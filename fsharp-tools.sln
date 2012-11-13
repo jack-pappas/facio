@@ -1,7 +1,26 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "fsharplex", "fsharplex\fsharplex.fsproj", "{F9F750FB-2817-4559-BD0A-BE5402102D37}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{E0ED8004-9C63-4BA4-987C-EE634B39B881}"
+	ProjectSection(SolutionItems) = preProject
+		.nuget\NuGet.Config = .nuget\NuGet.Config
+		.nuget\NuGet.exe = .nuget\NuGet.exe
+		.nuget\NuGet.targets = .nuget\NuGet.targets
+	EndProjectSection
+EndProject
 Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x86 = Debug|x86
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F9F750FB-2817-4559-BD0A-BE5402102D37}.Debug|x86.ActiveCfg = Debug|x86
+		{F9F750FB-2817-4559-BD0A-BE5402102D37}.Debug|x86.Build.0 = Debug|x86
+		{F9F750FB-2817-4559-BD0A-BE5402102D37}.Release|x86.ActiveCfg = Release|x86
+		{F9F750FB-2817-4559-BD0A-BE5402102D37}.Release|x86.Build.0 = Release|x86
+	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
