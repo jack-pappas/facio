@@ -8,7 +8,7 @@ See LICENSE.TXT for licensing details.
 
 //
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module Regex
+module FSharpLex.Regex
 
 open CharSet
 

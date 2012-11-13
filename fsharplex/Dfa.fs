@@ -8,7 +8,7 @@ See LICENSE.TXT for licensing details.
 
 //
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module Dfa
+module FSharpLex.Dfa
 
 open Graph
 open Nfa

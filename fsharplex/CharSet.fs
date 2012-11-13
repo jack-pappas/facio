@@ -8,7 +8,7 @@ See LICENSE.TXT for licensing details.
 
 //
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module CharSet
+module FSharpLex.CharSet
 
 
 /// Character set implementation based on a Discrete Interval Encoding Tree.

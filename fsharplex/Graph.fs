@@ -7,7 +7,7 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-module Graph
+module FSharpLex.Graph
 
 
 /// An immutable implementation of a directed,
@@ -112,15 +112,15 @@ type SparseGraph<[<EqualityConditionalOn>]'Vertex, [<EqualityConditionalOn; Comp
             Map.remove (source, target) edges)
     
 
-//
+/// Functions on immutable sparse graphs.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module SparseGraph =
-    //
+    /// The empty graph.
     [<GeneralizableValue>]
     let empty<'Vertex, 'Edge when 'Vertex : comparison> =
         SparseGraph<'Vertex,'Edge>.Empty
 
-    //
+    /// Determines if the graph is empty -- i.e., if it's vertex set is empty.
     let inline isEmpty (graph : SparseGraph<'Vertex, 'Edge>) =
         graph.IsEmpty
 
