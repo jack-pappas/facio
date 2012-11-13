@@ -10,6 +10,7 @@ See LICENSE.TXT for licensing details.
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module FSharpLex.Dfa
 
+open System.Diagnostics
 open Graph
 open Nfa
 
@@ -114,10 +115,6 @@ module internal Dfa =
         NfaStateSetToDfaState : Map<Set<NfaStateId>, DfaStateId>;
         /// Maps a DFA state to the set of NFA states it represents.
         DfaStateToNfaStateSet : Map<DfaStateId, Set<NfaStateId>>;
-        /// For each final (accepting) state of the DFA, specifies the index of
-        /// the pattern it accepts. The index is the index into the Regex[]
-        /// used to create the original NFA.
-        FinalStates : Map<DfaStateId, int<RegexIndex>>;
     }
 
     //
@@ -234,8 +231,7 @@ module internal Dfa =
         let compilationState : CompilationState<'Symbol> = {
             NfaStateSetToDfaState = Map.empty;
             DfaStateToNfaStateSet = Map.empty;
-            Transitions = SparseGraph.empty;
-            FinalStates = Map.empty; }
+            Transitions = SparseGraph.empty; }
 
         // The initial DFA state.
         let initialState, compilationState =
@@ -257,11 +253,54 @@ module internal Dfa =
         let compilationState =
             compileRec (Set.singleton initialState) nfa compilationState
 
+        /// Maps each final (accepting) DFA state to the
+        /// (index of) the Regex it accepts.
+        let finalStates =
+            (Map.empty, compilationState.DfaStateToNfaStateSet)
+            ||> Map.fold (fun finalStates dfaState nfaStateSet ->
+                /// The NFA states (if any) in the set of NFA states represented
+                /// by this DFA state which are final (accepting) states.
+                let nfaFinalStateSet =
+                    nfaStateSet
+                    |> Set.filter (fun nfaState ->
+                        Map.containsKey nfaState nfa.FinalStates)
+                
+                // If any of the NFA states in this DFA state are final (accepting) states,
+                // then this DFA state is also an accepting state.
+                if Set.isEmpty nfaFinalStateSet then
+                    finalStates
+                else
+                    (* TODO :   Determine if it's possible for one DFA state to contain two or
+                                more NFA states which are accepting states for different input
+                                Regexes. If so, we'll need to tweak the DFA (or perhaps, the DFA
+                                compilation algorithm) to handle this correctly. *)
+                    let finalStateInputRegexes =
+                        nfaFinalStateSet
+                        |> Set.map (fun nfaState ->
+                            Map.find nfaState nfa.FinalStates)
+
+                    Debug.Assert (
+                        Set.count finalStateInputRegexes = 1,
+                        "The DFA state contains multiple final (accepting) NFA states accepting \
+                        different regular expressions.")
+
+                    /// The (index of) the Regex accepted by the NFA states
+                    /// (and therefore, this DFA state).
+                    let acceptedRegex = Set.minElement finalStateInputRegexes
+
+                    // Add this DFA state and the accepted Regex to the map.
+                    Map.add dfaState acceptedRegex finalStates)
+
         // Create the DFA.
         let dfa =
             { InitialState = initialState;
                 Transitions = compilationState.Transitions;
-                FinalStates = compilationState.FinalStates; }
+                FinalStates = finalStates; }
+
+        // DEBUG : Correctness checks on the compiled DFA.
+        Debug.Assert (
+            not <| Map.isEmpty dfa.FinalStates,
+            "The final DFA compilation state does not contain any final (accepting) states.")
 
         // Return the DFA along with any data from the final compilation state which
         // does not become part of the DFA; this additional data may be displayed or
