@@ -25,19 +25,20 @@ type Dfa<'Symbol> = {
     InitialState : DfaStateId;
     /// The transition graph of the DFA.
     Transitions : SparseGraph<DfaStateId, 'Symbol>;
-    /// The final (accepting) states of the DFA, corresponding to
-    /// the list of regular expressions compiled into the DFA.
-    FinalStates : DfaStateId[];
+    /// For each final (accepting) state of the DFA, specifies the index of
+    /// the pattern it accepts. The index is the index into the Regex[]
+    /// used to create the original NFA.s
+    FinalStates : Map<DfaStateId, int<RegexIndex>>;
 }
 
 //
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module private Dfa =
+module internal Dfa =
     /// Compute the one-step transition map for a _set_ of NFA states.
     // OPTIMIZE : Once the representation of the NFA transitions is changed to
     // allow faster lookup of out-edges from a state, this function could be
     // rewritten to be much simpler.
-    let private oneStepTransitions (states : Set<NfaStateId>) (nfa : Nfa<'Symbol>) =
+    let oneStepTransitions (states : Set<NfaStateId>) (nfa : Nfa<'Symbol>) =
         let transitionEdges = nfa.Transitions.Edges
         (Map.empty, states)
         ||> Set.fold (fun moves state ->
@@ -100,86 +101,188 @@ module private Dfa =
                 |> epsilonClosureImpl closure nfa
 
     /// Computes the epsilon-closure of a specified NFA state.
-    let private epsilonClosure (state : NfaStateId) (nfa : Nfa<'Symbol>) =
+    let epsilonClosure (state : NfaStateId) (nfa : Nfa<'Symbol>) =
         // Call the recursive implementation.
         Set.singleton state
         |> epsilonClosureImpl Set.empty nfa
 
     //
-    type private CompilationState<'Symbol> = {
+    type CompilationState<'Symbol> = {
         //
         Transitions : SparseGraph<DfaStateId, 'Symbol>;
         /// Maps sets of NFA states to the DFA state representing the set.
-        NfaStateSets : Map<Set<NfaStateId>, DfaStateId>;
+        NfaStateSetToDfaState : Map<Set<NfaStateId>, DfaStateId>;
+        /// Maps a DFA state to the set of NFA states it represents.
+        DfaStateToNfaStateSet : Map<DfaStateId, Set<NfaStateId>>;
+        /// For each final (accepting) state of the DFA, specifies the index of
+        /// the pattern it accepts. The index is the index into the Regex[]
+        /// used to create the original NFA.
+        FinalStates : Map<DfaStateId, int<RegexIndex>>;
     }
 
     //
-    let private getOrCreateState nfaStateSet (compilationState : CompilationState<'Symbol>) =
-        match Map.tryFind nfaStateSet compilationState.NfaStateSets with
-        | Some dfaState ->
-            dfaState, compilationState
-        | None ->
-            /// The DFA state representing this set of NFA states.
-            let dfaState =
-                compilationState.NfaStateSets.Count
-                |> LanguagePrimitives.Int32WithMeasure
+    let private tryGetDfaState nfaStateSet (compilationState : CompilationState<'Symbol>) =
+        let dfaState = Map.tryFind nfaStateSet compilationState.NfaStateSetToDfaState
+        dfaState, compilationState
 
-            // Add the new DFA state to the compilation state.
+    //
+    let private getNfaStateSet dfaState (compilationState : CompilationState<'Symbol>) =
+        let nfaStateSet = Map.find dfaState compilationState.DfaStateToNfaStateSet
+        nfaStateSet, compilationState
+
+    //
+    let private createState nfaStateSet (compilationState : CompilationState<'Symbol>) =
+        // Preconditions
+        if Set.isEmpty nfaStateSet then
+            invalidArg "nfaStateSet" "A DFA state cannot be created for the empty set of NFA states."
+
+        /// The DFA state representing this set of NFA states.
+        let dfaState : DfaStateId =
+            compilationState.NfaStateSetToDfaState.Count
+            |> LanguagePrimitives.Int32WithMeasure
+
+        // Add the new DFA state to the compilation state.
+        let compilationState =
+            { compilationState with
+                NfaStateSetToDfaState = Map.add nfaStateSet dfaState compilationState.NfaStateSetToDfaState;
+                DfaStateToNfaStateSet = Map.add dfaState nfaStateSet compilationState.DfaStateToNfaStateSet; }
+
+        // Return the new DFA state and the updated compilation state.
+        dfaState, compilationState
+
+    //
+    let rec private compileRec (pending : Set<DfaStateId>) (nfa : Nfa<'Symbol>) (compilationState : CompilationState<'Symbol>) =
+        // If there are no more pending states, we're finished compiling the DFA.
+        if Set.isEmpty pending then
+            compilationState
+        else
+            //
+            let currentState = Set.minElement pending
+            let pending = Set.remove currentState pending
+
+            let nfaStateSet, compilationState = getNfaStateSet currentState compilationState
+
+            //
+            let transitionsFromCurrentNfaStateSet =
+                oneStepTransitions nfaStateSet nfa
+                |> Map.map (fun _ nfaStateSet ->
+                    epsilonClosureImpl Set.empty nfa nfaStateSet)
+
+            // For each set of NFA states targeted by a transition,
+            // retrieve the corresponding DFA state. If a corresponding
+            // DFA state cannot be found, it will be created.
+            let transitionsFromCurrentDfaState, compilationState =
+                ((Map.empty, compilationState), transitionsFromCurrentNfaStateSet)
+                ||> Map.fold (fun (transitionsFromCurrentDfaState, compilationState) symbol targetNfaStateSet ->
+                    let targetDfaState, compilationState =
+                        let maybeDfaState, compilationState = tryGetDfaState targetNfaStateSet compilationState
+                        match maybeDfaState with
+                        | Some targetDfaState ->
+                            targetDfaState, compilationState
+                        | None ->
+                            createState targetNfaStateSet compilationState
+
+                    //
+                    let transitionsFromCurrentDfaState =
+                        Map.add symbol targetDfaState transitionsFromCurrentDfaState
+
+                    transitionsFromCurrentDfaState, compilationState)
+
+            // Find DFA states which are transition targets which have not yet
+            // been added to the transition graph.
+            let unvisitedTransitionTargets =
+                let vertices = compilationState.Transitions.Vertices
+                (Set.empty, transitionsFromCurrentDfaState)
+                ||> Map.fold (fun unvisitedTransitionTargets _ target ->
+                    if Set.contains target vertices then
+                        unvisitedTransitionTargets
+                    else
+                        Set.add target unvisitedTransitionTargets)
+
+            //
+            let pending = Set.union pending unvisitedTransitionTargets
+
+            //
             let compilationState =
                 { compilationState with
-                    NfaStateSets = Map.add nfaStateSet dfaState compilationState.NfaStateSets; }
+                    Transitions =
+                        // Add the unvisited transition targets to the transition graph.
+                        (compilationState.Transitions, unvisitedTransitionTargets)
+                        ||> Set.fold (fun transitions target ->
+                            SparseGraph.addVertex target transitions)
+                        // Add the transition edges to the transition graph.
+                        |> Map.fold (fun transitions symbol target ->
+                            SparseGraph.addEdge currentState target symbol transitions)
+                        <| transitionsFromCurrentDfaState; }
 
-            // Return the new DFA state and the updated compilation state.
-            dfaState, compilationState
-
-    //
-    let rec private compileRec worklist (compilationState : CompilationState<'Symbol>) =
-        match worklist with
-        | [] ->
-            compilationState
-        | current :: worklist ->
-            raise <| System.NotImplementedException "Dfa.Dfa.compileRec"
-
-    //
-    let rec private subsetConstruction (dStates, marked, dTran) =
-        if dStates |> Set.exists (fun T -> not <| Set.contains T marked) then
-            
-            // Mark 
-
-            // do stuff
-            failwith ""
-
-        else
-            dStates, dTran
-
+            // Continue processing recursively.
+            compileRec pending nfa compilationState
 
     //
-    let compile (nfa : Nfa<'Symbol>) : Dfa<'Symbol> =
-        /// The epsilon-closure of the initial NFA state.
-        let initialStateEClosure = epsilonClosure nfa.InitialState nfa
+    type internal DfaCompilationResult<'Symbol> = {
+        //
+        Dfa : Dfa<'Symbol>;
+        /// Maps sets of NFA states to the DFA state representing the set.
+        NfaStateSetToDfaState : Map<Set<NfaStateId>, DfaStateId>;
+        /// Maps a DFA state to the set of NFA states it represents.
+        DfaStateToNfaStateSet : Map<DfaStateId, Set<NfaStateId>>;
+    }
 
-        /// The one-step transitions from 'initialStateEClosure'.
-        let initialStateEClosureTransitions = oneStepTransitions initialStateEClosure nfa
+    //
+    let compile (nfa : Nfa<'Symbol>) : DfaCompilationResult<'Symbol> =
+        // The initial (empty) compilation state.
+        let compilationState : CompilationState<'Symbol> = {
+            NfaStateSetToDfaState = Map.empty;
+            DfaStateToNfaStateSet = Map.empty;
+            Transitions = SparseGraph.empty;
+            FinalStates = Map.empty; }
 
+        // The initial DFA state.
+        let initialState, compilationState =
+            /// The epsilon-closure of the initial NFA state.
+            let initialStateEClosure = epsilonClosure nfa.InitialState nfa
 
-//        /// The compilation state after compilation is complete.
-//        let compilationState =
-//            // Create the initial compilation state, then compile the NFA.
-//            { Transitions = SparseGraph.empty;
-//                NfaStateSets = Map.empty; }
-//            |> compileRec [initialStateEClosure]
+            // Create the initial DFA state from the epsilon-closure
+            // of the initial NFA state.
+            createState initialStateEClosure compilationState
 
+        // Add the initial DFA state to the transition graph.
+        let compilationState =
+            { compilationState with
+                Transitions =
+                    compilationState.Transitions
+                    |> SparseGraph.addVertex initialState; }
 
+        // Compile the NFA into the DFA.
+        let compilationState =
+            compileRec (Set.singleton initialState) nfa compilationState
 
-        raise <| System.NotImplementedException "Dfa.Dfa.compile"
-                
+        // Create the DFA.
+        let dfa =
+            { InitialState = initialState;
+                Transitions = compilationState.Transitions;
+                FinalStates = compilationState.FinalStates; }
+
+        // Return the DFA along with any data from the final compilation state which
+        // does not become part of the DFA; this additional data may be displayed or
+        // logged to help diagnose any possible issues with the compiled DFA.
+        { Dfa = dfa;
+           NfaStateSetToDfaState = compilationState.NfaStateSetToDfaState;
+           DfaStateToNfaStateSet = compilationState.DfaStateToNfaStateSet; }
 
 
 //
 let ofNfa (nfa : Nfa<'Symbol>) : Dfa<'Symbol> =
-    Dfa.compile nfa
+    // Compile the NFA into a DFA.
+    let compilationResult = Dfa.compile nfa
+    
+    // Return the compiled DFA, discarding any additional data in the result.
+    compilationResult.Dfa
 
 
-
+(* TODO :   Implement an 'ofNfaWithLog' function which is similar to 'ofNfa'
+            but takes an additional parameter (e.g., a TextWriter) which it
+            will use to log additional compilation information before returning
+            the compiled DFA. *)
 
 
