@@ -21,11 +21,11 @@ open Nfa
 type DfaStateId = int<DfaState>
 
 /// A deterministic finite automaton (DFA).
-type Dfa<'Symbol> = {
+type Dfa<'Symbol when 'Symbol : comparison> = {
     /// The initial state of the DFA.
     InitialState : DfaStateId;
     /// The transition graph of the DFA.
-    Transitions : SparseGraph<DfaStateId, 'Symbol>;
+    Transitions : LabeledSparseMultidigraph<DfaStateId, 'Symbol>;
     /// For each final (accepting) state of the DFA, specifies the index of
     /// the pattern it accepts. The index is the index into the Regex[]
     /// used to create the original NFA.s
@@ -108,9 +108,9 @@ module internal Dfa =
         |> epsilonClosureImpl Set.empty nfa
 
     //
-    type CompilationState<'Symbol> = {
+    type CompilationState<'Symbol when 'Symbol : comparison> = {
         //
-        Transitions : SparseGraph<DfaStateId, 'Symbol>;
+        Transitions : LabeledSparseMultidigraph<DfaStateId, 'Symbol>;
         /// Maps sets of NFA states to the DFA state representing the set.
         NfaStateSetToDfaState : Map<Set<NfaStateId>, DfaStateId>;
         /// Maps a DFA state to the set of NFA states it represents.
@@ -206,17 +206,17 @@ module internal Dfa =
                         // Add the unvisited transition targets to the transition graph.
                         (compilationState.Transitions, unvisitedTransitionTargets)
                         ||> Set.fold (fun transitions target ->
-                            SparseGraph.addVertex target transitions)
+                            LabeledSparseMultidigraph.addVertex target transitions)
                         // Add the transition edges to the transition graph.
                         |> Map.fold (fun transitions symbol target ->
-                            SparseGraph.addEdge currentState target symbol transitions)
+                            LabeledSparseMultidigraph.addEdge currentState target symbol transitions)
                         <| transitionsFromCurrentDfaState; }
 
             // Continue processing recursively.
             compileRec pending nfa compilationState
 
     //
-    type internal DfaCompilationResult<'Symbol> = {
+    type internal DfaCompilationResult<'Symbol when 'Symbol : comparison> = {
         //
         Dfa : Dfa<'Symbol>;
         /// Maps sets of NFA states to the DFA state representing the set.
@@ -231,7 +231,7 @@ module internal Dfa =
         let compilationState : CompilationState<'Symbol> = {
             NfaStateSetToDfaState = Map.empty;
             DfaStateToNfaStateSet = Map.empty;
-            Transitions = SparseGraph.empty; }
+            Transitions = LabeledSparseMultidigraph.empty; }
 
         // The initial DFA state.
         let initialState, compilationState =
@@ -247,7 +247,7 @@ module internal Dfa =
             { compilationState with
                 Transitions =
                     compilationState.Transitions
-                    |> SparseGraph.addVertex initialState; }
+                    |> LabeledSparseMultidigraph.addVertex initialState; }
 
         // Compile the NFA into the DFA.
         let compilationState =
@@ -270,22 +270,23 @@ module internal Dfa =
                 if Set.isEmpty nfaFinalStateSet then
                     finalStates
                 else
-                    (* TODO :   Determine if it's possible for one DFA state to contain two or
-                                more NFA states which are accepting states for different input
-                                Regexes. If so, we'll need to tweak the DFA (or perhaps, the DFA
-                                compilation algorithm) to handle this correctly. *)
+                    /// The (indices of the) Regexes accepted by this DFA state.
                     let finalStateInputRegexes =
                         nfaFinalStateSet
                         |> Set.map (fun nfaState ->
                             Map.find nfaState nfa.FinalStates)
 
-                    Debug.Assert (
-                        Set.count finalStateInputRegexes = 1,
-                        "The DFA state contains multiple final (accepting) NFA states accepting \
-                        different regular expressions.")
+                    (* If this DFA state accepts more than one of the input Regexes,
+                       it means those Regexes overlap. Since a DFA state can only
+                       accept a single Regex, we simply choose the Regex with the
+                       lowest-valued index; this convention is a de-facto standard
+                       for lexer generators. *)
+                    (* TODO :   Add something to the compilation result so we can log
+                                any occurrences of this 'disambiguation' and perhaps
+                                also emit an MSBuild-style warning message to let the
+                                user know the patterns overlap. *)
 
-                    /// The (index of) the Regex accepted by the NFA states
-                    /// (and therefore, this DFA state).
+                    /// The (index of) the Regex accepted by this DFA state.
                     let acceptedRegex = Set.minElement finalStateInputRegexes
 
                     // Add this DFA state and the accepted Regex to the map.
@@ -296,11 +297,6 @@ module internal Dfa =
             { InitialState = initialState;
                 Transitions = compilationState.Transitions;
                 FinalStates = finalStates; }
-
-        // DEBUG : Correctness checks on the compiled DFA.
-        Debug.Assert (
-            not <| Map.isEmpty dfa.FinalStates,
-            "The final DFA compilation state does not contain any final (accepting) states.")
 
         // Return the DFA along with any data from the final compilation state which
         // does not become part of the DFA; this additional data may be displayed or
@@ -324,4 +320,19 @@ let ofNfa (nfa : Nfa<'Symbol>) : Dfa<'Symbol> =
             will use to log additional compilation information before returning
             the compiled DFA. *)
 
+
+/// Minimizes a Dfa.
+let minimize (dfa : Dfa<'Symbol>) : Dfa<'Symbol> =
+    raise <| System.NotImplementedException "Dfa.minimize"
+
+//
+let tokenize (dfa : Dfa<'Symbol>) (symbols : seq<'Symbol>) : seq<'Symbol[]> =
+(* TODO :   This function should read symbols from the seq<_> and use them to
+            execute the DFA. This function will useful for unit testing DFAs
+            without having to generate/compile/execute code; it could also be
+            used to test the code-generation process if we use it to tokenize
+            some input, then we tokenize the same input using the generated/
+            compiled code -- if they're not the same, something went wrong with
+            the code-generation process. *)
+    raise <| System.NotImplementedException "Dfa.tokenize"
 

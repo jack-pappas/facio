@@ -42,7 +42,7 @@ type Nfa<'Symbol> = {
     /// The initial state of the NFA.
     InitialState : NfaStateId;
     /// The transition graph of the NFA.
-    Transitions : SparseGraph<NfaStateId, StateTransition<'Symbol>>;
+    Transitions : LabeledSparseDigraph<NfaStateId, StateTransition<'Symbol>>;
     /// For each final (accepting) state of the NFA, specifies the index of
     /// the pattern it accepts. The index is the index into the Regex[]
     /// used to create the NFA.
@@ -53,36 +53,36 @@ type Nfa<'Symbol> = {
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module private CompileNfa =
     //
-    let private createState (transitions : SparseGraph<NfaStateId, StateTransition<'Symbol>>) =
+    let private createState (transitions : LabeledSparseDigraph<NfaStateId, StateTransition<'Symbol>>) =
         let newState =
             Set.count transitions.Vertices
             |> LanguagePrimitives.Int32WithMeasure<_>
 
         let transitions =
             transitions
-            |> SparseGraph.addVertex newState
+            |> LabeledSparseDigraph.addVertex newState
 
         newState, transitions
 
     //
-    let private addEpsilonTransition source target (transitions : SparseGraph<NfaStateId, StateTransition<'Symbol>>) =
+    let private addEpsilonTransition source target (transitions : LabeledSparseDigraph<NfaStateId, StateTransition<'Symbol>>) =
         let transitions =
             transitions
-            |> SparseGraph.addEdge source target StateTransition.Epsilon
+            |> LabeledSparseDigraph.addEdge source target StateTransition.Epsilon
 
         (), transitions
 
     //
-    let private addSymbolTransition source target symbol (transitions : SparseGraph<NfaStateId, StateTransition<'Symbol>>) =
+    let private addSymbolTransition source target symbol (transitions : LabeledSparseDigraph<NfaStateId, StateTransition<'Symbol>>) =
         let transitions =
             transitions
-            |> SparseGraph.addEdge source target (StateTransition.Symbol symbol)
+            |> LabeledSparseDigraph.addEdge source target (StateTransition.Symbol symbol)
 
         (), transitions
 
     //
     // OPTIMIZE : Rewrite this function using CPS to avoid the overhead of the stack frames.
-    let rec regexToNfa (regex : Regex<'Symbol>) (dest : NfaStateId) (transitions : SparseGraph<NfaStateId, StateTransition<'Symbol>>) : NfaStateId * SparseGraph<NfaStateId, StateTransition<'Symbol>> =
+    let rec regexToNfa (regex : Regex<'Symbol>) (dest : NfaStateId) (transitions : LabeledSparseDigraph<NfaStateId, StateTransition<'Symbol>>) : NfaStateId * LabeledSparseDigraph<NfaStateId, StateTransition<'Symbol>> =
         match regex with
         | Regex.Epsilon ->
             let stateId, transitions = createState transitions
@@ -121,9 +121,67 @@ let ofRegexes (regexes : Regex<'Symbol>[]) =
     if Array.isEmpty regexes then
         invalidArg "regexes" "Must specify at least one (1) regular expression to be compiled."
 
-    // TODO
-    raise <| System.NotImplementedException "Nfa.ofRegexes"
+    /// The initial NFA state.
+    let initialState : NfaStateId = 0<_>
 
+    /// The initial transition graph.
+    let transitions =
+        LabeledSparseDigraph.empty
+        // Add the initial NFA state to the transition graph.
+        |> LabeledSparseDigraph.addVertex initialState
+    
+    /// Maps final (accepting) NFA states to the index of the Regex they accept.
+    let regexFinalStates, regexIndexToFinalState =
+        ((Map.empty<NfaStateId,_>, Map.empty<_,NfaStateId>), [| 0 .. Array.length regexes - 1 |])
+        ||> Array.fold (fun (regexFinalStates, regexIndexToFinalState) i ->
+            let regexFinalState = LanguagePrimitives.Int32WithMeasure <| i + 1
+            let regexIndex = LanguagePrimitives.Int32WithMeasure i
+            Map.add regexFinalState regexIndex regexFinalStates,
+            Map.add regexIndex regexFinalState regexIndexToFinalState)
+
+    // Add the final (accepting) NFA states of the Regexes to the transition graph.
+    let transitions =
+        (transitions, regexFinalStates)
+        ||> Map.fold (fun transitions regexFinalState _ ->
+            LabeledSparseDigraph.addVertex regexFinalState transitions)
+
+    //
+    let regexInitialStates, transitions =
+        //
+        let regexInitialStates = Array.zeroCreate <| Array.length regexes
+
+        //
+        let transitions =
+            ((transitions, 0<_>), regexes)
+            ||> Array.fold (fun (transitions, regexIndex) regex ->
+                // Compile the regex.
+                let regexInitialState, transitions =
+                    /// The final (accepting) NFA state for this Regex.
+                    let regexFinalState = Map.find regexIndex regexIndexToFinalState
+
+                    CompileNfa.regexToNfa regex regexFinalState transitions
+
+                // Store the initial NFA state for this Regex.
+                regexInitialStates.[int regexIndex] <- regexInitialState
+
+                // Increment the index and continue folding.
+                transitions, regexIndex + 1<_>)
+            // Discard the counter
+            |> fst
+
+        regexInitialStates, transitions
+
+    // Add epsilon-transitions from the initial NFA state (i.e., for the entire NFA)
+    // to the initial NFA state for each Regex.
+    let transitions =
+        (transitions, regexInitialStates)
+        ||> Array.fold (fun transitions regexInitialState ->
+            LabeledSparseDigraph.addEdge initialState regexInitialState StateTransition.Epsilon transitions)
+
+    // Create the NFA.
+    { InitialState = initialState;
+        FinalStates = regexFinalStates;
+        Transitions = transitions; }
 
 // TODO : Once 'ofRegexes' is implemented, rewrite this function as a simple wrapper for it.
 /// Compiles a Regex into an Nfa.
@@ -132,10 +190,10 @@ let ofRegex (regex : Regex<'Symbol>) =
     let finalState = 0<_>
 
     /// The final compilation state, containing the completed transition graph of the NFA.
-    let initialState, transitions =
+    let initialState, transitions =        
+        LabeledSparseDigraph.empty
         // Add the vertex for the final NFA state of the regex.
-        SparseGraph.empty
-        |> SparseGraph.addVertex finalState
+        |> LabeledSparseDigraph.addVertex finalState
         // Compile the regex
         |> CompileNfa.regexToNfa regex finalState
 
@@ -178,11 +236,11 @@ let ofRegex (regex : Regex<'Symbol>) =
 //                    | StateTransition.Epsilon ->
 //                        workList.Enqueue (q_i, q_k)
 //
-//                    SparseGraph.addEdge q_i q_k b transitions
+//                    LabeledSparseDigraph.addEdge q_i q_k b transitions
 //
 //                else
 //                    transitions)
-//            |> SparseGraph.removeEdge q_i q_j
+//            |> LabeledSparseDigraph.removeEdge q_i q_j
 //
 //        finalStates <-
 //            match Map.tryFind q_j finalStates with
@@ -201,7 +259,7 @@ let ofRegex (regex : Regex<'Symbol>) =
 //            elif transitions.Edges |> Map.exists (fun (_, q_i) _ -> q_i = state) then
 //                transitions
 //            else
-//                SparseGraph.removeVertex state transitions)
+//                LabeledSparseDigraph.removeVertex state transitions)
 //
 //    // Return the simplified NFA.
 //    { InitialState = nfa.InitialState;

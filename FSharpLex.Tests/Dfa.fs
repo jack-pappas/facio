@@ -20,20 +20,20 @@ open Nfa
 let figure_2_5 =
     //
     let transitions =
-        (SparseGraph.empty, [1..8])
+        (LabeledSparseDigraph.empty, [1..8])
         // Add the vertices
         ||> List.fold (fun transitions el ->
-            SparseGraph.addVertex (LanguagePrimitives.Int32WithMeasure el) transitions)
+            LabeledSparseDigraph.addVertex (LanguagePrimitives.Int32WithMeasure el) transitions)
         // Add the edges
-        |> SparseGraph.addEdge 1<_> 2<_> StateTransition.Epsilon
-        |> SparseGraph.addEdge 2<_> 3<_> (StateTransition.Symbol 'a')
-        |> SparseGraph.addEdge 3<_> 4<_> (StateTransition.Symbol 'c')
-        |> SparseGraph.addEdge 1<_> 5<_> StateTransition.Epsilon
-        |> SparseGraph.addEdge 5<_> 6<_> StateTransition.Epsilon
-        |> SparseGraph.addEdge 5<_> 7<_> StateTransition.Epsilon
-        |> SparseGraph.addEdge 6<_> 8<_> (StateTransition.Symbol 'a')
-        |> SparseGraph.addEdge 7<_> 8<_> (StateTransition.Symbol 'b')
-        |> SparseGraph.addEdge 8<_> 1<_> StateTransition.Epsilon
+        |> LabeledSparseDigraph.addEdge 1<_> 2<_> StateTransition.Epsilon
+        |> LabeledSparseDigraph.addEdge 2<_> 3<_> (StateTransition.Symbol 'a')
+        |> LabeledSparseDigraph.addEdge 3<_> 4<_> (StateTransition.Symbol 'c')
+        |> LabeledSparseDigraph.addEdge 1<_> 5<_> StateTransition.Epsilon
+        |> LabeledSparseDigraph.addEdge 5<_> 6<_> StateTransition.Epsilon
+        |> LabeledSparseDigraph.addEdge 5<_> 7<_> StateTransition.Epsilon
+        |> LabeledSparseDigraph.addEdge 6<_> 8<_> (StateTransition.Symbol 'a')
+        |> LabeledSparseDigraph.addEdge 7<_> 8<_> (StateTransition.Symbol 'b')
+        |> LabeledSparseDigraph.addEdge 8<_> 1<_> StateTransition.Epsilon
 
     // Create the NFA
     { Transitions = transitions;
