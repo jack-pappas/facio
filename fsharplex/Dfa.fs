@@ -215,14 +215,27 @@ module internal Dfa =
             // Continue processing recursively.
             compileRec pending nfa compilationState
 
-    //
+    /// Information about overlapping Regexes discovered during DFA compilation.
+    type internal RegexOverlapInfo = {
+        /// The (index of the) Regex which will be
+        /// accepted by the compiled DFA.
+        Accepted : int<RegexIndex>;
+        /// The (indices of the) overlapped Regexes.
+        /// These will NOT be accepted by the compiled DFA.
+        Overlapped : Set<int<RegexIndex>>;
+    }
+
+    /// The compiled DFA, plus additional compilation data which may
+    /// be useful for diagnostics purposes.
     type internal DfaCompilationResult<'Symbol when 'Symbol : comparison> = {
-        //
+        /// The compiled DFA.
         Dfa : Dfa<'Symbol>;
         /// Maps sets of NFA states to the DFA state representing the set.
         NfaStateSetToDfaState : Map<Set<NfaStateId>, DfaStateId>;
         /// Maps a DFA state to the set of NFA states it represents.
         DfaStateToNfaStateSet : Map<DfaStateId, Set<NfaStateId>>;
+        /// Information about overlapping Regexes discovered during DFA compilation.
+        RegexOverlapInfo : RegexOverlapInfo list;
     }
 
     //
@@ -255,9 +268,9 @@ module internal Dfa =
 
         /// Maps each final (accepting) DFA state to the
         /// (index of) the Regex it accepts.
-        let finalStates =
-            (Map.empty, compilationState.DfaStateToNfaStateSet)
-            ||> Map.fold (fun finalStates dfaState nfaStateSet ->
+        let finalStates, regexOverlapInfo =
+            ((Map.empty, []), compilationState.DfaStateToNfaStateSet)
+            ||> Map.fold (fun (finalStates, regexOverlapInfo) dfaState nfaStateSet ->
                 /// The NFA states (if any) in the set of NFA states represented
                 /// by this DFA state which are final (accepting) states.
                 let nfaFinalStateSet =
@@ -268,7 +281,7 @@ module internal Dfa =
                 // If any of the NFA states in this DFA state are final (accepting) states,
                 // then this DFA state is also an accepting state.
                 if Set.isEmpty nfaFinalStateSet then
-                    finalStates
+                    finalStates, regexOverlapInfo
                 else
                     /// The (indices of the) Regexes accepted by this DFA state.
                     let finalStateInputRegexes =
@@ -276,21 +289,28 @@ module internal Dfa =
                         |> Set.map (fun nfaState ->
                             Map.find nfaState nfa.FinalStates)
 
-                    (* If this DFA state accepts more than one of the input Regexes,
-                       it means those Regexes overlap. Since a DFA state can only
-                       accept a single Regex, we simply choose the Regex with the
-                       lowest-valued index; this convention is a de-facto standard
-                       for lexer generators. *)
-                    (* TODO :   Add something to the compilation result so we can log
-                                any occurrences of this 'disambiguation' and perhaps
-                                also emit an MSBuild-style warning message to let the
-                                user know the patterns overlap. *)
+                    (* If this DFA state accepts more than one of the input Regexes, it means
+                       those Regexes overlap. Since a DFA state can only accept a single Regex,
+                       we simply choose the Regex with the lowest-valued index; this convention
+                       is a de-facto standard for lexer generators. *)
 
                     /// The (index of) the Regex accepted by this DFA state.
                     let acceptedRegex = Set.minElement finalStateInputRegexes
 
+                    // If there was more than one final state, add information about the
+                    // overlapped states to 'regexOverlapInfo'.
+                    let regexOverlapInfo =
+                        if Set.count finalStateInputRegexes = 1 then
+                            regexOverlapInfo
+                        else
+                            let overlapInfo = {
+                                Accepted = acceptedRegex;
+                                Overlapped = Set.remove acceptedRegex finalStateInputRegexes; }
+                            overlapInfo :: regexOverlapInfo
+
                     // Add this DFA state and the accepted Regex to the map.
-                    Map.add dfaState acceptedRegex finalStates)
+                    Map.add dfaState acceptedRegex finalStates,
+                    regexOverlapInfo)
 
         // Create the DFA.
         let dfa =
@@ -303,10 +323,11 @@ module internal Dfa =
         // logged to help diagnose any possible issues with the compiled DFA.
         { Dfa = dfa;
            NfaStateSetToDfaState = compilationState.NfaStateSetToDfaState;
-           DfaStateToNfaStateSet = compilationState.DfaStateToNfaStateSet; }
+           DfaStateToNfaStateSet = compilationState.DfaStateToNfaStateSet;
+           RegexOverlapInfo = regexOverlapInfo; }
 
 
-//
+/// Converts an NFA into a DFA.
 let ofNfa (nfa : Nfa<'Symbol>) : Dfa<'Symbol> =
     // Compile the NFA into a DFA.
     let compilationResult = Dfa.compile nfa
@@ -314,16 +335,52 @@ let ofNfa (nfa : Nfa<'Symbol>) : Dfa<'Symbol> =
     // Return the compiled DFA, discarding any additional data in the result.
     compilationResult.Dfa
 
+//
+let ofNfaWithLog (nfa : Nfa<'Symbol>) (textWriter : #System.IO.TextWriter) : Dfa<'Symbol> =
+    // Preconditions
+    if System.Object.ReferenceEquals (null, textWriter) then
+        nullArg "textWriter"
 
-(* TODO :   Implement an 'ofNfaWithLog' function which is similar to 'ofNfa'
-            but takes an additional parameter (e.g., a TextWriter) which it
-            will use to log additional compilation information before returning
-            the compiled DFA. *)
+    // Compile the NFA into a DFA.
+    let compilationResult = Dfa.compile nfa
 
+    // Log additional data using the TextWriter.
+    // TODO
+    raise <| System.NotImplementedException "Dfa.ofNfaWithLog"
 
-/// Minimizes a Dfa.
+    // Return the compiled DFA.
+    compilationResult.Dfa    
+
+/// Given a DFA which accepts language L, produces an NFA which accepts the reverse of L.
+let reverse (dfa : Dfa<'Symbol>) : Nfa<'Symbol> =
+    // Reverse the direction of the edges in the transition map.
+    // TODO
+
+    // Change the final states to initial states, and vice versa.
+    // TODO
+
+    // Return the resulting NFA.
+    raise <| System.NotImplementedException "Dfa.reverse"
+
+/// Minimizes a DFA.
 let minimize (dfa : Dfa<'Symbol>) : Dfa<'Symbol> =
-    raise <| System.NotImplementedException "Dfa.minimize"
+    // Minimize the DFA using Brzozowski's algorithm.
+    dfa
+    |> reverse
+    |> ofNfa
+    |> reverse
+    |> ofNfa
+
+
+//
+type private TokenizerState<'Symbol> = {
+    //
+    Buffer : 'Symbol[];
+    //
+    LastAcceptedBufferPosition : int option;
+    //
+    CurrentBufferPosition : int;
+}
 
 //
 let tokenize (dfa : Dfa<'Symbol>) (symbols : seq<'Symbol>) : seq<'Symbol[]> =
