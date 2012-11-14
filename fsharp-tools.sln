@@ -14,6 +14,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{43BEF91B
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpLex.Tests", "FSharpLex.Tests\FSharpLex.Tests.fsproj", "{F7E7C726-A9E3-4DCE-BEF7-6694310E4B21}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpYacc", "FSharpYacc\FSharpYacc.fsproj", "{1A562247-7B57-45DF-9BAB-CDFA6202A6B4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,6 +30,10 @@ Global
 		{F7E7C726-A9E3-4DCE-BEF7-6694310E4B21}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F7E7C726-A9E3-4DCE-BEF7-6694310E4B21}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F7E7C726-A9E3-4DCE-BEF7-6694310E4B21}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1A562247-7B57-45DF-9BAB-CDFA6202A6B4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1A562247-7B57-45DF-9BAB-CDFA6202A6B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1A562247-7B57-45DF-9BAB-CDFA6202A6B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1A562247-7B57-45DF-9BAB-CDFA6202A6B4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
