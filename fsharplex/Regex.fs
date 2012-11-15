@@ -10,7 +10,7 @@ See LICENSE.TXT for licensing details.
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module FSharpLex.Regex
 
-open CharSet
+open Collections
 
 
 //

@@ -11,6 +11,7 @@ See LICENSE.TXT for licensing details.
 module FSharpLex.Dfa
 
 open System.Diagnostics
+open Collections
 open Graph
 open Nfa
 
@@ -26,9 +27,12 @@ type Dfa<'Symbol when 'Symbol : comparison> = {
     InitialState : DfaStateId;
     /// The transition graph of the DFA.
     Transitions : LabeledSparseMultidigraph<DfaStateId, 'Symbol>;
+    /// For a DFA state, maps the out-edges (transitions) from that state
+    /// to the state targeted by the transition.
+    TransitionsBySymbol : Map<DfaStateId, Map<'Symbol, DfaStateId>>;
     /// For each final (accepting) state of the DFA, specifies the index of
     /// the pattern it accepts. The index is the index into the Regex[]
-    /// used to create the original NFA.s
+    /// used to create the original NFA.
     FinalStates : Map<DfaStateId, int<RegexIndex>>;
 }
 
@@ -133,6 +137,10 @@ module internal Dfa =
         if Set.isEmpty nfaStateSet then
             invalidArg "nfaStateSet" "A DFA state cannot be created for the empty set of NFA states."
 
+        Debug.Assert (
+            not <| Map.containsKey nfaStateSet compilationState.NfaStateSetToDfaState,
+            sprintf "The compilation state already contains a DFA state for the NFA state %O." nfaStateSet)
+
         /// The DFA state representing this set of NFA states.
         let dfaState : DfaStateId =
             compilationState.NfaStateSetToDfaState.Count
@@ -147,7 +155,7 @@ module internal Dfa =
         // Return the new DFA state and the updated compilation state.
         dfaState, compilationState
 
-    //
+    /// The main NFA -> DFA compilation function.
     let rec private compileRec (pending : Set<DfaStateId>) (nfa : Nfa<'Symbol>) (compilationState : CompilationState<'Symbol>) =
         // If there are no more pending states, we're finished compiling the DFA.
         if Set.isEmpty pending then
@@ -239,6 +247,21 @@ module internal Dfa =
     }
 
     //
+    let private transitionsBySymbol (transitions : LabeledSparseMultidigraph<DfaStateId, 'Symbol>) =
+        (Map.empty, transitions.EdgeSets)
+        ||> Map.fold (fun transitionsBySymbol (source, target) symbols ->
+            let transitionsFromSource =
+                let transitionsFromSource = Map.tryFind source transitionsBySymbol
+                defaultArg transitionsFromSource Map.empty
+
+            let transitionsFromSource =
+                (transitionsFromSource, symbols)
+                ||> Set.fold (fun transitionsFromSource symbol ->
+                    Map.add symbol target transitionsFromSource)
+
+            Map.add source transitionsFromSource transitionsBySymbol)
+
+    //
     let compile (nfa : Nfa<'Symbol>) : DfaCompilationResult<'Symbol> =
         // The initial (empty) compilation state.
         let compilationState : CompilationState<'Symbol> = {
@@ -316,6 +339,7 @@ module internal Dfa =
         let dfa =
             { InitialState = initialState;
                 Transitions = compilationState.Transitions;
+                TransitionsBySymbol = transitionsBySymbol compilationState.Transitions;
                 FinalStates = finalStates; }
 
         // Return the DFA along with any data from the final compilation state which
@@ -354,7 +378,16 @@ let ofNfaWithLog (nfa : Nfa<'Symbol>) (textWriter : #System.IO.TextWriter) : Dfa
 /// Given a DFA which accepts language L, produces an NFA which accepts the reverse of L.
 let reverse (dfa : Dfa<'Symbol>) : Nfa<'Symbol> =
     // Reverse the direction of the edges in the transition map.
-    // TODO
+    // OPTIMIZE : This could (and should) easily be optimized to be much more efficient.
+    let transitions =
+        let transitions =
+            LabeledSparseMultidigraph.ofVertexSet dfa.Transitions.Vertices
+        (transitions, dfa.Transitions.EdgeSets)
+        ||> Map.fold (fun transitions (source, target) edgeSet ->
+            (transitions, edgeSet)
+            ||> Set.fold (fun transitions symbol ->
+                // Reverse the source and target vertices of the edge.
+                LabeledSparseMultidigraph.addEdge target source symbol transitions))
 
     // Change the final states to initial states, and vice versa.
     // TODO
@@ -374,22 +407,245 @@ let minimize (dfa : Dfa<'Symbol>) : Dfa<'Symbol> =
 
 //
 type private TokenizerState<'Symbol> = {
+    /// The symbols which have been accepted for the current match.
+    /// These are stored in reverse order for efficiency, so the
+    /// list must be reversed before returning.
+    Accepted : 'Symbol list;
+    /// Characters which have been read from the symbol stream
+    /// but not yet accepted. This allows the stream to be read
+    /// in a forward-only manner.
+    Pending : Queue<'Symbol>;
     //
-    Buffer : 'Symbol[];
-    //
-    LastAcceptedBufferPosition : int option;
-    //
-    CurrentBufferPosition : int;
+    Buffer : 'Symbol list;
+    /// The current DFA state.
+    CurrentState : DfaStateId;
+    /// The last final DFA state visited by the tokenizer.
+    LastFinalState : DfaStateId;
 }
 
 //
-let tokenize (dfa : Dfa<'Symbol>) (symbols : seq<'Symbol>) : seq<'Symbol[]> =
-(* TODO :   This function should read symbols from the seq<_> and use them to
-            execute the DFA. This function will useful for unit testing DFAs
-            without having to generate/compile/execute code; it could also be
-            used to test the code-generation process if we use it to tokenize
-            some input, then we tokenize the same input using the generated/
-            compiled code -- if they're not the same, something went wrong with
-            the code-generation process. *)
-    raise <| System.NotImplementedException "Dfa.tokenize"
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module private TokenizerState =
+    /// Create a new TokenizerState with the specified initial state.
+    let create initialState : TokenizerState<'Symbol> =
+        { Accepted = List.empty;
+            Pending = Queue.empty;
+            Buffer = List.empty;
+            CurrentState = initialState;
+            LastFinalState = initialState; }
+
+    /// Marks the current DFA state as the last final DFA state visited
+    /// by the tokenizer. This function should be called ONLY when the current
+    /// DFA state is a final (accepting) state.
+    let checkpoint (tokenizerState : TokenizerState<'Symbol>) =
+        (),
+        { tokenizerState with
+            Accepted =
+                // OPTIMIZE : Implement a Queue.fold function to
+                // avoid creating the intermediate array.
+                (tokenizerState.Accepted, Queue.toArray tokenizerState.Pending)
+                ||> Array.fold (fun accepted el -> el :: accepted);
+            Pending = Queue.empty;
+            LastFinalState = tokenizerState.CurrentState; }
+
+    /// Gets the current token ('Symbol[]) and clears the list of
+    /// accepted symbols from the tokenizer state.
+    let accept (tokenizerState : TokenizerState<'Symbol>) =
+        // Create the token from the list of accepted symbols.
+        Array.ofList <| List.rev tokenizerState.Accepted,
+        // Clear the list of accepted symbols in the tokenizer state.
+        { tokenizerState with Accepted = List.empty; }
+
+    //
+    let reject (tokenizerState : TokenizerState<'Symbol>) : 'Symbol[] * _ =
+        // TODO : Transfer characters from 'Pending' to 'Buffer'
+        // TODO
+        Array.empty, tokenizerState
+
+    /// Adds a symbol to the queue of symbols pending acceptance.
+    let addPending symbol (tokenizerState : TokenizerState<'Symbol>) =
+        (),
+        { tokenizerState with
+            Pending = Queue.enqueue symbol tokenizerState.Pending; }
+
+    /// Sets the current DFA state to the target DFA state.
+    let transition targetDfaState (tokenizerState : TokenizerState<'Symbol>) =
+        (),
+        { tokenizerState with
+            CurrentState = targetDfaState; }
+
+
+//
+type Token<'Symbol> = {
+    //
+    Token : 'Symbol[];
+    //
+    Regex : int<RegexIndex>;
+    //
+    StartPosition : uint32;
+    //
+    EndPosition : uint32;
+}
+
+//
+type InvalidToken<'Symbol> = {
+    //
+    Token : 'Symbol[];
+    //
+    StartPosition : uint32;
+    //
+    EndPosition : uint32;
+}
+
+open System.Collections.Generic
+
+(* TODO :   Once 'tokenize' works correctly, modify it so the return type is:
+                seq<Choice<Token<'Symbol>, InvalidToken<'Symbol>>>
+            This allows the start/end position of the tokens to be returned as well. *)
+
+/// <summary>Tokenizes a sequence of symbols using the specified DFA.</summary>
+/// <remarks>
+/// This function can be used to unit-test DFAs and lexers without having to
+/// generate code for them. It can also be used to test the code-generation
+/// functionality; for a given sequence of symbols, a generated/compiled lexer
+/// should produce the exact same sequence of tokens produced by this function.
+/// </remarks>
+let tokenize (dfa : Dfa<'Symbol>) (symbols : seq<'Symbol>) : seq<Choice<int<RegexIndex> * 'Symbol[], 'Symbol[]>> =
+    //
+    let rec tokenize (symbolEnumerator : IEnumerator<'Symbol>) tokenizerState = seq {
+        // Try to read a symbol from the stream or pending characters queue.
+        let symbol, tokenizerState =
+            // If the buffer contains any symbols, return the next symbol in
+            // the buffer; otherwise, try to read a character from the symbol stream.
+            match tokenizerState.Buffer with
+            | [] ->
+                let symbol =
+                    if symbolEnumerator.MoveNext () then
+                        Some symbolEnumerator.Current
+                    else None
+
+                symbol, tokenizerState
+
+            | symbol :: buffer ->
+                Some symbol, { tokenizerState with Buffer = buffer; }
+
+        match symbol with
+        | None ->
+            // The end of the file has been reached.
+            // If the current state is a final (accepting) state,
+            // accept the current string; otherwise, reject it.
+            match Map.tryFind tokenizerState.CurrentState dfa.FinalStates with
+            | Some regexIndex ->
+                let (), tokenizerState = TokenizerState.checkpoint tokenizerState
+                let token, tokenizerState = TokenizerState.accept tokenizerState
+
+                // Emit the token.
+                yield Choice1Of2 (regexIndex, token)
+
+            | None ->
+                // If there are any pending symbols, reject the first one and restart tokenizing.
+                if not <| Queue.isEmpty tokenizerState.Pending then
+                    let rejectedSymbol, pending = Queue.dequeue tokenizerState.Pending
+                    yield Choice2Of2 [| rejectedSymbol |]
+
+                    // Move the remaining pending symbols into the buffer.
+                    let tokenizerState =
+                        { tokenizerState with
+                            Pending = Queue.empty;
+                            Buffer =
+                                List.ofArray <| Queue.toArray pending; }
+
+                    // Start matching again at the initial DFA state.
+                    let (), tokenizerState = TokenizerState.transition dfa.InitialState tokenizerState
+                    let (), tokenizerState = TokenizerState.checkpoint tokenizerState
+                    yield! tokenize symbolEnumerator tokenizerState
+
+        | Some symbol ->
+            // Add this symbol to the queue of pending symbols.
+            let (), tokenizerState = TokenizerState.addPending symbol tokenizerState
+
+            // Determine if there is a transition out of the current state
+            // which is labeled with this symbol.
+            let transitionTarget =
+                dfa.TransitionsBySymbol
+                |> Map.tryFind tokenizerState.CurrentState
+                |> Option.bind (Map.tryFind symbol)
+
+            match transitionTarget with
+            | None ->
+                // If the current DFA state is a final (accepting) state,
+                // accept the current token.
+                match Map.tryFind tokenizerState.CurrentState dfa.FinalStates with
+                | Some regexIndex ->
+                    let (), tokenizerState = TokenizerState.checkpoint tokenizerState
+                    let token, tokenizerState = TokenizerState.accept tokenizerState
+
+                    // Emit the accepted token.
+                    yield Choice1Of2 (regexIndex, token)
+
+                    // Start matching again at the initial DFA state.
+                    let (), tokenizerState = TokenizerState.transition dfa.InitialState tokenizerState
+                    let (), tokenizerState = TokenizerState.checkpoint tokenizerState
+                    yield! tokenize symbolEnumerator tokenizerState
+
+                | None ->
+                    // If the last final state is the initial state of the DFA, then the current
+                    // sequence of characters does not match any of the input Regexes.
+                    // Remove the first character from the 'pending' queue, reject it, then restart tokenizing.
+                    let token, tokenizerState =
+                        if tokenizerState.LastFinalState = dfa.InitialState then
+                            let rejectedSymbol, pending = Queue.dequeue tokenizerState.Pending    
+                            let tokenizerState = { tokenizerState with Pending = pending; }
+                            
+                            Choice2Of2 [| rejectedSymbol |], tokenizerState
+
+                        else
+                            // Emit the current token (set at the last-encountered final state).
+                            let token, tokenizerState = TokenizerState.accept tokenizerState
+                            let regexIndex = Map.find tokenizerState.LastFinalState dfa.FinalStates
+                            Choice1Of2 (regexIndex, token), tokenizerState
+
+                    // Emit the token.
+                    yield token
+
+                    // Move the pending symbols into the buffer.
+                    let tokenizerState =
+                        { tokenizerState with
+                            Pending = Queue.empty;
+                            Buffer =
+                                // OPTIMIZE : This should be implemented more efficiently,
+                                // perhaps as a Queue.toList function.
+                                List.ofArray <| Queue.toArray tokenizerState.Pending; }
+                    
+                    // Start tokenizing again at the initial DFA state.
+                    let (), tokenizerState = TokenizerState.transition dfa.InitialState tokenizerState
+                    let (), tokenizerState = TokenizerState.checkpoint tokenizerState
+                    yield! tokenize symbolEnumerator tokenizerState
+
+            | Some transitionTarget ->
+                // If the current DFA state is a final (accepting) state,
+                // mark it as the last final state.
+                let (), tokenizerState =
+                    if Map.containsKey tokenizerState.CurrentState dfa.FinalStates then
+                        TokenizerState.checkpoint tokenizerState
+                    else
+                        (), tokenizerState
+
+                // Set the transition target as the current DFA state,
+                // then recurse to continue tokenizing.
+                let (), tokenizerState = TokenizerState.transition transitionTarget tokenizerState
+                yield! tokenize symbolEnumerator tokenizerState
+    }
+
+    // Run the tokenize function.
+    TokenizerState.create dfa.InitialState
+    |> tokenize (symbols.GetEnumerator ())
+
+
+/// Produces a sequence containing all words (groups of symbols)
+/// in the language accepted by the specified DFA.
+/// In many cases, the sequence produced by this function is infinite.
+let generate (dfa : Dfa<'Symbol>) : seq<'Symbol[]> =
+    //
+    raise <| System.NotImplementedException "Dfa.generate"
 

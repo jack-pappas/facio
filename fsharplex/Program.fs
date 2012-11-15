@@ -31,7 +31,7 @@ let id_regex =
         |> Set.ofSeq
         |> charSetRegex
 
-    let ``[a-z0-9]*`` =
+    let ``[a-z0-9]`` =
         seq {'a' .. 'z'}
         |> Seq.append (seq {'0' .. '9'})
         |> Set.ofSeq
@@ -39,7 +39,7 @@ let id_regex =
 
     Sequence (
         ``[a-z]``,
-        ZeroOrMore ``[a-z0-9]*``)
+        ZeroOrMore ``[a-z0-9]``)
 
 let id_nfa =
     Nfa.ofRegex id_regex
@@ -116,10 +116,9 @@ let figure_2_5_dfa =
     Dfa.ofNfa figure_2_5
 
 
-// TEST : Compile the above regexes into a single NFA.
+// TEST : Compile some regexes into a single NFA.
 let combined_nfa =
     Nfa.ofRegexes [|
-        //id_regex;
         ``a(b|c)*``;
         ``(a|b)*ac``;
         |]
@@ -127,6 +126,16 @@ let combined_nfa =
 let combined_dfa =
     Dfa.ofNfa combined_nfa
 
+//
+"abaccbaaabcaba"    // Accept: abacc, Reject: b, Accept: aaabc, Reject: aba
+//|> Dfa.tokenize combined_dfa
+|> Dfa.tokenize abc_dfa
+|> Seq.iter (function
+    | Choice1Of2 (regexIndex, token) ->
+        printfn "Matched regex #%i: '%s'" (int regexIndex) (System.String token)
+    | Choice2Of2 invalidToken ->
+        printfn "Rejected: '%s'" (System.String invalidToken)
+    )
 
 
 printfn "Press any key to exit..."
