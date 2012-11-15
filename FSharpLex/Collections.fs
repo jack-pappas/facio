@@ -8,7 +8,7 @@ See LICENSE.TXT for licensing details.
 
 //
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module FSharpLex.CharSet
+module FSharpLex.Collections
 
 
 /// Character set implementation based on a Discrete Interval Encoding Tree.
@@ -424,3 +424,168 @@ module CharSet =
                 add el set
             else set)
 
+
+/// This module creates and manipulates suspensions for lazy evaluation.
+module Susp =
+    //
+    type susp<'a> = Lazy<'a>
+
+    //
+    let force (susp : susp<'a>) =
+        susp.Force ()
+
+    //
+    let delay f : susp<'a> =
+        System.Lazy.Create f
+
+
+
+/// An implementation of a lazy-list.
+type Stream<'T> =
+    | Nil
+    | Cons of 'T * Stream<'T>
+    | LCons of 'T * Lazy<Stream<'T>>
+
+//
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module Stream =
+    open Susp
+
+    exception Empty
+
+    //
+    let empty = Nil
+
+    //
+    let cons = Cons
+
+    //
+    let lcons (x, xs) =
+        LCons (x, delay xs)
+
+    //
+    let head = function
+        | Nil ->
+            raise Empty
+        | Cons (x, _) -> x
+        | LCons (x, _) -> x
+
+    //
+    let tail = function
+        | Nil ->
+            Nil
+        | Cons (_, xs) ->
+            xs
+        | LCons (_, xs) ->
+            force xs
+
+    //
+    let isEmpty = function
+        | Nil -> true
+        | _ -> false
+
+    //
+    let rec sizeImpl stream cont =
+        match stream with
+        | Nil ->
+            cont 0
+        | Cons (_, xs) ->
+            sizeImpl xs <| fun size ->
+                1 + size
+        | LCons (_, xs) ->
+            sizeImpl (force xs) <| fun size ->
+                1 + size
+
+    //
+    let size stream =
+        sizeImpl stream id
+
+
+//
+type QueueData<'T> = {
+    Front : Stream<'T>;
+    Rear : 'T list;
+    Pending : Stream<'T>;
+}
+
+//
+type Queue<'T> = Queue of QueueData<'T>
+
+//
+module Queue =
+    open Stream
+
+    (* INVARIANTS                                        *)
+    (*   1. length front >= length rear                  *)
+    (*   2. length pending = length front - length rear  *)
+    (*   3. (in the absence of insertf's)                *)
+    (*      pending = nthtail (front, length rear)       *)
+
+    //
+    let rec private rotate (xs, y::ys, rys) =
+        if Stream.isEmpty xs then
+            cons (y,rys)
+        else lcons (head xs,
+                      fun () -> rotate (tail xs, ys, cons (y, rys)))
+
+    (* Psuedo-constructor that enforces invariant *)
+    (*   always called with length pending = length front - length rear + 1 *)
+    let private queue { Front = front; Rear = rear; Pending = pending; } =
+        if Stream.isEmpty pending then
+            (* length rear = length front + 1 *)
+            let front = rotate (front, rear, Stream.empty)
+            Queue { Front = front; Rear = []; Pending = front; }
+        else
+            Queue { Front = front; Rear = rear; Pending = tail pending; }
+
+    
+    exception Empty
+
+    /// Returns an empty queue of the given type.
+    let empty : Queue<'T> =
+        Queue { Front = Stream.empty; Rear = []; Pending = Stream.empty; }
+
+    /// Returns true if the given queue is empty; otherwise, false.
+    let isEmpty (Queue { Front = front } : Queue<'T>) =
+        (* by Invariant 1, front = empty implies rear = [] *)
+        Stream.isEmpty front
+
+    let size (Queue { Front = front; Rear = rear; Pending = pending; } : Queue<'T>) =
+        (* = Stream.size front + length rear -- by Invariant 2 *)
+        Stream.size pending + 2 * List.length rear
+
+    /// add to rear of queue
+    let enqueue x (Queue { Front = front; Rear = rear; Pending = pending; } : Queue<'T>) =
+        queue { Front = front; Rear = x :: rear; Pending = pending; }
+
+    /// add to front of queue
+    let enqueuef x (Queue { Front = front; Rear = rear; Pending = pending; } : Queue<'T>) =
+        Queue { Front = cons (x, front); Rear = rear; Pending = cons (x, pending); }
+
+    /// take from front of queue
+    let dequeue (Queue { Front = front; Rear = rear; Pending = pending; } : Queue<'T>) =
+        if Stream.isEmpty front then
+            raise Empty
+        else
+            head front,
+            queue { Front = tail front; Rear = rear; Pending = pending; }
+
+    //
+    let toArray (queue : Queue<'T>) : 'T[] =
+        // OPTIMIZATION : If the queue is empty, return an empty array.
+        if isEmpty queue then
+            Array.empty
+        else
+            // Instead of creating a fixed-size array with
+                // Array.zeroCreate <| size queue
+            // use a ResizeArray<_> so we only need to traverse the queue once.
+            // TODO : Tune this for best average-case performance.
+            let result = ResizeArray<_> ()
+
+            let mutable queue = queue
+            while not <| isEmpty queue do
+                let item, queue' = dequeue queue
+                result.Add item
+                queue <- queue'
+
+            result.ToArray ()
