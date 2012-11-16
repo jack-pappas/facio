@@ -416,7 +416,7 @@ type private TokenizerState<'Symbol> = {
     /// in a forward-only manner.
     Pending : Queue<'Symbol>;
     //
-    Buffer : 'Symbol list;
+    Buffer : Queue<'Symbol>;
     /// The current DFA state.
     CurrentState : DfaStateId;
     /// The last final DFA state visited by the tokenizer.
@@ -430,7 +430,7 @@ module private TokenizerState =
     let create initialState : TokenizerState<'Symbol> =
         { Accepted = List.empty;
             Pending = Queue.empty;
-            Buffer = List.empty;
+            Buffer = Queue.empty;
             CurrentState = initialState;
             LastFinalState = initialState; }
 
@@ -517,16 +517,15 @@ let tokenize (dfa : Dfa<'Symbol>) (symbols : seq<'Symbol>) : seq<Choice<int<Rege
         let symbol, tokenizerState =
             // If the buffer contains any symbols, return the next symbol in
             // the buffer; otherwise, try to read a character from the symbol stream.
-            match tokenizerState.Buffer with
-            | [] ->
+            if Queue.isEmpty tokenizerState.Buffer then
                 let symbol =
                     if symbolEnumerator.MoveNext () then
                         Some symbolEnumerator.Current
                     else None
 
                 symbol, tokenizerState
-
-            | symbol :: buffer ->
+            else
+                let symbol, buffer = Queue.dequeue tokenizerState.Buffer
                 Some symbol, { tokenizerState with Buffer = buffer; }
 
         match symbol with
@@ -552,8 +551,7 @@ let tokenize (dfa : Dfa<'Symbol>) (symbols : seq<'Symbol>) : seq<Choice<int<Rege
                     let tokenizerState =
                         { tokenizerState with
                             Pending = Queue.empty;
-                            Buffer =
-                                List.ofArray <| Queue.toArray pending; }
+                            Buffer = pending; }
 
                     // Start matching again at the initial DFA state.
                     let (), tokenizerState = TokenizerState.transition dfa.InitialState tokenizerState
@@ -561,9 +559,6 @@ let tokenize (dfa : Dfa<'Symbol>) (symbols : seq<'Symbol>) : seq<Choice<int<Rege
                     yield! tokenize symbolEnumerator tokenizerState
 
         | Some symbol ->
-            // Add this symbol to the queue of pending symbols.
-            let (), tokenizerState = TokenizerState.addPending symbol tokenizerState
-
             // Determine if there is a transition out of the current state
             // which is labeled with this symbol.
             let transitionTarget =
@@ -573,6 +568,11 @@ let tokenize (dfa : Dfa<'Symbol>) (symbols : seq<'Symbol>) : seq<Choice<int<Rege
 
             match transitionTarget with
             | None ->
+                // Add this symbol to the buffer so it will be reprocessed.
+                let tokenizerState =
+                    { tokenizerState with
+                        Buffer = Queue.enqueue symbol tokenizerState.Buffer; }
+
                 // If the current DFA state is a final (accepting) state,
                 // accept the current token.
                 match Map.tryFind tokenizerState.CurrentState dfa.FinalStates with
@@ -609,13 +609,17 @@ let tokenize (dfa : Dfa<'Symbol>) (symbols : seq<'Symbol>) : seq<Choice<int<Rege
                     yield token
 
                     // Move the pending symbols into the buffer.
+                    // They are placed at the front of the buffer to keep
+                    // the symbols in the same order as they were in the symbol stream.
                     let tokenizerState =
                         { tokenizerState with
                             Pending = Queue.empty;
-                            Buffer =
-                                // OPTIMIZE : This should be implemented more efficiently,
-                                // perhaps as a Queue.toList function.
-                                List.ofArray <| Queue.toArray tokenizerState.Pending; }
+                            Buffer = 
+                                // OPTIMIZE : Implement a Queue.fold function for this.
+                                let pending = Queue.toArray tokenizerState.Pending
+                                (tokenizerState.Buffer, pending)
+                                ||> Array.fold (fun buffer el ->
+                                    Queue.enqueue el buffer); }
                     
                     // Start tokenizing again at the initial DFA state.
                     let (), tokenizerState = TokenizerState.transition dfa.InitialState tokenizerState
@@ -623,6 +627,9 @@ let tokenize (dfa : Dfa<'Symbol>) (symbols : seq<'Symbol>) : seq<Choice<int<Rege
                     yield! tokenize symbolEnumerator tokenizerState
 
             | Some transitionTarget ->
+                // Add this symbol to the queue of pending symbols.
+                let (), tokenizerState = TokenizerState.addPending symbol tokenizerState
+
                 // If the current DFA state is a final (accepting) state,
                 // mark it as the last final state.
                 let (), tokenizerState =
