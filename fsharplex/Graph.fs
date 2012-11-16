@@ -260,9 +260,9 @@ type LabeledSparseMultidigraph<[<EqualityConditionalOn>]'Vertex, [<EqualityCondi
         let edgeSet =
             match Map.tryFind (source, target) edgeSets with
             | Some edgeSet ->
-                edgeSet
+                Set.add edge edgeSet
             | None ->
-                Set.singleton edge
+                Set.singleton edge        
 
         LabeledSparseMultidigraph (
             vertexSet,
