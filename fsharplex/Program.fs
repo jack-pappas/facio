@@ -49,7 +49,6 @@ let id_dfa =
     
 
 // a(b|c)*
-// Should have 10 states when using Thompson's construction.
 let ``a(b|c)*`` =
     Sequence (
         Symbol 'a',
@@ -127,9 +126,9 @@ let combined_dfa =
     Dfa.ofNfa combined_nfa
 
 //
-"abaccbaaabcaba"    // Accept: abacc, Reject: b, Accept: aaabc, Reject: aba
-//|> Dfa.tokenize combined_dfa
-|> Dfa.tokenize abc_dfa
+"abaccbaaabcaba"
+|> Dfa.tokenize combined_dfa
+//|> Dfa.tokenize abc_dfa
 |> Seq.iter (function
     | Choice1Of2 (regexIndex, token) ->
         printfn "Matched regex #%i: '%s'" (int regexIndex) (System.String token)
