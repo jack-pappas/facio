@@ -107,3 +107,9 @@ type Regex<'Symbol> =
         Regex<_>.FromExtendedRegexImpl extRegex id
 
 
+    (* TODO :   Implement a method Tokenize which accepts a seq<'Symbol> and tokenizes it
+                using the Regex (without compiling the Regex to a NFA/DFA. This method could
+                use the List monad internally to implement the nondeterminism. *)
+    (* TODO :   Implement a method Generate which lazily generates a sequence containing all
+                of the words accepted by this regular expression. *)
+
