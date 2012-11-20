@@ -33,5 +33,6 @@ type Grammar<'NonterminalId, 'Token
     //
     StartSymbol : 'NonterminalId;
 }
-    
 
+(* TODO :   Create a new internal record type, GrammarWithSets (or similar) which
+            contains the same fields as Grammar, plus the FIRST/FOLLOW/nullable sets. *)
