@@ -130,8 +130,6 @@ let grammar_3_12_sets =
 *)
 
 let grammar_3_20 =
-    // NOTE : This grammar does not include the first rule,
-    // which is the augmented start symbol.
     let S =
         Set.empty
         |> Set.add [|
@@ -163,7 +161,11 @@ let grammar_3_20 =
         Productions =
             Map.empty
             |> Map.add 'L' L
-            |> Map.add 'S' S; }
+            |> Map.add 'S' S;
+        StartSymbol = 'S'; }
+    // Augment the grammar with the start production and end-of-file token.
+    |> Tables.AugmentedGrammar.ofGrammar
+
         
 // TEST
 //Tables.Lr0.test grammar_3_20

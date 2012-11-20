@@ -59,6 +59,57 @@ module LrParsingTable =
             Table = Map.add (state, symbol) entry table.Table; }
 
 
+/// Represents nonterminals augmented with an additional nonterminal
+/// representing the start production of an augmented grammar.
+type AugmentedNonterminal<'NonterminalId when 'NonterminalId : comparison> =
+    /// A nonterminal specified in the original grammar.
+    | Nonterminal of 'NonterminalId
+    /// Represents the start production of the grammar.
+    | Start
+
+//
+type AugmentedTerminal<'Token when 'Token : comparison> =
+    //
+    | Terminal of 'Token
+    //
+    | EndOfFile
+
+//
+[<RequireQualifiedAccess>]
+module AugmentedGrammar =
+    //
+    let ofGrammar (grammar : Grammar<'NonterminalId, 'Token>)
+        : Grammar<AugmentedNonterminal<'NonterminalId>, AugmentedTerminal<'Token>> =
+        // Based on the input grammar, create a new grammar with an additional
+        // nonterminal and production for the start symbol and an additional token
+        // representing the end-of-file marker.
+        let startProduction = [|
+            Symbol.Nonterminal <| Nonterminal grammar.StartSymbol;
+            Symbol.Terminal EndOfFile; |]
+
+        {   StartSymbol = Start;
+            Terminals =
+                grammar.Terminals
+                |> Set.map Terminal
+                |> Set.add EndOfFile;
+            Nonterminals =
+                grammar.Nonterminals
+                |> Set.map Nonterminal
+                |> Set.add Start;
+            Productions =
+                (Map.empty, grammar.Productions)
+                ||> Map.fold (fun productionMap nontermId nontermProductions ->
+                    let nontermProductions =
+                        nontermProductions
+                        |> Set.map (Array.map (function
+                            | Symbol.Nonterminal nontermId ->
+                                Symbol.Nonterminal <| Nonterminal nontermId
+                            | Symbol.Terminal token ->
+                                Symbol.Terminal <| Terminal token))
+                    Map.add (Nonterminal nontermId) nontermProductions productionMap)
+                // Add the (only) production of the new start symbol.
+                |> Map.add Start (Set.singleton startProduction); }
+
 /// Represents the position of a parser in a production.
 /// The position corresponds to the 0-based index of the next symbol
 /// to be parsed, so position values must always be within the range
@@ -83,7 +134,7 @@ module Lr0 =
     /// Computes the LR(0) closure of a set of items.
     let private closure items (productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>) =
         /// Implementation of the LR(0) closure algorithm.
-        let rec closure (items : Set<_>) =
+        let rec closure items =
             let items' =
                 (items, items)
                 ||> Set.fold (fun items item ->
@@ -94,10 +145,10 @@ module Lr0 =
                     else
                         // Determine what to do based on the next symbol to be parsed.
                         match item.Production.[int item.Position] with
-                        | Terminal _ ->
+                        | Symbol.Terminal _ ->
                             // Nothing to do for terminals
                             items
-                        | Nonterminal nontermId ->
+                        | Symbol.Nonterminal nontermId ->
                             /// The productions of this nonterminal.
                             let nontermProductions = Map.find nontermId productions
 
@@ -170,3 +221,5 @@ module Lr0 =
 //            closure (Set.singleton state3StartItem) grammar.Productions
 //
 //        ()
+
+

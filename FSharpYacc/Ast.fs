@@ -30,11 +30,8 @@ type Grammar<'NonterminalId, 'Token
     Nonterminals : Set<'NonterminalId>;
     //
     Productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>;
+    //
+    StartSymbol : 'NonterminalId;
 }
     
-
-
-
-
-
 
