@@ -10,7 +10,7 @@ See LICENSE.TXT for licensing details.
 module FSharpYacc.Tables
 
 open Ast
-open Derivation
+open Predictive
 
 
 /// Represents nonterminals augmented with an additional nonterminal
@@ -158,7 +158,7 @@ type internal Lr0Item<'NonterminalId, 'Token
         sprintf "%O \u2192 %s" this.Nonterminal productionString
 
 //
-type internal ParserState<'NonterminalId, 'Token
+type internal Lr0ParserState<'NonterminalId, 'Token
         when 'NonterminalId : comparison
         and 'Token : comparison> = Set<Lr0Item<'NonterminalId, 'Token>>
 
@@ -169,7 +169,7 @@ type internal Lr0TableGenState<'NonterminalId, 'Token
     //
     Table : Map<LrParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserTableAction>>;
     //
-    ParserStates : Map<ParserState<'NonterminalId, 'Token>, LrParserStateId>;
+    ParserStates : Map<Lr0ParserState<'NonterminalId, 'Token>, LrParserStateId>;
     //
     ReductionRules : Map<'NonterminalId * Symbol<'NonterminalId, 'Token>[], LrReductionRuleId>;
     //
@@ -190,7 +190,7 @@ module internal Lr0TableGenState =
     /// Retrives the identifier for a given parser state (set of items).
     /// If the state has not been assigned an identifier, one is created
     /// and added to the table-generation state before returning.
-    let stateId (parserState : ParserState<'NonterminalId, 'Token>) (tableGenState : Lr0TableGenState<'NonterminalId, 'Token>) =
+    let stateId (parserState : Lr0ParserState<'NonterminalId, 'Token>) (tableGenState : Lr0TableGenState<'NonterminalId, 'Token>) =
         // Try to retrieve an existing id for this state.
         match Map.tryFind parserState tableGenState.ParserStates with
         | Some parserStateId ->
@@ -598,4 +598,36 @@ module Slr =
 
         // Create the parser table.
         createTableImpl grammar analysis initialTableGenState
+
+
+//
+type internal Lr1Item<'NonterminalId, 'Token
+        when 'NonterminalId : comparison
+        and 'Token : comparison> = {
+    //
+    Nonterminal : 'NonterminalId;
+    //
+    Production : Symbol<'NonterminalId, 'Token>[];
+    //
+    Position : int<ParserPosition>;
+    //
+    LookaheadSymbol : 'Token;
+} with
+    override this.ToString () =
+        let productionString =
+            let sb = System.Text.StringBuilder ()
+            for i = 0 to Array.length this.Production do
+                if i < int this.Position then
+                    this.Production.[i].ToString ()
+                    |> sb.Append |> ignore
+                elif i = int this.Position then
+                    // Append the dot character representing the parser position.
+                    sb.Append "\u2022" |> ignore
+                else
+                    this.Production.[i - 1].ToString ()
+                    |> sb.Append |> ignore
+
+            sb.ToString ()
+
+        sprintf "%O \u2192 %s, %O" this.Nonterminal productionString this.LookaheadSymbol
 

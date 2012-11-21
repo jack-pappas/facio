@@ -43,7 +43,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Ast.fs" />
-    <Compile Include="Derivation.fs" />
+    <Compile Include="Predictive.fs" />
     <Compile Include="Tables.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

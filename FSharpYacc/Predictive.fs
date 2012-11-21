@@ -7,7 +7,7 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-module FSharpYacc.Derivation
+module FSharpYacc.Predictive
 
 open Ast
 

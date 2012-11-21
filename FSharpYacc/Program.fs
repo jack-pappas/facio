@@ -9,7 +9,7 @@ See LICENSE.TXT for licensing details.
 module FSharpYacc.Program
 
 open Ast
-open Derivation
+open Predictive
 
 
 // TEST
