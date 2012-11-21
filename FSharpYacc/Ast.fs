@@ -19,6 +19,12 @@ type Symbol<'NonterminalId, 'Token
     //
     | Nonterminal of 'NonterminalId
 
+    override this.ToString () =
+        match this with
+        | Terminal token ->
+            token.ToString ()
+        | Nonterminal nonterm ->
+            nonterm.ToString ()
 
 /// A context-free grammar (CFG).
 type Grammar<'NonterminalId, 'Token
