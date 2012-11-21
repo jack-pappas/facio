@@ -125,7 +125,7 @@ let grammar_3_12 =
             |> Map.add 'Y' Y
             |> Map.add 'Z' Z; }
 
-let grammar_3_12_sets =
+let grammar_3_12_analysis =
     GrammarAnalysis.ofGrammar grammar_3_12
 *)
 
@@ -167,10 +167,46 @@ let grammar_3_20 =
         StartSymbol = 'S'; }
         
 // TEST
-let grammar_3_20_table =
+let ``LR(0) table for Grammar 3.20`` =
     Tables.Lr0.createTable grammar_3_20
 
 
+let grammar_3_23 =
+    // NOTE : This grammar does not include the first rule,
+    // which is the production of the augmented start symbol.
+    let E =
+        Set.empty
+        |> Set.add [|
+            Nonterminal 'T';
+            Terminal "+";
+            Nonterminal 'E'; |]
+        |> Set.add [|
+            Nonterminal 'T'; |]
+
+    let T =
+        Set.empty
+        |> Set.add [|
+            Terminal "x"; |]
+
+    {   Terminals =
+            Set.empty
+            |> Set.add "x"
+            |> Set.add "+";
+        Nonterminals =
+            Set.empty
+            |> Set.add 'E'
+            |> Set.add 'T';
+        Productions =
+            Map.empty
+            |> Map.add 'E' E
+            |> Map.add 'T' T;
+        StartSymbol = 'E'; }
+
+let ``LR(0) table for Grammar 3.23`` =
+    Tables.Lr0.createTable grammar_3_23
+
+let ``SLR table for Grammar 3.23`` =
+    Tables.Slr.createTable grammar_3_23
 
 
 
