@@ -143,85 +143,65 @@ module GrammarAnalysis =
 
                         let k = Array.length production - 1
                         for i = 0 to k do
-                            for j = i + 1 to k do
-                                if i = k ||
-                                    // OPTIMIZE : Array slices are slow -- find another way to implement this.
-                                    production.[i + 1 .. k]
-                                    |> Array.forall (function
-                                        | Terminal _ ->
-                                            false
-                                        | Nonterminal nontermId ->
-                                            Map.find nontermId nullable) then
+                            // Only compute follow sets for non-terminals!
+                            match production.[i] with
+                            | Terminal _ -> ()
+                            | Nonterminal ithSymbolNontermId ->
+                                for j = i + 1 to k do
+                                    if i = k ||
+                                        // OPTIMIZE : Array slices are slow -- find another way to implement this.
+                                        production.[i + 1 .. k]
+                                        |> Array.forall (function
+                                            | Terminal _ ->
+                                                false
+                                            | Nonterminal nontermId ->
+                                                Map.find nontermId nullable) then
 
-                                    (* NOTE : At this point, we know the i-th symbol is a nonterminal. *)
+                                        /// The FOLLOW set for the i-th symbol in the production.
+                                        let ithSymbolFollowSet = Map.find ithSymbolNontermId followSets
 
-                                    /// The nonterminal identifier for the i-th symbol.
-                                    let ithSymbolNontermId =
-                                        match production.[i] with
-                                        | Terminal token ->
-                                            failwith "A terminal was found where a nonterminal was expected."
-                                        | Nonterminal nontermId ->
-                                            nontermId
+                                        /// The updated FOLLOW set for the i-th symbol in the production.
+                                        let ithSymbolFollowSet' =
+                                            /// The FOLLOW set for the current nonterminal.
+                                            let nontermFollowSet = Map.find nontermId followSets
 
-                                    /// The FOLLOW set for the i-th symbol in the production.
-                                    let ithSymbolFollowSet = Map.find ithSymbolNontermId followSets
+                                            Set.union ithSymbolFollowSet nontermFollowSet
 
-                                    /// The updated FOLLOW set for the i-th symbol in the production.
-                                    let ithSymbolFollowSet' =
-                                        /// The FOLLOW set for the current nonterminal.
-                                        let nontermFollowSet = Map.find nontermId followSets
+                                        // Set the 'updated' flag iff the i-th symbol's FOLLOW set
+                                        // was actually changed.
+                                        if ithSymbolFollowSet <> ithSymbolFollowSet' then
+                                            updated <- true
+                                            followSets <- Map.add ithSymbolNontermId ithSymbolFollowSet' followSets
 
-                                        Set.union ithSymbolFollowSet nontermFollowSet
+                                    if i + 1 = j ||
+                                        // OPTIMIZE : Array slices are slow -- find another way to implement this.
+                                        production.[i + 1 .. j - 1]
+                                        |> Array.forall (function
+                                            | Terminal _ ->
+                                                false
+                                            | Nonterminal nontermId ->
+                                                Map.find nontermId nullable) then
 
-                                    // Set the 'updated' flag iff the i-th symbol's FOLLOW set
-                                    // was actually changed.
-                                    if ithSymbolFollowSet <> ithSymbolFollowSet' then
-                                        updated <- true
-                                        followSets <- Map.add ithSymbolNontermId ithSymbolFollowSet' followSets
+                                        /// The FOLLOW set for the i-th symbol in the production.
+                                        let ithSymbolFollowSet = Map.find ithSymbolNontermId followSets
 
-                                if i + 1 = j ||
-                                    // OPTIMIZE : Array slices are slow -- find another way to implement this.
-                                    production.[i + 1 .. j - 1]
-                                    |> Array.forall (function
-                                        | Terminal _ ->
-                                            false
-                                        | Nonterminal nontermId ->
-                                            Map.find nontermId nullable) then
-                                    
-                                    (* NOTE : At this point, we know both the i-th and j-th symbols are nonterminals. *)
-
-                                    /// The nonterminal identifier for the i-th symbol.
-                                    let ithSymbolNontermId =
-                                        match production.[i] with
-                                        | Terminal token ->
-                                            failwith "A terminal was found where a nonterminal was expected."
-                                        | Nonterminal nontermId ->
-                                            nontermId
-
-                                    /// The FOLLOW set for the i-th symbol in the production.
-                                    let ithSymbolFollowSet = Map.find ithSymbolNontermId followSets
-
-                                    /// The updated FOLLOW set for the i-th symbol in the production.
-                                    let ithSymbolFollowSet' =
-                                        /// The FIRST set for the j-th symbol in the production.
-                                        let jthSymbolFirstSet =
-                                            /// The nonterminal identifier for the j-th symbol.
-                                            let jthSymbolNontermId =
+                                        /// The updated FOLLOW set for the i-th symbol in the production.
+                                        let ithSymbolFollowSet' =
+                                            /// The FIRST set for the j-th symbol in the production.
+                                            let jthSymbolFirstSet =
                                                 match production.[j] with
                                                 | Terminal token ->
-                                                    failwith "A terminal was found where a nonterminal was expected."
+                                                    Set.singleton token
                                                 | Nonterminal nontermId ->
-                                                    nontermId
+                                                    Map.find nontermId firstSets
 
-                                            Map.find jthSymbolNontermId firstSets
+                                            Set.union ithSymbolFollowSet jthSymbolFirstSet
 
-                                        Set.union ithSymbolFollowSet jthSymbolFirstSet
-
-                                    // Set the 'updated' flag iff the i-th symbol's FOLLOW set
-                                    // was actually changed.
-                                    if ithSymbolFollowSet <> ithSymbolFollowSet' then
-                                        updated <- true
-                                        followSets <- Map.add ithSymbolNontermId ithSymbolFollowSet' followSets
+                                        // Set the 'updated' flag iff the i-th symbol's FOLLOW set
+                                        // was actually changed.
+                                        if ithSymbolFollowSet <> ithSymbolFollowSet' then
+                                            updated <- true
+                                            followSets <- Map.add ithSymbolNontermId ithSymbolFollowSet' followSets
 
                         // Pass the 'followSets' map and the 'updated' flag to the
                         // next iteration of the fold.
