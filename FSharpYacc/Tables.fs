@@ -13,71 +13,6 @@ open Ast
 open Predictive
 
 
-/// Represents nonterminals augmented with an additional nonterminal
-/// representing the start production of an augmented grammar.
-type AugmentedNonterminal<'NonterminalId when 'NonterminalId : comparison> =
-    /// A nonterminal specified in the original grammar.
-    | Nonterminal of 'NonterminalId
-    /// Represents the start production of the grammar.
-    | Start
-
-    override this.ToString () =
-        match this with
-        | Nonterminal nonterm ->
-            nonterm.ToString ()
-        | Start ->
-            "\u0002"
-
-//
-type AugmentedTerminal<'Token when 'Token : comparison> =
-    //
-    | Terminal of 'Token
-    //
-    | EndOfFile
-
-    override this.ToString () =
-        match this with
-        | Terminal token ->
-            token.ToString ()
-        | EndOfFile ->
-            "\u0003"
-
-//
-[<RequireQualifiedAccess>]
-module AugmentedGrammar =
-    //
-    let ofGrammar (grammar : Grammar<'NonterminalId, 'Token>)
-        : Grammar<AugmentedNonterminal<'NonterminalId>, AugmentedTerminal<'Token>> =
-        // Based on the input grammar, create a new grammar with an additional
-        // nonterminal and production for the start symbol and an additional token
-        // representing the end-of-file marker.
-        let startProduction = [|
-            Symbol.Nonterminal <| Nonterminal grammar.StartSymbol;
-            Symbol.Terminal EndOfFile; |]
-
-        {   StartSymbol = Start;
-            Terminals =
-                grammar.Terminals
-                |> Set.map Terminal
-                |> Set.add EndOfFile;
-            Nonterminals =
-                grammar.Nonterminals
-                |> Set.map Nonterminal
-                |> Set.add Start;
-            Productions =
-                (Map.empty, grammar.Productions)
-                ||> Map.fold (fun productionMap nontermId nontermProductions ->
-                    let nontermProductions =
-                        nontermProductions
-                        |> Set.map (Array.map (function
-                            | Symbol.Nonterminal nontermId ->
-                                Symbol.Nonterminal <| Nonterminal nontermId
-                            | Symbol.Terminal token ->
-                                Symbol.Terminal <| Terminal token))
-                    Map.add (Nonterminal nontermId) nontermProductions productionMap)
-                // Add the (only) production of the new start symbol.
-                |> Map.add Start (Set.singleton startProduction); }
-
 /// Represents the position of a parser in a production.
 /// The position corresponds to the 0-based index of the next symbol
 /// to be parsed, so position values must always be within the range
@@ -128,7 +63,7 @@ type LrParsingTable<'NonterminalId, 'Token
     ReductionRulesById : Map<LrReductionRuleId, 'NonterminalId * Symbol<'NonterminalId, 'Token>[]>;
 }
 
-//
+/// An LR(0) item.
 type internal Lr0Item<'NonterminalId, 'Token
         when 'NonterminalId : comparison
         and 'Token : comparison> = {
@@ -140,22 +75,24 @@ type internal Lr0Item<'NonterminalId, 'Token
     Position : int<ParserPosition>;
 } with
     override this.ToString () =
-        let productionString =
-            let sb = System.Text.StringBuilder ()
-            for i = 0 to Array.length this.Production do
-                if i < int this.Position then
-                    this.Production.[i].ToString ()
-                    |> sb.Append |> ignore
-                elif i = int this.Position then
-                    // Append the dot character representing the parser position.
-                    sb.Append "\u2022" |> ignore
-                else
-                    this.Production.[i - 1].ToString ()
-                    |> sb.Append |> ignore
+        let sb = System.Text.StringBuilder ()
 
-            sb.ToString ()
+        // Add the nonterminal text and arrow to the StringBuilder.
+        sprintf "%O \u2192 " this.Nonterminal
+        |> sb.Append |> ignore
 
-        sprintf "%O \u2192 %s" this.Nonterminal productionString
+        for i = 0 to Array.length this.Production do
+            if i < int this.Position then
+                this.Production.[i].ToString ()
+                |> sb.Append |> ignore
+            elif i = int this.Position then
+                // Append the dot character representing the parser position.
+                sb.Append "\u2022" |> ignore
+            else
+                this.Production.[i - 1].ToString ()
+                |> sb.Append |> ignore
+
+        sb.ToString ()
 
 //
 type internal Lr0ParserState<'NonterminalId, 'Token
@@ -317,6 +254,9 @@ module internal Lr0TableGenState =
 [<RequireQualifiedAccess>]
 module Lr0 =
     /// Computes the LR(0) closure of a set of items.
+    // TODO : Modify this to use a worklist-style algorithm to avoid
+    // reprocessing items which already exist in the set (i.e., when iterating,
+    // we only process items added to the set in the previous iteration).
     let internal closure (productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>) items =
         /// Implementation of the LR(0) closure algorithm.
         let rec closure items =
@@ -600,7 +540,7 @@ module Slr =
         createTableImpl grammar analysis initialTableGenState
 
 
-//
+/// An LR(1) item.
 type internal Lr1Item<'NonterminalId, 'Token
         when 'NonterminalId : comparison
         and 'Token : comparison> = {
@@ -614,20 +554,160 @@ type internal Lr1Item<'NonterminalId, 'Token
     LookaheadSymbol : 'Token;
 } with
     override this.ToString () =
-        let productionString =
-            let sb = System.Text.StringBuilder ()
-            for i = 0 to Array.length this.Production do
-                if i < int this.Position then
-                    this.Production.[i].ToString ()
-                    |> sb.Append |> ignore
-                elif i = int this.Position then
-                    // Append the dot character representing the parser position.
-                    sb.Append "\u2022" |> ignore
+        let sb = System.Text.StringBuilder ()
+
+        // Add the nonterminal text and arrow to the StringBuilder.
+        sprintf "%O \u2192 " this.Nonterminal
+        |> sb.Append |> ignore
+
+        for i = 0 to Array.length this.Production do
+            if i < int this.Position then
+                this.Production.[i].ToString ()
+                |> sb.Append |> ignore
+            elif i = int this.Position then
+                // Append the dot character representing the parser position.
+                sb.Append "\u2022" |> ignore
+            else
+                this.Production.[i - 1].ToString ()
+                |> sb.Append |> ignore
+
+        // Append the lookahead symbol
+        sb.Append ", " |> ignore
+        this.LookaheadSymbol.ToString () |> sb.Append |> ignore
+
+        sb.ToString ()
+
+//
+type internal Lr1ParserState<'NonterminalId, 'Token
+        when 'NonterminalId : comparison
+        and 'Token : comparison> = Set<Lr1Item<'NonterminalId, 'Token>>
+
+//
+[<RequireQualifiedAccess>]
+module Lr1 =
+    /// Computes the LR(1) closure of a set of items.
+    // TODO : Modify this to use a worklist-style algorithm to avoid
+    // reprocessing items which already exist in the set (i.e., when iterating,
+    // we only process items added to the set in the previous iteration).
+    let internal closure (grammar : Grammar<'NonterminalId, 'Token>) (analysis : GrammarAnalysis<'NonterminalId, 'Token>) items =
+        /// Implementation of the LR(1) closure algorithm.
+        let rec closure items =
+            let items' =
+                (items, items)
+                ||> Set.fold (fun items item ->
+                    // If the position is at the end of the production,
+                    // there's nothing that needs to be done for this item.
+                    if int item.Position = Array.length item.Production then
+                        items
+                    else
+                        // Determine what to do based on the next symbol to be parsed.
+                        match item.Production.[int item.Position] with
+                        | Symbol.Terminal _ ->
+                            // Nothing to do for terminals
+                            items
+                        | Symbol.Nonterminal nontermId ->
+                            /// The productions of this nonterminal.
+                            let nontermProductions = Map.find nontermId grammar.Productions
+
+                            /// The FOLLOW set of this nonterminal, incorporating the lookahead symbol.
+                            let nontermFollowSetWithLookahead =
+                                /// The FOLLOW set of this nonterminal.
+                                let nontermFollowSet = Map.find nontermId analysis.Follow
+
+                                // Add the lookahead symbol to the FOLLOW set if this nonterminal is nullable.
+                                if Map.find nontermId analysis.Nullable then
+                                    Set.add item.LookaheadSymbol nontermFollowSet
+                                else
+                                    nontermFollowSet
+
+                            // For all productions of this nonterminal, create a new item
+                            // with the parser position at the beginning of the production.
+                            // Add these new items into the set of items.
+                            (items, nontermProductions)
+                            ||> Set.fold (fun items production ->
+                                // Combine the production with each token which could
+                                // possibly follow this nonterminal.
+                                (items, nontermFollowSetWithLookahead)
+                                ||> Set.fold (fun items nontermFollowToken ->
+                                    let newItem = {
+                                        Nonterminal = nontermId;
+                                        Production = production;
+                                        Position = 0<_>;
+                                        LookaheadSymbol = nontermFollowToken; }
+
+                                    Set.add newItem items)))
+
+            // If the items set has changed, recurse for another iteration.
+            // If not, we're done processing and the set is returned.
+            if items' = items then
+                items
+            else
+                closure items'
+
+        // Compute the closure, starting with the specified initial item.
+        closure items
+
+    /// Moves the 'dot' (the current parser position) past the
+    /// specified symbol for each item in a set of items.
+    let internal goto symbol items (grammar : Grammar<'NonterminalId, 'Token>) (analysis : GrammarAnalysis<_,_>) =
+        /// The updated 'items' set.
+        let items =
+            (Set.empty, items)
+            ||> Set.fold (fun updatedItems item ->
+                // If the position is at the end of the production, we know
+                // this item can't be a match, so continue to to the next item.
+                if int item.Position = Array.length item.Production then
+                    updatedItems
                 else
-                    this.Production.[i - 1].ToString ()
-                    |> sb.Append |> ignore
+                    // If the next symbol to be parsed in the production is the
+                    // specified symbol, create a new item with the position advanced
+                    // to the right of the symbol and add it to the updated items set.
+                    if item.Production.[int item.Position] = symbol then
+                        let updatedItem =
+                            { item with
+                                Position = item.Position + 1<_>; }
+                        Set.add updatedItem updatedItems
+                    else
+                        // The symbol did not match, so this item won't be added to
+                        // the updated items set.
+                        updatedItems)
 
-            sb.ToString ()
+        // Return the closure of the item set.
+        closure grammar analysis items
 
-        sprintf "%O \u2192 %s, %O" this.Nonterminal productionString this.LookaheadSymbol
+    //
+    let createTable (grammar : Grammar<'NonterminalId, 'Token>) =
+        // Augment the grammar with the start production and end-of-file token.
+        let grammar = AugmentedGrammar.ofGrammar grammar
+
+        /// Analysis of the augmented grammar.
+        let analysis = GrammarAnalysis.ofGrammar grammar
+
+        /// The initial state (set of items) passed to 'createTable'.
+        let initialParserState =
+            let startProductions = Map.find Start grammar.Productions
+            (Set.empty, startProductions)
+            ||> Set.fold (fun items production ->
+                // Create an 'item', with the parser position at
+                // the beginning of the production.
+                let item = {
+                    Nonterminal = Start;
+                    Production = production;
+                    Position = 0<_>;
+                    // Any token can be used here, because the end-of-file symbol
+                    // (in the augmented start production) will never be shifted.
+                    // We use the EndOfFile token itself here to keep the code generic.
+                    LookaheadSymbol = EndOfFile; }
+                Set.add item items)
+            |> closure grammar analysis
+
+//        // The initial table-gen state.
+//        let initialParserStateId, initialTableGenState =
+//            Lr0TableGenState.stateId initialParserState Lr0TableGenState.empty
+//
+//        // Create the parser table.
+//        createTableImpl grammar analysis initialTableGenState
+
+        raise <| System.NotImplementedException "Tables.Lr1.createTable"
+        ()
 

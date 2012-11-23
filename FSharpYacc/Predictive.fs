@@ -14,8 +14,8 @@ open Ast
 
 //
 type GrammarAnalysis<'NonterminalId, 'Token
-                    when 'NonterminalId : comparison
-                    and 'Token : comparison> = {
+    when 'NonterminalId : comparison
+    and 'Token : comparison> = {
     //
     First : Map<'NonterminalId, Set<'Token>>;
     //
@@ -42,9 +42,9 @@ module GrammarAnalysis =
                         let isNullable =
                             productions
                             |> Set.exists (Array.forall (function
-                                | Terminal _ ->
+                                | Symbol.Terminal _ ->
                                     false
-                                | Nonterminal nontermId ->
+                                | Symbol.Nonterminal nontermId ->
                                     Map.find nontermId nullable))
 
                         // If this nonterminal is nullable, update its entry in the map.
@@ -85,9 +85,9 @@ module GrammarAnalysis =
                                 // OPTIMIZE : Array slices are slow -- find another way to implement this.
                                 production.[0 .. i - 1]
                                 |> Array.forall (function
-                                    | Terminal _ ->
+                                    | Symbol.Terminal _ ->
                                         false
-                                    | Nonterminal nontermId ->
+                                    | Symbol.Nonterminal nontermId ->
                                         Map.find nontermId nullable) then
 
                                 /// The FIRST set for the current nonterminal.
@@ -95,9 +95,9 @@ module GrammarAnalysis =
                                 /// The FIRST set for the i-th symbol in the production.
                                 let symbolFirstSet =
                                     match production.[i] with
-                                    | Terminal token ->
+                                    | Symbol.Terminal token ->
                                         Set.singleton token
-                                    | Nonterminal nontermId ->
+                                    | Symbol.Nonterminal nontermId ->
                                         Map.find nontermId firstSets
 
                                 /// The updated FIRST set for the current nonterminal.
@@ -145,16 +145,16 @@ module GrammarAnalysis =
                         for i = 0 to k do
                             // Only compute follow sets for non-terminals!
                             match production.[i] with
-                            | Terminal _ -> ()
-                            | Nonterminal ithSymbolNontermId ->
+                            | Symbol.Terminal _ -> ()
+                            | Symbol.Nonterminal ithSymbolNontermId ->
                                 for j = i + 1 to k do
                                     if i = k ||
                                         // OPTIMIZE : Array slices are slow -- find another way to implement this.
                                         production.[i + 1 .. k]
                                         |> Array.forall (function
-                                            | Terminal _ ->
+                                            | Symbol.Terminal _ ->
                                                 false
-                                            | Nonterminal nontermId ->
+                                            | Symbol.Nonterminal nontermId ->
                                                 Map.find nontermId nullable) then
 
                                         /// The FOLLOW set for the i-th symbol in the production.
@@ -177,9 +177,9 @@ module GrammarAnalysis =
                                         // OPTIMIZE : Array slices are slow -- find another way to implement this.
                                         production.[i + 1 .. j - 1]
                                         |> Array.forall (function
-                                            | Terminal _ ->
+                                            | Symbol.Terminal _ ->
                                                 false
-                                            | Nonterminal nontermId ->
+                                            | Symbol.Nonterminal nontermId ->
                                                 Map.find nontermId nullable) then
 
                                         /// The FOLLOW set for the i-th symbol in the production.
@@ -190,9 +190,9 @@ module GrammarAnalysis =
                                             /// The FIRST set for the j-th symbol in the production.
                                             let jthSymbolFirstSet =
                                                 match production.[j] with
-                                                | Terminal token ->
+                                                | Symbol.Terminal token ->
                                                     Set.singleton token
-                                                | Nonterminal nontermId ->
+                                                | Symbol.Nonterminal nontermId ->
                                                     Map.find nontermId firstSets
 
                                             Set.union ithSymbolFollowSet jthSymbolFirstSet

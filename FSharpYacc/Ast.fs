@@ -40,5 +40,92 @@ type Grammar<'NonterminalId, 'Token
     StartSymbol : 'NonterminalId;
 }
 
-(* TODO :   Create a new internal record type, GrammarWithSets (or similar) which
-            contains the same fields as Grammar, plus the FIRST/FOLLOW/nullable sets. *)
+////
+//type Production<'NonterminalId, 'Token
+//        when 'NonterminalId : comparison
+//        and 'Token : comparison> = {
+//    //
+//    Nonterminal : 'NonterminalId;
+//    //
+//    Symbols : Symbol<'NonterminalId, 'Token>[];
+//} with
+//    override this.ToString () =
+//        let sb = System.Text.StringBuilder ()
+//
+//        // Add the nonterminal text and arrow to the StringBuilder.
+//        sprintf "%O \u2192 " this.Nonterminal
+//        |> sb.Append |> ignore
+//
+//        // Append the symbols
+//        this.Symbols
+//        |> Array.iter (fun symbol ->
+//            symbol.ToString ()
+//            |> sb.Append |> ignore)
+//
+//        sb.ToString ()
+
+/// Represents nonterminals augmented with an additional nonterminal
+/// representing the start production of an augmented grammar.
+type AugmentedNonterminal<'NonterminalId when 'NonterminalId : comparison> =
+    /// A nonterminal specified in the original grammar.
+    | Nonterminal of 'NonterminalId
+    /// Represents the start production of the grammar.
+    | Start
+
+    override this.ToString () =
+        match this with
+        | Nonterminal nonterm ->
+            nonterm.ToString ()
+        | Start ->
+            "\u0002"
+
+//
+type AugmentedTerminal<'Token when 'Token : comparison> =
+    //
+    | Terminal of 'Token
+    //
+    | EndOfFile
+
+    override this.ToString () =
+        match this with
+        | Terminal token ->
+            token.ToString ()
+        | EndOfFile ->
+            "\u0003"
+
+//
+[<RequireQualifiedAccess>]
+module AugmentedGrammar =
+    //
+    let ofGrammar (grammar : Grammar<'NonterminalId, 'Token>)
+        : Grammar<AugmentedNonterminal<'NonterminalId>, AugmentedTerminal<'Token>> =
+        // Based on the input grammar, create a new grammar with an additional
+        // nonterminal and production for the start symbol and an additional token
+        // representing the end-of-file marker.
+        let startProduction = [|
+            Symbol.Nonterminal <| Nonterminal grammar.StartSymbol;
+            Symbol.Terminal EndOfFile; |]
+
+        {   StartSymbol = Start;
+            Terminals =
+                grammar.Terminals
+                |> Set.map Terminal
+                |> Set.add EndOfFile;
+            Nonterminals =
+                grammar.Nonterminals
+                |> Set.map Nonterminal
+                |> Set.add Start;
+            Productions =
+                (Map.empty, grammar.Productions)
+                ||> Map.fold (fun productionMap nontermId nontermProductions ->
+                    let nontermProductions =
+                        nontermProductions
+                        |> Set.map (Array.map (function
+                            | Symbol.Nonterminal nontermId ->
+                                Symbol.Nonterminal <| Nonterminal nontermId
+                            | Symbol.Terminal token ->
+                                Symbol.Terminal <| Terminal token))
+                    Map.add (Nonterminal nontermId) nontermProductions productionMap)
+                // Add the (only) production of the new start symbol.
+                |> Map.add Start (Set.singleton startProduction); }
+
