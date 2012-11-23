@@ -68,6 +68,24 @@ module GrammarAnalysis =
         //
         |> computeNullable
 
+    /// Determines if all symbols within the specified slice of a production are nullable.
+    let inline private allNullableInSlice (production : Symbol<'NonterminalId, 'Token>[], startInclusive, endInclusive, nullable : Map<'NonterminalId, bool>) =
+        let mutable result = true
+        let mutable index = startInclusive
+        while result && index <= endInclusive do
+            result <-
+                match production.[index] with
+                | Symbol.Terminal _ ->
+                    false
+                | Symbol.Nonterminal nontermId ->
+                    Map.find nontermId nullable
+
+            // Increment the index
+            index <- index + 1
+
+        // Return the result
+        result
+
     //
     let internal computeFirst (productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>, nullable : Map<'NonterminalId, bool>) =
         /// Implementation of the algorithm for computing the FIRST sets of the nonterminals.
@@ -81,27 +99,21 @@ module GrammarAnalysis =
                         let mutable updated = updated
 
                         for i = 0 to Array.length production - 1 do
-                            if i = 0 ||
-                                // OPTIMIZE : Array slices are slow -- find another way to implement this.
-                                production.[0 .. i - 1]
-                                |> Array.forall (function
-                                    | Symbol.Terminal _ ->
-                                        false
-                                    | Symbol.Nonterminal nontermId ->
-                                        Map.find nontermId nullable) then
-
+                            if i = 0 || allNullableInSlice (production, 0, i - 1, nullable) then
                                 /// The FIRST set for the current nonterminal.
                                 let nontermFirstSet = Map.find nontermId firstSets
-                                /// The FIRST set for the i-th symbol in the production.
-                                let symbolFirstSet =
-                                    match production.[i] with
-                                    | Symbol.Terminal token ->
-                                        Set.singleton token
-                                    | Symbol.Nonterminal nontermId ->
-                                        Map.find nontermId firstSets
-
+                                
                                 /// The updated FIRST set for the current nonterminal.
-                                let nontermFirstSet' = Set.union nontermFirstSet symbolFirstSet
+                                let nontermFirstSet' =
+                                    /// The FIRST set for the i-th symbol in the production.
+                                    let symbolFirstSet =
+                                        match production.[i] with
+                                        | Symbol.Terminal token ->
+                                            Set.singleton token
+                                        | Symbol.Nonterminal nontermId ->
+                                            Map.find nontermId firstSets
+                                    
+                                    Set.union nontermFirstSet symbolFirstSet
 
                                 // Set the 'updated' flag iff the nonterminal's FIRST set
                                 // was actually changed.
@@ -148,15 +160,7 @@ module GrammarAnalysis =
                             | Symbol.Terminal _ -> ()
                             | Symbol.Nonterminal ithSymbolNontermId ->
                                 for j = i + 1 to k do
-                                    if i = k ||
-                                        // OPTIMIZE : Array slices are slow -- find another way to implement this.
-                                        production.[i + 1 .. k]
-                                        |> Array.forall (function
-                                            | Symbol.Terminal _ ->
-                                                false
-                                            | Symbol.Nonterminal nontermId ->
-                                                Map.find nontermId nullable) then
-
+                                    if i = k || allNullableInSlice (production, i + 1, k, nullable) then
                                         /// The FOLLOW set for the i-th symbol in the production.
                                         let ithSymbolFollowSet = Map.find ithSymbolNontermId followSets
 
@@ -164,7 +168,7 @@ module GrammarAnalysis =
                                         let ithSymbolFollowSet' =
                                             /// The FOLLOW set for the current nonterminal.
                                             let nontermFollowSet = Map.find nontermId followSets
-
+                                            // Merge it with the FOLLOW set for the i-th symbol.
                                             Set.union ithSymbolFollowSet nontermFollowSet
 
                                         // Set the 'updated' flag iff the i-th symbol's FOLLOW set
@@ -173,15 +177,7 @@ module GrammarAnalysis =
                                             updated <- true
                                             followSets <- Map.add ithSymbolNontermId ithSymbolFollowSet' followSets
 
-                                    if i + 1 = j ||
-                                        // OPTIMIZE : Array slices are slow -- find another way to implement this.
-                                        production.[i + 1 .. j - 1]
-                                        |> Array.forall (function
-                                            | Symbol.Terminal _ ->
-                                                false
-                                            | Symbol.Nonterminal nontermId ->
-                                                Map.find nontermId nullable) then
-
+                                    if i + 1 = j || allNullableInSlice (production, i + 1, j - 1, nullable) then
                                         /// The FOLLOW set for the i-th symbol in the production.
                                         let ithSymbolFollowSet = Map.find ithSymbolNontermId followSets
 
