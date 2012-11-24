@@ -43,11 +43,11 @@ let figure_2_5 =
             |> Map.add 4<_> 0<_>; }
 
 
-////
-//[<TestCase>]
-//let figure_2_5_epsilon_closure () =
-//    Dfa.Dfa.epsilonClosure figure_2_5.InitialState figure_2_5
-//    |> should equal
-//    <| Set.ofArray [| 1<_>; 2<_>; 5<_>; 6<_>; 7<_>; |]
+//
+[<TestCase>]
+let figure_2_5_epsilon_closure () =
+    Dfa.Dfa.epsilonClosure figure_2_5.InitialState figure_2_5
+    |> should equal
+    <| Set.ofArray [| 1<_>; 2<_>; 5<_>; 6<_>; 7<_>; |]
 
 

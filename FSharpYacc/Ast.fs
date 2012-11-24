@@ -77,7 +77,7 @@ type AugmentedNonterminal<'NonterminalId when 'NonterminalId : comparison> =
         | Nonterminal nonterm ->
             nonterm.ToString ()
         | Start ->
-            "\u0002"
+            "\xabStart\xbb"
 
 //
 type AugmentedTerminal<'Token when 'Token : comparison> =
@@ -91,7 +91,7 @@ type AugmentedTerminal<'Token when 'Token : comparison> =
         | Terminal token ->
             token.ToString ()
         | EndOfFile ->
-            "\u0003"
+            "$"
 
 //
 [<RequireQualifiedAccess>]

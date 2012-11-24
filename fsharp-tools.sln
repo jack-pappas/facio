@@ -18,6 +18,11 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpYacc", "FSharpYacc\FS
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpYacc.Tests", "FSharpYacc.Tests\FSharpYacc.Tests.fsproj", "{64594E06-1750-4472-BBB0-299C4D39CD10}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{0F12E0D6-7576-4C95-BE56-5C48BA792032}"
+	ProjectSection(SolutionItems) = preProject
+		Common\CommonAssemblyInfo.fs = Common\CommonAssemblyInfo.fs
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU

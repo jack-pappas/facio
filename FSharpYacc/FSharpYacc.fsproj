@@ -45,6 +45,9 @@
     <Compile Include="Ast.fs" />
     <Compile Include="Predictive.fs" />
     <Compile Include="Tables.fs" />
+    <Compile Include="..\Common\CommonAssemblyInfo.fs">
+      <Link>CommonAssemblyInfo.fs</Link>
+    </Compile>
     <Compile Include="Program.fs" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\FSharp\1.0\Microsoft.FSharp.Targets" Condition="!Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
