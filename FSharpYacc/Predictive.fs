@@ -27,6 +27,11 @@ type GrammarAnalysis<'NonterminalId, 'Token
 //
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module GrammarAnalysis =
+    (* OPTIMIZE :   The functions in this module can be sped up by creating a dependency graph of
+                    the nonterminals in the grammar, then computing a quasi-topological sort of
+                    this graph. Traversing this graph from the bottom up will minimize the number
+                    of iterations needed to reach a fixpoint. *)
+
     //
     let internal computeNullable (productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>) =
         /// Implementation of the nullable-map-computing algorithm.
@@ -140,43 +145,59 @@ module GrammarAnalysis =
         |> computeFirst
 
     //
-    let internal computeFollow (productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>,
-                                    nullable : Map<'NonterminalId, bool>,
-                                    firstSets : Map<'NonterminalId, Set<'Token>>) =
+    let internal computeFollow (grammar : Grammar<AugmentedNonterminal<'NonterminalId>, AugmentedTerminal<'Token>>,
+                                nullable : Map<AugmentedNonterminal<'NonterminalId>, bool>,
+                                firstSets : Map<AugmentedNonterminal<'NonterminalId>, Set<AugmentedTerminal<'Token>>>) =
         /// Implementation of the algorithm for computing the FOLLOW sets of the nonterminals.
-        let rec computeFollow (followSets : Map<'NonterminalId, Set<'Token>>) =
+        let rec computeFollow (followSets : Map<AugmentedNonterminal<'NonterminalId>, Set<AugmentedTerminal<'Token>>>) =
             let followSets, updated =
-                ((followSets, false), productions)
+                ((followSets, false), grammar.Productions)
                 ||> Map.fold (fun (followSets, updated) nontermId productions ->
                     ((followSets, updated), productions)
                     ||> Set.fold (fun (followSets, updated) production ->
                         let mutable followSets = followSets
                         let mutable updated = updated
 
-                        let k = Array.length production - 1
-                        for i = 0 to k do
+                        let productionLength = Array.length production
+                        for i = 0 to productionLength - 1 do
                             // Only compute follow sets for non-terminals!
                             match production.[i] with
                             | Symbol.Terminal _ -> ()
                             | Symbol.Nonterminal ithSymbolNontermId ->
-                                for j = i + 1 to k do
-                                    if i = k || allNullableInSlice (production, i + 1, k, nullable) then
-                                        /// The FOLLOW set for the i-th symbol in the production.
-                                        let ithSymbolFollowSet = Map.find ithSymbolNontermId followSets
+                                (* OPTIMIZE :   Both conditions here could be fused and simplified if we implemented a
+                                                function similar to Array.tryPick, but which worked over a segment or slice
+                                                of the array. (This function should be inlined.)
+                                                The 'picker' function passed to this new function would return Some for any
+                                                non-nullable symbol; then, if all the symbols were nullable (or the i-th symbol
+                                                is the last symbol in the production), we'd "fill" the value with the
+                                                FOLLOW set of the nonterminal producing this production. *)
+                            
+                                // If this nonterminal is the last symbol in the production, or all of the symbols
+                                // which follow it are nullable (i.e., they could all be empty), then the FOLLOW set
+                                // of this nonterminal must contain the FOLLOW set of the nonterminal producing this production.
+                                if i = productionLength - 1 ||
+                                    allNullableInSlice (production, i + 1, productionLength - 1, nullable) then
+                                    /// The FOLLOW set for the i-th symbol in the production.
+                                    let ithSymbolFollowSet = Map.find ithSymbolNontermId followSets
 
-                                        /// The updated FOLLOW set for the i-th symbol in the production.
-                                        let ithSymbolFollowSet' =
-                                            /// The FOLLOW set for the current nonterminal.
-                                            let nontermFollowSet = Map.find nontermId followSets
-                                            // Merge it with the FOLLOW set for the i-th symbol.
-                                            Set.union ithSymbolFollowSet nontermFollowSet
+                                    /// The updated FOLLOW set for the i-th symbol in the production.
+                                    let ithSymbolFollowSet' =
+                                        /// The FOLLOW set for the current nonterminal.
+                                        let nontermFollowSet = Map.find nontermId followSets
+                                        // Merge it with the FOLLOW set for the i-th symbol.
+                                        Set.union ithSymbolFollowSet nontermFollowSet
 
-                                        // Set the 'updated' flag iff the i-th symbol's FOLLOW set
-                                        // was actually changed.
-                                        if ithSymbolFollowSet <> ithSymbolFollowSet' then
-                                            updated <- true
-                                            followSets <- Map.add ithSymbolNontermId ithSymbolFollowSet' followSets
+                                    // Set the 'updated' flag iff the i-th symbol's FOLLOW set
+                                    // was actually changed.
+                                    if ithSymbolFollowSet <> ithSymbolFollowSet' then
+                                        updated <- true
+                                        followSets <- Map.add ithSymbolNontermId ithSymbolFollowSet' followSets
 
+                                // If there are any non-nullable symbols in the production which follow the i-th symbol,
+                                // then merge the FIRST set of the first of those non-nullable symbols into the FOLLOW set
+                                // of the i-th symbol; also merge the FIRST sets of any nullable symbols which appear
+                                // prior to the first non-nullable symbol.
+                                for j = i + 1 to productionLength - 1 do
                                     if i + 1 = j || allNullableInSlice (production, i + 1, j - 1, nullable) then
                                         /// The FOLLOW set for the i-th symbol in the production.
                                         let ithSymbolFollowSet = Map.find ithSymbolNontermId followSets
@@ -212,13 +233,20 @@ module GrammarAnalysis =
                 followSets
 
         //
-        productions
-        |> Map.map (fun _ _ -> Set.empty)
+        grammar.Productions
+        |> Map.map (fun nonterminal _ ->
+            match nonterminal with
+            | AugmentedNonterminal.Start ->
+                // The FOLLOW set for the augmented start symbol
+                // is initialized with the end-of-file marker.
+                Set.singleton EndOfFile
+            | AugmentedNonterminal.Nonterminal _ ->
+                Set.empty)
         //
         |> computeFollow
 
     //
-    let ofGrammar (grammar : Grammar<'NonterminalId, 'Token>) : GrammarAnalysis<'NonterminalId, 'Token> =
+    let ofGrammar (grammar : Grammar<AugmentedNonterminal<'NonterminalId>, AugmentedTerminal<'Token>>) : GrammarAnalysis<AugmentedNonterminal<'NonterminalId>, AugmentedTerminal<'Token>> =
         /// Map denoting which nonterminals in the grammar are nullable.
         let nullable = computeNullable grammar.Productions
 
@@ -226,7 +254,7 @@ module GrammarAnalysis =
         let firstSets = computeFirst (grammar.Productions, nullable)
 
         /// The FOLLOW sets for the nonterminals in the grammar.
-        let followSets = computeFollow (grammar.Productions, nullable, firstSets)
+        let followSets = computeFollow (grammar, nullable, firstSets)
 
         // Combine the computed sets into a GrammarAnalysis record and return it.
         { Nullable = nullable;
