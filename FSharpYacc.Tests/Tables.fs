@@ -193,4 +193,89 @@ let ``SLR table for Grammar 3.23`` () =
     table.Table
     |> should equal expectedTable
 
+[<TestCase>]
+let ``LR(1) table for Grammar 3.26`` () =
+    let table = Tables.Lr1.createTable grammar_3_26
+
+    let expectedTable =
+        Map.empty
+        |> Map.add (1<LrParserState>, Symbol.Terminal <| Terminal "*") (
+            Set.ofArray [| Shift 5<_>; |])
+        |> Map.add (1<LrParserState>, Symbol.Terminal <| Terminal "x") (
+            Set.ofArray [| Shift 4<_>; |])
+        |> Map.add (1<LrParserState>, Symbol.Nonterminal <| Nonterminal 'E') (
+            Set.ofArray [| Goto 3<_>; |])
+        |> Map.add (1<LrParserState>, Symbol.Nonterminal <| Nonterminal 'S') (
+            Set.ofArray [| Goto 6<_>; |])
+        |> Map.add (1<LrParserState>, Symbol.Nonterminal <| Nonterminal 'V') (
+            Set.ofArray [| Goto 2<_>; |])
+
+        |> Map.add (2<LrParserState>, Symbol.Terminal <| Terminal "=") (
+            Set.ofArray [| Shift 9<_>; |])
+        |> Map.add (2<LrParserState>, Symbol.Terminal EndOfFile) (
+            Set.ofArray [| Reduce 1<_>; |])
+
+        |> Map.add (3<LrParserState>, Symbol.Terminal EndOfFile) (
+            Set.ofArray [| Reduce 2<_>; |])
+
+        |> Map.add (4<LrParserState>, Symbol.Terminal <| Terminal "=") (
+            Set.ofArray [| Reduce 3<_>; |])
+        |> Map.add (4<LrParserState>, Symbol.Terminal EndOfFile) (
+            Set.ofArray [| Reduce 3<_>; |])
+
+        |> Map.add (5<LrParserState>, Symbol.Terminal <| Terminal "*") (
+            Set.ofArray [| Shift 5<_>; |])
+        |> Map.add (5<LrParserState>, Symbol.Terminal <| Terminal "x") (
+            Set.ofArray [| Shift 4<_>; |])
+        |> Map.add (5<LrParserState>, Symbol.Nonterminal <| Nonterminal 'E') (
+            Set.ofArray [| Goto 8<_>; |])
+        |> Map.add (5<LrParserState>, Symbol.Nonterminal <| Nonterminal 'V') (
+            Set.ofArray [| Goto 7<_>; |])
+
+        |> Map.add (6<LrParserState>, Symbol.Terminal EndOfFile) (
+            Set.ofArray [| Accept; |])
+
+        |> Map.add (7<LrParserState>, Symbol.Terminal <| Terminal "=") (
+            Set.ofArray [| Reduce 1<_>; |])
+        |> Map.add (7<LrParserState>, Symbol.Terminal EndOfFile) (
+            Set.ofArray [| Reduce 1<_>; |])
+
+        |> Map.add (8<LrParserState>, Symbol.Terminal <| Terminal "=") (
+            Set.ofArray [| Reduce 4<_>; |])
+        |> Map.add (8<LrParserState>, Symbol.Terminal EndOfFile) (
+            Set.ofArray [| Reduce 4<_>; |])
+
+        |> Map.add (9<LrParserState>, Symbol.Terminal <| Terminal "*") (
+            Set.ofArray [| Shift 13<_>; |])
+        |> Map.add (9<LrParserState>, Symbol.Terminal <| Terminal "x") (
+            Set.ofArray [| Shift 12<_>; |])
+        |> Map.add (9<LrParserState>, Symbol.Nonterminal <| Nonterminal 'E') (
+            Set.ofArray [| Goto 11<_>; |])
+        |> Map.add (9<LrParserState>, Symbol.Nonterminal <| Nonterminal 'V') (
+            Set.ofArray [| Goto 10<_>; |])
+
+        |> Map.add (10<LrParserState>, Symbol.Terminal EndOfFile) (
+            Set.ofArray [| Reduce 1<_>; |])
+
+        |> Map.add (11<LrParserState>, Symbol.Terminal EndOfFile) (
+            Set.ofArray [| Reduce 5<_>; |])
+
+        |> Map.add (12<LrParserState>, Symbol.Terminal EndOfFile) (
+            Set.ofArray [| Reduce 3<_>; |])
+
+        |> Map.add (13<LrParserState>, Symbol.Terminal <| Terminal "*") (
+            Set.ofArray [| Shift 13<_>; |])
+        |> Map.add (13<LrParserState>, Symbol.Terminal <| Terminal "x") (
+            Set.ofArray [| Shift 12<_>; |])
+        |> Map.add (13<LrParserState>, Symbol.Nonterminal <| Nonterminal 'E') (
+            Set.ofArray [| Goto 14<_>; |])
+        |> Map.add (13<LrParserState>, Symbol.Nonterminal <| Nonterminal 'V') (
+            Set.ofArray [| Goto 10<_>; |])
+        
+        |> Map.add (14<LrParserState>, Symbol.Terminal EndOfFile) (
+            Set.ofArray [| Reduce 4<_>; |])
+
+    // Verify the table.
+    table.Table
+    |> should equal expectedTable
 
