@@ -13,6 +13,46 @@ open FSharpYacc
 open Ast
 
 
+/// Grammar 3.5 from "Modern Compiler Implementation in ML".
+let grammar_3_5 =
+    let E =
+        Set.empty
+        |> Set.add [|
+            Symbol.Terminal "id"; |]
+        |> Set.add [|
+            Symbol.Terminal "num"; |]
+        |> Set.add [|
+            Symbol.Nonterminal 'E';
+            Symbol.Terminal "*";
+            Symbol.Nonterminal 'E'; |]
+        |> Set.add [|
+            Symbol.Nonterminal 'E';
+            Symbol.Terminal "/";
+            Symbol.Nonterminal 'E'; |]
+        |> Set.add [|
+            Symbol.Nonterminal 'E';
+            Symbol.Terminal "+";
+            Symbol.Nonterminal 'E'; |]
+        |> Set.add [|
+            Symbol.Nonterminal 'E';
+            Symbol.Terminal "-";
+            Symbol.Nonterminal 'E'; |]
+        |> Set.add [|
+            Symbol.Terminal "(";
+            Symbol.Nonterminal 'E';
+            Symbol.Terminal ")"; |]
+
+    {   Terminals =
+            [| "id"; "num"; "*"; "/"; "+"; "-"; "("; ")"; |]
+            |> Set.ofArray;
+        Nonterminals =
+            [| 'E'; |]
+            |> Set.ofArray;
+        Productions =
+            Map.empty
+            |> Map.add 'E' E;
+        StartSymbol = 'E'; }
+
 /// Grammar 3.8 from "Modern Compiler Implementation in ML".
 let grammar_3_8 =
     /// Factor.
@@ -236,44 +276,63 @@ let grammar_3_26 =
             |> Map.add 'V' V;
         StartSymbol = 'S'; }
 
-//
-let wikipedia_grammar =
-    // NOTE : This grammar does not include the first rule
-    // which is the production of the augmented start symbol.
-    let E =
+/// Grammar 3.30 from "Modern Compiler Implementation in ML".
+let grammar_3_30 =
+    // prog
+    let P =
         Set.empty
         |> Set.add [|
-            Symbol.Nonterminal 'T'; |]
-        |> Set.add [|
-            Symbol.Terminal "(";
-            Symbol.Nonterminal 'E';
-            Symbol.Terminal ")"; |]
+            Symbol.Nonterminal 'P'; |]
 
-    let T =
+    // stm
+    let S =
         Set.empty
         |> Set.add [|
-            Symbol.Terminal "n"; |]
+            Symbol.Terminal "id";
+            Symbol.Terminal ":=";
+            Symbol.Terminal "id"; |]
         |> Set.add [|
-            Symbol.Terminal "+";
-            Symbol.Nonterminal 'T'; |]
+            Symbol.Terminal "while";
+            Symbol.Terminal "id";
+            Symbol.Terminal "do";
+            Symbol.Nonterminal 'S'; |]
         |> Set.add [|
-            Symbol.Nonterminal 'T';
-            Symbol.Terminal "+";
-            Symbol.Terminal "n"; |]
+            Symbol.Terminal "begin";
+            Symbol.Nonterminal 'L';
+            Symbol.Terminal "end"; |]
+        |> Set.add [|
+            Symbol.Terminal "if";
+            Symbol.Terminal "id";
+            Symbol.Terminal "then";
+            Symbol.Nonterminal 'S'; |]
+        |> Set.add [|
+            Symbol.Terminal "if";
+            Symbol.Terminal "id";
+            Symbol.Terminal "then";
+            Symbol.Nonterminal 'S';
+            Symbol.Terminal "else";
+            Symbol.Nonterminal 'S'; |]
+
+    // stmlist
+    let L =
+        Set.empty
+        |> Set.add [|
+            Symbol.Nonterminal 'S'; |]
+        |> Set.add [|
+            Symbol.Nonterminal 'L';
+            Symbol.Terminal ";";
+            Symbol.Nonterminal 'S'; |]
 
     {   Terminals =
-            Set.empty
-            |> Set.add "n"
-            |> Set.add "+"
-            |> Set.add "("
-            |> Set.add ")";
+            [| "id"; "while"; "begin"; "end"; "do"; "if"; "then"; "else"; ";"; ":="; |]
+            |> Set.ofArray;
         Nonterminals =
-            Set.empty
-            |> Set.add 'E'
-            |> Set.add 'T';
+            [| 'P'; 'L'; 'S'; |]
+            |> Set.ofArray;
         Productions =
             Map.empty
-            |> Map.add 'E' E
-            |> Map.add 'T' T;
-        StartSymbol = 'E'; }
+            |> Map.add 'P' P
+            |> Map.add 'S' S
+            |> Map.add 'L' L;
+        StartSymbol = 'P'; }
 
