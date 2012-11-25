@@ -21,7 +21,7 @@ open Tables
 
 [<TestCase>]
 let ``LR(0) table for Grammar 3.20`` () =
-    let table = Tables.Lr0.createTable grammar_3_20
+    let table = Tables.Lr0.createTable Appel.``Grammar 3.20``
     
     let expectedTable =
         Map.empty
@@ -106,7 +106,7 @@ let ``LR(0) table for Grammar 3.20`` () =
 
 [<TestCase>]
 let ``LR(0) table for Grammar 3.23`` () =
-    let table = Tables.Lr0.createTable grammar_3_23
+    let table = Tables.Lr0.createTable Appel.``Grammar 3.23``
     // table should have 6 states and 3 rules
 
     let expectedTable =
@@ -155,7 +155,7 @@ let ``LR(0) table for Grammar 3.23`` () =
 
 [<TestCase>]
 let ``SLR table for Grammar 3.23`` () =
-    let table = Tables.Slr.createTable grammar_3_23
+    let table = Tables.Slr.createTable Appel.``Grammar 3.23``
 
     let expectedTable =
         Map.empty
@@ -195,7 +195,7 @@ let ``SLR table for Grammar 3.23`` () =
 
 [<TestCase>]
 let ``LR(1) table for Grammar 3.26`` () =
-    let table = Tables.Lr1.createTable grammar_3_26
+    let table = Tables.Lr1.createTable Appel.``Grammar 3.26``
 
     let expectedTable =
         Map.empty
@@ -281,7 +281,7 @@ let ``LR(1) table for Grammar 3.26`` () =
 
 [<TestCase>]
 let ``LALR(1) table for Grammar 3.26`` () =
-    let table = Tables.Lr1.createCompressedTable grammar_3_26
+    let table = Tables.Lr1.createCompressedTable Appel.``Grammar 3.26``
 
     let expectedTable =
         Map.empty
@@ -346,3 +346,4 @@ let ``LALR(1) table for Grammar 3.26`` () =
     // Verify the table.
     table.Table
     |> should equal expectedTable
+

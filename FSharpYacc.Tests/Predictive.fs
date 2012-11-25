@@ -20,7 +20,7 @@ open Predictive
 
 [<TestCase>]
 let ``Analysis of Grammar 3.26`` () =
-    let grammar = AugmentedGrammar.ofGrammar grammar_3_26
+    let grammar = AugmentedGrammar.ofGrammar Appel.``Grammar 3.26``
     let analysis = GrammarAnalysis.ofGrammar grammar
 
     (* Verify the nullable map. *)
