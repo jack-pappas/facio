@@ -936,13 +936,12 @@ module Lr1 =
             tableGenState.Table <> tableGenState'.Table then
             createTableImpl grammar analysis tableGenState'
         else
-            // Create the parser table from the table-gen state.
-            { Table = tableGenState.Table;
-                ParserStateCount = uint32 tableGenState.ParserStates.Count;
-                ReductionRulesById = tableGenState.ReductionRulesById; }
+            // Return the table-gen state itself -- the consuming method
+            // can construct the table from it.
+            tableGenState
 
     //
-    let createTable (grammar : Grammar<'NonterminalId, 'Token>) =
+    let private createTableGenState (grammar : Grammar<'NonterminalId, 'Token>) =
         // Augment the grammar with the start production and end-of-file token.
         let grammar = AugmentedGrammar.ofGrammar grammar
 
@@ -971,7 +970,126 @@ module Lr1 =
         let initialParserStateId, initialTableGenState =
             Lr1TableGenState.stateId initialParserState Lr1TableGenState.empty
 
-        // Create the parser table.
+        // Create the table-gen state.
         createTableImpl grammar analysis initialTableGenState
 
+    /// Create an LR(1) parser table for the specified grammar.
+    let createTable (grammar : Grammar<'NonterminalId, 'Token>) =
+        // Create the table-gen state.
+        let tableGenState = createTableGenState grammar
+
+        // Create the LR(1) parser table from the table-gen state.
+        {   Table = tableGenState.Table;
+            ParserStateCount = uint32 tableGenState.ParserStates.Count;
+            ReductionRulesById = tableGenState.ReductionRulesById; }
+
+    /// Create a LALR(1) action from an LR(1) action.
+    let private lalrAction lrToLalrIdMap lrAction =
+        match lrAction with
+        | Shift lrParserStateId ->
+            Shift <| Map.find lrParserStateId lrToLalrIdMap
+        | Goto lrParserStateId ->
+            Goto <| Map.find lrParserStateId lrToLalrIdMap
+        // These actions don't change
+        | Reduce _
+        | Accept as action ->
+            action
+
+    /// <summary>An LR(1) parser state (set of LR(1) items) without lookahead tokens.</summary>
+    /// <remarks>Uses the Lr0Item type because it has the exact same fields as Lr1Item
+    /// when the lookahead token is discarded, and therefore we avoid creating a type
+    /// which would be exactly the same except for it's semantics.</remarks>
+    type private Lr1ParserStateNoLookahead<'NonterminalId, 'Token
+        when 'NonterminalId : comparison
+        and 'Token : comparison> = Set<Lr0Item<'NonterminalId, 'Token>>
+
+    /// Discards the lookahead tokens from the items in an LR(1) parser state.
+    let private discardLookaheadTokens (lr1ParserState : Lr1ParserState<'NonterminalId, 'Token>)
+        : Lr1ParserStateNoLookahead<'NonterminalId, 'Token> =
+        //
+        lr1ParserState
+        |> Set.map (fun lr1Item ->
+            {   Nonterminal = lr1Item.Nonterminal;
+                Production = lr1Item.Production;
+                Position = lr1Item.Position; } : Lr0Item<_,_>)
+
+    /// Create a LALR(1) parser table for the specified grammar.
+    let createCompressedTable (grammar : Grammar<'NonterminalId, 'Token>) =
+        // Create the table-gen state.
+        let tableGenState = createTableGenState grammar
+
+        // Fold over the LR(1) table-gen state to determine which LR(1) states
+        // (sets of LR(1) items) are equivalent except for their lookahead
+        // tokens. The resulting merged states are the LALR(1) states.
+        /// Maps LR(1) state identifiers to LALR(1) state identifiers.
+        let lrToLalrIdMap, lalrParserStateCount =
+            let lrToLalrIdMap, noLookaheadStateIdMap =
+                ((Map.empty, Map.empty), tableGenState.ParserStates)
+                // lrToLalrIdMap -- Maps LR(1) state identifiers to LALR(1) state identifiers.
+                // noLookaheadStateIdMap -- Maps LR(1) states whose lookahead tokens have been
+                // discarded to the LALR(1) state identifier representing that state and any
+                // other equivalent states which have been merged into it.
+                ||> Map.fold (fun (lrToLalrIdMap, noLookaheadStateIdMap : Map<Lr1ParserStateNoLookahead<_,_>, LrParserStateId>) lrParserState lrParserStateId ->
+                    /// The LALR(1) state identifier for this LR(1) state.
+                    let lalrParserStateId, noLookaheadStateIdMap =
+                        /// The items of this LR(1) state, without their lookahead tokens.
+                        let lrParserStateNoLookahead = discardLookaheadTokens lrParserState
+
+                        // Find the LALR(1) state id for this LR(1) state without lookahead tokens.
+                        // If no state id has been created for it yet, create one and add it to the map.
+                        match Map.tryFind lrParserStateNoLookahead noLookaheadStateIdMap with
+                        | Some lalrParserStateId ->
+                            lalrParserStateId, noLookaheadStateIdMap
+                        | None ->
+                            // Create a new LALR(1) state identifier for this state.
+                            let lalrParserStateId : LrParserStateId =
+                                LanguagePrimitives.Int32WithMeasure <| noLookaheadStateIdMap.Count + 1
+
+                            // Add this state and it's identifier to the map.
+                            let noLookaheadStateIdMap =
+                                Map.add lrParserStateNoLookahead lalrParserStateId noLookaheadStateIdMap
+
+                            // Return the state identifier and the updated map.
+                            lalrParserStateId, noLookaheadStateIdMap
+
+                    // Add an entry to the LR(1) -> LALR(1) state id map.
+                    let lrToLalrIdMap = Map.add lrParserStateId lalrParserStateId lrToLalrIdMap                     
+
+                    // Pass the maps to the next iteration of the folds.
+                    lrToLalrIdMap,
+                    noLookaheadStateIdMap)
+
+            // The 'noLookaheadStateIdMap' isn't needed any longer, but we need the
+            // number of entries to include in the parser table record.
+            lrToLalrIdMap, uint32 noLookaheadStateIdMap.Count
+
+        // Using the LR(1) to LALR(1) state-id map, create a
+        // LALR(1) parser table from the LR(1) parser table.
+        let lalrTable =
+            (Map.empty, tableGenState.Table)
+            ||> Map.fold (fun lalrTable (lrParserStateId, lookaheadToken) lrActions ->
+                /// The LALR(1) state identifier for this LR(1) state.
+                let lalrParserStateId = Map.find lrParserStateId lrToLalrIdMap
+
+                /// The LALR(1) table entry for this LALR(1) state and lookahead token.
+                let entry =
+                    // Create LALR(1) actions from the LR(1) actions.
+                    let lalrActions = Set.map (lalrAction lrToLalrIdMap) lrActions
+
+                    // If the LALR(1) table already contains an entry for this LALR(1)
+                    // state and lookahead token, merge the actions of this LR(1) state
+                    // with the existing LALR(1) actions.
+                    match Map.tryFind (lalrParserStateId, lookaheadToken) lalrTable with
+                    | None ->
+                        lalrActions
+                    | Some entry ->
+                        Set.union entry lalrActions
+
+                // Add/update this entry in the LALR(1) table.
+                Map.add (lalrParserStateId, lookaheadToken) entry lalrTable)
+
+        // Create and return the LALR(1) parser table.
+        {   Table = lalrTable;
+            ParserStateCount = lalrParserStateCount;
+            ReductionRulesById = tableGenState.ReductionRulesById; }
 
