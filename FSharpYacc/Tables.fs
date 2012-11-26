@@ -30,7 +30,7 @@ type LrParserStateId = int<LrParserState>
 type LrReductionRuleId = int<LrReductionRule>
 
 //
-type LrParserTableAction =
+type LrParserAction =
     /// Shift into a state.
     | Shift of LrParserStateId
     /// Goto a state.
@@ -56,7 +56,7 @@ type LrParsingTable<'NonterminalId, 'Token
         when 'NonterminalId : comparison
         and 'Token : comparison> = {
     //
-    Table : Map<LrParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserTableAction>>;
+    Table : Map<LrParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserAction>>;
     //
     ParserStateCount : uint32;
     //
@@ -182,7 +182,7 @@ type internal Lr0TableGenState<'NonterminalId, 'Token
         when 'NonterminalId : comparison
         and 'Token : comparison> = {
     //
-    Table : Map<LrParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserTableAction>>;
+    Table : Map<LrParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserAction>>;
     //
     ParserStates : Map<Lr0ParserState<'NonterminalId, 'Token>, LrParserStateId>;
     //
@@ -723,7 +723,7 @@ type internal Lr1TableGenState<'NonterminalId, 'Token
         when 'NonterminalId : comparison
         and 'Token : comparison> = {
     //
-    Table : Map<LrParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserTableAction>>;
+    Table : Map<LrParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserAction>>;
     //
     ParserStates : Map<Lr1ParserState<'NonterminalId, 'Token>, LrParserStateId>;
     //
@@ -1093,3 +1093,44 @@ module Lr1 =
             ParserStateCount = lalrParserStateCount;
             ReductionRulesById = tableGenState.ReductionRulesById; }
 
+
+//
+type LeftCornerParserAction =
+    /// Shift into a state.
+    | Shift of LrParserStateId
+    /// Goto a state.
+    | Goto of LrParserStateId
+    /// Announce that the free position ("recognition point")
+    /// has been reached for the specified rule.
+    | Announce of LrReductionRuleId
+    /// Accept.
+    | Accept
+
+    override this.ToString () =
+        match this with
+        | Shift stateId ->
+            "s" + stateId.ToString ()
+        | Goto stateId ->
+            "g" + stateId.ToString ()
+        | Announce ruleId ->
+            "n" + ruleId.ToString ()
+        | Accept ->
+            "a"
+
+
+
+
+// Utility functions for generating left-corner parsers.
+// module internal LeftCorner
+
+
+
+// TODO : Implement modules for generating other types of parsers
+    // Deterministic
+    // SGLC -- Simple Generalized Left-Corner, accomodates SLR(1) grammars
+    // XLC(1) - eXtended generalized Left-Corner(1), accomodates LR(1) grammars
+    // LAXLC(1) - Look-Ahead eXtended generalized Left-Corner(1), accomodates LALR(1) grammars
+
+    // Nondeterministic
+    // GLR -- Generalized LR (perhaps as Scannerless GLR (SGLR))
+    // GLC -- Generalized Left-Corner (see Nederhof, "Generalized Left-Corner Parsing")
