@@ -13,7 +13,7 @@ open Ast
 
 
 //
-type GrammarAnalysis<'NonterminalId, 'Token
+type PredictiveSets<'NonterminalId, 'Token
     when 'NonterminalId : comparison
     and 'Token : comparison> = {
     //
@@ -26,7 +26,7 @@ type GrammarAnalysis<'NonterminalId, 'Token
 
 //
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module GrammarAnalysis =
+module PredictiveSets =
     (* OPTIMIZE :   The functions in this module can be sped up by creating a dependency graph of
                     the nonterminals in the grammar, then computing a quasi-topological sort of
                     this graph. Traversing this graph from the bottom up will minimize the number
@@ -246,7 +246,7 @@ module GrammarAnalysis =
         |> computeFollow
 
     //
-    let ofGrammar (grammar : Grammar<AugmentedNonterminal<'NonterminalId>, AugmentedTerminal<'Token>>) : GrammarAnalysis<AugmentedNonterminal<'NonterminalId>, AugmentedTerminal<'Token>> =
+    let ofGrammar (grammar : Grammar<AugmentedNonterminal<'NonterminalId>, AugmentedTerminal<'Token>>) =
         /// Map denoting which nonterminals in the grammar are nullable.
         let nullable = computeNullable grammar.Productions
 

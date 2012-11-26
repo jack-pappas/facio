@@ -521,8 +521,8 @@ module Slr =
         // Augment the grammar with the start production and end-of-file token.
         let grammar = AugmentedGrammar.ofGrammar grammar
 
-        /// Analysis of the augmented grammar.
-        let analysis = GrammarAnalysis.ofGrammar grammar
+        /// Predictive sets of the augmented grammar.
+        let analysis = PredictiveSets.ofGrammar grammar
 
         /// The initial state (set of items) passed to 'createTable'.
         let initialParserState =
@@ -586,7 +586,7 @@ type internal Lr1Item<'NonterminalId, 'Token
 module internal Lr1Item =
     /// Computes the FIRST set of a string of symbols.
     /// The string is a "substring" of a production, followed by a lookahead token.
-    let firstSetOfString (production : Symbol<'NonterminalId, 'Token>[]) startIndex (lookahead : 'Token) (analysis : GrammarAnalysis<'NonterminalId, 'Token>) : Set<'Token> =
+    let firstSetOfString (production : Symbol<'NonterminalId, 'Token>[]) startIndex (lookahead : 'Token) (predictiveSets : PredictiveSets<'NonterminalId, 'Token>) : Set<'Token> =
         // Preconditions
         if startIndex < 0 then
             invalidArg "startIndex" "The start index cannot be negative."
@@ -611,7 +611,7 @@ module internal Lr1Item =
 
                 | Symbol.Nonterminal nontermId ->
                     /// The FIRST set of this nonterminal symbol.
-                    let nontermFirstSet = Map.find nontermId analysis.First
+                    let nontermFirstSet = Map.find nontermId predictiveSets.First
 
                     // Merge the FIRST set of this nonterminal symbol into
                     // the FIRST set of the string.
@@ -619,7 +619,7 @@ module internal Lr1Item =
 
                     // If this symbol is nullable, continue processing with
                     // the next symbol in the production; otherwise, return.
-                    if Map.find nontermId analysis.Nullable then
+                    if Map.find nontermId predictiveSets.Nullable then
                         firstSetOfString firstSet (symbolIndex + 1)
                     else
                         firstSet
@@ -631,7 +631,7 @@ module internal Lr1Item =
     // TODO : Modify this to use a worklist-style algorithm to avoid
     // reprocessing items which already exist in the set (i.e., when iterating,
     // we only process items added to the set in the previous iteration).
-    let closure (grammar : Grammar<'NonterminalId, 'Token>) (analysis : GrammarAnalysis<'NonterminalId, 'Token>) items =
+    let closure (grammar : Grammar<'NonterminalId, 'Token>) (predictiveSets : PredictiveSets<'NonterminalId, 'Token>) items =
         /// Implementation of the LR(1) closure algorithm.
         let rec closure items =
             let items' =
@@ -655,7 +655,7 @@ module internal Lr1Item =
                             /// (i.e., the symbols following this nonterminal symbol),
                             /// plus the lookahead token from the item.
                             let firstSetOfRemainingSymbols =
-                                firstSetOfString item.Production (int item.Position + 1) item.LookaheadSymbol analysis
+                                firstSetOfString item.Production (int item.Position + 1) item.LookaheadSymbol predictiveSets
 
                             // For all productions of this nonterminal, create a new item
                             // with the parser position at the beginning of the production.
@@ -686,7 +686,7 @@ module internal Lr1Item =
 
     /// Moves the 'dot' (the current parser position) past the
     /// specified symbol for each item in a set of items.
-    let goto symbol items (grammar : Grammar<'NonterminalId, 'Token>) (analysis : GrammarAnalysis<_,_>) =
+    let goto symbol items (grammar : Grammar<'NonterminalId, 'Token>) (predictiveSets : PredictiveSets<_,_>) =
         /// The updated 'items' set.
         let items =
             (Set.empty, items)
@@ -710,7 +710,7 @@ module internal Lr1Item =
                         updatedItems)
 
         // Return the closure of the item set.
-        closure grammar analysis items
+        closure grammar predictiveSets items
 
 
 //
@@ -867,7 +867,7 @@ module internal Lr1TableGenState =
 [<RequireQualifiedAccess>]
 module Lr1 =
     //
-    let rec private createTableImpl grammar analysis (tableGenState : Lr1TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
+    let rec private createTableImpl grammar predictiveSets (tableGenState : Lr1TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
         // Preconditions
         assert (not <| Map.isEmpty tableGenState.ParserStates)
 
@@ -902,7 +902,7 @@ module Lr1 =
                         | Symbol.Terminal (Terminal _ as token) as symbol ->                            
                             /// The state (set of items) transitioned into
                             /// via the edge labeled with this symbol.
-                            let targetState = Lr1Item.goto symbol stateItems grammar analysis
+                            let targetState = Lr1Item.goto symbol stateItems grammar predictiveSets
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
@@ -917,7 +917,7 @@ module Lr1 =
                         | Symbol.Nonterminal nonterm as symbol ->
                             /// The state (set of items) transitioned into
                             /// via the edge labeled with this symbol.
-                            let targetState = Lr1Item.goto symbol stateItems grammar analysis
+                            let targetState = Lr1Item.goto symbol stateItems grammar predictiveSets
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
@@ -934,7 +934,7 @@ module Lr1 =
         // and continue until we reach a fixpoint; otherwise, return the completed table.
         if tableGenState.ParserStates <> tableGenState'.ParserStates ||
             tableGenState.Table <> tableGenState'.Table then
-            createTableImpl grammar analysis tableGenState'
+            createTableImpl grammar predictiveSets tableGenState'
         else
             // Return the table-gen state itself -- the consuming method
             // can construct the table from it.
@@ -946,7 +946,7 @@ module Lr1 =
         let grammar = AugmentedGrammar.ofGrammar grammar
 
         /// Analysis of the augmented grammar.
-        let analysis = GrammarAnalysis.ofGrammar grammar
+        let predictiveSets = PredictiveSets.ofGrammar grammar
 
         /// The initial state (set of items) passed to 'createTable'.
         let initialParserState : Lr1ParserState<_,_> =
@@ -964,14 +964,14 @@ module Lr1 =
                     // We use the EndOfFile token itself here to keep the code generic.
                     LookaheadSymbol = EndOfFile; }
                 Set.add item items)
-            |> Lr1Item.closure grammar analysis
+            |> Lr1Item.closure grammar predictiveSets
 
         // The initial table-gen state.
         let initialParserStateId, initialTableGenState =
             Lr1TableGenState.stateId initialParserState Lr1TableGenState.empty
 
         // Create the table-gen state.
-        createTableImpl grammar analysis initialTableGenState
+        createTableImpl grammar predictiveSets initialTableGenState
 
     /// Create an LR(1) parser table for the specified grammar.
     let createTable (grammar : Grammar<'NonterminalId, 'Token>) =
