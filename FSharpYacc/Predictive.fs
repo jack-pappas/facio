@@ -31,6 +31,8 @@ module PredictiveSets =
                     the nonterminals in the grammar, then computing a quasi-topological sort of
                     this graph. Traversing this graph from the bottom up will minimize the number
                     of iterations needed to reach a fixpoint. *)
+    (* OPTIMIZE :   Modify the functions in this module to use a worklist-style algorithm to
+                    avoid re-processing values which haven't changed. *)
 
     //
     let internal computeNullable (productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>) =

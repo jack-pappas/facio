@@ -26,6 +26,11 @@ type Symbol<'NonterminalId, 'Token
         | Nonterminal nonterm ->
             nonterm.ToString ()
 
+//
+[<Measure>] type ProductionIndex
+//
+type ProductionId = int<ProductionIndex>
+
 /// A context-free grammar (CFG).
 type Grammar<'NonterminalId, 'Token
                 when 'NonterminalId : comparison
@@ -139,4 +144,15 @@ type Associativity =
     | Left
     /// Right-associative.
     | Right
+
+/// Represents the position of a parser in a production.
+/// The position corresponds to the 0-based index of the next symbol
+/// to be parsed, so position values must always be within the range
+/// [0, production.Length].
+[<Measure>] type ParserPosition
+
+//
+[<Measure>] type ParserStateIdentifier
+//
+type ParserStateId = int<ParserStateIdentifier>
 
