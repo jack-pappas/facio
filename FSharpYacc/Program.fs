@@ -8,7 +8,7 @@ See LICENSE.TXT for licensing details.
 
 module FSharpYacc.Program
 
-open Tables
+//open LR
 open Ast
 
 

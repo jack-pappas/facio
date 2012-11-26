@@ -7,22 +7,11 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-module FSharpYacc.Tables
+module FSharpYacc.LR
 
 open Ast
 open Predictive
 
-
-(* TODO :   Remove the LrReductionRule and LrReductionRuleId types;
-            modify consuming code to use ProductionIndex instead of LrReductionRuleId.
-            Alternatively, create a ProductionIndex -> LrReductionRuleId map
-            so we only emit code for production rules which are actually used
-            to reduce items from the stack, but for Reduce actions we can still
-            identify the original production rule (for diagnostic purposes). *)
-//
-[<Measure>] type LrReductionRule
-//
-type LrReductionRuleId = int<LrReductionRule>
 
 /// An action which manipulates the state of the
 /// parser automaton for an LR(k) parser.
@@ -32,7 +21,7 @@ type LrParserAction =
     /// Goto a state.
     | Goto of ParserStateId
     /// Reduce by a production rule.
-    | Reduce of LrReductionRuleId
+    | Reduce of ReductionRuleId
     /// Accept.
     | Accept
 
@@ -56,7 +45,7 @@ type LrParsingTable<'NonterminalId, 'Token
     //
     ParserStateCount : uint32;
     //
-    ReductionRulesById : Map<LrReductionRuleId, 'NonterminalId * Symbol<'NonterminalId, 'Token>[]>;
+    ReductionRulesById : Map<ReductionRuleId, 'NonterminalId * Symbol<'NonterminalId, 'Token>[]>;
 }
 
 /// An LR(0) item.
@@ -90,7 +79,7 @@ type internal Lr0Item<'NonterminalId, 'Token
 
         sb.ToString ()
 
-//
+/// Functions for manipulating LR(0) parser items.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module internal Lr0Item =
     /// Computes the LR(0) closure of a set of items.
@@ -182,9 +171,9 @@ type internal Lr0TableGenState<'NonterminalId, 'Token
     //
     ParserStates : Map<Lr0ParserState<'NonterminalId, 'Token>, ParserStateId>;
     //
-    ReductionRules : Map<'NonterminalId * Symbol<'NonterminalId, 'Token>[], LrReductionRuleId>;
+    ReductionRules : Map<'NonterminalId * Symbol<'NonterminalId, 'Token>[], ReductionRuleId>;
     //
-    ReductionRulesById : Map<LrReductionRuleId, 'NonterminalId * Symbol<'NonterminalId, 'Token>[]>;
+    ReductionRulesById : Map<ReductionRuleId, 'NonterminalId * Symbol<'NonterminalId, 'Token>[]>;
 }
 
 /// Functions which use the State monad to manipulate an LR(0) table-generation state.
@@ -299,7 +288,7 @@ module internal Lr0TableGenState =
             Table = Map.add tableKey entry tableGenState.Table; }
 
     /// Add 'reduce' actions to the parser table for each terminal (token) in the grammar.
-    let reduce (sourceState : ParserStateId) (reductionRuleId : LrReductionRuleId) (terminals : Set<_>) (tableGenState : Lr0TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
+    let reduce (sourceState : ParserStateId) (reductionRuleId : ReductionRuleId) (terminals : Set<_>) (tableGenState : Lr0TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
         // Fold over the set of terminals (tokens) in the grammar.
         let table =
             (tableGenState.Table, terminals)
@@ -723,9 +712,9 @@ type internal Lr1TableGenState<'NonterminalId, 'Token
     //
     ParserStates : Map<Lr1ParserState<'NonterminalId, 'Token>, ParserStateId>;
     //
-    ReductionRules : Map<'NonterminalId * Symbol<'NonterminalId, 'Token>[], LrReductionRuleId>;
+    ReductionRules : Map<'NonterminalId * Symbol<'NonterminalId, 'Token>[], ReductionRuleId>;
     //
-    ReductionRulesById : Map<LrReductionRuleId, 'NonterminalId * Symbol<'NonterminalId, 'Token>[]>;
+    ReductionRulesById : Map<ReductionRuleId, 'NonterminalId * Symbol<'NonterminalId, 'Token>[]>;
 }
 
 /// Functions which use the State monad to manipulate an LR(1) table-generation state.
@@ -840,7 +829,7 @@ module internal Lr1TableGenState =
             Table = Map.add tableKey entry tableGenState.Table; }
 
     /// Add a 'reduce' action to the parser table for the specified lookahead token.
-    let reduce (sourceState : ParserStateId) (reductionRuleId : LrReductionRuleId) (lookaheadToken : AugmentedTerminal<'Token>) (tableGenState : Lr1TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
+    let reduce (sourceState : ParserStateId) (reductionRuleId : ReductionRuleId) (lookaheadToken : AugmentedTerminal<'Token>) (tableGenState : Lr1TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
         //
         let tableKey = sourceState, Symbol.Terminal lookaheadToken
 
@@ -859,7 +848,7 @@ module internal Lr1TableGenState =
             Table = Map.add tableKey entry tableGenState.Table; }
 
 
-//
+/// LR(1) parser tables.
 [<RequireQualifiedAccess>]
 module Lr1 =
     //
@@ -1088,43 +1077,3 @@ module Lr1 =
             ParserStateCount = lalrParserStateCount;
             ReductionRulesById = tableGenState.ReductionRulesById; }
 
-
-/// An action which manipulates the state of the
-/// parser automaton for a left-corner parser.
-type LeftCornerParserAction =
-    /// Shift into a state.
-    | Shift of ParserStateId
-    /// Goto a state.
-    | Goto of ParserStateId
-    /// Announce that the free position ("recognition point")
-    /// has been reached for the specified rule.
-    | Announce of LrReductionRuleId
-    /// Accept.
-    | Accept
-
-    override this.ToString () =
-        match this with
-        | Shift stateId ->
-            "s" + stateId.ToString ()
-        | Goto stateId ->
-            "g" + stateId.ToString ()
-        | Announce ruleId ->
-            "n" + ruleId.ToString ()
-        | Accept ->
-            "a"
-
-
-// Utility functions for generating left-corner parsers.
-// module internal LeftCorner
-// let [<Literal>] ihat = "\u0069\u0302"
-
-
-// TODO : Implement modules for generating other types of parsers
-    // Deterministic
-    // SGLC -- Simple Generalized Left-Corner, accomodates SLR(1) grammars
-    // XLC(1) - eXtended generalized Left-Corner(1), accomodates LR(1) grammars
-    // LAXLC(1) - Look-Ahead eXtended generalized Left-Corner(1), accomodates LALR(1) grammars
-
-    // Nondeterministic
-    // GLR -- Generalized LR (perhaps as Scannerless GLR (SGLR))
-    // GLC -- Generalized Left-Corner (see Nederhof, "Generalized Left-Corner Parsing")

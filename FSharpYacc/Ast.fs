@@ -156,3 +156,12 @@ type Associativity =
 //
 type ParserStateId = int<ParserStateIdentifier>
 
+(* TODO :   Create a ProductionIndex -> ReductionRuleId map
+            so we only emit code for production rules which are actually used
+            to reduce items from the stack, but for Reduce actions we can still
+            identify the original production rule (for diagnostic purposes). *)
+//
+[<Measure>] type ReductionRuleIdentifier
+//
+type ReductionRuleId = int<ReductionRuleIdentifier>
+
