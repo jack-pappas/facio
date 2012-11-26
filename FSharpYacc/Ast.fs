@@ -129,3 +129,14 @@ module AugmentedGrammar =
                 // Add the (only) production of the new start symbol.
                 |> Map.add Start (Set.singleton startProduction); }
 
+/// Associativity of a terminal (token).
+/// This can be explicitly specified to override the
+/// default behavior for resolving conflicts.
+type Associativity =
+    /// Non-associative.
+    | NonAssociative
+    /// Left-associative.
+    | Left
+    /// Right-associative.
+    | Right
+
