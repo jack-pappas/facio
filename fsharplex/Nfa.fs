@@ -12,6 +12,7 @@ module FSharpLex.Nfa
 
 open Graph
 open Regex
+open Ast
 
 
 /// NFA state.
@@ -38,7 +39,7 @@ type Nfa = {
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module private CompileNfa =
     //
-    let private createState (transitions : LexerNfaGraph<NfaState>) : NfaStateId * _ =
+    let inline private createState (transitions : LexerNfaGraph<NfaState>) : NfaStateId * _ =
         LexerNfaGraph.createVertex transitions
 
     //
@@ -52,44 +53,45 @@ module private CompileNfa =
     //
     let inline private addSymbolTransition source target symbol (transitions : LexerNfaGraph<NfaState>) =
         let transitions =
-            transitions
-            |> LexerNfaGraph.addSymbolEdge source target symbol
-
+            LexerNfaGraph.addSymbolEdge source target symbol transitions
         (), transitions
 
-    //
-    // OPTIMIZE : Rewrite this function using CPS to avoid the overhead of the stack frames.
-    let rec regexToNfa (regex : Regex<'Symbol>) (dest : NfaStateId) (transitions : LexerNfaGraph<NfaState>) : NfaStateId * LexerNfaGraph<NfaState> =
+    /// Implementation of the algorithm for creating an NFA from a Regex.
+    let rec private regexToNfaImpl (regex : Regex<_>) (dest : NfaStateId) (transitions : LexerNfaGraph<NfaState>) cont : NfaStateId * LexerNfaGraph<NfaState> =
         match regex with
         | Regex.Epsilon ->
             let stateId, transitions = createState transitions
             let (), transitions = addEpsilonTransition stateId dest transitions
-            stateId, transitions
+            cont (stateId, transitions)
 
         | Regex.Symbol s ->
             let stateId, transitions = createState transitions
             let (), transitions = addSymbolTransition stateId dest s transitions
-            stateId, transitions
+            cont (stateId, transitions)
 
         | Alternate (a, b) ->
             let stateId, transitions = createState transitions
-            let aStateId, transitions = regexToNfa a dest transitions
-            let (), transitions = addEpsilonTransition stateId aStateId transitions
-            let bStateId, transitions = regexToNfa b dest transitions
-            let (), transitions = addEpsilonTransition stateId bStateId transitions
-            stateId, transitions
+            regexToNfaImpl a dest transitions <| fun (aStateId, transitions) ->
+                let (), transitions = addEpsilonTransition stateId aStateId transitions
+                regexToNfaImpl b dest transitions <| fun (bStateId, transitions) ->
+                    let (), transitions = addEpsilonTransition stateId bStateId transitions
+                    cont (stateId, transitions)
 
         | Sequence (a, b) ->
-            (dest, transitions)
-            ||> regexToNfa b
-            ||> regexToNfa a
+            regexToNfaImpl b dest transitions <| fun (bStateId, transitions) ->
+                regexToNfaImpl a bStateId transitions cont
 
         | ZeroOrMore regex ->
             let stateId, transitions = createState transitions
             let (), transitions = addEpsilonTransition stateId dest transitions
-            let starStateId, transitions = regexToNfa regex stateId transitions
-            let (), transitions = addEpsilonTransition stateId starStateId transitions
-            stateId, transitions
+            regexToNfaImpl regex stateId transitions <| fun (starStateId, transitions) ->
+                let (), transitions = addEpsilonTransition stateId starStateId transitions
+                cont (stateId, transitions)
+
+    /// <summary>Creates an NFA from a Regex.</summary>
+    /// <returns>The initial NFA state and the constructed NFA transition graph.</returns>
+    let regexToNfa (regex : Regex<_>) (finalState : NfaStateId) (transitions : LexerNfaGraph<NfaState>) : NfaStateId * LexerNfaGraph<NfaState> =
+        regexToNfaImpl regex finalState transitions id
 
 
 /// Compiles multiple Regex instances into a single Nfa.

@@ -14,6 +14,7 @@ open System.Diagnostics
 open SpecializedCollections
 open Graph
 open Nfa
+open Ast
 
 
 /// DFA state.
