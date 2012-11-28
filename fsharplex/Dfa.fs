@@ -112,7 +112,7 @@ module internal Dfa =
         |> epsilonClosureImpl Set.empty nfa
 
     //
-    type CompilationState<'Symbol when 'Symbol : comparison> = {
+    type CompilationState = {
         //
         Transitions : LexerDfaGraph<DfaState>;
         /// Maps sets of NFA states to the DFA state representing the set.
@@ -122,15 +122,15 @@ module internal Dfa =
     }
 
     //
-    let inline private tryGetDfaState nfaStateSet (compilationState : CompilationState<'Symbol>) =
+    let inline private tryGetDfaState nfaStateSet (compilationState : CompilationState) =
         Map.tryFind nfaStateSet compilationState.NfaStateSetToDfaState
 
     //
-    let inline private getNfaStateSet dfaState (compilationState : CompilationState<'Symbol>) =
+    let inline private getNfaStateSet dfaState (compilationState : CompilationState) =
         Map.find dfaState compilationState.DfaStateToNfaStateSet
 
     //
-    let private createState nfaStateSet (compilationState : CompilationState<'Symbol>) =
+    let private createState nfaStateSet (compilationState : CompilationState) =
         // Preconditions
         if Set.isEmpty nfaStateSet then
             invalidArg "nfaStateSet" "A DFA state cannot be created for the empty set of NFA states."
@@ -154,7 +154,7 @@ module internal Dfa =
         dfaState, compilationState
 
     /// The main NFA -> DFA compilation function.
-    let rec private compileRec (nfa : Nfa) (pending : Set<DfaStateId>) (compilationState : CompilationState<'Symbol>) =
+    let rec private compileRec (nfa : Nfa) (pending : Set<DfaStateId>) (compilationState : CompilationState) =
         // If there are no more pending states, we're finished compiling the DFA.
         if Set.isEmpty pending then
             compilationState
@@ -260,7 +260,7 @@ module internal Dfa =
     //
     let compile (nfa : Nfa) : DfaCompilationResult =
         // The initial (empty) compilation state.
-        let compilationState : CompilationState<'Symbol> = {
+        let compilationState : CompilationState = {
             NfaStateSetToDfaState = Map.empty;
             DfaStateToNfaStateSet = Map.empty;
             Transitions = LexerDfaGraph.empty; }
