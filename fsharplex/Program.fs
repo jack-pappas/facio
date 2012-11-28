@@ -112,20 +112,22 @@ let abac_dfa =
 let figure_2_5 =
     //
     let transitions =
-        (LabeledSparseDigraph.empty, [1..8])
+        (LexerNfaGraph.empty, [1..8])
         // Add the vertices
         ||> List.fold (fun transitions el ->
-            LabeledSparseDigraph.addVertex (LanguagePrimitives.Int32WithMeasure el) transitions)
+            transitions
+            |> LexerNfaGraph.createVertex
+            |> snd)
         // Add the edges
-        |> LabeledSparseDigraph.addEdge 1<_> 2<_> StateTransition.Epsilon
-        |> LabeledSparseDigraph.addEdge 2<_> 3<_> (StateTransition.Symbol 'a')
-        |> LabeledSparseDigraph.addEdge 3<_> 4<_> (StateTransition.Symbol 'c')
-        |> LabeledSparseDigraph.addEdge 1<_> 5<_> StateTransition.Epsilon
-        |> LabeledSparseDigraph.addEdge 5<_> 6<_> StateTransition.Epsilon
-        |> LabeledSparseDigraph.addEdge 5<_> 7<_> StateTransition.Epsilon
-        |> LabeledSparseDigraph.addEdge 6<_> 8<_> (StateTransition.Symbol 'a')
-        |> LabeledSparseDigraph.addEdge 7<_> 8<_> (StateTransition.Symbol 'b')
-        |> LabeledSparseDigraph.addEdge 8<_> 1<_> StateTransition.Epsilon
+        |> LexerNfaGraph.addEpsilonEdge 1<_> 2<_>
+        |> LexerNfaGraph.addSymbolEdge 2<_> 3<_> 'a'
+        |> LexerNfaGraph.addSymbolEdge 3<_> 4<_> 'c'
+        |> LexerNfaGraph.addEpsilonEdge 1<_> 5<_>
+        |> LexerNfaGraph.addEpsilonEdge 5<_> 6<_>
+        |> LexerNfaGraph.addEpsilonEdge 5<_> 7<_>
+        |> LexerNfaGraph.addSymbolEdge 6<_> 8<_> 'a'
+        |> LexerNfaGraph.addSymbolEdge 7<_> 8<_> 'b'
+        |> LexerNfaGraph.addEpsilonEdge 8<_> 1<_>
 
     // Create the NFA
     { Transitions = transitions;

@@ -9,374 +9,218 @@ See LICENSE.TXT for licensing details.
 //
 module FSharpLex.Graph
 
+open System.Diagnostics
+open LanguagePrimitives
+open SpecializedCollections
 
-/// An immutable implementation of a vertex- and edge-labeled sparse digraph.
-type LabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex, [<EqualityConditionalOn; ComparisonConditionalOn>]'Edge when 'Vertex : comparison>
-        private (vertexSet : Set<'Vertex>, edgeSet : Map<'Vertex * 'Vertex, 'Edge>) =
+
+/// The endpoints of an edge in a graph.
+/// Used as a key for sparse graph implementations because
+/// it's more efficient than an F# tuple.
+[<Struct>]
+type EdgeEndpoints< [<Measure>] 'Vertex> =
+    /// The source vertex of the edge.
+    val Source : int<'Vertex>
+    /// The target vertex of the edge.
+    val Target : int<'Vertex>
+
+    new (source, target) =
+        {   Source = source;
+            Target = target; }
+
+/// <summary>An immutable implementation of a vertex- and edge-labeled sparse digraph,
+/// modified for better performance when creating NFAs for lexers.</summary>
+/// <remarks>Assumes vertex ids are assigned in order (i.e., there are no gaps in the values),
+/// starting at zero (0).</remarks>
+type LexerNfaGraph<[<Measure>]'Vertex>
+        private (vertexCount : int, adjacencyMap : Map<EdgeEndpoints<'Vertex>, System.Nullable<char>>) =
+
     //
     static member internal Empty
-        with get () = LabeledSparseDigraph<'Vertex, 'Edge> (Set.empty, Map.empty)
+        with get () =
+            LexerNfaGraph<'Vertex> (GenericZero, Map.empty)
 
     //
     member __.IsEmpty
-        with get () = Set.isEmpty vertexSet
+        with get () =
+            vertexCount = GenericZero
 
     //
     member __.Edges
-        with get () = edgeSet
+        with get () = adjacencyMap
     
     //
-    member __.Vertices
-        with get () = vertexSet
+    member __.VertexCount
+        with get () = vertexCount
 
     //
-    static member Create (vertices : Set<'Vertex>) =
-        LabeledSparseDigraph (
-            vertices,
-            Map.empty)
+    member __.CreateVertex () =
+        let newVertex = Int32WithMeasure<'Vertex> <| vertexCount + 1
+        newVertex,
+        LexerNfaGraph (
+            vertexCount + 1,
+            adjacencyMap)
 
     //
-    member __.ContainsVertex (vertex : 'Vertex) =
-        Set.contains vertex vertexSet
-
-    //
-    member __.ContainsEdge (source : 'Vertex, target : 'Vertex) =
+    member __.AddEpsilonEdge (source : int<'Vertex>, target : int<'Vertex>) =
         // Preconditions
-        if not <| Set.contains source vertexSet then
+        if int source <= 0 || int source > vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
+        elif int target <= 0 || int target > vertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        Map.containsKey (source, target) edgeSet
+        let key = EdgeEndpoints (source, target)
+        let value = System.Nullable ()
+        LexerNfaGraph (
+            vertexCount,
+            Map.add key value adjacencyMap)
 
     //
-    member __.GetEdge (source : 'Vertex, target : 'Vertex) =
+    member __.AddSymbolEdge (source : int<'Vertex>, target : int<'Vertex>, edge : char) =
         // Preconditions
-        if not <| Set.contains source vertexSet then
+        if int source <= 0 || int source > vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
+        elif int target <= 0 || int target > vertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        Map.find (source, target) edgeSet
+        let key = EdgeEndpoints (source, target)
+        let value = System.Nullable edge
+        LexerNfaGraph (
+            vertexCount,
+            Map.add key value adjacencyMap)
 
     //
-    member __.TryGetEdge (source : 'Vertex, target : 'Vertex) =
+    member __.TryGetEdge (source : int<'Vertex>, target : int<'Vertex>) =
         // Preconditions
-        if not <| Set.contains source vertexSet then
+        if int source < 0 || int source >= vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
+        elif int target < 0 || int target >= vertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        Map.tryFind (source, target) edgeSet
-
-    //
-    member __.AddVertex (vertex : 'Vertex) =
-        LabeledSparseDigraph (
-            Set.add vertex vertexSet,
-            edgeSet)
-
-    //
-    member __.AddVertices (vertices : Set<'Vertex>) =
-        LabeledSparseDigraph (
-            Set.union vertexSet vertices,
-            edgeSet)
-
-    //
-    member __.AddEdge (source : 'Vertex, target : 'Vertex, edge : 'Edge) =
-        // Preconditions
-        if not <| Set.contains source vertexSet then
-            invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
-            invalidArg "target" "The vertex is not in the graph's vertex-set."
-
-        LabeledSparseDigraph (
-            vertexSet,
-            Map.add (source, target) edge edgeSet)
-
-    //
-    member __.RemoveVertex (vertex : 'Vertex) =
-        // Preconditions
-        if not <| Set.contains vertex vertexSet then
-            invalidArg "vertex" "The vertex is not in the graph's vertex-set."
-
-        // Remove in- and out-edgeSet of the vertex.
-        let edgeSet =
-            edgeSet
-            |> Map.filter (fun (source, target) _ ->
-                source <> vertex
-                && target <> vertex)
-
-        LabeledSparseDigraph (
-            Set.remove vertex vertexSet,
-            edgeSet)
-
-    //
-    member __.RemoveEdge (source : 'Vertex, target : 'Vertex) =
-        // Preconditions
-        if not <| Set.contains source vertexSet then
-            invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
-            invalidArg "target" "The vertex is not in the graph's vertex-set."
-
-        LabeledSparseDigraph (
-            vertexSet,
-            Map.remove (source, target) edgeSet)
+        let key = EdgeEndpoints (source, target)
+        Map.tryFind key adjacencyMap
     
 
-/// Functions on LabeledSparseDigraphs.
+/// Functions for working with LexerNfaGraph instances.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module LabeledSparseDigraph =
+module LexerNfaGraph =
     /// The empty graph.
-    [<GeneralizableValue>]
-    let empty<'Vertex, 'Edge when 'Vertex : comparison> =
-        LabeledSparseDigraph<'Vertex,'Edge>.Empty
+    let empty<[<Measure>]'Vertex> =
+        LexerNfaGraph<'Vertex>.Empty
 
     /// Determines if the graph is empty -- i.e., if it's vertex set is empty.
-    let inline isEmpty (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+    let inline isEmpty (graph : LexerNfaGraph<'Vertex>) =
         graph.IsEmpty
 
-    /// Creates a graph from a set of vertices.
-    let inline ofVertexSet (vertices : Set<'Vertex>) : LabeledSparseDigraph<'Vertex, 'Edge> =
-        LabeledSparseDigraph<'Vertex, 'Edge>.Create vertices
+    //
+    let inline addEpsilonEdge source target (graph : LexerNfaGraph<'Vertex>) =
+        graph.AddEpsilonEdge (source, target)
 
     //
-    let inline addVertex (vertex : 'Vertex) (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
-        graph.AddVertex vertex
+    let inline addSymbolEdge source target edge (graph : LexerNfaGraph<'Vertex>) =
+        graph.AddSymbolEdge (source, target, edge)
 
     //
-    let inline addVertices (vertices : Set<'Vertex>) (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
-        graph.AddVertices vertices
+    let inline createVertex (graph : LexerNfaGraph<'Vertex>) =
+        graph.CreateVertex ()
 
     //
-    let inline addEdge source target edge (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
-        graph.AddEdge (source, target, edge)
-
-    //
-    let inline removeVertex (vertex : 'Vertex) (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
-        graph.RemoveVertex vertex
-
-    //
-    let inline removeEdge source target (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
-        graph.RemoveEdge (source, target)
-
-    //
-    let inline containsVertex (vertex : 'Vertex) (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
-        graph.ContainsVertex vertex
-
-    //
-    let inline containsEdge source target (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
-        graph.ContainsEdge (source, target)
-
-    //
-    let inline getEdge source target (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
-        graph.GetEdge (source, target)
-
-    //
-    let inline tryGetEdge source target (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+    let inline tryGetEdge source target (graph : LexerNfaGraph<'Vertex>) =
         graph.TryGetEdge (source, target)
 
+/// Active pattern for classifying edges of lexer NFA graphs.
+let inline (|Epsilon|Symbol|) (edge : System.Nullable<char>) =
+    if edge.HasValue then
+        Symbol edge.Value
+    else
+        Epsilon
 
-//
-/// An immutable implementation of a vertex- and edge-labeled sparse multidigraph.
-type LabeledSparseMultidigraph<[<EqualityConditionalOn>]'Vertex, [<EqualityConditionalOn>]'Edge when 'Vertex : comparison and 'Edge : comparison>
-        private (vertexSet : Set<'Vertex>, edgeSets : Map<'Vertex * 'Vertex, Set<'Edge>>) =
+
+/// <summary>An immutable implementation of a vertex- and edge-labeled sparse multidigraph,
+/// modified for better performance when creating DFAs for lexers.</summary>
+/// <remarks>Assumes vertex ids are assigned in order (i.e., there are no gaps in the values),
+/// starting at zero (0).</remarks>
+type LexerDfaGraph<[<Measure>]'Vertex>
+        private (vertexCount : int, adjacencyMap : Map<EdgeEndpoints<'Vertex>, CharSet>) =
     //
     static member internal Empty
-        with get () = LabeledSparseMultidigraph<'Vertex, 'Edge> (Set.empty, Map.empty)
+        with get () = LexerDfaGraph<'Vertex> (GenericZero, Map.empty)
 
     //
     member __.IsEmpty
-        with get () = Set.isEmpty vertexSet
+        with get () =
+            vertexCount = GenericZero
 
     //
     member __.EdgeSets
-        with get () = edgeSets
+        with get () = adjacencyMap
     
     //
-    member __.Vertices
-        with get () = vertexSet
+    member __.VertexCount
+        with get () = vertexCount
 
     //
-    static member Create (vertices : Set<'Vertex>) =
-        LabeledSparseMultidigraph (
-            vertices,
-            Map.empty)
+    member __.CreateVertex () =
+        let newVertex = Int32WithMeasure<'Vertex> <| vertexCount + 1
+        newVertex,
+        LexerDfaGraph (
+            vertexCount + 1,
+            adjacencyMap)
 
     //
-    member __.ContainsVertex (vertex : 'Vertex) =
-        Set.contains vertex vertexSet
-
-    //
-    member __.ContainsEdge (source : 'Vertex, target : 'Vertex) =
+    member __.TryGetEdgeSet (source : int<'Vertex>, target : int<'Vertex>) =
         // Preconditions
-        if not <| Set.contains source vertexSet then
+        if int source <= 0 || int source > vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
+        elif int target <= 0 || int target > vertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        Map.containsKey (source, target) edgeSets
+        let key = EdgeEndpoints (source, target)
+        Map.tryFind key adjacencyMap
 
     //
-    member __.GetEdgeSet (source : 'Vertex, target : 'Vertex) =
+    member __.AddEdge (source : int<'Vertex>, target : int<'Vertex>, edge : char) =
         // Preconditions
-        if not <| Set.contains source vertexSet then
+        if int source <= 0 || int source > vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
+        elif int target <= 0 || int target > vertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        Map.find (source, target) edgeSets
-
-    //
-    member __.TryGetEdgeSet (source : 'Vertex, target : 'Vertex) =
-        // Preconditions
-        if not <| Set.contains source vertexSet then
-            invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
-            invalidArg "target" "The vertex is not in the graph's vertex-set."
-
-        Map.tryFind (source, target) edgeSets
-
-    //
-    member __.AddVertex (vertex : 'Vertex) =
-        LabeledSparseMultidigraph (
-            Set.add vertex vertexSet,
-            edgeSets)
-
-    //
-    member __.AddVertices (vertices : Set<'Vertex>) =
-        LabeledSparseMultidigraph (
-            Set.union vertexSet vertices,
-            edgeSets)
-
-    //
-    member __.AddEdge (source : 'Vertex, target : 'Vertex, edge : 'Edge) =
-        // Preconditions
-        if not <| Set.contains source vertexSet then
-            invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
-            invalidArg "target" "The vertex is not in the graph's vertex-set."
+        let key = EdgeEndpoints (source, target)
 
         //
         let edgeSet =
-            match Map.tryFind (source, target) edgeSets with
+            match Map.tryFind key adjacencyMap with
             | Some edgeSet ->
-                Set.add edge edgeSet
+                CharSet.add edge edgeSet
             | None ->
-                Set.singleton edge        
+                CharSet.singleton edge
 
-        LabeledSparseMultidigraph (
-            vertexSet,
-            Map.add (source, target) edgeSet edgeSets)
+        LexerDfaGraph (
+            vertexCount,
+            Map.add key edgeSet adjacencyMap)
 
-    //
-    member __.RemoveVertex (vertex : 'Vertex) =
-        // Preconditions
-        if not <| Set.contains vertex vertexSet then
-            invalidArg "vertex" "The vertex is not in the graph's vertex-set."
-
-        // Remove in- and out-edges of the vertex.
-        let edgeSets =
-            edgeSets
-            |> Map.filter (fun (source, target) _ ->
-                source <> vertex
-                && target <> vertex)
-
-        LabeledSparseMultidigraph (
-            Set.remove vertex vertexSet,
-            edgeSets)
-
-    //
-    member __.RemoveAllEdges (source : 'Vertex, target : 'Vertex) =
-        // Preconditions
-        if not <| Set.contains source vertexSet then
-            invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
-            invalidArg "target" "The vertex is not in the graph's vertex-set."
-
-        LabeledSparseMultidigraph (
-            vertexSet,
-            Map.remove (source, target) edgeSets)
-
-    //
-    member this.RemoveEdge (source : 'Vertex, target : 'Vertex, edge : 'Edge) =
-        // Preconditions
-        if not <| Set.contains source vertexSet then
-            invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
-            invalidArg "target" "The vertex is not in the graph's vertex-set."
-
-        // Try to retrieve the edge-set for these vertexSet.
-        match Map.tryFind (source, target) edgeSets with
-        | None ->
-            // Nothing to do, so just return the original graph.
-            this
-        | Some edgeSet ->
-            // Remove the edge from the edge-set.
-            let edgeSet = Set.remove edge edgeSet
-
-            // If the edge-set is empty after removing the edge, remove it from 'edges';
-            // otherwise, update 'edges' with the modified edge-set.
-            let edgeSets =
-                if Set.isEmpty edgeSet then
-                    Map.remove (source, target) edgeSets
-                else
-                    Map.add (source, target) edgeSet edgeSets
-
-            LabeledSparseMultidigraph (
-                vertexSet, edgeSets)
         
-/// Functions on LabeledSparseMultidigraph.
+/// Functions on LexerDfaGraph.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module LabeledSparseMultidigraph =
+module LexerDfaGraph =
     /// The empty graph.
-    [<GeneralizableValue>]
-    let empty<'Vertex, 'Edge when 'Vertex : comparison and 'Edge : comparison> =
-        LabeledSparseMultidigraph<'Vertex,'Edge>.Empty
+    let empty<[<Measure>]'Vertex> =
+        LexerDfaGraph<'Vertex>.Empty
 
     /// Determines if the graph is empty -- i.e., if it's vertex set is empty.
-    let inline isEmpty (graph : LabeledSparseMultidigraph<'Vertex, 'Edge>) =
+    let inline isEmpty (graph : LexerDfaGraph<'Vertex>) =
         graph.IsEmpty
 
-    /// Creates a graph from a set of vertices.
-    let inline ofVertexSet (vertices : Set<'Vertex>) : LabeledSparseMultidigraph<'Vertex, 'Edge> =
-        LabeledSparseMultidigraph<'Vertex, 'Edge>.Create vertices
+    //
+    let inline createVertex (graph : LexerDfaGraph<'Vertex>) =
+        graph.CreateVertex ()
 
     //
-    let inline addVertex (vertex : 'Vertex) (graph : LabeledSparseMultidigraph<'Vertex, 'Edge>) =
-        graph.AddVertex vertex
-
-    //
-    let inline addVertices (vertices : Set<'Vertex>) (graph : LabeledSparseMultidigraph<'Vertex, 'Edge>) =
-        graph.AddVertices vertices
-
-    //
-    let inline addEdge source target edge (graph : LabeledSparseMultidigraph<'Vertex, 'Edge>) =
+    let inline addEdge source target edge (graph : LexerDfaGraph<'Vertex>) =
         graph.AddEdge (source, target, edge)
 
     //
-    let inline removeVertex (vertex : 'Vertex) (graph : LabeledSparseMultidigraph<'Vertex, 'Edge>) =
-        graph.RemoveVertex vertex
-
-    //
-    let inline removeAllEdges source target (graph : LabeledSparseMultidigraph<'Vertex, 'Edge>) =
-        graph.RemoveAllEdges (source, target)
-
-    //
-    let inline removeEdge source target edge (graph : LabeledSparseMultidigraph<'Vertex, 'Edge>) =
-        graph.RemoveEdge (source, target, edge)
-
-    //
-    let inline containsVertex (vertex : 'Vertex) (graph : LabeledSparseMultidigraph<'Vertex, 'Edge>) =
-        graph.ContainsVertex vertex
-
-    //
-    let inline containsEdge source target (graph : LabeledSparseMultidigraph<'Vertex, 'Edge>) =
-        graph.ContainsEdge (source, target)
-
-    //
-    let inline getEdgeSet source target (graph : LabeledSparseMultidigraph<'Vertex, 'Edge>) =
-        graph.GetEdgeSet (source, target)
-
-    //
-    let inline tryGetEdgeSet source target (graph : LabeledSparseMultidigraph<'Vertex, 'Edge>) =
+    let inline tryGetEdgeSet source target (graph : LexerDfaGraph<'Vertex>) =
         graph.TryGetEdgeSet (source, target)
+

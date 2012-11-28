@@ -11,7 +11,7 @@ See LICENSE.TXT for licensing details.
 module FSharpLex.Dfa
 
 open System.Diagnostics
-open Collections
+open SpecializedCollections
 open Graph
 open Nfa
 
@@ -22,14 +22,14 @@ open Nfa
 type DfaStateId = int<DfaState>
 
 /// A deterministic finite automaton (DFA).
-type Dfa<'Symbol when 'Symbol : comparison> = {
+type Dfa = {
     /// The initial state of the DFA.
     InitialState : DfaStateId;
     /// The transition graph of the DFA.
-    Transitions : LabeledSparseMultidigraph<DfaStateId, 'Symbol>;
+    Transitions : LexerDfaGraph<DfaState>;
     /// For a DFA state, maps the out-edges (transitions) from that state
     /// to the state targeted by the transition.
-    TransitionsBySymbol : Map<DfaStateId, Map<'Symbol, DfaStateId>>;
+    TransitionsBySymbol : Map<DfaStateId, Map<char, DfaStateId>>;
     /// For each final (accepting) state of the DFA, specifies the index of
     /// the pattern it accepts. The index is the index into the Regex[]
     /// used to create the original NFA.
@@ -43,31 +43,31 @@ module internal Dfa =
     // OPTIMIZE : Once the representation of the NFA transitions is changed to
     // allow faster lookup of out-edges from a state, this function could be
     // rewritten to be much simpler.
-    let oneStepTransitions (states : Set<NfaStateId>) (nfa : Nfa<'Symbol>) =
+    let oneStepTransitions (states : Set<NfaStateId>) (nfa : Nfa) =
         let transitionEdges = nfa.Transitions.Edges
         (Map.empty, states)
         ||> Set.fold (fun moves state ->
             (moves, transitionEdges)
-            ||> Map.fold (fun moves (source, target) edge ->
-                if source <> state then
+            ||> Map.fold (fun moves edgeEndpoints edge ->
+                if edgeEndpoints.Source <> state then
                     moves
                 else
                     match edge with
-                    | StateTransition.Epsilon ->
+                    | Epsilon ->
                         moves
-                    | StateTransition.Symbol sym ->
+                    | Symbol sym ->
                         let targets =
                             match Map.tryFind sym moves with
                             | None ->
-                                Set.singleton target
+                                Set.singleton edgeEndpoints.Target
                             | Some targets ->
-                                Set.add target targets
+                                Set.add edgeEndpoints.Target targets
 
                         Map.add sym targets moves))
 
     // Private, recursive implementation of the epsilon-closure algorithm.
     // Uses a worklist-style algorithm to avoid non-tail-recursive-calls.
-    let rec private epsilonClosureImpl (closure : Set<NfaStateId>) (nfa : Nfa<'Symbol>) (pending : Set<NfaStateId>) =
+    let rec private epsilonClosureImpl (closure : Set<NfaStateId>) (nfa : Nfa) (pending : Set<NfaStateId>) =
         // If there are no more pending states, we're finished computing.
         if Set.isEmpty pending then
             closure
@@ -89,15 +89,15 @@ module internal Dfa =
                 // targets of the out-edges labeled with that StateTransition.
                 let epsilonTargets =
                     (Set.empty, nfa.Transitions.Edges)
-                    ||> Map.fold (fun epsilonTargets (source, target) edge ->
-                        if source <> state then
+                    ||> Map.fold (fun epsilonTargets edgeEndpoints edge ->
+                        if edgeEndpoints.Source <> state then
                             epsilonTargets
                         else
                             match edge with
-                            | StateTransition.Symbol _ ->
+                            | Symbol _ ->
                                 epsilonTargets
-                            | StateTransition.Epsilon ->
-                                Set.add target epsilonTargets)
+                            | Epsilon ->
+                                Set.add edgeEndpoints.Target epsilonTargets)
 
                 // Add the targets of any epsilon-transitions to the set of
                 // pending states, then recurse to continue processing.
@@ -106,7 +106,7 @@ module internal Dfa =
                 |> epsilonClosureImpl closure nfa
 
     /// Computes the epsilon-closure of a specified NFA state.
-    let epsilonClosure (state : NfaStateId) (nfa : Nfa<'Symbol>) =
+    let epsilonClosure (state : NfaStateId) (nfa : Nfa) =
         // Call the recursive implementation.
         Set.singleton state
         |> epsilonClosureImpl Set.empty nfa
@@ -114,7 +114,7 @@ module internal Dfa =
     //
     type CompilationState<'Symbol when 'Symbol : comparison> = {
         //
-        Transitions : LabeledSparseMultidigraph<DfaStateId, 'Symbol>;
+        Transitions : LexerDfaGraph<DfaState>;
         /// Maps sets of NFA states to the DFA state representing the set.
         NfaStateSetToDfaState : Map<Set<NfaStateId>, DfaStateId>;
         /// Maps a DFA state to the set of NFA states it represents.
@@ -122,14 +122,12 @@ module internal Dfa =
     }
 
     //
-    let private tryGetDfaState nfaStateSet (compilationState : CompilationState<'Symbol>) =
-        let dfaState = Map.tryFind nfaStateSet compilationState.NfaStateSetToDfaState
-        dfaState, compilationState
+    let inline private tryGetDfaState nfaStateSet (compilationState : CompilationState<'Symbol>) =
+        Map.tryFind nfaStateSet compilationState.NfaStateSetToDfaState
 
     //
-    let private getNfaStateSet dfaState (compilationState : CompilationState<'Symbol>) =
-        let nfaStateSet = Map.find dfaState compilationState.DfaStateToNfaStateSet
-        nfaStateSet, compilationState
+    let inline private getNfaStateSet dfaState (compilationState : CompilationState<'Symbol>) =
+        Map.find dfaState compilationState.DfaStateToNfaStateSet
 
     //
     let private createState nfaStateSet (compilationState : CompilationState<'Symbol>) =
@@ -142,21 +140,21 @@ module internal Dfa =
             sprintf "The compilation state already contains a DFA state for the NFA state %O." nfaStateSet)
 
         /// The DFA state representing this set of NFA states.
-        let dfaState : DfaStateId =
-            compilationState.NfaStateSetToDfaState.Count
-            |> LanguagePrimitives.Int32WithMeasure
+        let (dfaState : DfaStateId), transitions =
+            LexerDfaGraph.createVertex compilationState.Transitions
 
         // Add the new DFA state to the compilation state.
         let compilationState =
             { compilationState with
                 NfaStateSetToDfaState = Map.add nfaStateSet dfaState compilationState.NfaStateSetToDfaState;
-                DfaStateToNfaStateSet = Map.add dfaState nfaStateSet compilationState.DfaStateToNfaStateSet; }
+                DfaStateToNfaStateSet = Map.add dfaState nfaStateSet compilationState.DfaStateToNfaStateSet;
+                Transitions = transitions; }
 
         // Return the new DFA state and the updated compilation state.
         dfaState, compilationState
 
     /// The main NFA -> DFA compilation function.
-    let rec private compileRec (pending : Set<DfaStateId>) (nfa : Nfa<'Symbol>) (compilationState : CompilationState<'Symbol>) =
+    let rec private compileRec (nfa : Nfa) (pending : Set<DfaStateId>) (compilationState : CompilationState<'Symbol>) =
         // If there are no more pending states, we're finished compiling the DFA.
         if Set.isEmpty pending then
             compilationState
@@ -165,7 +163,7 @@ module internal Dfa =
             let currentState = Set.minElement pending
             let pending = Set.remove currentState pending
 
-            let nfaStateSet, compilationState = getNfaStateSet currentState compilationState
+            let nfaStateSet = getNfaStateSet currentState compilationState
 
             //
             let transitionsFromCurrentNfaStateSet =
@@ -175,36 +173,38 @@ module internal Dfa =
 
             // For each set of NFA states targeted by a transition,
             // retrieve the corresponding DFA state. If a corresponding
-            // DFA state cannot be found, it will be created.
-            let transitionsFromCurrentDfaState, compilationState =
-                ((Map.empty, compilationState), transitionsFromCurrentNfaStateSet)
-                ||> Map.fold (fun (transitionsFromCurrentDfaState, compilationState) symbol targetNfaStateSet ->
-                    let targetDfaState, compilationState =
-                        let maybeDfaState, compilationState = tryGetDfaState targetNfaStateSet compilationState
+            // DFA state cannot be found, one will be created.
+            let transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState =
+                ((Map.empty, Set.empty, compilationState), transitionsFromCurrentNfaStateSet)
+                ||> Map.fold (fun (transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState) symbol targetNfaStateSet ->
+                    let targetDfaState, unvisitedTransitionTargets, compilationState =
+                        let maybeDfaState =
+                            tryGetDfaState targetNfaStateSet compilationState
+
                         match maybeDfaState with
                         | Some targetDfaState ->
-                            targetDfaState, compilationState
+                            targetDfaState, unvisitedTransitionTargets, compilationState
                         | None ->
-                            createState targetNfaStateSet compilationState
+                            // Create a DFA state for this set of NFA states.
+                            let newDfaState, compilationState = createState targetNfaStateSet compilationState
+
+                            // Add this new DFA state to the set of unvisited states
+                            // targeted by transitions from the current DFA state.
+                            let unvisitedTransitionTargets =
+                                Set.add newDfaState unvisitedTransitionTargets
+
+                            newDfaState,
+                            unvisitedTransitionTargets,
+                            compilationState
 
                     //
                     let transitionsFromCurrentDfaState =
                         Map.add symbol targetDfaState transitionsFromCurrentDfaState
 
-                    transitionsFromCurrentDfaState, compilationState)
+                    transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState)
 
-            // Find DFA states which are transition targets which have not yet
-            // been added to the transition graph.
-            let unvisitedTransitionTargets =
-                let vertices = compilationState.Transitions.Vertices
-                (Set.empty, transitionsFromCurrentDfaState)
-                ||> Map.fold (fun unvisitedTransitionTargets _ target ->
-                    if Set.contains target vertices then
-                        unvisitedTransitionTargets
-                    else
-                        Set.add target unvisitedTransitionTargets)
-
-            //
+            // Add any newly-created, unvisited states to the
+            // set of states which still need to be visited.
             let pending = Set.union pending unvisitedTransitionTargets
 
             //
@@ -212,16 +212,12 @@ module internal Dfa =
                 { compilationState with
                     Transitions =
                         // Add the unvisited transition targets to the transition graph.
-                        (compilationState.Transitions, unvisitedTransitionTargets)
-                        ||> Set.fold (fun transitions target ->
-                            LabeledSparseMultidigraph.addVertex target transitions)
-                        // Add the transition edges to the transition graph.
-                        |> Map.fold (fun transitions symbol target ->
-                            LabeledSparseMultidigraph.addEdge currentState target symbol transitions)
-                        <| transitionsFromCurrentDfaState; }
+                        (compilationState.Transitions, transitionsFromCurrentDfaState)
+                        ||> Map.fold (fun transitions symbol target ->
+                            LexerDfaGraph.addEdge currentState target symbol transitions); }
 
             // Continue processing recursively.
-            compileRec pending nfa compilationState
+            compileRec nfa pending compilationState
 
     /// Information about overlapping Regexes discovered during DFA compilation.
     type internal RegexOverlapInfo = {
@@ -235,9 +231,9 @@ module internal Dfa =
 
     /// The compiled DFA, plus additional compilation data which may
     /// be useful for diagnostics purposes.
-    type internal DfaCompilationResult<'Symbol when 'Symbol : comparison> = {
+    type internal DfaCompilationResult = {
         /// The compiled DFA.
-        Dfa : Dfa<'Symbol>;
+        Dfa : Dfa;
         /// Maps sets of NFA states to the DFA state representing the set.
         NfaStateSetToDfaState : Map<Set<NfaStateId>, DfaStateId>;
         /// Maps a DFA state to the set of NFA states it represents.
@@ -247,27 +243,27 @@ module internal Dfa =
     }
 
     //
-    let private transitionsBySymbol (transitions : LabeledSparseMultidigraph<DfaStateId, 'Symbol>) =
+    let private transitionsBySymbol (transitions : LexerDfaGraph<DfaState>) =
         (Map.empty, transitions.EdgeSets)
-        ||> Map.fold (fun transitionsBySymbol (source, target) symbols ->
+        ||> Map.fold (fun transitionsBySymbol edgeEndpoints symbols ->
             let transitionsFromSource =
-                let transitionsFromSource = Map.tryFind source transitionsBySymbol
+                let transitionsFromSource = Map.tryFind edgeEndpoints.Source transitionsBySymbol
                 defaultArg transitionsFromSource Map.empty
 
             let transitionsFromSource =
                 (transitionsFromSource, symbols)
-                ||> Set.fold (fun transitionsFromSource symbol ->
-                    Map.add symbol target transitionsFromSource)
+                ||> CharSet.fold (fun transitionsFromSource symbol ->
+                    Map.add symbol edgeEndpoints.Target transitionsFromSource)
 
-            Map.add source transitionsFromSource transitionsBySymbol)
+            Map.add edgeEndpoints.Source transitionsFromSource transitionsBySymbol)
 
     //
-    let compile (nfa : Nfa<'Symbol>) : DfaCompilationResult<'Symbol> =
+    let compile (nfa : Nfa) : DfaCompilationResult =
         // The initial (empty) compilation state.
         let compilationState : CompilationState<'Symbol> = {
             NfaStateSetToDfaState = Map.empty;
             DfaStateToNfaStateSet = Map.empty;
-            Transitions = LabeledSparseMultidigraph.empty; }
+            Transitions = LexerDfaGraph.empty; }
 
         // The initial DFA state.
         let initialState, compilationState =
@@ -278,16 +274,9 @@ module internal Dfa =
             // of the initial NFA state.
             createState initialStateEClosure compilationState
 
-        // Add the initial DFA state to the transition graph.
-        let compilationState =
-            { compilationState with
-                Transitions =
-                    compilationState.Transitions
-                    |> LabeledSparseMultidigraph.addVertex initialState; }
-
         // Compile the NFA into the DFA.
         let compilationState =
-            compileRec (Set.singleton initialState) nfa compilationState
+            compileRec nfa (Set.singleton initialState) compilationState
 
         /// Maps each final (accepting) DFA state to the
         /// (index of) the Regex it accepts.
@@ -336,58 +325,58 @@ module internal Dfa =
                     regexOverlapInfo)
 
         // Create the DFA.
-        let dfa =
-            { InitialState = initialState;
-                Transitions = compilationState.Transitions;
-                TransitionsBySymbol = transitionsBySymbol compilationState.Transitions;
-                FinalStates = finalStates; }
+        let dfa = {
+            InitialState = initialState;
+            Transitions = compilationState.Transitions;
+            TransitionsBySymbol = transitionsBySymbol compilationState.Transitions;
+            FinalStates = finalStates; }
 
         // Return the DFA along with any data from the final compilation state which
         // does not become part of the DFA; this additional data may be displayed or
         // logged to help diagnose any possible issues with the compiled DFA.
-        { Dfa = dfa;
-           NfaStateSetToDfaState = compilationState.NfaStateSetToDfaState;
-           DfaStateToNfaStateSet = compilationState.DfaStateToNfaStateSet;
-           RegexOverlapInfo = regexOverlapInfo; }
+        {   Dfa = dfa;
+            NfaStateSetToDfaState = compilationState.NfaStateSetToDfaState;
+            DfaStateToNfaStateSet = compilationState.DfaStateToNfaStateSet;
+            RegexOverlapInfo = regexOverlapInfo; }
 
 
 /// Converts an NFA into a DFA.
-let ofNfa (nfa : Nfa<'Symbol>) : Dfa<'Symbol> =
+let ofNfa (nfa : Nfa) : Dfa =
     // Compile the NFA into a DFA.
     let compilationResult = Dfa.compile nfa
     
     // Return the compiled DFA, discarding any additional data in the result.
     compilationResult.Dfa
 
+////
+//let ofNfaWithLog (nfa : Nfa<'Symbol>) (textWriter : #System.IO.TextWriter) : Dfa<'Symbol> =
+//    // Preconditions
+//    if System.Object.ReferenceEquals (null, textWriter) then
+//        nullArg "textWriter"
 //
-let ofNfaWithLog (nfa : Nfa<'Symbol>) (textWriter : #System.IO.TextWriter) : Dfa<'Symbol> =
-    // Preconditions
-    if System.Object.ReferenceEquals (null, textWriter) then
-        nullArg "textWriter"
-
-    // Compile the NFA into a DFA.
-    let compilationResult = Dfa.compile nfa
-
-    // Log additional data using the TextWriter.
-    // TODO
-    raise <| System.NotImplementedException "Dfa.ofNfaWithLog"
-
-    // Return the compiled DFA.
-    compilationResult.Dfa    
+//    // Compile the NFA into a DFA.
+//    let compilationResult = Dfa.compile nfa
+//
+//    // Log additional data using the TextWriter.
+//    // TODO
+//    raise <| System.NotImplementedException "Dfa.ofNfaWithLog"
+//
+//    // Return the compiled DFA.
+//    compilationResult.Dfa
 
 /// Given a DFA which accepts language L, produces an NFA which accepts the reverse of L.
-let reverse (dfa : Dfa<'Symbol>) : Nfa<'Symbol> =
+let reverse (dfa : Dfa) : Nfa =
     // Reverse the direction of the edges in the transition map.
     // OPTIMIZE : This could (and should) easily be optimized to be much more efficient.
-    let transitions =
-        let transitions =
-            LabeledSparseMultidigraph.ofVertexSet dfa.Transitions.Vertices
-        (transitions, dfa.Transitions.EdgeSets)
-        ||> Map.fold (fun transitions (source, target) edgeSet ->
-            (transitions, edgeSet)
-            ||> Set.fold (fun transitions symbol ->
-                // Reverse the source and target vertices of the edge.
-                LabeledSparseMultidigraph.addEdge target source symbol transitions))
+//    let transitions =
+//        let transitions =
+//            LexerDfaGraph.ofVertexSet dfa.Transitions.Vertices
+//        (transitions, dfa.Transitions.EdgeSets)
+//        ||> Map.fold (fun transitions edgeEndpoints edgeSet ->
+//            (transitions, edgeSet)
+//            ||> CharSet.fold (fun transitions symbol ->
+//                // Reverse the source and target vertices of the edge.
+//                LexerDfaGraph.addEdge edgeEndpoints.Target edgeEndpoints.Source symbol transitions))
 
     // Change the final states to initial states, and vice versa.
     // TODO
@@ -396,7 +385,7 @@ let reverse (dfa : Dfa<'Symbol>) : Nfa<'Symbol> =
     raise <| System.NotImplementedException "Dfa.reverse"
 
 /// Minimizes a DFA.
-let minimize (dfa : Dfa<'Symbol>) : Dfa<'Symbol> =
+let minimize (dfa : Dfa) : Dfa =
     // Minimize the DFA using Brzozowski's algorithm.
     dfa
     |> reverse
@@ -519,9 +508,9 @@ type InvalidToken<'Symbol> = {
 /// functionality; for a given sequence of symbols, a generated/compiled lexer
 /// should produce the exact same sequence of tokens produced by this function.
 /// </remarks>
-let tokenize (dfa : Dfa<'Symbol>) (symbols : seq<'Symbol>) : seq<Choice<int<RegexIndex> * 'Symbol[], 'Symbol[]>> =
+let tokenize (dfa : Dfa) (symbols : seq<_>) : seq<Choice<int<RegexIndex> * _[], _[]>> =
     //
-    let rec tokenize (symbolEnumerator : System.Collections.Generic.IEnumerator<'Symbol>) tokenizerState = seq {
+    let rec tokenize (symbolEnumerator : System.Collections.Generic.IEnumerator<_>) tokenizerState = seq {
         // Try to read a symbol from the stream or pending characters queue.
         let symbol, tokenizerState =
             // If the buffer contains any symbols, return the next symbol in
@@ -702,7 +691,7 @@ let tokenize (dfa : Dfa<'Symbol>) (symbols : seq<'Symbol>) : seq<Choice<int<Rege
 /// Produces a sequence containing all words (groups of symbols)
 /// in the language accepted by the specified DFA.
 /// In many cases, the sequence produced by this function is infinite.
-let generate (dfa : Dfa<'Symbol>) : seq<'Symbol[]> =
+let generate (dfa : Dfa) : seq<char[]> =
     //
     raise <| System.NotImplementedException "Dfa.generate"
 

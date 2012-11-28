@@ -8,7 +8,7 @@ See LICENSE.TXT for licensing details.
 
 //
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module FSharpLex.Collections
+module FSharpLex.SpecializedCollections
 
 
 /// Character set implementation based on a Discrete Interval Encoding Tree.
@@ -23,6 +23,10 @@ type CharSet =
 module CharSet =
     //
     let empty = CharSet.Empty
+
+    //
+    let singleton c =
+        Node (c, c, Empty, Empty)
 
     //
     let rec private splitMaxImpl tree cont =
