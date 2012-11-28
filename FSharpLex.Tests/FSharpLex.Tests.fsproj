@@ -38,6 +38,8 @@
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <ItemGroup>
     <None Include="packages.config" />
+    <Compile Include="Patterns.fs" />
+    <Compile Include="Nfa.fs" />
     <Compile Include="Dfa.fs" />
   </ItemGroup>
   <ItemGroup>
