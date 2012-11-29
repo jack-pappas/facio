@@ -68,7 +68,7 @@ module private CompileNfa =
             let (), transitions = addSymbolTransition stateId dest s transitions
             cont (stateId, transitions)
 
-        | Alternate (a, b) ->
+        | Regex.Or (a, b) ->
             let stateId, transitions = createState transitions
             regexToNfaImpl a dest transitions <| fun (aStateId, transitions) ->
                 let (), transitions = addEpsilonTransition stateId aStateId transitions
@@ -76,11 +76,11 @@ module private CompileNfa =
                     let (), transitions = addEpsilonTransition stateId bStateId transitions
                     cont (stateId, transitions)
 
-        | Sequence (a, b) ->
+        | Regex.Concat (a, b) ->
             regexToNfaImpl b dest transitions <| fun (bStateId, transitions) ->
                 regexToNfaImpl a bStateId transitions cont
 
-        | ZeroOrMore regex ->
+        | Regex.Star regex ->
             let stateId, transitions = createState transitions
             let (), transitions = addEpsilonTransition stateId dest transitions
             regexToNfaImpl regex stateId transitions <| fun (starStateId, transitions) ->

@@ -124,6 +124,19 @@ module CharSet =
             Node (x, y, l', r)
 
     //
+    [<CompiledName("AddRange")>]
+    let addRange lower upper tree =
+        // If the range is "inverted", we consider the range
+        // to be empty and simply return the original tree.
+        if lower > upper then tree
+        else
+            // OPTIMIZE : Implement some function which adds the values into
+            // the tree symbolically -- it'll be *way* faster.
+            (tree, seq { lower .. upper })
+            ||> Seq.fold (fun tree el ->
+                add el tree)
+
+    //
     let rec private removeImpl value tree cont =
         match tree with
         | Empty ->
