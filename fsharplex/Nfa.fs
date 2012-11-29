@@ -20,19 +20,18 @@ open Ast
 /// Unique identifier for a state within an NFA.
 type NfaStateId = int<NfaState>
 
-/// An index into a Regex[] used to create an NFA.
-[<Measure>] type RegexIndex
-
-/// A non-deterministic finite automaton (NFA).
-type Nfa = {
-    /// The initial state of the NFA.
-    InitialState : NfaStateId;
+/// A non-deterministic finite automaton (NFA)
+/// implementing a lexer specification.
+type LexerNfa = {
     /// The transition graph of the NFA.
     Transitions : LexerNfaGraph<NfaState>;
-    /// For each final (accepting) state of the NFA, specifies the index of
-    /// the pattern it accepts. The index is the index into the Regex[]
-    /// used to create the NFA.
-    FinalStates : Map<NfaStateId, int<RegexIndex>>;
+    /// For each lexer rule, contains an array whose elements
+    /// are the initial NFA states of the rule's clauses.
+    RuleClauseFinalStates : Map<RuleIdentifier, NfaStateId[]>;
+    /// The initial NFA state of each lexer rule.
+    RuleInitialStates : Map<RuleIdentifier, NfaStateId>;
+    /// The initial state of the NFA.
+    InitialState : NfaStateId;
 }
 
 //
@@ -94,88 +93,80 @@ module private CompileNfa =
         regexToNfaImpl regex finalState transitions id
 
 
-/// Compiles multiple Regex instances into a single Nfa.
-let ofRegexes (regexes : Regex<_>[]) =
+/// Compiles a lexer specification into an NFA which implements the lexer.
+[<CompiledName("CreateFromSpecification")>]
+let ofSpecification (spec : Specification) =
     // Preconditions
-    if Array.isEmpty regexes then
-        invalidArg "regexes" "Must specify at least one (1) regular expression to be compiled."
+    // TODO : Add an assertion to check that the specification is valid;
+    // the actual validation procedure should have already taken place before
+    // this method is called.
 
-    /// The initial NFA state.
-    let initialState, transitions =
+    // TODO : Implement a function which takes the rules and macros and
+    // inlines the macros into the rule patterns to produce a new set of rules.
+    //
+
+    /// The initial NFA state of the lexer.
+    let lexerInitialState, transitions =
         LexerNfaGraph.empty
         |> LexerNfaGraph.createVertex
-    
-    /// Maps final (accepting) NFA states to the index of the Regex they accept.
-    let regexFinalStates, regexIndexToFinalState, transitions =
-        ((Map.empty<NfaStateId,_>, Map.empty<_,NfaStateId>, transitions), [| 0 .. Array.length regexes - 1 |])
-        ||> Array.fold (fun (regexFinalStates, regexIndexToFinalState, transitions) regexIndex ->
-            // Add the measure type to the Regex index.
-            let regexIndex = LanguagePrimitives.Int32WithMeasure regexIndex
-
-            // Create a final NFA state for this Regex.
-            let regexFinalState, transitions =
-                LexerNfaGraph.createVertex transitions
-
-            // Add the identifier of the final state to the maps.            
-            Map.add regexFinalState regexIndex regexFinalStates,
-            Map.add regexIndex regexFinalState regexIndexToFinalState,
-            transitions)
 
     //
-    let regexInitialStates, transitions =
-        //
-        let regexInitialStates = Array.zeroCreate <| Array.length regexes
+    let ruleInitialStates, ruleClauseFinalStates, transitions =
+        ((Map.empty, Map.empty, transitions), spec.Rules)
+        ||> Map.fold (fun (ruleInitialStates, ruleClauseFinalStates, transitions) ruleId ruleClauses ->
+            /// The initial NFA state for this rule.
+            let ruleInitialState, transitions =
+                LexerNfaGraph.createVertex transitions
 
-        //
-        let transitions =
-            ((transitions, 0<_>), regexes)
-            ||> Array.fold (fun (transitions, regexIndex) regex ->
-                // Compile the regex.
-                let regexInitialState, transitions =
-                    /// The final (accepting) NFA state for this Regex.
-                    let regexFinalState = Map.find regexIndex regexIndexToFinalState
+            // Add the initial rule state to the map.
+            let ruleInitialStates = Map.add ruleId ruleInitialState ruleInitialStates
 
-                    CompileNfa.regexToNfa regex regexFinalState transitions
+            //
+            let ruleClauseFinalStateList, transitions =
+                (([], transitions), ruleClauses)
+                ||> List.fold (fun (ruleClauseFinalStateList, transitions) ruleClause ->
+                    /// The final (accepting) NFA state for this rule clause.
+                    let finalRuleClauseState, transitions =
+                        LexerNfaGraph.createVertex transitions
 
-                // Store the initial NFA state for this Regex.
-                regexInitialStates.[int regexIndex] <- regexInitialState
+                    // Add the rule clause's final state to the list.
+                    let ruleClauseFinalStateList = finalRuleClauseState :: ruleClauseFinalStateList
 
-                // Increment the index and continue folding.
-                transitions, regexIndex + 1<_>)
-            // Discard the counter
-            |> fst
+                    // Compile the clause's pattern into the NFA.
+                    let ruleClauseInitialState, transitions =
+                        CompileNfa.regexToNfa ruleClause.Pattern finalRuleClauseState transitions
 
-        regexInitialStates, transitions
+                    // Add an epsilon-transition from the rule's initial
+                    // NFA state to this clause's initial NFA state.
+                    let transitions =
+                        LexerNfaGraph.addEpsilonEdge ruleInitialState ruleClauseInitialState transitions
 
-    // Add epsilon-transitions from the initial NFA state (i.e., for the entire NFA)
-    // to the initial NFA state for each Regex.
+                    ruleClauseFinalStateList,
+                    transitions)
+
+            // Add the final states of the rule clauses into the map.
+            let ruleClauseFinalStates =
+                let finalStates =
+                    ruleClauseFinalStateList
+                    |> List.rev
+                    |> List.toArray
+
+                Map.add ruleId finalStates ruleClauseFinalStates
+
+            ruleInitialStates,
+            ruleClauseFinalStates,
+            transitions)
+
+    // Add epsilon-transitions from the initial NFA state to
+    // the initial state of each lexer rule.
     let transitions =
-        (transitions, regexInitialStates)
-        ||> Array.fold (fun transitions regexInitialState ->
-            LexerNfaGraph.addEpsilonEdge initialState regexInitialState transitions)
+        (transitions, ruleInitialStates)
+        ||> Map.fold (fun transitions _ ruleInitialState ->
+            LexerNfaGraph.addEpsilonEdge lexerInitialState ruleInitialState transitions)
 
-    // Create the NFA.
-    { InitialState = initialState;
-        FinalStates = regexFinalStates;
-        Transitions = transitions; }
-
-// TODO : Once 'ofRegexes' is implemented, rewrite this function as a simple wrapper for it.
-/// Compiles a Regex into an Nfa.
-let ofRegex regex =
-    /// The final (accepting) NFA state for the regular expression.
-    let finalState, transitions =
-        LexerNfaGraph.empty
-        |> LexerNfaGraph.createVertex
-
-    /// The final compilation state, containing the completed transition graph of the NFA.
-    let initialState, transitions =
-        // Compile the regex
-        CompileNfa.regexToNfa regex finalState transitions
-
-    // Create an NFA from the final compilation state.
-    { InitialState = initialState;
-        Transitions = transitions;
-        FinalStates =
-            Map.empty
-            |> Map.add finalState 0<_>; }
+    // Create and return the NFA.
+    {   Transitions = transitions;
+        RuleClauseFinalStates = ruleClauseFinalStates;
+        RuleInitialStates = ruleInitialStates;
+        InitialState = lexerInitialState; }
 

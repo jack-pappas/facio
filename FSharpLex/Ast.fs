@@ -29,6 +29,11 @@ type RuleClause = {
 }
 
 //
+[<Measure>] type RuleClauseIdx
+//
+type RuleClauseIndex = int<RuleClauseIdx>
+
+//
 type Rule = RuleClause list
 
 //

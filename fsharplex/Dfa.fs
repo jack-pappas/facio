@@ -22,19 +22,20 @@ open Ast
 /// Unique identifier for a state within a DFA.
 type DfaStateId = int<DfaState>
 
-/// A deterministic finite automaton (DFA).
-type Dfa = {
-    /// The initial state of the DFA.
-    InitialState : DfaStateId;
+/// A deterministic finite automaton (DFA)
+/// implementing a lexer specification.
+type LexerDfa = {
     /// The transition graph of the DFA.
     Transitions : LexerDfaGraph<DfaState>;
     /// For a DFA state, maps the out-edges (transitions) from that state
     /// to the state targeted by the transition.
     TransitionsBySymbol : Map<DfaStateId, Map<char, DfaStateId>>;
-    /// For each final (accepting) state of the DFA, specifies the index of
-    /// the pattern it accepts. The index is the index into the Regex[]
-    /// used to create the original NFA.
-    FinalStates : Map<DfaStateId, int<RegexIndex>>;
+    //
+    RuleClauseFinalStates : Map<RuleIdentifier, DfaStateId[]>;
+    //
+    RuleInitialStates : Map<RuleIdentifier, DfaStateId>;
+    /// The initial state of the DFA.
+    InitialState : DfaStateId;
 }
 
 //
@@ -44,7 +45,7 @@ module internal Dfa =
     // OPTIMIZE : Once the representation of the NFA transitions is changed to
     // allow faster lookup of out-edges from a state, this function could be
     // rewritten to be much simpler.
-    let oneStepTransitions (states : Set<NfaStateId>) (nfa : Nfa) =
+    let oneStepTransitions (states : Set<NfaStateId>) (nfa : LexerNfa) =
         let transitionEdges = nfa.Transitions.Edges
         (Map.empty, states)
         ||> Set.fold (fun moves state ->
@@ -68,7 +69,7 @@ module internal Dfa =
 
     // Private, recursive implementation of the epsilon-closure algorithm.
     // Uses a worklist-style algorithm to avoid non-tail-recursive-calls.
-    let rec private epsilonClosureImpl (closure : Set<NfaStateId>) (nfa : Nfa) (pending : Set<NfaStateId>) =
+    let rec private epsilonClosureImpl (closure : Set<NfaStateId>) (nfa : LexerNfa) (pending : Set<NfaStateId>) =
         // If there are no more pending states, we're finished computing.
         if Set.isEmpty pending then
             closure
@@ -107,7 +108,7 @@ module internal Dfa =
                 |> epsilonClosureImpl closure nfa
 
     /// Computes the epsilon-closure of a specified NFA state.
-    let epsilonClosure (state : NfaStateId) (nfa : Nfa) =
+    let epsilonClosure (state : NfaStateId) (nfa : LexerNfa) =
         // Call the recursive implementation.
         Set.singleton state
         |> epsilonClosureImpl Set.empty nfa
@@ -155,7 +156,7 @@ module internal Dfa =
         dfaState, compilationState
 
     /// The main NFA -> DFA compilation function.
-    let rec private compileRec (nfa : Nfa) (pending : Set<DfaStateId>) (compilationState : CompilationState) =
+    let rec private compileRec (nfa : LexerNfa) (pending : Set<DfaStateId>) (compilationState : CompilationState) =
         // If there are no more pending states, we're finished compiling the DFA.
         if Set.isEmpty pending then
             compilationState
@@ -220,27 +221,29 @@ module internal Dfa =
             // Continue processing recursively.
             compileRec nfa pending compilationState
 
-    /// Information about overlapping Regexes discovered during DFA compilation.
-    type internal RegexOverlapInfo = {
-        /// The (index of the) Regex which will be
+    /// Information about overlapping rule clauses discovered during DFA compilation.
+    type internal RuleClauseOverlapInfo = {
+        //
+        Rule : RuleIdentifier;
+        /// The (index of the) clause which will be
         /// accepted by the compiled DFA.
-        Accepted : int<RegexIndex>;
-        /// The (indices of the) overlapped Regexes.
-        /// These will NOT be accepted by the compiled DFA.
-        Overlapped : Set<int<RegexIndex>>;
+        Accepted : RuleClauseIndex;
+        /// The (indices of the) overlapped clauses.
+        /// These will never be accepted by the compiled DFA.
+        Overlapped : Set<RuleClauseIndex>;
     }
 
     /// The compiled DFA, plus additional compilation data which may
     /// be useful for diagnostics purposes.
     type internal DfaCompilationResult = {
         /// The compiled DFA.
-        Dfa : Dfa;
+        Dfa : LexerDfa;
         /// Maps sets of NFA states to the DFA state representing the set.
         NfaStateSetToDfaState : Map<Set<NfaStateId>, DfaStateId>;
         /// Maps a DFA state to the set of NFA states it represents.
         DfaStateToNfaStateSet : Map<DfaStateId, Set<NfaStateId>>;
         /// Information about overlapping Regexes discovered during DFA compilation.
-        RegexOverlapInfo : RegexOverlapInfo list;
+        RegexOverlapInfo : RuleClauseOverlapInfo list;
     }
 
     //
@@ -259,7 +262,7 @@ module internal Dfa =
             Map.add edgeEndpoints.Source transitionsFromSource transitionsBySymbol)
 
     //
-    let compile (nfa : Nfa) : DfaCompilationResult =
+    let compile (nfa : LexerNfa) : DfaCompilationResult =
         // The initial (empty) compilation state.
         let compilationState : CompilationState = {
             NfaStateSetToDfaState = Map.empty;
@@ -282,55 +285,73 @@ module internal Dfa =
         /// Maps each final (accepting) DFA state to the
         /// (index of) the Regex it accepts.
         let finalStates, regexOverlapInfo =
+            // TEMP : Create a map of NFA state -> RuleIdentifier so we can
+            // easily determine if an NFA state is a final state, and if so,
+            // which rule (not rule clause) it belongs to.
+            let nfaFinalStatesToRules =
+                (Map.empty, nfa.RuleClauseFinalStates)
+                ||> Map.fold (fun nfaFinalStatesToRules ruleId ruleClauseFinalStates ->
+                    (nfaFinalStatesToRules, ruleClauseFinalStates)
+                    ||> Array.fold (fun nfaFinalStatesToRules nfaStateId ->
+                        Map.add nfaStateId ruleId nfaFinalStatesToRules))
+
             ((Map.empty, []), compilationState.DfaStateToNfaStateSet)
-            ||> Map.fold (fun (finalStates, regexOverlapInfo) dfaState nfaStateSet ->
+            ||> Map.fold (fun (finalStates, ruleClauseOverlapInfo) dfaState nfaStateSet ->
                 /// The NFA states (if any) in the set of NFA states represented
                 /// by this DFA state which are final (accepting) states.
                 let nfaFinalStateSet =
                     nfaStateSet
                     |> Set.filter (fun nfaState ->
-                        Map.containsKey nfaState nfa.FinalStates)
+                        Map.containsKey nfaState nfaFinalStatesToRules)
                 
                 // If any of the NFA states in this DFA state are final (accepting) states,
                 // then this DFA state is also an accepting state.
                 if Set.isEmpty nfaFinalStateSet then
-                    finalStates, regexOverlapInfo
+                    finalStates, ruleClauseOverlapInfo
                 else
-                    /// The (indices of the) Regexes accepted by this DFA state.
-                    let finalStateInputRegexes =
+                    //
+                    let ruleId = Map.find (Set.minElement nfaFinalStateSet) nfaFinalStatesToRules
+
+                    /// The (indices of the) rule clauses accepted by this DFA state.
+                    let finalStateRuleClauses : Set<RuleClauseIndex> =
                         nfaFinalStateSet
                         |> Set.map (fun nfaState ->
-                            Map.find nfaState nfa.FinalStates)
+                            nfa.RuleClauseFinalStates
+                            |> Map.find ruleId
+                            |> Array.findIndex ((=) nfaState)
+                            |> LanguagePrimitives.Int32WithMeasure)
 
                     (* If this DFA state accepts more than one of the input Regexes, it means
                        those Regexes overlap. Since a DFA state can only accept a single Regex,
                        we simply choose the Regex with the lowest-valued index; this convention
                        is a de-facto standard for lexer generators. *)
 
-                    /// The (index of) the Regex accepted by this DFA state.
-                    let acceptedRegex = Set.minElement finalStateInputRegexes
+                    /// The (index of) the rule clause accepted by this DFA state.
+                    let acceptedRegex = Set.minElement finalStateRuleClauses
 
                     // If there was more than one final state, add information about the
-                    // overlapped states to 'regexOverlapInfo'.
-                    let regexOverlapInfo =
-                        if Set.count finalStateInputRegexes = 1 then
-                            regexOverlapInfo
+                    // overlapped states to 'ruleClauseOverlapInfo'.
+                    let ruleClauseOverlapInfo =
+                        if Set.count finalStateRuleClauses = 1 then
+                            ruleClauseOverlapInfo
                         else
                             let overlapInfo = {
+                                Rule = ruleId;
                                 Accepted = acceptedRegex;
-                                Overlapped = Set.remove acceptedRegex finalStateInputRegexes; }
-                            overlapInfo :: regexOverlapInfo
+                                Overlapped = Set.remove acceptedRegex finalStateRuleClauses; }
+                            overlapInfo :: ruleClauseOverlapInfo
 
                     // Add this DFA state and the accepted Regex to the map.
                     Map.add dfaState acceptedRegex finalStates,
-                    regexOverlapInfo)
+                    ruleClauseOverlapInfo)
 
         // Create the DFA.
         let dfa = {
-            InitialState = initialState;
             Transitions = compilationState.Transitions;
             TransitionsBySymbol = transitionsBySymbol compilationState.Transitions;
-            FinalStates = finalStates; }
+            RuleClauseFinalStates = Map.empty;
+            RuleInitialStates = Map.empty;
+            InitialState = initialState; }
 
         // Return the DFA along with any data from the final compilation state which
         // does not become part of the DFA; this additional data may be displayed or
@@ -342,7 +363,7 @@ module internal Dfa =
 
 
 /// Converts an NFA into a DFA.
-let ofNfa (nfa : Nfa) : Dfa =
+let ofNfa (nfa : LexerNfa) : LexerDfa =
     // Compile the NFA into a DFA.
     let compilationResult = Dfa.compile nfa
     
@@ -350,7 +371,7 @@ let ofNfa (nfa : Nfa) : Dfa =
     compilationResult.Dfa
 
 ////
-//let ofNfaWithLog (nfa : Nfa<'Symbol>) (textWriter : #System.IO.TextWriter) : Dfa<'Symbol> =
+//let ofNfaWithLog (nfa : LexerNfa) (textWriter : #System.IO.TextWriter) : LexerDfa =
 //    // Preconditions
 //    if System.Object.ReferenceEquals (null, textWriter) then
 //        nullArg "textWriter"
@@ -365,10 +386,10 @@ let ofNfa (nfa : Nfa) : Dfa =
 //    // Return the compiled DFA.
 //    compilationResult.Dfa
 
-/// Given a DFA which accepts language L, produces an NFA which accepts the reverse of L.
-let reverse (dfa : Dfa) : Nfa =
-    // Reverse the direction of the edges in the transition map.
-    // OPTIMIZE : This could (and should) easily be optimized to be much more efficient.
+///// Given a DFA which accepts language L, produces an NFA which accepts the reverse of L.
+//let reverse (dfa : LexerDfa) : LexerNfa =
+//    // Reverse the direction of the edges in the transition map.
+//    // OPTIMIZE : This could (and should) easily be optimized to be much more efficient.
 //    let transitions =
 //        let transitions =
 //            LexerDfaGraph.ofVertexSet dfa.Transitions.Vertices
@@ -378,21 +399,21 @@ let reverse (dfa : Dfa) : Nfa =
 //            ||> CharSet.fold (fun transitions symbol ->
 //                // Reverse the source and target vertices of the edge.
 //                LexerDfaGraph.addEdge edgeEndpoints.Target edgeEndpoints.Source symbol transitions))
-
-    // Change the final states to initial states, and vice versa.
-    // TODO
-
-    // Return the resulting NFA.
-    raise <| System.NotImplementedException "Dfa.reverse"
-
-/// Minimizes a DFA.
-let minimize (dfa : Dfa) : Dfa =
-    // Minimize the DFA using Brzozowski's algorithm.
-    dfa
-    |> reverse
-    |> ofNfa
-    |> reverse
-    |> ofNfa
+//
+//    // Change the final states to initial states, and vice versa.
+//    // TODO
+//
+//    // Return the resulting NFA.
+//    raise <| System.NotImplementedException "Dfa.reverse"
+//
+///// Minimizes a DFA.
+//let minimize (dfa : Dfa) : Dfa =
+//    // Minimize the DFA using Brzozowski's algorithm.
+//    dfa
+//    |> reverse
+//    |> ofNfa
+//    |> reverse
+//    |> ofNfa
 
 
 //
@@ -481,7 +502,7 @@ type Token<'Symbol> = {
     //
     Token : 'Symbol[];
     //
-    Regex : int<RegexIndex>;
+    RuleClause : RuleIdentifier * uint32;
     //
     StartPosition : uint32;
     //
@@ -501,7 +522,7 @@ type InvalidToken<'Symbol> = {
 (* TODO :   Once 'tokenize' works correctly, modify it so the return type is:
                 seq<Choice<Token<'Symbol>, InvalidToken<'Symbol>>>
             This allows the start/end position of the tokens to be returned as well. *)
-
+(*
 /// <summary>Tokenizes a sequence of symbols using the specified DFA.</summary>
 /// <remarks>
 /// This function can be used to unit-test DFAs and lexers without having to
@@ -509,7 +530,7 @@ type InvalidToken<'Symbol> = {
 /// functionality; for a given sequence of symbols, a generated/compiled lexer
 /// should produce the exact same sequence of tokens produced by this function.
 /// </remarks>
-let tokenize (dfa : Dfa) (symbols : seq<_>) : seq<Choice<int<RegexIndex> * _[], _[]>> =
+let tokenize (dfa : LexerDfa) (symbols : seq<_>) : seq<Choice<int<RegexIndex> * _[], _[]>> =
     //
     let rec tokenize (symbolEnumerator : System.Collections.Generic.IEnumerator<_>) tokenizerState = seq {
         // Try to read a symbol from the stream or pending characters queue.
@@ -692,7 +713,8 @@ let tokenize (dfa : Dfa) (symbols : seq<_>) : seq<Choice<int<RegexIndex> * _[], 
 /// Produces a sequence containing all words (groups of symbols)
 /// in the language accepted by the specified DFA.
 /// In many cases, the sequence produced by this function is infinite.
-let generate (dfa : Dfa) : seq<char[]> =
+let generate (dfa : LexerDfa) : seq<char[]> =
     //
     raise <| System.NotImplementedException "Dfa.generate"
 
+*)
