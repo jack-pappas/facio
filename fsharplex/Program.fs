@@ -9,7 +9,6 @@ See LICENSE.TXT for licensing details.
 module FSharpLex.Program
 
 open Graph
-open Nfa
 open Regex
 
 //
@@ -78,7 +77,7 @@ let testRegex =
 
 let testUniverse =
     CharSet.empty
-    |> CharSet.addRange 'a' 'e'
+    |> CharSet.addRange 'a' 'z'
 
 let derivativeClasses =
     Regex.DerivativeClasses (testRegex, testUniverse)

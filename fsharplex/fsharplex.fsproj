@@ -46,10 +46,9 @@
       <Link>CommonAssemblyInfo.fs</Link>
     </Compile>
     <Compile Include="Collections.fs" />
-    <Compile Include="Graph.fs" />
     <Compile Include="Regex.fs" />
     <Compile Include="Ast.fs" />
-    <Compile Include="Nfa.fs" />
+    <Compile Include="Graph.fs" />
     <Compile Include="Dfa.fs" />
     <Compile Include="CodeGen.fs" />
     <Compile Include="Program.fs" />
