@@ -10,6 +10,8 @@ See LICENSE.TXT for licensing details.
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module FSharpLex.SpecializedCollections
 
+open OptimizedClosures
+
 
 /// Character set implementation based on a Discrete Interval Encoding Tree.
 /// This is faster and more efficient than the built-in F# Set<'T>,
@@ -203,7 +205,7 @@ module CharSet =
                 contains value r
 
     //
-    let rec private foldImpl (folder : 'State -> char -> 'State) (state : 'State) tree cont =
+    let rec private foldImpl (folder : FSharpFunc<'State, char, 'State>) (state : 'State) tree cont =
         match tree with
         | Empty ->
             cont state
@@ -215,7 +217,7 @@ module CharSet =
                 let lowerBound = int lowerBound
                 let upperBound = int upperBound
                 for i = lowerBound to upperBound do
-                    state <- folder state (char i)
+                    state <- folder.Invoke (state, char i)
 
                 // Fold over the right subtree
                 foldImpl folder state right cont
@@ -223,10 +225,11 @@ module CharSet =
     /// Applies the given accumulating function to all the elements of the set.
     [<CompiledName("Fold")>]
     let fold (folder : 'State -> char -> 'State) (state : 'State) tree =
+        let folder = FSharpFunc<_,_,_>.Adapt folder
         foldImpl folder state tree id
 
     //
-    let rec private foldBackImpl (folder : char -> 'State -> 'State) tree (state : 'State) cont =
+    let rec private foldBackImpl (folder : FSharpFunc<char, 'State, 'State>) tree (state : 'State) cont =
         match tree with
         | Empty ->
             cont state
@@ -239,7 +242,7 @@ module CharSet =
             let upperBound = int upperBound
             let lowerBound = int lowerBound
             for i = upperBound downto lowerBound do
-                state <- folder (char i) state
+                state <- folder.Invoke (char i, state)
 
             // Fold backward over the left subtree
             foldBackImpl folder left state cont
@@ -247,7 +250,49 @@ module CharSet =
     /// Applies the given accumulating function to all the elements of the set.
     [<CompiledName("FoldBack")>]
     let foldBack (folder : char -> 'State -> 'State) tree (state : 'State) =
+        let folder = FSharpFunc<_,_,_>.Adapt folder
         foldBackImpl folder tree state id
+
+    //
+    let rec private foldIntervalsImpl (folder : FSharpFunc<'State, char, char, 'State>) (state : 'State) tree cont =
+        match tree with
+        | Empty ->
+            cont state
+        | Node (lowerBound, upperBound, left, right) ->
+            // Fold over the left subtree
+            foldIntervalsImpl folder state left <| fun state ->
+                // Apply the folder function to this interval.
+                let state = folder.Invoke (state, lowerBound, upperBound)
+
+                // Fold over the right subtree
+                foldIntervalsImpl folder state right cont
+
+    /// Applies the given accumulating function to all the intervals of the set.
+    [<CompiledName("FoldIntervals")>]
+    let foldIntervals (folder : 'State -> char -> char -> 'State) (state : 'State) tree =
+        let folder = FSharpFunc<_,_,_,_>.Adapt folder
+        foldIntervalsImpl folder state tree id
+
+    //
+    let rec private foldBackIntervalsImpl (folder : FSharpFunc<char, char, 'State, 'State>) tree (state : 'State) cont =
+        match tree with
+        | Empty ->
+            cont state
+        | Node (lowerBound, upperBound, left, right) ->
+            // Fold backward over the right subtree
+            foldBackIntervalsImpl folder right state <| fun state ->
+
+            // Apply the folder function to this interval.
+            let state = folder.Invoke (lowerBound, upperBound, state)
+
+            // Fold backward over the left subtree
+            foldBackIntervalsImpl folder left state cont
+
+    /// Applies the given accumulating function to all the elements of the set.
+    [<CompiledName("FoldBackIntervals")>]
+    let foldBackIntervals (folder : char -> char -> 'State -> 'State) tree (state : 'State) =
+        let folder = FSharpFunc<_,_,_,_>.Adapt folder
+        foldBackIntervalsImpl folder tree state id
 
     /// Returns a new set containing the results of applying the given function to each element of the input set.
     [<CompiledName("Map")>]
@@ -475,8 +520,9 @@ module CharSet =
     /// Returns a new set with the elements of the second set removed from the first.
     [<CompiledName("Difference")>]
     let difference set1 set2 =
-        // OPTIMIZE : This needs to be re-implemented in a
-        // much more efficient way for it to be useful!
+        // OPTIMIZE : This could probably be re-implemented to walk both
+        // trees at once, building a new set from the bottom up. This would
+        // avoid multiple traversals of both set trees and the result set tree.
 
         // TEMP : This works, but it's **slow**.
         (empty, set1)
@@ -489,8 +535,9 @@ module CharSet =
     /// Computes the intersection of the two sets.
     [<CompiledName("Intersect")>]
     let intersect set1 set2 =
-        // OPTIMIZE : This needs to be re-implemented in a
-        // much more efficient way for it to be useful!
+        // OPTIMIZE : This could probably be re-implemented to walk both
+        // trees at once, building a new set from the bottom up. This would
+        // avoid multiple traversals of both set trees and the result set tree.
 
         // TEMP : This works, but it's **slow**.
         let smaller, larger =
@@ -508,8 +555,9 @@ module CharSet =
     /// Computes the union of the two sets.
     [<CompiledName("Union")>]
     let union set1 set2 =
-        // OPTIMIZE : This needs to be re-implemented in a
-        // much more efficient way for it to be useful!
+        // OPTIMIZE : This could probably be re-implemented to walk both
+        // trees at once, building a new set from the bottom up. This would
+        // avoid multiple traversals of both set trees and the result set tree.
 
         // TEMP : This works, but it's **slow**.
         let smaller, larger =
