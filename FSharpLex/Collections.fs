@@ -138,11 +138,17 @@ module CharSet =
         // to be empty and simply return the original tree.
         if lower > upper then tree
         else
-            // OPTIMIZE : Implement some function which adds the values into
-            // the tree symbolically -- it'll be *way* faster.
-            (tree, seq { lower .. upper })
-            ||> Seq.fold (fun tree el ->
-                add el tree)
+            // If the input set is empty, optimize by immediately
+            // creating a new set from the specified range.
+            match tree with
+            | Empty ->
+                Node (lower, upper, Empty, Empty)
+            | Node (_,_,_,_) as tree ->
+                // OPTIMIZE : Implement some function which adds the values into
+                // the tree symbolically -- it'll be *way* faster.
+                (tree, seq { lower .. upper })
+                ||> Seq.fold (fun tree el ->
+                    add el tree)
 
     //
     let rec private removeImpl value tree cont =
