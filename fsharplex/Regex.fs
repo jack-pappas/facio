@@ -20,10 +20,10 @@ open SpecializedCollections
 /// operations are included here, so the lanugage it represents must still be a regular
 /// language.</remarks>
 type Regex =
-    /// The empty language.
-    | Empty
     /// The empty string.
     | Epsilon
+    /// The empty language.
+    | Empty    
     /// Any character except for newline ('\n').
     | Any
     /// A character.
@@ -33,7 +33,7 @@ type Regex =
     // will never contain fewer than two (2) characters.
     | CharacterSet of CharSet
     /// Negation.
-    | Not of Regex
+    | Negate of Regex
     /// Kleene *-closure.
     /// The specified Regex will be matched zero (0) or more times.
     | Star of Regex
@@ -55,7 +55,7 @@ type Regex =
         | Character _
         | CharacterSet _ ->
             cont false
-        | Not regex ->
+        | Negate regex ->
             Regex.IsNullableImpl regex (cont >> not)
         | Concat (a, b)
         | And (a, b) ->
@@ -90,9 +90,9 @@ type Regex =
         | CharacterSet charSet ->
             if CharSet.contains wrtSymbol charSet then Epsilon else Empty
             |> cont
-        | Not r ->
+        | Negate r ->
             Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-                Not r'
+                Negate r'
                 |> cont
         | Star r as ``r*`` ->
             Regex.DerivativeImpl wrtSymbol r <| fun r' ->
@@ -152,21 +152,21 @@ type Regex =
                 charSetRegex
             |> cont
 
-        | Not Empty ->
+        | Negate Empty ->
             cont Any
-        | Not Any ->
+        | Negate Any ->
             cont Empty        
-        | Not (Character c) ->
+        | Negate (Character c) ->
              let anyMinusChar = CharSet.remove c charUniverse
              Regex.SimplifyCharacterSet anyMinusChar
              |> cont
-        | Not (CharacterSet charSet) ->
+        | Negate (CharacterSet charSet) ->
              let anyMinusCharSet = CharSet.difference charUniverse charSet
              Regex.SimplifyCharacterSet anyMinusCharSet
              |> cont
-        | Not (Not regex) ->
+        | Negate (Negate regex) ->
             Regex.CanonicalizeImpl regex charUniverse cont
-        | Not _ as notRegex ->
+        | Negate _ as notRegex ->
             // This regex is canonical
             cont notRegex
 
@@ -303,6 +303,51 @@ type Regex =
         
         Regex.CanonicalizeImpl regex charUniverse id
 
+    //
+    static member private DerivativeClassesImpl regex universe cont =
+        match regex with
+        | Epsilon
+        | Empty ->
+            Set.singleton universe
+            |> cont
+        | Any ->
+            Set.singleton universe
+            |> Set.add CharSet.empty
+            |> cont
+        | Character c ->
+            Set.singleton (CharSet.singleton c)
+            |> Set.add (CharSet.remove c universe)
+            |> cont
+        | CharacterSet charSet ->
+            Set.singleton charSet
+            |> Set.add (CharSet.difference universe charSet)
+            |> cont
+        | Negate r
+        | Star r ->
+            Regex.DerivativeClassesImpl r universe cont
+        | Concat (r, s) ->
+            if not <| Regex.IsNullable r then
+                Regex.DerivativeClassesImpl r universe cont
+            else
+                Regex.DerivativeClassesImpl r universe <| fun ``C(r)`` ->
+                Regex.DerivativeClassesImpl s universe <| fun ``C(s)`` ->
+                    Set.intersect ``C(r)`` ``C(s)``
+                    |> cont
+        | Or (r, s)
+        | And (r, s) ->
+            Regex.DerivativeClassesImpl r universe <| fun ``C(r)`` ->
+            Regex.DerivativeClassesImpl s universe <| fun ``C(s)`` ->
+                Set.intersect ``C(r)`` ``C(s)``
+                |> cont
+
+    /// Computes the _approximate_ set of derivative classes for the specified Regex.
+    static member DerivativeClasses (regex : Regex, charUniverse) =
+        // Preconditions
+        if CharSet.isEmpty charUniverse then
+            invalidArg "charUniverse" "The character universe (set of all characters used in the lexer) is empty."
+        
+        Regex.DerivativeClassesImpl regex charUniverse id
+
 
 /// An extended regular expression: the basic form plus
 /// cases to handle optional and one-or-more patterns.
@@ -321,16 +366,16 @@ type ExtendedRegex =
     // will never contain fewer than two (2) characters.
     | CharacterSet of CharSet
     /// Negation.
-    | Not of ExtendedRegex
+    | Negate of ExtendedRegex
     /// Kleene *-closure.
     /// The specified ExtendedRegex will be matched zero (0) or more times.
     | Star of ExtendedRegex
     /// Concatenation. A ExtendedRegex immediately followed by another ExtendedRegex.
-    | Concat of ExtendedRegex * ExtendedRegex    
+    | Concat of ExtendedRegex * ExtendedRegex
     /// Choice between two regular expressions (i.e., boolean OR).
     | Or of ExtendedRegex * ExtendedRegex
     /// Boolean AND of two regular expressions.
-    | And of ExtendedRegex * ExtendedRegex    
+    | And of ExtendedRegex * ExtendedRegex
 
     (* Extensions *)
     /// The specified ExtendedRegex is matched one (1) or more times.
@@ -357,9 +402,9 @@ type ExtendedRegex =
             Regex.CharacterSet charSet
             |> cont
 
-        | ExtendedRegex.Not r ->
+        | ExtendedRegex.Negate r ->
             ExtendedRegex.ToRegexImpl r <| fun r ->
-                Regex.Not r
+                Regex.Negate r
                 |> cont
 
         | ExtendedRegex.Star r ->
