@@ -134,7 +134,7 @@ let ofSpecification (spec : Specification) =
 
                     // Compile the clause's pattern into the NFA.
                     let ruleClauseInitialState, transitions =
-                        CompileNfa.regexToNfa ruleClause.Pattern finalRuleClauseState transitions
+                        CompileNfa.regexToNfa (ExtendedRegex.ToRegex ruleClause.Pattern) finalRuleClauseState transitions
 
                     // Add an epsilon-transition from the rule's initial
                     // NFA state to this clause's initial NFA state.

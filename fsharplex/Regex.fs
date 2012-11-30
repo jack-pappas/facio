@@ -38,11 +38,11 @@ type Regex =
     /// The specified Regex will be matched zero (0) or more times.
     | Star of Regex
     /// Concatenation. A Regex immediately followed by another Regex.
-    | Concat of Regex * Regex    
+    | Concat of Regex * Regex
     /// Choice between two regular expressions (i.e., boolean OR).
     | Or of Regex * Regex
     /// Boolean AND of two regular expressions.
-    | And of Regex * Regex    
+    | And of Regex * Regex
 
     //
     static member private IsNullableImpl regex cont =
@@ -120,23 +120,173 @@ type Regex =
     static member Derivative symbol regex =
         Regex.DerivativeImpl symbol regex id
 
+    /// Given a CharSet from a CharacterSet case, returns the simplest Regex
+    /// representing the CharSet.
+    static member inline private SimplifyCharacterSet (charSet : CharSet) =
+        match CharSet.count charSet with
+        | 0 ->
+            Empty
+        | 1 ->
+            CharSet.minElement charSet
+            |> Character
+        | _ ->
+            CharacterSet charSet
+
     //
-    static member private CanonicalizeImpl (regex : Regex) (cont : Regex -> Regex) =
+    static member private CanonicalizeImpl (regex : Regex) (charUniverse : CharSet) (cont : Regex -> Regex) =
         match regex with
-        | And (Empty, _) ->
+        | Empty
+        | Epsilon
+        | Any
+        | Character _ as regex ->
+            cont regex
+
+        | CharacterSet charSet as charSetRegex ->
+            match CharSet.count charSet with
+            | 0 ->
+                Empty
+            | 1 ->
+                CharSet.minElement charSet
+                |> Character
+            | _ ->
+                charSetRegex
+            |> cont
+
+        | Not Empty ->
+            cont Any
+        | Not Any ->
+            cont Empty        
+        | Not (Character c) ->
+             let anyMinusChar = CharSet.remove c charUniverse
+             Regex.SimplifyCharacterSet anyMinusChar
+             |> cont
+        | Not (CharacterSet charSet) ->
+             let anyMinusCharSet = CharSet.difference charUniverse charSet
+             Regex.SimplifyCharacterSet anyMinusCharSet
+             |> cont
+        | Not (Not regex) ->
+            Regex.CanonicalizeImpl regex charUniverse cont
+        | Not _ as notRegex ->
+            // This regex is canonical
+            cont notRegex
+
+        | Star (Star _ as ``r*``) ->
+            Regex.CanonicalizeImpl ``r*`` charUniverse cont
+        | Star Epsilon
+        | Star Empty ->
+            cont Epsilon
+        | Star (Or (Epsilon, r))
+        | Star (Or (r, Epsilon)) ->
+            Regex.CanonicalizeImpl r charUniverse <| fun r' ->
+                Star r'
+                |> cont
+        | Star _ as ``r*`` ->
+            // This regex is canonical
+            cont ``r*``
+
+        | Concat (r, Concat (s, t)) ->
+            // Rewrite the expression so it's left-associative.
+            let regex = Concat (Concat (r, s), t)
+            Regex.CanonicalizeImpl regex charUniverse cont        
+        | Concat (r, s) ->
+            Regex.CanonicalizeImpl r charUniverse <| fun r' ->
+            Regex.CanonicalizeImpl s charUniverse <| fun s' ->
+                // Try to simplify the expression, using the canonicalized components.
+                match r', s' with
+                | Empty, _
+                | _, Empty ->
+                    cont Empty
+                | Epsilon, regex
+                | regex, Epsilon ->
+                    Regex.CanonicalizeImpl regex charUniverse cont
+                | r', s' ->
+                    Concat (r', s')
+                    |> cont
+
+        | Or (Empty, r)
+        | Or (r, Empty) ->
+            Regex.CanonicalizeImpl r charUniverse cont
+        | Or (Any, _)
+        | Or (_, Any) ->
+            cont Any
+        | Or (r, Or (s, t)) ->
+            // Rewrite the expression so it's left-associative.
+            let regex = Or (Or (r, s), t)
+            Regex.CanonicalizeImpl regex charUniverse cont
+        | Or (r, s) ->
+            Regex.CanonicalizeImpl r charUniverse <| fun r' ->
+            Regex.CanonicalizeImpl s charUniverse <| fun s' ->
+                // Try to simplify the expression, using the canonicalized components.
+                match r', s' with
+                | r', s' when r' = s' ->
+                    r'
+                | (Character c1 as charRegex), Character c2 ->
+                    if c1 = c2 then charRegex
+                    else
+                        CharSet.empty
+                        |> CharSet.add c1
+                        |> CharSet.add c2
+                        |> CharacterSet
+
+                | Character c, CharacterSet charSet
+                | CharacterSet charSet, Character c ->
+                    CharSet.add c charSet
+                    |> CharacterSet
+
+                | CharacterSet charSet1, CharacterSet charSet2 ->
+                    // 'Or' is the disjunction (union) of two Regexes.
+                    let charSetUnion = CharSet.union charSet1 charSet2
+
+                    // Return the simplest Regex for the union set.
+                    Regex.SimplifyCharacterSet charSetUnion
+
+                | r', s' ->
+                    // Sort the components before returning; this takes care
+                    // of the symmetry rule (r | s) = (s | r) so the
+                    // "approximately equal" relation is simply handled by
+                    // F#'s structural equality.
+                    if r' < s' then Or (r', s')
+                    else Or (s', r')
+                |> cont
+        
+        | And (Empty, _)
+        | And (_, Empty) ->
             cont Empty
-        | And (Not Empty, r) ->
-            Regex.CanonicalizeImpl r cont
+        | And (Any, r)
+        | And (r, Any) ->
+            Regex.CanonicalizeImpl r charUniverse cont
         | And (r, And (s, t)) ->
             // Rewrite the expression so it's left-associative.
             let regex = And (And (r, s), t)
-            Regex.CanonicalizeImpl regex cont
+            Regex.CanonicalizeImpl regex charUniverse cont
         | And (r, s) ->
-            Regex.CanonicalizeImpl r <| fun r' ->
-            Regex.CanonicalizeImpl s <| fun s' ->
-                // Try to simplify the expression once more before returning.
-                if r' = s' then r'
-                else
+            Regex.CanonicalizeImpl r charUniverse <| fun r' ->
+            Regex.CanonicalizeImpl s charUniverse <| fun s' ->
+                // Try to simplify the expression, using the canonicalized components.
+                match r', s' with
+                | r', s' when r' = s' ->
+                    r'
+                | (Character c1 as charRegex), Character c2 ->
+                    if c1 = c2 then charRegex
+                    else
+                        // TODO : Emit a warning to TraceListener?
+                        // The 'And' case represents a conjunction (intersection) of two Regexes;
+                        // since the characters are different, the intersection must be empty.
+                        Empty
+
+                | Character c, CharacterSet charSet
+                | CharacterSet charSet, Character c ->
+                    CharSet.add c charSet
+                    |> CharacterSet
+
+                | CharacterSet charSet1, CharacterSet charSet2 ->
+                    // 'And' is the conjunction (intersection) of two Regexes.
+                    let charSetIntersection = CharSet.intersect charSet1 charSet2
+
+                    // Return the simplest Regex for the intersection set.
+                    Regex.SimplifyCharacterSet charSetIntersection
+
+                | r', s' ->
                     // Sort the components before returning; this takes care
                     // of the symmetry rule (r & s) = (s & r) so the
                     // "approximately equal" relation is simply handled by
@@ -145,73 +295,13 @@ type Regex =
                     else And (s', r')
                 |> cont
 
-        | Or (Empty, r) ->
-            Regex.CanonicalizeImpl r cont
-        | Or (Not Empty, _) ->
-            cont Any
-        | Or (r, Or (s, t)) ->
-            // Rewrite the expression so it's left-associative.
-            let regex = Or (Or (r, s), t)
-            Regex.CanonicalizeImpl regex cont
-        | Or (r, s) ->
-            Regex.CanonicalizeImpl r <| fun r' ->
-            Regex.CanonicalizeImpl s <| fun s' ->
-                // Try to simplify the expression once more before returning.
-                if r' = s' then r'
-                else
-                    // Sort the components before returning; this takes care
-                    // of the symmetry rule (r | s) = (s | r) so the
-                    // "approximately equal" relation is simply handled by
-                    // F#'s structural equality.
-                    if r' < s' then Or (r', s')
-                    else Or (s', r')
-                |> cont
-
-        | Concat (r, Concat (s, t)) ->
-            // Rewrite the expression so it's left-associative.
-            let regex = Concat (Concat (r, s), t)
-            Regex.CanonicalizeImpl regex cont
-        | Concat (Empty, _)
-        | Concat (_, Empty) ->
-            cont Empty
-        | Concat (Epsilon, regex)
-        | Concat (regex, Epsilon) ->
-            Regex.CanonicalizeImpl regex cont
-
-        | Star (Star _ as starRegex) ->
-            Regex.CanonicalizeImpl starRegex cont
-        | Star Epsilon
-        | Star Empty ->
-            cont Epsilon
-        | Star (Or (Epsilon, r))
-        | Star (Or (r, Epsilon)) ->
-            Regex.CanonicalizeImpl r <| fun r' ->
-                Star r'
-                |> cont
-
-        | Not Empty ->
-            cont Any
-        | Not Any ->
-            cont Empty
-        | Not (Not regex) ->
-            Regex.CanonicalizeImpl regex cont
-
-        | CharacterSet charSet as charSetRegex ->
-            match CharSet.count charSet with
-            | 0 ->
-                Empty
-            | 1 ->
-                raise <| System.NotImplementedException "Regex.CanonicalizeImpl"
-            | _ ->
-                charSetRegex
-            |> cont
-
-        | regex ->
-            cont regex
-
-    //
-    static member Canonicalize (regex : Regex) : Regex =
-        Regex.CanonicalizeImpl regex id
+    /// Creates a new Regex in canonical form from the given Regex.
+    static member Canonicalize (regex : Regex, charUniverse) : Regex =
+        // Preconditions
+        if CharSet.isEmpty charUniverse then
+            invalidArg "charUniverse" "The character universe (set of all characters used in the lexer) is empty."
+        
+        Regex.CanonicalizeImpl regex charUniverse id
 
 
 /// An extended regular expression: the basic form plus
@@ -311,4 +401,4 @@ type ExtendedRegex =
     /// Simplifies an ExtendedRegex into a Regex.
     static member ToRegex (extRegex : ExtendedRegex) : Regex =
         ExtendedRegex.ToRegexImpl extRegex id
-
+ 
