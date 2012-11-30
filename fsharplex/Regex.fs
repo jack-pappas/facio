@@ -10,7 +10,7 @@ See LICENSE.TXT for licensing details.
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module FSharpLex.Regex
 
-open OptimizedClosures
+open LanguagePrimitives
 open SpecializedCollections
 
 
@@ -303,6 +303,21 @@ type Regex =
         
         Regex.CanonicalizeImpl regex charUniverse id
 
+    /// Computes a conservative approximation of the derivative class of
+    /// a compound regular expression ('And', 'Or', and 'Concat') from
+    /// the derivative classes of its component expressions.
+    static member private DerivativeClassOfCompoundRegex (``C(r)``, ``C(s)``) =
+        (Set.empty, ``C(r)``)
+        ||> Set.fold (fun intersections el1 ->
+            (intersections, ``C(s)``)
+            ||> Set.fold (fun intersections el2 ->
+                // The intersection of the two elements (character sets)
+                let elementIntersection = CharSet.intersect el1 el2
+
+                // Add the intersection to the set of intersections
+                // (if it's already in the set, no error is thrown).
+                Set.add elementIntersection intersections))
+
     //
     static member private DerivativeClassesImpl regex universe cont =
         match regex with
@@ -331,13 +346,13 @@ type Regex =
             else
                 Regex.DerivativeClassesImpl r universe <| fun ``C(r)`` ->
                 Regex.DerivativeClassesImpl s universe <| fun ``C(s)`` ->
-                    Set.intersect ``C(r)`` ``C(s)``
+                    Regex.DerivativeClassOfCompoundRegex (``C(r)``, ``C(s)``)
                     |> cont
         | Or (r, s)
         | And (r, s) ->
             Regex.DerivativeClassesImpl r universe <| fun ``C(r)`` ->
             Regex.DerivativeClassesImpl s universe <| fun ``C(s)`` ->
-                Set.intersect ``C(r)`` ``C(s)``
+                Regex.DerivativeClassOfCompoundRegex (``C(r)``, ``C(s)``)
                 |> cont
 
     /// Computes the _approximate_ set of derivative classes for the specified Regex.
@@ -349,21 +364,13 @@ type Regex =
         Regex.DerivativeClassesImpl regex charUniverse id
 
 
-/// An extended regular expression: the basic form plus
-/// cases to handle optional and one-or-more patterns.
+/// An extended regular expression: a standard regular expression
+/// plus some additional common cases for convenience.
 type ExtendedRegex =
     (* Regex cases *)
-    /// The empty language.
-    | Empty
     /// The empty string.
     | Epsilon
-    /// Any character except for newline ('\n').
-    | Any
-    /// A character.
-    | Character of char
     /// A set of characters.
-    // NOTE : Whenever a Regex is in "canonical" form, this set
-    // will never contain fewer than two (2) characters.
     | CharacterSet of CharSet
     /// Negation.
     | Negate of ExtendedRegex
@@ -378,6 +385,13 @@ type ExtendedRegex =
     | And of ExtendedRegex * ExtendedRegex
 
     (* Extensions *)
+    /// The empty language.
+    | Empty
+    /// Any character except for newline ('\n').
+    | Any
+    /// A character.
+    | Character of char
+
     /// The specified ExtendedRegex is matched one (1) or more times.
     /// This is the Plus (+) operator in a regular expression.
     | OneOrMore of ExtendedRegex
@@ -385,6 +399,10 @@ type ExtendedRegex =
     /// be matched zero (0) or one (1) times).
     /// This is the QuestionMark (?) operator in a regular expression.
     | Optional of ExtendedRegex
+    /// Match the specified ExtendedRegex at least
+    /// 'm' times and at most 'n' times.
+    /// This is the {} operator in a regular expression.
+    | Repetition of ExtendedRegex * uint32 option * uint32 option
 
     //
     static member private ToRegexImpl (extRegex : ExtendedRegex) cont : Regex =
@@ -442,6 +460,11 @@ type ExtendedRegex =
                 // Rewrite r? as (|r)
                 Regex.Concat (Regex.Epsilon, r)
                 |> cont
+
+        | ExtendedRegex.Repetition (r, m, n) ->
+            // If not specified, the lower bound defaults to zero (0).
+            let m = defaultArg m GenericZero
+            raise <| System.NotImplementedException "ToRegexImpl"
 
     /// Simplifies an ExtendedRegex into a Regex.
     static member ToRegex (extRegex : ExtendedRegex) : Regex =
