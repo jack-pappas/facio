@@ -13,6 +13,12 @@ module FSharpLex.Regex
 open LanguagePrimitives
 open SpecializedCollections
 
+(*  Turn off warning about uppercase variable identifiers;
+    some variables in the code below are named using the
+    F# backtick syntax so they can use names which closely
+    match those in the paper. *)
+#nowarn "49"
+
 
 /// <summary>A regular expression.</summary>
 /// <remarks>This type includes some cases which are normally referred to as "extended"
@@ -296,17 +302,17 @@ type Regex =
                 |> cont
 
     /// Creates a new Regex in canonical form from the given Regex.
-    static member Canonicalize (regex : Regex, charUniverse) : Regex =
+    static member Canonicalize (regex : Regex, universe) : Regex =
         // Preconditions
-        if CharSet.isEmpty charUniverse then
-            invalidArg "charUniverse" "The character universe (set of all characters used in the lexer) is empty."
+        if CharSet.isEmpty universe then
+            invalidArg "universe" "The character universe (set of all characters used in the lexer) is empty."
         
-        Regex.CanonicalizeImpl regex charUniverse id
+        Regex.CanonicalizeImpl regex universe id
 
-    /// Computes a conservative approximation of the derivative class of
-    /// a compound regular expression ('And', 'Or', and 'Concat') from
-    /// the derivative classes of its component expressions.
-    static member private DerivativeClassOfCompoundRegex (``C(r)``, ``C(s)``) =
+    /// Computes a conservative approximation of the intersection of two sets of
+    /// derivative classes. This is needed when computing the set of derivative
+    /// classes for a compound regular expression ('And', 'Or', and 'Concat').
+    static member IntersectionOfDerivativeClasses (``C(r)``, ``C(s)``) =
         (Set.empty, ``C(r)``)
         ||> Set.fold (fun intersections el1 ->
             (intersections, ``C(s)``)
@@ -346,22 +352,72 @@ type Regex =
             else
                 Regex.DerivativeClassesImpl r universe <| fun ``C(r)`` ->
                 Regex.DerivativeClassesImpl s universe <| fun ``C(s)`` ->
-                    Regex.DerivativeClassOfCompoundRegex (``C(r)``, ``C(s)``)
+                    Regex.IntersectionOfDerivativeClasses (``C(r)``, ``C(s)``)
                     |> cont
         | Or (r, s)
         | And (r, s) ->
             Regex.DerivativeClassesImpl r universe <| fun ``C(r)`` ->
             Regex.DerivativeClassesImpl s universe <| fun ``C(s)`` ->
-                Regex.DerivativeClassOfCompoundRegex (``C(r)``, ``C(s)``)
+                Regex.IntersectionOfDerivativeClasses (``C(r)``, ``C(s)``)
                 |> cont
 
-    /// Computes the _approximate_ set of derivative classes for the specified Regex.
-    static member DerivativeClasses (regex : Regex, charUniverse) =
+    /// Computes an approximate set of derivative classes for the specified Regex.
+    static member DerivativeClasses (regex : Regex, universe) =
         // Preconditions
-        if CharSet.isEmpty charUniverse then
-            invalidArg "charUniverse" "The character universe (set of all characters used in the lexer) is empty."
+        if CharSet.isEmpty universe then
+            invalidArg "universe" "The character universe (set of all characters used in the lexer) is empty."
         
-        Regex.DerivativeClassesImpl regex charUniverse id
+        Regex.DerivativeClassesImpl regex universe id
+
+/// An array of regular expressions.
+// Definition 4.3.
+type RegularVector = Regex[]
+
+/// Functional programming operators related to the RegularVector type.
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module RegularVector =
+    /// Compute the derivative of a regular vector
+    /// with respect to the given symbol.
+    let inline derivative symbol (regVec : RegularVector) =
+        Array.map (Regex.Derivative symbol) regVec
+
+    /// Determines if the regular vector is nullable,
+    /// i.e., it accepts the empty string (epsilon).
+    let inline isNullable (regVec : RegularVector) =
+        // A regular vector is nullable iff any of
+        // the component regexes are nullable.
+        Array.exists Regex.IsNullable regVec
+
+    /// Determines if a regular vector is an empty vector. Note that an
+    /// empty regular vector is *not* the same thing as an empty array.
+    let inline isEmpty (regVec : RegularVector) =
+        // A regular vector is empty iff all of it's entries
+        // are equal to the empty character set.
+        regVec
+        |> Array.forall (function
+            | Empty -> true
+            | CharacterSet charSet ->
+                CharSet.isEmpty charSet
+            | _ -> false)
+
+    /// Compute the approximate set of derivative classes of a regular vector.
+    let derivativeClasses (regVec : RegularVector) universe =
+        // Preconditions
+        if Array.isEmpty regVec then
+            invalidArg "regVec" "The regular vector does not contain any regular expressions."
+        elif CharSet.isEmpty universe then
+            invalidArg "universe" "The character universe (set of all characters used in the lexer) is empty."
+
+        regVec
+        // Compute the approximate set of derivative classes
+        // for each regular expression in the vector.
+        |> Array.map (fun r ->
+            Regex.DerivativeClasses (r, universe))
+        // By Definition 4.3, the approximate set of derivative classes of a regular vector
+        // is the intersection of the approximate sets of derivative classes of it's elements.
+        |> Array.reduce (
+            FuncConvert.FuncFromTupled Regex.IntersectionOfDerivativeClasses)
+
 
 
 /// An extended regular expression: a standard regular expression
@@ -391,7 +447,6 @@ type ExtendedRegex =
     | Any
     /// A character.
     | Character of char
-
     /// The specified ExtendedRegex is matched one (1) or more times.
     /// This is the Plus (+) operator in a regular expression.
     | OneOrMore of ExtendedRegex
