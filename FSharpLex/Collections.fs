@@ -18,13 +18,20 @@ type CharSet =
     | Empty
     | Node of char * char * CharSet * CharSet
 
-//
+/// Functional programming operators related to the CharSet type.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module CharSet =
-    //
+    /// The empty set.
     let empty = CharSet.Empty
 
-    //
+    /// Returns 'true' if the set is empty.
+    [<CompiledName("IsEmpty")>]
+    let isEmpty tree =
+        match tree with
+        | Empty -> true
+        | Node (_,_,_,_) -> false
+
+    /// The set containing the given element.
     let singleton c =
         Node (c, c, Empty, Empty)
 
@@ -110,7 +117,8 @@ module CharSet =
             else
                 cont t (* value in [x, y] *)
 
-    //
+    /// Returns a new set with an element added to the set.
+    /// No exception is raised if the set already contains the given element.
     [<CompiledName("Add")>]
     let add value tree =
         addImpl value tree id
@@ -168,12 +176,13 @@ module CharSet =
                 Node (x, (char (int value - 1)), l, Node (value + (char 1), y, Empty, r))
                 |> cont
 
-    //
+    /// Returns a new set with the given element removed.
+    /// No exception is raised if the set doesn't contain the given element.
     [<CompiledName("Remove")>]
     let remove value tree =
         removeImpl value tree id
 
-    //
+    /// Evaluates to 'true' if the given element is in the given set.
     [<CompiledName("Contains")>]
     let rec contains value tree =
         match tree with
@@ -186,13 +195,6 @@ module CharSet =
             else
                 // value > z
                 contains value r
-
-    //
-    [<CompiledName("IsEmpty")>]
-    let isEmpty tree =
-        match tree with
-        | Empty -> true
-        | Node (_,_,_,_) -> false
 
     //
     let rec private foldImpl (folder : 'State -> char -> 'State) (state : 'State) tree cont =
@@ -212,7 +214,7 @@ module CharSet =
                 // Fold over the right subtree
                 foldImpl folder state right cont
 
-    //
+    /// Applies the given accumulating function to all the elements of the set.
     [<CompiledName("Fold")>]
     let fold (folder : 'State -> char -> 'State) (state : 'State) tree =
         foldImpl folder state tree id
@@ -236,10 +238,26 @@ module CharSet =
             // Fold backward over the left subtree
             foldBackImpl folder left state cont
 
-    //
+    /// Applies the given accumulating function to all the elements of the set.
     [<CompiledName("FoldBack")>]
     let foldBack (folder : char -> 'State -> 'State) tree (state : 'State) =
         foldBackImpl folder tree state id
+
+    /// Returns a new set containing the results of applying the given function to each element of the input set.
+    [<CompiledName("Map")>]
+    let map (mapping : char -> char) tree =
+        (empty, tree)
+        ||> fold (fun set el ->
+            add (mapping el) set)
+
+    /// Returns a new set containing only the elements of the collection for which the given predicate returns true.
+    [<CompiledName("Filter")>]
+    let filter (predicate : char -> bool) tree =
+        (empty, tree)
+        ||> fold (fun set el ->
+            if predicate el then
+                add el set
+            else set)
 
     //
     let rec private iterImpl (action : char -> unit) tree cont =
@@ -259,7 +277,7 @@ module CharSet =
             // Iterate over the right subtree
             iterImpl action right cont
 
-    //
+    /// Applies the given function to each element of the set, in order from least to greatest.
     [<CompiledName("Iterate")>]
     let iter (action : char -> unit) tree =
         iterImpl action tree id
@@ -280,7 +298,7 @@ module CharSet =
                 thisCount + leftCount + rightCount
                 |> cont
 
-    //
+    /// Returns the number of elements in the set.
     [<CompiledName("Count")>]
     let count tree =
         countImpl tree id
@@ -309,7 +327,9 @@ module CharSet =
                         // Check the right subtree
                         existsImpl predicate right cont
 
-    //
+    /// Tests if any element of the collection satisfies the given predicate.
+    /// If the input function is <c>predicate</c> and the elements are <c>i0...iN</c>,
+    /// then this function computes predicate <c>i0 or ... or predicate iN</c>.
     [<CompiledName("Exists")>]
     let exists (predicate : char -> bool) tree =
         existsImpl predicate tree id
@@ -338,12 +358,14 @@ module CharSet =
                         // Check the right subtree
                         forallImpl predicate right cont
 
-    //
+    /// Tests if all elements of the collection satisfy the given predicate.
+    /// If the input function is <c>p</c> and the elements are <c>i0...iN</c>,
+    /// then this function computes <c>p i0 && ... && p iN</c>.
     [<CompiledName("Forall")>]
     let forall (predicate : char -> bool) tree =
         forallImpl predicate tree id
 
-    //
+    /// Creates a list that contains the elements of the set in order.
     [<CompiledName("ToList")>]
     let toList tree =
         // Fold backwards so we don't need to reverse the list.
@@ -351,7 +373,7 @@ module CharSet =
         ||> foldBack (fun i lst ->
             i :: lst)
 
-    //
+    /// Creates a set that contains the same elements as the given list.
     [<CompiledName("OfList")>]
     let ofList list =
         (empty, list)
@@ -372,21 +394,21 @@ module CharSet =
         ||> Set.fold (fun tree el ->
             add el tree)
 
-    //
+    /// Creates an array that contains the elements of the set in order.
     [<CompiledName("ToArray")>]
     let toArray tree =
         let resizeArr = ResizeArray<_> ()
         iter resizeArr.Add tree
         resizeArr.ToArray ()
 
-    //
+    /// Creates a set that contains the same elements as the given array.
     [<CompiledName("OfArray")>]
     let ofArray array =
         (empty, array)
         ||> Array.fold (fun tree el ->
             add el tree)
 
-    //
+    /// Returns an ordered view of the set as an enumerable object.
     [<CompiledName("ToSeq")>]
     let rec toSeq tree =
         seq {
@@ -402,14 +424,99 @@ module CharSet =
             // Produce the sequence for the right subtree.
             yield! toSeq right }
 
-    //
+    /// Creates a new set from the given enumerable object.
     [<CompiledName("OfSeq")>]
     let ofSeq seq =
         (empty, seq)
         ||> Seq.fold (fun tree el ->
             add el tree)
 
-    //
+    /// Returns the highest (greatest) value in the set.
+    [<CompiledName("MaxElement")>]
+    let rec maxElement tree =
+        match tree with
+        | Empty ->
+            invalidArg "tree" "Cannot retrieve the maximum element of an empty set."
+        | Node (_,_,_,(Node (_,_,_,_) as right)) ->
+            maxElement right
+        | Node (_,maxEl,_,_) ->
+            maxEl
+
+    /// Returns the lowest (least) value in the set. 
+    [<CompiledName("MinElement")>]
+    let rec minElement tree =
+        match tree with
+        | Empty ->
+            invalidArg "tree" "Cannot retrieve the minimum element of an empty set."
+        | Node (_,_,(Node (_,_,_,_) as left),_) ->
+            minElement left
+        | Node (minEl,_,_,_) ->
+            minEl
+
+    /// Splits the set into two sets containing the elements for which
+    /// the given predicate returns true and false respectively.
+    [<CompiledName("Partition")>]
+    let partition predicate set =
+        ((empty, empty), set)
+        ||> fold (fun (trueSet, falseSet) el ->
+            if predicate el then
+                add el trueSet,
+                falseSet
+            else
+                trueSet,
+                add el falseSet)
+
+    /// Returns a new set with the elements of the second set removed from the first.
+    [<CompiledName("Difference")>]
+    let difference set1 set2 =
+        // OPTIMIZE : This needs to be re-implemented in a
+        // much more efficient way for it to be useful!
+
+        // TEMP : This works, but it's **slow**.
+        (empty, set1)
+        ||> fold (fun set1' el ->
+            if contains el set2 then
+                set1'
+            else
+                add el set1')
+
+    /// Computes the intersection of the two sets.
+    [<CompiledName("Intersect")>]
+    let intersect set1 set2 =
+        // OPTIMIZE : This needs to be re-implemented in a
+        // much more efficient way for it to be useful!
+
+        // TEMP : This works, but it's **slow**.
+        let smaller, larger =
+            if count set1 < count set2 then
+                set1, set2
+            else set2, set1
+
+        (empty, smaller)
+        ||> fold (fun intersection el ->
+            if contains el larger then
+                add el intersection
+            else
+                intersection)    
+
+    /// Computes the union of the two sets.
+    [<CompiledName("Union")>]
+    let union set1 set2 =
+        // OPTIMIZE : This needs to be re-implemented in a
+        // much more efficient way for it to be useful!
+
+        // TEMP : This works, but it's **slow**.
+        let smaller, larger =
+            if count set1 < count set2 then
+                set1, set2
+            else set2, set1
+
+        (larger, smaller)
+        ||> fold (fun union el ->
+            add el union)
+
+    /// Returns a sequence of tuples <c>(lower, upper)</c>
+    /// containing the intervals of values in the set.
     [<CompiledName("Intervals")>]
     let rec intervals tree =
         seq {
@@ -425,184 +532,3 @@ module CharSet =
             // Produce the sequence for the right subtree.
             yield! intervals right }
 
-    //
-    [<CompiledName("Map")>]
-    let map (mapping : char -> char) tree =
-        (empty, tree)
-        ||> fold (fun set el ->
-            add (mapping el) set)
-
-    //
-    [<CompiledName("Filter")>]
-    let filter (predicate : char -> bool) tree =
-        (empty, tree)
-        ||> fold (fun set el ->
-            if predicate el then
-                add el set
-            else set)
-
-
-/// This module creates and manipulates suspensions for lazy evaluation.
-module Susp =
-    //
-    type susp<'a> = Lazy<'a>
-
-    //
-    let force (susp : susp<'a>) =
-        susp.Force ()
-
-    //
-    let delay f : susp<'a> =
-        System.Lazy.Create f
-
-
-
-/// An implementation of a lazy-list.
-type Stream<'T> =
-    | Nil
-    | Cons of 'T * Stream<'T>
-    | LCons of 'T * Lazy<Stream<'T>>
-
-//
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module Stream =
-    open Susp
-
-    exception Empty
-
-    //
-    let empty = Nil
-
-    //
-    let cons = Cons
-
-    //
-    let lcons (x, xs) =
-        LCons (x, delay xs)
-
-    //
-    let head = function
-        | Nil ->
-            raise Empty
-        | Cons (x, _) -> x
-        | LCons (x, _) -> x
-
-    //
-    let tail = function
-        | Nil ->
-            Nil
-        | Cons (_, xs) ->
-            xs
-        | LCons (_, xs) ->
-            force xs
-
-    //
-    let isEmpty = function
-        | Nil -> true
-        | _ -> false
-
-    //
-    let rec sizeImpl stream cont =
-        match stream with
-        | Nil ->
-            cont 0
-        | Cons (_, xs) ->
-            sizeImpl xs <| fun size ->
-                1 + size
-        | LCons (_, xs) ->
-            sizeImpl (force xs) <| fun size ->
-                1 + size
-
-    //
-    let size stream =
-        sizeImpl stream id
-
-
-//
-type QueueData<'T> = {
-    Front : Stream<'T>;
-    Rear : 'T list;
-    Pending : Stream<'T>;
-}
-
-//
-type Queue<'T> = Queue of QueueData<'T>
-
-//
-module Queue =
-    open Stream
-
-    (* INVARIANTS                                        *)
-    (*   1. length front >= length rear                  *)
-    (*   2. length pending = length front - length rear  *)
-    (*   3. (in the absence of insertf's)                *)
-    (*      pending = nthtail (front, length rear)       *)
-
-    //
-    let rec private rotate (xs, y::ys, rys) =
-        if Stream.isEmpty xs then
-            cons (y,rys)
-        else lcons (head xs,
-                      fun () -> rotate (tail xs, ys, cons (y, rys)))
-
-    (* Psuedo-constructor that enforces invariant *)
-    (*   always called with length pending = length front - length rear + 1 *)
-    let private queue { Front = front; Rear = rear; Pending = pending; } =
-        if Stream.isEmpty pending then
-            (* length rear = length front + 1 *)
-            let front = rotate (front, rear, Stream.empty)
-            Queue { Front = front; Rear = []; Pending = front; }
-        else
-            Queue { Front = front; Rear = rear; Pending = tail pending; }
-
-    
-    exception Empty
-
-    /// Returns an empty queue of the given type.
-    let empty : Queue<'T> =
-        Queue { Front = Stream.empty; Rear = []; Pending = Stream.empty; }
-
-    /// Returns true if the given queue is empty; otherwise, false.
-    let isEmpty (Queue { Front = front } : Queue<'T>) =
-        (* by Invariant 1, front = empty implies rear = [] *)
-        Stream.isEmpty front
-
-    let size (Queue { Front = front; Rear = rear; Pending = pending; } : Queue<'T>) =
-        (* = Stream.size front + length rear -- by Invariant 2 *)
-        Stream.size pending + 2 * List.length rear
-
-    /// add to rear of queue
-    let enqueue x (Queue { Front = front; Rear = rear; Pending = pending; } : Queue<'T>) =
-        queue { Front = front; Rear = x :: rear; Pending = pending; }
-
-    /// add to front of queue
-    let enqueuef x (Queue { Front = front; Rear = rear; Pending = pending; } : Queue<'T>) =
-        Queue { Front = cons (x, front); Rear = rear; Pending = cons (x, pending); }
-
-    /// take from front of queue
-    let dequeue (Queue { Front = front; Rear = rear; Pending = pending; } : Queue<'T>) =
-        if Stream.isEmpty front then
-            raise Empty
-        else
-            head front,
-            queue { Front = tail front; Rear = rear; Pending = pending; }
-
-    //
-    let toArray (queue : Queue<'T>) : 'T[] =
-        // OPTIMIZATION : If the queue is empty, return an empty array.
-        if isEmpty queue then
-            Array.empty
-        else
-            // Instead of creating a fixed-size array with
-                // Array.zeroCreate <| size queue
-            // use a ResizeArray<_> so we only need to traverse the queue once.
-            // TODO : Tune this for best average-case performance.
-            let result = ResizeArray<_> ()
-
-            let mutable queue = queue
-            while not <| isEmpty queue do
-                let item, queue' = dequeue queue
-                result.Add item
-                queue <- queue'
-
-            result.ToArray ()
