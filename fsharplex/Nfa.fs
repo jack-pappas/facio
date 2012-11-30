@@ -56,16 +56,16 @@ module private CompileNfa =
         (), transitions
 
     /// Implementation of the algorithm for creating an NFA from a Regex.
-    let rec private regexToNfaImpl (regex : Regex<_>) (dest : NfaStateId) (transitions : LexerNfaGraph<NfaState>) cont : NfaStateId * LexerNfaGraph<NfaState> =
+    let rec private regexToNfaImpl (regex : Regex) (dest : NfaStateId) (transitions : LexerNfaGraph<NfaState>) cont : NfaStateId * LexerNfaGraph<NfaState> =
         match regex with
         | Regex.Epsilon ->
             let stateId, transitions = createState transitions
             let (), transitions = addEpsilonTransition stateId dest transitions
             cont (stateId, transitions)
 
-        | Regex.Symbol s ->
+        | Regex.CharacterSet s ->
             let stateId, transitions = createState transitions
-            let (), transitions = addSymbolTransition stateId dest s transitions
+            //let (), transitions = addSymbolTransition stateId dest s transitions
             cont (stateId, transitions)
 
         | Regex.Or (a, b) ->
@@ -89,7 +89,7 @@ module private CompileNfa =
 
     /// <summary>Creates an NFA from a Regex.</summary>
     /// <returns>The initial NFA state and the constructed NFA transition graph.</returns>
-    let regexToNfa (regex : Regex<_>) (finalState : NfaStateId) (transitions : LexerNfaGraph<NfaState>) : NfaStateId * LexerNfaGraph<NfaState> =
+    let regexToNfa (regex : Regex) (finalState : NfaStateId) (transitions : LexerNfaGraph<NfaState>) : NfaStateId * LexerNfaGraph<NfaState> =
         regexToNfaImpl regex finalState transitions id
 
 

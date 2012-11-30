@@ -23,7 +23,7 @@ type CodeFragment = string
 //
 type RuleClause = {
     //
-    Pattern : Regex<char>;
+    Pattern : ExtendedRegex;
     //
     Action : CodeFragment;
 }
@@ -49,7 +49,7 @@ type Specification = {
     //
     Footer : CodeFragment;
     //
-    Macros : Map<MacroIdentifier, Regex<char>>;
+    Macros : Map<MacroIdentifier, ExtendedRegex>;
     //
     Rules : Map<RuleIdentifier, Rule>;
 }

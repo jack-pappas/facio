@@ -14,48 +14,49 @@ open OptimizedClosures
 open SpecializedCollections
 
 
-//
-type CharacterSet =
-    //
-    | Empty
-    /// Any character except for newline ('\n').
-    | Any
-    /// A character.
-    | Character of char
-    /// A set of characters.
-    | Set of CharSet
-    /// Characters in a Unicode category.
-    | UnicodeCategory of System.Globalization.UnicodeCategory
-
 /// <summary>A regular expression.</summary>
 /// <remarks>This type includes some cases which are normally referred to as "extended"
 /// regular expressions. However, only those cases which are still closed under boolean
 /// operations are included here, so the lanugage it represents must still be a regular
 /// language.</remarks>
 type Regex =
+    /// The empty language.
+    | Empty
     /// The empty string.
     | Epsilon
-    /// A (possibly empty) set of characters.
-    | CharacterSet of CharacterSet
-    /// Concatenation. A Regex immediately followed by another Regex.
-    | Concat of Regex * Regex
+    /// Any character except for newline ('\n').
+    | Any
+    /// A character.
+    | Character of char
+    /// A set of characters.
+    // NOTE : Whenever a Regex is in "canonical" form, this set
+    // will never contain fewer than two (2) characters.
+    | CharacterSet of CharSet
+    /// Negation.
+    | Not of Regex
     /// Kleene *-closure.
     /// The specified Regex will be matched zero (0) or more times.
     | Star of Regex
+    /// Concatenation. A Regex immediately followed by another Regex.
+    | Concat of Regex * Regex    
     /// Choice between two regular expressions (i.e., boolean OR).
     | Or of Regex * Regex
     /// Boolean AND of two regular expressions.
-    | And of Regex * Regex
-    /// Negation.
-    | Not of Regex
+    | And of Regex * Regex    
 
     //
     static member private IsNullableImpl regex cont =
         match regex with
-        | Epsilon ->
+        | Epsilon
+        | Star _ ->
             cont true
+        | Empty
+        | Any
+        | Character _
         | CharacterSet _ ->
             cont false
+        | Not regex ->
+            Regex.IsNullableImpl regex (cont >> not)
         | Concat (a, b)
         | And (a, b) ->
             // IsNullable(a) && IsNullable(b)
@@ -63,86 +64,189 @@ type Regex =
                 if not a then false
                 else
                     Regex.IsNullableImpl b cont
-        | Star _ ->
-            cont true
         | Or (a, b) ->
             // IsNullable(a) || IsNullable(b)
             Regex.IsNullableImpl a <| fun a ->
                 if a then true
                 else
                     Regex.IsNullableImpl b cont
-        | Not regex ->
-            Regex.IsNullableImpl regex (cont >> not)
 
-    /// Determines if a specified Regex is 'nullable', i.e.,
-    /// it accepts the empty string (epsilon).
+    /// Determines if a specified Regex is 'nullable',
+    /// i.e., it accepts the empty string (epsilon).
     static member IsNullable (regex : Regex) =
         Regex.IsNullableImpl regex id
 
     //
-    static member private DerivativeImpl (contains : FSharpFunc<'Symbol, 'Symbol, bool>) wrtSymbol regex cont =
+    static member private DerivativeImpl wrtSymbol regex cont =
         match regex with
+        | Empty
         | Epsilon ->
             cont Empty
-        | CharacterSet charSet ->
+        | Any ->
             raise <| System.NotImplementedException "DerivativeImpl"
-//            if contains.Invoke (symbol, wrtSymbol) then Epsilon else Empty
-//            |> cont
-        | Concat (a, b) ->
-            failwith "TODO"
-        | Star regex ->
-            failwith "TODO"
-        | Or (a, b) ->
-            failwith "TODO"
-        | And (a, b) ->
-            failwith "TODO"
-        | Not regex ->
-            failwith "TODO"
+        | Character c ->
+            if c = wrtSymbol then Epsilon else Empty
+            |> cont
+        | CharacterSet charSet ->
+            if CharSet.contains wrtSymbol charSet then Epsilon else Empty
+            |> cont
+        | Not r ->
+            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
+                Not r'
+                |> cont
+        | Star r as ``r*`` ->
+            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
+                Concat (r', ``r*``)
+                |> cont
+        | Concat (r, s) ->
+            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
+            Regex.DerivativeImpl wrtSymbol s <| fun s' ->
+                let ``nu(r)`` = if Regex.IsNullable r then Epsilon else Empty
+                Or (Concat (r', s),
+                    Concat (``nu(r)``, s'))
+                |> cont        
+        | Or (r, s) ->
+            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
+            Regex.DerivativeImpl wrtSymbol s <| fun s' ->
+                Or (r', s')
+                |> cont
+        | And (r, s) ->
+            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
+            Regex.DerivativeImpl wrtSymbol s <| fun s' ->
+                And (r', s')
+                |> cont        
 
     /// Computes the derivative of a Regex with respect to a specified symbol.
-    static member Derivative (contains : 'Symbol -> 'Symbol -> bool) symbol regex =
-        let contains = FSharpFunc<_,_,_>.Adapt contains
-        Regex.DerivativeImpl contains symbol regex id
+    static member Derivative symbol regex =
+        Regex.DerivativeImpl symbol regex id
 
     //
-    static member private CanonicalizeImpl (regex : Regex) cont =
-//        match regex with
-//        | Or (x, y) ->
-//            // 
-        raise <| System.NotImplementedException "CanonicalizeImpl"
+    static member private CanonicalizeImpl (regex : Regex) (cont : Regex -> Regex) =
+        match regex with
+        | And (Empty, _) ->
+            cont Empty
+        | And (Not Empty, r) ->
+            Regex.CanonicalizeImpl r cont
+        | And (r, And (s, t)) ->
+            // Rewrite the expression so it's left-associative.
+            let regex = And (And (r, s), t)
+            Regex.CanonicalizeImpl regex cont
+        | And (r, s) ->
+            Regex.CanonicalizeImpl r <| fun r' ->
+            Regex.CanonicalizeImpl s <| fun s' ->
+                // Try to simplify the expression once more before returning.
+                if r' = s' then r'
+                else
+                    // Sort the components before returning; this takes care
+                    // of the symmetry rule (r & s) = (s & r) so the
+                    // "approximately equal" relation is simply handled by
+                    // F#'s structural equality.
+                    if r' < s' then And (r', s')
+                    else And (s', r')
+                |> cont
+
+        | Or (Empty, r) ->
+            Regex.CanonicalizeImpl r cont
+        | Or (Not Empty, _) ->
+            cont Any
+        | Or (r, Or (s, t)) ->
+            // Rewrite the expression so it's left-associative.
+            let regex = Or (Or (r, s), t)
+            Regex.CanonicalizeImpl regex cont
+        | Or (r, s) ->
+            Regex.CanonicalizeImpl r <| fun r' ->
+            Regex.CanonicalizeImpl s <| fun s' ->
+                // Try to simplify the expression once more before returning.
+                if r' = s' then r'
+                else
+                    // Sort the components before returning; this takes care
+                    // of the symmetry rule (r | s) = (s | r) so the
+                    // "approximately equal" relation is simply handled by
+                    // F#'s structural equality.
+                    if r' < s' then Or (r', s')
+                    else Or (s', r')
+                |> cont
+
+        | Concat (r, Concat (s, t)) ->
+            // Rewrite the expression so it's left-associative.
+            let regex = Concat (Concat (r, s), t)
+            Regex.CanonicalizeImpl regex cont
+        | Concat (Empty, _)
+        | Concat (_, Empty) ->
+            cont Empty
+        | Concat (Epsilon, regex)
+        | Concat (regex, Epsilon) ->
+            Regex.CanonicalizeImpl regex cont
+
+        | Star (Star _ as starRegex) ->
+            Regex.CanonicalizeImpl starRegex cont
+        | Star Epsilon
+        | Star Empty ->
+            cont Epsilon
+        | Star (Or (Epsilon, r))
+        | Star (Or (r, Epsilon)) ->
+            Regex.CanonicalizeImpl r <| fun r' ->
+                Star r'
+                |> cont
+
+        | Not Empty ->
+            cont Any
+        | Not Any ->
+            cont Empty
+        | Not (Not regex) ->
+            Regex.CanonicalizeImpl regex cont
+
+        | CharacterSet charSet as charSetRegex ->
+            match CharSet.count charSet with
+            | 0 ->
+                Empty
+            | 1 ->
+                raise <| System.NotImplementedException "Regex.CanonicalizeImpl"
+            | _ ->
+                charSetRegex
+            |> cont
+
+        | regex ->
+            cont regex
 
     //
-    static member Canonicalize (regex : Regex) =
+    static member Canonicalize (regex : Regex) : Regex =
         Regex.CanonicalizeImpl regex id
 
-    /// Determines if two Regexes are similar, i.e., if they're approximately equal.
-    static member Similar (x : Regex) (y : Regex) =
-        // Canonicalize the Regexes, then they can be compared using
-        // the built-in structural equality relation.
-        (Regex.Canonicalize x) = (Regex.Canonicalize y)
 
-/// An extended regular expression: the basic form plus cases
-/// to handle optional and one-or-more patterns.
+/// An extended regular expression: the basic form plus
+/// cases to handle optional and one-or-more patterns.
 type ExtendedRegex =
-    /// An empty string.
+    (* Regex cases *)
+    /// The empty language.
+    | Empty
+    /// The empty string.
     | Epsilon
-    /// A symbol from the language's alphabet.
-    | CharacterSet of CharacterSet
-    /// A Regex immediately followed by another Regex.
-    | Concat of ExtendedRegex * ExtendedRegex
+    /// Any character except for newline ('\n').
+    | Any
+    /// A character.
+    | Character of char
+    /// A set of characters.
+    // NOTE : Whenever a Regex is in "canonical" form, this set
+    // will never contain fewer than two (2) characters.
+    | CharacterSet of CharSet
+    /// Negation.
+    | Not of ExtendedRegex
     /// Kleene *-closure.
-    /// The specified Regex will be matched zero (0) or more times.
+    /// The specified ExtendedRegex will be matched zero (0) or more times.
     | Star of ExtendedRegex
+    /// Concatenation. A ExtendedRegex immediately followed by another ExtendedRegex.
+    | Concat of ExtendedRegex * ExtendedRegex    
     /// Choice between two regular expressions (i.e., boolean OR).
     | Or of ExtendedRegex * ExtendedRegex
     /// Boolean AND of two regular expressions.
-    | And of ExtendedRegex * ExtendedRegex
-    /// Negation.
-    | Not of ExtendedRegex
-    /// The specified Regex is matched one (1) or more times.
+    | And of ExtendedRegex * ExtendedRegex    
+
+    (* Extensions *)
+    /// The specified ExtendedRegex is matched one (1) or more times.
     /// This is the Plus (+) operator in a regular expression.
     | OneOrMore of ExtendedRegex
-    /// The specified Regex is optionally matched (i.e., it will
+    /// The specified ExtendedRegex is optionally matched (i.e., it will
     /// be matched zero (0) or one (1) times).
     /// This is the QuestionMark (?) operator in a regular expression.
     | Optional of ExtendedRegex
@@ -150,51 +254,58 @@ type ExtendedRegex =
     //
     static member private ToRegexImpl (extRegex : ExtendedRegex) cont : Regex =
         match extRegex with
+        | ExtendedRegex.Empty ->
+            cont Regex.Empty
         | ExtendedRegex.Epsilon ->
             cont Regex.Epsilon
-        | ExtendedRegex.CharacterSet set ->
-            Regex.CharacterSet set
+        | ExtendedRegex.Any ->
+            cont Regex.Any
+        | ExtendedRegex.Character c ->
+            Regex.Character c
+            |> cont
+        | ExtendedRegex.CharacterSet charSet ->
+            Regex.CharacterSet charSet
             |> cont
 
-        | ExtendedRegex.Concat (a, b) ->
-            ExtendedRegex.ToRegexImpl a <| fun a ->
-            ExtendedRegex.ToRegexImpl b <| fun b ->
-                Regex.Concat (a, b)
+        | ExtendedRegex.Not r ->
+            ExtendedRegex.ToRegexImpl r <| fun r ->
+                Regex.Not r
                 |> cont
 
-        | ExtendedRegex.Star extRegex ->
-            ExtendedRegex.ToRegexImpl extRegex <| fun regex ->
-                Regex.Star regex
+        | ExtendedRegex.Star r ->
+            ExtendedRegex.ToRegexImpl r <| fun r ->
+                Regex.Star r
                 |> cont
 
-        | ExtendedRegex.Or (a, b) ->
-            ExtendedRegex.ToRegexImpl a <| fun a ->
-            ExtendedRegex.ToRegexImpl b <| fun b ->
-                Regex.Or (a, b)
+        | ExtendedRegex.Concat (r, s) ->
+            ExtendedRegex.ToRegexImpl r <| fun r ->
+            ExtendedRegex.ToRegexImpl s <| fun s ->
+                Regex.Concat (r, s)
                 |> cont
 
-        | ExtendedRegex.And (a, b) ->
-            ExtendedRegex.ToRegexImpl a <| fun a ->
-            ExtendedRegex.ToRegexImpl b <| fun b ->
-                Regex.And (a, b)
+        | ExtendedRegex.Or (r, s) ->
+            ExtendedRegex.ToRegexImpl r <| fun r ->
+            ExtendedRegex.ToRegexImpl s <| fun s ->
+                Regex.Or (r, s)
                 |> cont
 
-        | ExtendedRegex.Not extRegex ->
-            ExtendedRegex.ToRegexImpl extRegex <| fun regex ->
-                Regex.Not regex
+        | ExtendedRegex.And (r, s) ->
+            ExtendedRegex.ToRegexImpl r <| fun r ->
+            ExtendedRegex.ToRegexImpl s <| fun s ->
+                Regex.And (r, s)
                 |> cont
 
         (* These extended patterns can be rewritten using the simple patterns. *)
-        | ExtendedRegex.OneOrMore extRegex ->
-            ExtendedRegex.ToRegexImpl extRegex <| fun regex ->
-                // Rewrite s+ as ss*
-                Regex.Concat (regex, Regex.Star regex)
+        | ExtendedRegex.OneOrMore r ->
+            ExtendedRegex.ToRegexImpl r <| fun r ->
+                // Rewrite r+ as rr*
+                Regex.Concat (r, Regex.Star r)
                 |> cont
 
-        | ExtendedRegex.Optional extRegex ->
-            ExtendedRegex.ToRegexImpl extRegex <| fun regex ->
-                // Rewrite s? as (|s)
-                Regex.Concat (Regex.Epsilon, regex)
+        | ExtendedRegex.Optional r ->
+            ExtendedRegex.ToRegexImpl r <| fun r ->
+                // Rewrite r? as (|r)
+                Regex.Concat (Regex.Epsilon, r)
                 |> cont
 
     /// Simplifies an ExtendedRegex into a Regex.
