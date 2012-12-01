@@ -88,6 +88,58 @@ module private CompilationState =
         // Return the new DFA state and the updated compilation state.
         dfaState, compilationState
 
+//
+let private transitions regularVector universe (transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState) derivativeClass =
+    // Ignore empty derivative classes.
+    if CharSet.isEmpty derivativeClass then
+        transitionsFromCurrentDfaState,
+        unvisitedTransitionTargets,
+        compilationState
+    else
+        // Choose an element from the derivative class; any element
+        // will do (which is the point behind the derivative classes).
+        let derivativeClassElement = CharSet.minElement derivativeClass
+
+        // The derivative of the regular vector w.r.t. the chosen element.
+        let regularVector' =
+            regularVector
+            // Compute the derivative of the regular vector
+            |> RegularVector.derivative derivativeClassElement
+            // Canonicalize the derivative vector.
+            // THIS IS EXTREMELY IMPORTANT -- this algorithm absolutely
+            // will not work without this step.
+            |> RegularVector.canonicalize universe
+
+        let targetDfaState, unvisitedTransitionTargets, compilationState =
+            let maybeDfaState =
+                CompilationState.tryGetDfaState regularVector' compilationState
+
+            match maybeDfaState with
+            | Some targetDfaState ->
+                targetDfaState,
+                unvisitedTransitionTargets,
+                compilationState
+            | None ->
+                // Create a DFA state for this regular vector.
+                let newDfaState, compilationState =
+                    CompilationState.createDfaState regularVector' compilationState
+
+                // Add this new DFA state to the set of unvisited states
+                // targeted by transitions from the current DFA state.
+                let unvisitedTransitionTargets =
+                    Set.add newDfaState unvisitedTransitionTargets
+
+                newDfaState,
+                unvisitedTransitionTargets,
+                compilationState
+
+        //
+        let transitionsFromCurrentDfaState =
+            Map.add derivativeClass targetDfaState transitionsFromCurrentDfaState
+
+        transitionsFromCurrentDfaState,
+        unvisitedTransitionTargets,
+        compilationState
 
 //
 let rec private createDfa universe pending compilationState =
@@ -102,87 +154,65 @@ let rec private createDfa universe pending compilationState =
         //
         let regularVector = CompilationState.getRegularVector currentState compilationState
 
-        /// The approximate set of derivative classes of the regular vector,
-        /// representing transitions out of the DFA state representing it.
-        let derivativeClasses = RegularVector.derivativeClasses regularVector universe
+        // If this regular vector represents the error state, there's nothing to do
+        // for it -- just continue processing the worklist.
+        if RegularVector.isEmpty regularVector then
+            createDfa universe pending compilationState
+        else
+            /// The approximate set of derivative classes of the regular vector,
+            /// representing transitions out of the DFA state representing it.
+            let derivativeClasses = RegularVector.derivativeClasses regularVector universe
 
-        // For each DFA state (regular vector) targeted by a transition (derivative class),
-        // add the DFA state to the compilation state (if necessary), then add an edge
-        // to the transition graph from this DFA state to the target DFA state.
-        let transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState =
-            ((Map.empty, Set.empty, compilationState), derivativeClasses)
-            ||> Set.fold (fun (transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState) derivativeClass ->
-                Debug.Assert (
-                    not <| CharSet.isEmpty derivativeClass,
-                    "The derivative class is empty.")
+            // For each DFA state (regular vector) targeted by a transition (derivative class),
+            // add the DFA state to the compilation state (if necessary), then add an edge
+            // to the transition graph from this DFA state to the target DFA state.
+            let transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState =
+                ((Map.empty, Set.empty, compilationState), derivativeClasses)
+                ||> Set.fold (transitions regularVector universe)
 
-                // Choose an element from the derivative class; any element
-                // will do (which is the point behind the derivative classes).
-                let derivativeClassElement = CharSet.minElement derivativeClass
+            // Add any newly-created, unvisited states to the
+            // set of states which still need to be visited.
+            let pending = Set.union pending unvisitedTransitionTargets
 
-                // The derivative of the regular vector w.r.t. the chosen element.
-                let regularVector' = RegularVector.derivative derivativeClassElement regularVector
+            let compilationState =
+                { compilationState with
+                    Transitions =
+                        // Add the unvisited transition targets to the transition graph.
+                        (compilationState.Transitions, transitionsFromCurrentDfaState)
+                        ||> Map.fold (fun transitions symbol target ->
+                            LexerDfaGraph.addEdge currentState target symbol transitions); }
 
-                let targetDfaState, unvisitedTransitionTargets, compilationState =
-                    let maybeDfaState =
-                        CompilationState.tryGetDfaState regularVector' compilationState
-
-                    match maybeDfaState with
-                    | Some targetDfaState ->
-                        targetDfaState,
-                        unvisitedTransitionTargets,
-                        compilationState
-                    | None ->
-                        // Create a DFA state for this regular vector.
-                        let newDfaState, compilationState =
-                            CompilationState.createDfaState regularVector' compilationState
-
-                        // Add this new DFA state to the set of unvisited states
-                        // targeted by transitions from the current DFA state.
-                        let unvisitedTransitionTargets =
-                            Set.add newDfaState unvisitedTransitionTargets
-
-                        newDfaState,
-                        unvisitedTransitionTargets,
-                        compilationState
-
-                //
-                let transitionsFromCurrentDfaState =
-                    Map.add derivativeClass targetDfaState transitionsFromCurrentDfaState
-
-                transitionsFromCurrentDfaState,
-                unvisitedTransitionTargets,
-                compilationState)
-
-        // Add any newly-created, unvisited states to the
-        // set of states which still need to be visited.
-        let pending = Set.union pending unvisitedTransitionTargets
-
-        let compilationState =
-            { compilationState with
-                Transitions =
-                    // Add the unvisited transition targets to the transition graph.
-                    (compilationState.Transitions, transitionsFromCurrentDfaState)
-                    ||> Map.fold (fun transitions symbol target ->
-                        LexerDfaGraph.addEdge currentState target symbol transitions); }
-
-        // Continue processing recursively.
-        createDfa universe pending compilationState
+            // Continue processing recursively.
+            createDfa universe pending compilationState
 
 //
-let private rulePatternsToDfa (rulePatterns : RegularVector) : LexerDfa =
+let (*private*) rulePatternsToDfa (rulePatterns : RegularVector) : LexerDfa =
     // Preconditions
     if Array.isEmpty rulePatterns then
         invalidArg "rulePatterns" "The rule must contain at least one (1) pattern."
 
     // TODO : Compute the "universe" for this rule pattern.
     let universe = CharSet.empty
-    raise <| System.NotImplementedException "rulePatternsToDfa"
+    let universe =
+        CharSet.empty
+        |> CharSet.addRange 'a' 'z'
+    //raise <| System.NotImplementedException "rulePatternsToDfa"
 
     // The initial DFA compilation state.
     let initialDfaStateId, compilationState =
+        // Canonicalize the patterns before creating a state for them.
+        let rulePatterns = RegularVector.canonicalize universe rulePatterns
+
         CompilationState.empty
         |> CompilationState.createDfaState rulePatterns
+
+    // The error state of the DFA.
+    let errorDfaStateId, compilationState =
+        // The error state of the DFA represents the regular vector
+        // whose elements are all Empty.
+        let errorVector = Array.create (Array.length rulePatterns) Regex.Empty
+        // Create the DFA state
+        CompilationState.createDfaState errorVector compilationState
 
     // Compile the DFA.
     let compilationState =

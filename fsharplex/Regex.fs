@@ -106,12 +106,12 @@ type Regex =
                 Concat (r', ``r*``)
                 |> cont
         | Concat (r, s) ->
+            let ``nu(r)`` = if Regex.IsNullable r then Epsilon else Empty
             Regex.DerivativeImpl wrtSymbol r <| fun r' ->
             Regex.DerivativeImpl wrtSymbol s <| fun s' ->
-                let ``nu(r)`` = if Regex.IsNullable r then Epsilon else Empty
                 Or (Concat (r', s),
                     Concat (``nu(r)``, s'))
-                |> cont        
+                |> cont
         | Or (r, s) ->
             Regex.DerivativeImpl wrtSymbol r <| fun r' ->
             Regex.DerivativeImpl wrtSymbol s <| fun s' ->
@@ -432,4 +432,13 @@ module RegularVector =
         // is the intersection of the approximate sets of derivative classes of it's elements.
         |> Array.reduce (
             FuncConvert.FuncFromTupled Regex.IntersectionOfDerivativeClasses)
+
+    /// Creates a new regular vector in canonical form by canonicalizing
+    /// each regular expression in the given regular vector.
+    let inline canonicalize universe (regVec : RegularVector) : RegularVector =
+        regVec
+        |> Array.map (fun regex ->
+            Regex.Canonicalize (regex, universe))
+
+
 
