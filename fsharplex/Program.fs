@@ -35,37 +35,6 @@ module internal AssemblyInfo =
     do ()
 
 
-//// TEMP : Only needed to compute tables.
-//open System.Collections.Generic
-//open System.Globalization
-//open SpecializedCollections
-//
-//let unicodeCategories =
-//    let table = Dictionary<_,_> ()
-//    for i = 0 to 65535 do
-//        /// The Unicode category of this character.
-//        let category = System.Char.GetUnicodeCategory (char i)
-//
-//        // Add this character to the set for this category.
-//        table.[category] <-
-//            match table.TryGetValue category with
-//            | true, charSet ->
-//                CharSet.add (char i) charSet
-//            | false, _ ->
-//                CharSet.singleton (char i)
-//
-//    // Convert the dictionary to a Map
-//    (Map.empty, table)
-//    ||> Seq.fold (fun categoryMap kvp ->
-//        Map.add kvp.Key kvp.Value categoryMap)
-//
-//let unicodeCategoryRanges =
-//    unicodeCategories
-//    |> Map.map (fun _ charSet ->
-//        charSet
-//        |> CharSet.intervals
-//        |> Seq.toArray)
-
 //open SpecializedCollections
 //open Regex
 //
