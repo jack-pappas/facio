@@ -10,15 +10,66 @@ See LICENSE.TXT for licensing details.
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module FSharpLex.SpecializedCollections
 
+open System.Diagnostics
 open OptimizedClosures
 
 
 /// Character set implementation based on a Discrete Interval Encoding Tree.
 /// This is faster and more efficient than the built-in F# Set<'T>,
 /// especially for dense sets.
+[<DebuggerDisplay(
+    "Count = {DebuggerElementCount}, \
+     Intervals = {DebuggerIntervalCount}")>]
 type CharSet =
     | Empty
     | Node of char * char * CharSet * CharSet
+
+    //
+    member private this.DebuggerElementCount
+        with get () =
+            CharSet.Count this
+
+    //
+    member private this.DebuggerIntervalCount
+        with get () =
+            CharSet.IntervalCount this
+
+    //
+    static member private CountImpl tree cont =
+        match tree with
+        | Empty ->
+            cont 0
+        | Node (lowerBound, upperBound, left, right) ->
+            // Count the left and right subtrees.
+            CharSet.CountImpl left <| fun leftCount ->
+            CharSet.CountImpl right <| fun rightCount ->
+                /// The number of values in this interval.
+                let thisCount = int upperBound - int lowerBound + 1
+
+                // Return the combined count for this node and it's children.
+                thisCount + leftCount + rightCount
+                |> cont
+
+    /// Returns the number of elements in the set.
+    static member Count tree =
+        CharSet.CountImpl tree id
+
+    //
+    static member private IntervalCountImpl tree cont =
+        match tree with
+        | Empty ->
+            cont 0
+        | Node (lowerBound, upperBound, left, right) ->
+            // Count the left and right subtrees.
+            CharSet.IntervalCountImpl left <| fun leftCount ->
+            CharSet.IntervalCountImpl right <| fun rightCount ->
+                // Combine the interval count for this node's children, then increment it.
+                1 + leftCount + rightCount
+                |> cont
+
+    /// Returns the number of intervals in the set.
+    static member IntervalCount tree =
+        CharSet.IntervalCountImpl tree id
 
 /// Functional programming operators related to the CharSet type.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -28,14 +79,24 @@ module CharSet =
 
     /// Returns 'true' if the set is empty.
     [<CompiledName("IsEmpty")>]
-    let isEmpty tree =
-        match tree with
+    let isEmpty set =
+        match set with
         | Empty -> true
         | Node (_,_,_,_) -> false
 
     /// The set containing the given element.
     let singleton c =
         Node (c, c, Empty, Empty)
+
+    /// Returns the number of elements in the set.
+    [<CompiledName("Count")>]
+    let inline count (set : CharSet) =
+        CharSet.Count set
+
+    /// Returns the number of intervals in the set.
+    [<CompiledName("IntervalCount")>]
+    let inline intervalCount (set : CharSet) =
+        CharSet.IntervalCount set
 
     //
     let rec private splitMaxImpl tree cont =
@@ -332,27 +393,6 @@ module CharSet =
     [<CompiledName("Iterate")>]
     let iter (action : char -> unit) tree =
         iterImpl action tree id
-
-    //
-    let rec private countImpl tree cont =
-        match tree with
-        | Empty ->
-            cont 0
-        | Node (lowerBound, upperBound, left, right) ->
-            // Count the left and right subtrees.
-            countImpl left <| fun leftCount ->
-            countImpl right <| fun rightCount ->
-                /// The number of values in this interval.
-                let thisCount = int upperBound - int lowerBound + 1
-
-                // Return the combined count for this node and it's children.
-                thisCount + leftCount + rightCount
-                |> cont
-
-    /// Returns the number of elements in the set.
-    [<CompiledName("Count")>]
-    let count tree =
-        countImpl tree id
 
     //
     let rec private existsImpl (predicate : char -> bool) tree cont =

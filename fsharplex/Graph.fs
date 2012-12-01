@@ -24,6 +24,7 @@ type DfaStateId = int<DfaState>
 /// <remarks>Used as a key for sparse graph implementations
 /// because it's more efficient than an F# tuple.</remarks>
 [<Struct>]
+[<DebuggerDisplay("{Source} -> {Target}")>]
 type TransitionEdgeKey =
     /// The source vertex of the edge.
     val Source : DfaStateId
@@ -34,11 +35,14 @@ type TransitionEdgeKey =
         {   Source = source;
             Target = target; }
 
-
 /// <summary>An immutable implementation of a vertex- and edge-labeled sparse multidigraph,
 /// modified for better performance when creating DFAs for lexers.</summary>
 /// <remarks>Assumes vertex ids are assigned in order (i.e., there are no gaps in the values),
 /// starting at zero (0).</remarks>
+[<DebuggerDisplay(
+    "Vertices = {VertexCount}, \
+     EdgeSets = {EdgeSetCount}, \
+     Edges = {EdgeCount}")>]
 type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdgeKey, CharSet>) =
     //
     static let empty =
@@ -54,12 +58,23 @@ type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdge
             vertexCount = GenericZero
 
     //
-    member __.EdgeSets
+    member __.AdjacencyMap
         with get () = adjacencyMap
     
     //
     member __.VertexCount
         with get () = vertexCount
+
+    //
+    member internal __.EdgeSetCount
+        with get () = adjacencyMap.Count
+
+    //
+    member internal __.EdgeCount
+        with get () =
+            (0, adjacencyMap)
+            ||> Map.fold (fun edgeCount _ edgeSet ->
+                edgeCount + CharSet.count edgeSet)
 
     //
     member __.CreateVertex () =
@@ -81,27 +96,28 @@ type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdge
         Map.tryFind key adjacencyMap
 
     //
-    member __.AddEdge (source : DfaStateId, target : DfaStateId, edge : CharSet) =
+    member __.AddEdges (source : DfaStateId, target : DfaStateId, edges : CharSet) =
         // Preconditions
         if int source <= 0 || int source > vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
         elif int target <= 0 || int target > vertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
+        elif CharSet.isEmpty edges then
+            invalidArg "edges" "The set of edges to be added is empty."
 
         let key = TransitionEdgeKey (source, target)
 
-//        //
-//        let edgeSet =
-//            match Map.tryFind key adjacencyMap with
-//            | Some edgeSet ->
-//                CharSet.add edge edgeSet
-//            | None ->
-//                CharSet.singleton edge
+        //
+        let edgeSet =
+            match Map.tryFind key adjacencyMap with
+            | Some edgeSet ->
+                CharSet.union edgeSet edges
+            | None ->
+                edges
 
         LexerDfaGraph (
             vertexCount,
-            Map.add key edge adjacencyMap)
-            //Map.add key edgeSet adjacencyMap)
+            Map.add key edgeSet adjacencyMap)
 
         
 /// Functions on LexerDfaGraph.
@@ -119,8 +135,8 @@ module LexerDfaGraph =
         graph.CreateVertex ()
 
     //
-    let inline addEdge source target edge (graph : LexerDfaGraph) =
-        graph.AddEdge (source, target, edge)
+    let inline addEdges source target edges (graph : LexerDfaGraph) =
+        graph.AddEdges (source, target, edges)
 
     //
     let inline tryGetEdgeSet source target (graph : LexerDfaGraph) =

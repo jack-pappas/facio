@@ -377,6 +377,8 @@ type RegularVector = Regex[]
 /// Functional programming operators related to the RegularVector type.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module RegularVector =
+    open LanguagePrimitives
+
     /// Compute the derivative of a regular vector
     /// with respect to the given symbol.
     let inline derivative symbol (regVec : RegularVector) : RegularVector =
@@ -399,6 +401,20 @@ module RegularVector =
         for i = 0 to len - 1 do
             if Regex.IsNullable regVec.[i] then
                 accepting <- Set.add i accepting
+
+        // Return the computed set of indices.
+        accepting
+
+    /// The indices of the element expressions (if any)
+    /// that accept the empty string (epsilon).
+    let acceptingElementsTagged< [<Measure>] 'Tag > (regVec : RegularVector) =
+        /// The indices of the expressions accepting the empty string.
+        let mutable accepting = Set.empty
+
+        let len = Array.length regVec
+        for i = 0 to len - 1 do
+            if Regex.IsNullable regVec.[i] then
+                accepting <- Set.add (Int32WithMeasure<'Tag> i) accepting
 
         // Return the computed set of indices.
         accepting

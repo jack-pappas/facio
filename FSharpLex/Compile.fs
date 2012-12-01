@@ -17,26 +17,16 @@ open Regex
 open Ast
 
 
-/// A deterministic finite automaton (DFA)
-/// implementing a lexer specification.
-type LexerDfa = {
-    /// The transition graph of the DFA.
-    Transitions : LexerDfaGraph;
-    /// For a DFA state, maps the out-edges (transitions) from that state
-    /// to the state targeted by the transition.
-    TransitionsBySymbol : Map<DfaStateId, Map<char, DfaStateId>>;
-    //
-    RuleClauseFinalStates : Map<RuleIdentifier, DfaStateId[]>;
-    //
-    RuleInitialStates : Map<RuleIdentifier, DfaStateId>;
-    /// The initial state of the DFA.
-    InitialState : DfaStateId;
-}
-
-//
+/// DFA compilation state.
+[<DebuggerDisplay(
+    "States = {Transitions.VertexCount}, \
+     Transition Sets = {Transitions.EdgeSetCount}, \
+     FinalStates = {FinalStates.Count}")>]
 type private CompilationState = {
     //
     Transitions : LexerDfaGraph;
+    /// Final (accepting) DFA states.
+    FinalStates : Set<DfaStateId>;
     /// Maps regular vectors to the DFA state representing them.
     RegularVectorToDfaState : Map<RegularVector, DfaStateId>;
     /// Maps a DFA state to the regular vector it represents.
@@ -49,6 +39,7 @@ module private CompilationState =
     /// Empty compilation state.
     let empty = {
         Transitions = LexerDfaGraph.empty;
+        FinalStates = Set.empty;
         RegularVectorToDfaState = Map.empty;
         DfaStateToRegularVector = Map.empty; }
 
@@ -76,9 +67,18 @@ module private CompilationState =
         // Add the new DFA state to the compilation state.
         let compilationState =
             { compilationState with
-                RegularVectorToDfaState = Map.add regVec dfaState compilationState.RegularVectorToDfaState;
-                DfaStateToRegularVector = Map.add dfaState regVec compilationState.DfaStateToRegularVector;
-                Transitions = transitions; }
+                Transitions = transitions;
+                FinalStates =
+                    // A regular vector represents a final state iff it is nullable.
+                    if RegularVector.isNullable regVec then
+                        Set.add dfaState compilationState.FinalStates
+                    else
+                        compilationState.FinalStates;
+                RegularVectorToDfaState =
+                    Map.add regVec dfaState compilationState.RegularVectorToDfaState;
+                DfaStateToRegularVector =
+                    Map.add dfaState regVec compilationState.DfaStateToRegularVector;
+                 }
 
         // Return the new DFA state and the updated compilation state.
         dfaState, compilationState
@@ -174,14 +174,28 @@ let rec private createDfa universe pending compilationState =
                     Transitions =
                         // Add the unvisited transition targets to the transition graph.
                         (compilationState.Transitions, transitionsFromCurrentDfaState)
-                        ||> Map.fold (fun transitions symbol target ->
-                            LexerDfaGraph.addEdge currentState target symbol transitions); }
+                        ||> Map.fold (fun transitions derivativeClass target ->
+                            LexerDfaGraph.addEdges currentState target derivativeClass transitions); }
 
             // Continue processing recursively.
             createDfa universe pending compilationState
 
+
+/// A deterministic finite automaton (DFA) implementing a lexer rule.
+[<DebuggerDisplay(
+    "States = {Transitions.VertexCount}, \
+     Transitions = {Transitions.EdgeSetCount}")>]
+type LexerRuleDfa = {
+    /// The transition graph of the DFA.
+    Transitions : LexerDfaGraph;
+    //
+    RuleClauseFinalStates : DfaStateId[];
+    /// The initial state of the DFA.
+    InitialState : DfaStateId;
+}
+
 //
-let (*private*) rulePatternsToDfa (rulePatterns : RegularVector) : LexerDfa =
+let (*private*) rulePatternsToDfa (rulePatterns : RegularVector) : LexerRuleDfa =
     // Preconditions
     if Array.isEmpty rulePatterns then
         invalidArg "rulePatterns" "The rule must contain at least one (1) pattern."
@@ -201,32 +215,45 @@ let (*private*) rulePatternsToDfa (rulePatterns : RegularVector) : LexerDfa =
         CompilationState.empty
         |> CompilationState.createDfaState rulePatterns
 
-    // The error state of the DFA.
-    let errorDfaStateId, compilationState =
-        // The error state of the DFA represents the regular vector
-        // whose elements are all Empty.
-        let errorVector = Array.create (Array.length rulePatterns) Regex.Empty
-        // Create the DFA state
-        CompilationState.createDfaState errorVector compilationState
-
     // Compile the DFA.
     let compilationState =
         let initialPending = Set.singleton initialDfaStateId
         createDfa universe initialPending compilationState
 
-    // Create a LexerDfa record from the compiled DFA.
-    // TODO
-    raise <| System.NotImplementedException "rulePatternsToDfa"
+    //
+    let qq =
+        // TEST
+        (Map.empty, compilationState.FinalStates)
+        ||> Set.fold (fun map finalDfaStateId ->
+            let acceptedRules : Set<RuleClauseIndex> =
+                // Get the regular vector represented by this DFA state.
+                compilationState.DfaStateToRegularVector
+                |> Map.find finalDfaStateId
+                // Determine which lexer rules are accepted by this regular vector.
+                |> RegularVector.acceptingElementsTagged
+                
+            Map.add finalDfaStateId acceptedRules map)
 
-// TEST
+
+
+    // Create a LexerDfa record from the compiled DFA.
+    {   Transitions = compilationState.Transitions;
+        RuleClauseFinalStates = Array.empty;    // TODO
+        InitialState = initialDfaStateId; }
+
 /// Creates pattern-matching DFAs from the lexer rules.
-let createLexerDFAs (spec : Specification) =
-(*  TODO :  Implement a function which performs a single
-            traversal over the lexer rules and implements
-            several pieces of functionality:
-            -   Validate the rules: look for invalid macros, etc.
-            -   Replace uses of macros with the pattern assigned to that macro *)
+let lexerSpec (spec : Specification) =
+    (*  TODO :  Implement a function which performs a single
+                traversal over the lexer rules and implements
+                several pieces of functionality:
+                -   Validate the rules: look for invalid macros, etc.
+                -   Replace uses of macros with the pattern assigned to that macro *)
+
+    // TODO : Once the pre-processing steps are complete,
+    // compile the lexer rules into individual DFAs.
+    // Use Array.Parallel.map for this to provide better
+    // performance for large specifications.
 
     //
-    raise <| System.NotImplementedException "createLexerDfa"
+    raise <| System.NotImplementedException "lexerSpec"
 
