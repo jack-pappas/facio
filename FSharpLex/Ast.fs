@@ -30,7 +30,7 @@ module private Unicode =
         // OPTIMIZE : If this takes "too long" to compute on-the-fly, we could pre-compute
         // the category sets and implement code which recreates the CharSets from the intervals
         // in the CharSets (not the individual values, which would be much slower).
-        let table = System.Collections.Generic.Dictionary<_,_> ()
+        let table = System.Collections.Generic.Dictionary<_,_> (30)
         for i = 0 to 65535 do
             /// The Unicode category of this character.
             let category = System.Char.GetUnicodeCategory (char i)
