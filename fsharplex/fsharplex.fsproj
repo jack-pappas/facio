@@ -48,6 +48,8 @@
     <Compile Include="Collections.fs" />
     <Compile Include="Regex.fs" />
     <Compile Include="Ast.fs" />
+    <Compile Include="Lexer.fs" />
+    <Compile Include="Parser.fs" />
     <Compile Include="Graph.fs" />
     <Compile Include="Dfa.fs" />
     <Compile Include="CodeGen.fs" />
