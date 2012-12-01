@@ -38,34 +38,50 @@ type LexerDfa = {
     InitialState : DfaStateId;
 }
 
+//
+type private CompilationState = {
+    //
+    Transitions : LexerDfaGraph<DfaState>;
+    /// Maps regular vectors to the DFA state representing them.
+    RegularVectorToDfaState : Map<RegularVector, DfaStateId>;
+    /// Maps a DFA state to the regular vector it represents.
+    DfaStateToRegularVector : Map<DfaStateId, RegularVector>;
+}
+
+//
+let inline private tryGetDfaState regVec (compilationState : CompilationState) =
+    Map.tryFind regVec compilationState.RegularVectorToDfaState
+
+//
+let inline private getRegularVector dfaState (compilationState : CompilationState) =
+    Map.find dfaState compilationState.DfaStateToRegularVector
+
+//
+let private createState regVec (compilationState : CompilationState) =
+    // Preconditions
+    // TODO
+
+    Debug.Assert (
+        not <| Map.containsKey regVec compilationState.RegularVectorToDfaState,
+        "The compilation state already contains a DFA state for this regular vector.")
+
+    /// The DFA state representing this regular vector.
+    let (dfaState : DfaStateId), transitions =
+        LexerDfaGraph.createVertex compilationState.Transitions
+
+    // Add the new DFA state to the compilation state.
+    let compilationState =
+        { compilationState with
+            RegularVectorToDfaState = Map.add regVec dfaState compilationState.RegularVectorToDfaState;
+            DfaStateToRegularVector = Map.add dfaState regVec compilationState.DfaStateToRegularVector;
+            Transitions = transitions; }
+
+    // Return the new DFA state and the updated compilation state.
+    dfaState, compilationState
+
 ////
 //[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 //module internal Dfa =
-//    /// Compute the one-step transition map for a _set_ of NFA states.
-//    // OPTIMIZE : Once the representation of the NFA transitions is changed to
-//    // allow faster lookup of out-edges from a state, this function could be
-//    // rewritten to be much simpler.
-//    let oneStepTransitions (states : Set<NfaStateId>) (nfa : LexerNfa) =
-//        let transitionEdges = nfa.Transitions.Edges
-//        (Map.empty, states)
-//        ||> Set.fold (fun moves state ->
-//            (moves, transitionEdges)
-//            ||> Map.fold (fun moves edgeEndpoints edge ->
-//                if edgeEndpoints.Source <> state then
-//                    moves
-//                else
-//                    match edge with
-//                    | Epsilon ->
-//                        moves
-//                    | Symbol sym ->
-//                        let targets =
-//                            match Map.tryFind sym moves with
-//                            | None ->
-//                                Set.singleton edgeEndpoints.Target
-//                            | Some targets ->
-//                                Set.add edgeEndpoints.Target targets
-//
-//                        Map.add sym targets moves))
 //
 //    // Private, recursive implementation of the epsilon-closure algorithm.
 //    // Uses a worklist-style algorithm to avoid non-tail-recursive-calls.
@@ -113,47 +129,6 @@ type LexerDfa = {
 //        Set.singleton state
 //        |> epsilonClosureImpl Set.empty nfa
 //
-//    //
-//    type CompilationState = {
-//        //
-//        Transitions : LexerDfaGraph<DfaState>;
-//        /// Maps sets of NFA states to the DFA state representing the set.
-//        NfaStateSetToDfaState : Map<Set<NfaStateId>, DfaStateId>;
-//        /// Maps a DFA state to the set of NFA states it represents.
-//        DfaStateToNfaStateSet : Map<DfaStateId, Set<NfaStateId>>;
-//    }
-//
-//    //
-//    let inline private tryGetDfaState nfaStateSet (compilationState : CompilationState) =
-//        Map.tryFind nfaStateSet compilationState.NfaStateSetToDfaState
-//
-//    //
-//    let inline private getNfaStateSet dfaState (compilationState : CompilationState) =
-//        Map.find dfaState compilationState.DfaStateToNfaStateSet
-//
-//    //
-//    let private createState nfaStateSet (compilationState : CompilationState) =
-//        // Preconditions
-//        if Set.isEmpty nfaStateSet then
-//            invalidArg "nfaStateSet" "A DFA state cannot be created for the empty set of NFA states."
-//
-//        Debug.Assert (
-//            not <| Map.containsKey nfaStateSet compilationState.NfaStateSetToDfaState,
-//            sprintf "The compilation state already contains a DFA state for the NFA state %O." nfaStateSet)
-//
-//        /// The DFA state representing this set of NFA states.
-//        let (dfaState : DfaStateId), transitions =
-//            LexerDfaGraph.createVertex compilationState.Transitions
-//
-//        // Add the new DFA state to the compilation state.
-//        let compilationState =
-//            { compilationState with
-//                NfaStateSetToDfaState = Map.add nfaStateSet dfaState compilationState.NfaStateSetToDfaState;
-//                DfaStateToNfaStateSet = Map.add dfaState nfaStateSet compilationState.DfaStateToNfaStateSet;
-//                Transitions = transitions; }
-//
-//        // Return the new DFA state and the updated compilation state.
-//        dfaState, compilationState
 //
 //    /// The main NFA -> DFA compilation function.
 //    let rec private compileRec (nfa : LexerNfa) (pending : Set<DfaStateId>) (compilationState : CompilationState) =
@@ -389,19 +364,81 @@ type LexerDfa = {
 
 open Regex
 
+//
+let rec private goto dfaStateId derivativeClass universe compilationState =
+    // Preconditions (assertions only)
+    assert (not <| CharSet.isEmpty derivativeClass)
+
+    // Choose an element from the derivative class; any element
+    // will do (which is the point behind the derivative classes).
+    let derivativeClassElement = CharSet.minElement derivativeClass
+
+    /// The regular vector represented by this DFA state.
+    let regVec = getRegularVector dfaStateId compilationState
+
+    // The derivative of the regular vector w.r.t. the chosen element.
+    let regVecDerivative =
+        RegularVector.derivative derivativeClassElement regVec
+
+    // If this is an error state, return without doing anything else.
+    if RegularVector.isEmpty regVecDerivative then
+        compilationState
+    else
+        //
+        let targetDfaStateId, compilationState =
+            // Get the existing DFA state for this regular vector, if one exists.
+            match tryGetDfaState regVec compilationState with
+            | Some targetDfaStateId ->
+                targetDfaStateId, compilationState
+
+            | None ->
+                // Create a new DFA state to represent this regular vector.
+                createState regVec compilationState
+
+        // Add a transition between the input DFA state and the
+        // DFA state representing the derivative regular vector.
+        let compilationState =
+            { compilationState with
+                Transitions =
+                    LexerDfaGraph.addEdge dfaStateId targetDfaStateId derivativeClass compilationState.Transitions; }
+
+        // Continue building the DFA from the derivative vector state.
+        explore regVecDerivative universe compilationState
 
 //
-let private regularVectorOfRules (spec : Specification) =
-    
+and private explore (regVec : RegularVector) universe compilationState =
+    /// The approximate set of derivative classes for this regular vector.
+    let derivativeClasses = RegularVector.derivativeClasses regVec universe
 
+    // Fold over the approximate set of derivative classes
+    // to compute the transitions from the current state.
+    (compilationState, derivativeClasses)
+    ||> Set.fold (fun compilationState derivativeClass ->
+        goto regVec derivativeClass universe compilationState)
 
+//
+let private rulePatternsToDfa (rulePatterns : RegularVector) =
+    // Preconditions
+    if Array.isEmpty rulePatterns then
+        invalidArg "rulePatterns" "The rule must contain at least one (1) pattern."
 
+    // The initial DFA compilation state.
+    let initialDfaStateId, compilationState =
+        0<_>, ()    // TODO
+
+    // Compile the DFA.
+    let compilationState =
+        ()
+
+    // Create a LexerDfa record from the compiled DFA.
+    // TODO
+
+    raise <| System.NotImplementedException "rulePatternsToDfa"
     ()
 
-
 // TEST
-/// Compute a DFA for the lexer.
-let createLexerDfa (spec : Specification) =
+/// Creates pattern-matching DFAs from the lexer rules.
+let createLexerDFAs (spec : Specification) =
 (*  TODO :  Implement a function which performs a single
             traversal over the lexer rules and implements
             several pieces of functionality:
@@ -409,9 +446,51 @@ let createLexerDfa (spec : Specification) =
             -   Replace uses of macros with the pattern assigned to that macro
             -   Compute the "universe" of characters used within the lexer. *)
 
-
     //
-    //let initialState = RegularVector.derivative Regex.Epsilon
+    
 
+    // ruleClauseVector = An array containing the pattern of each lexer rule clause.
+    // ruleClauseIndexMap = Maps indicies of the 'ruleClauseVector' to a
+    //                      (RuleIdentifier, RuleClauseIndex) identifying the rule clause.
+    let ruleClauseVector, ruleClauseIndexMap =
+        let ruleClauseList, ruleClauseIndexMap =
+            (([], Map.empty), spec.Rules)
+            ||> Map.fold (fun (ruleClauseList, ruleClauseIndexMap) ruleId clauses ->
+                ((ruleClauseList, ruleClauseIndexMap, 0), clauses)
+                ||> List.fold (fun (ruleClauseList, ruleClauseIndexMap, clauseIndex) clause ->
+                    let taggedClauseIndex : RuleClauseIndex = LanguagePrimitives.Int32WithMeasure clauseIndex
+                    clause.Pattern :: ruleClauseList,
+                    Map.add ruleClauseIndexMap.Count (ruleId, taggedClauseIndex) ruleClauseIndexMap,
+                    clauseIndex + 1)
+                // Discard the clause index
+                |> fun (x, y, z) -> x, y)
 
-    ()
+        /// The total number of rule clauses in the lexer specification.
+        let ruleClauseCount = List.length ruleClauseList
+
+        // Reverse the list and convert it into an array.
+        List.toArray (List.rev ruleClauseList),
+        // Since the list is reversed, we need to perform the
+        // equivalent operation on the keys of the map.
+        (Map.empty, ruleClauseIndexMap)
+        ||> Map.fold (fun reversedMap ruleClauseVectorIndex ruleClauseId ->
+            Map.add ((ruleClauseCount - 1) - ruleClauseVectorIndex) ruleClauseId reversedMap)
+
+    // Convert the rule patterns to simple regexes.
+    // This vector represents the initial DFA state.
+    let ruleClauseVector =
+        Array.map ExtendedRegex.ToRegex ruleClauseVector
+
+    // The initial DFA compilation state.
+    let initialDfaStateId, compilationState =
+        0<_>, ()    // TODO
+
+    // Compile the DFA.
+    let compilationState =
+        ()
+
+    // Create a LexerDfa record for the compiled DFA.
+    // TODO
+
+    raise <| System.NotImplementedException "createLexerDfa"
+

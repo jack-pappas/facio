@@ -28,15 +28,7 @@ open SpecializedCollections
 type Regex =
     /// The empty string.
     | Epsilon
-    /// The empty language.
-    | Empty    
-    /// Any character except for newline ('\n').
-    | Any
-    /// A character.
-    | Character of char
     /// A set of characters.
-    // NOTE : Whenever a Regex is in "canonical" form, this set
-    // will never contain fewer than two (2) characters.
     | CharacterSet of CharSet
     /// Negation.
     | Negate of Regex
@@ -49,6 +41,15 @@ type Regex =
     | Or of Regex * Regex
     /// Boolean AND of two regular expressions.
     | And of Regex * Regex
+
+    (* TODO :   Remove these -- we'll leave them in ExtendedRegex for convenience
+                but they can all be handled by the CharacterSet case here. *)
+    /// The empty language.
+    | Empty
+    /// Any character except for newline ('\n').
+    | Any
+    /// A character.
+    | Character of char
 
     //
     static member private IsNullableImpl regex cont =
@@ -138,7 +139,7 @@ type Regex =
         | _ ->
             CharacterSet charSet
 
-    //
+    /// Implementation of the canonicalization function.
     static member private CanonicalizeImpl (regex : Regex) (charUniverse : CharSet) (cont : Regex -> Regex) =
         match regex with
         | Empty
@@ -378,7 +379,7 @@ type RegularVector = Regex[]
 module RegularVector =
     /// Compute the derivative of a regular vector
     /// with respect to the given symbol.
-    let inline derivative symbol (regVec : RegularVector) =
+    let inline derivative symbol (regVec : RegularVector) : RegularVector =
         Array.map (Regex.Derivative symbol) regVec
 
     /// Determines if the regular vector is nullable,
@@ -387,6 +388,20 @@ module RegularVector =
         // A regular vector is nullable iff any of
         // the component regexes are nullable.
         Array.exists Regex.IsNullable regVec
+
+    /// The indices of the element expressions (if any)
+    /// that accept the empty string (epsilon).
+    let acceptingElements (regVec : RegularVector) =
+        /// The indices of the expressions accepting the empty string.
+        let mutable accepting = Set.empty
+
+        let len = Array.length regVec
+        for i = 0 to len - 1 do
+            if Regex.IsNullable regVec.[i] then
+                accepting <- Set.add i accepting
+
+        // Return the computed set of indices.
+        accepting
 
     /// Determines if a regular vector is an empty vector. Note that an
     /// empty regular vector is *not* the same thing as an empty array.
@@ -417,7 +432,6 @@ module RegularVector =
         // is the intersection of the approximate sets of derivative classes of it's elements.
         |> Array.reduce (
             FuncConvert.FuncFromTupled Regex.IntersectionOfDerivativeClasses)
-
 
 
 /// An extended regular expression: a standard regular expression
@@ -462,41 +476,29 @@ type ExtendedRegex =
     //
     static member private ToRegexImpl (extRegex : ExtendedRegex) cont : Regex =
         match extRegex with
-        | ExtendedRegex.Empty ->
-            cont Regex.Empty
         | ExtendedRegex.Epsilon ->
-            cont Regex.Epsilon
-        | ExtendedRegex.Any ->
-            cont Regex.Any
-        | ExtendedRegex.Character c ->
-            Regex.Character c
-            |> cont
+            cont Regex.Epsilon        
         | ExtendedRegex.CharacterSet charSet ->
             Regex.CharacterSet charSet
             |> cont
-
         | ExtendedRegex.Negate r ->
             ExtendedRegex.ToRegexImpl r <| fun r ->
                 Regex.Negate r
                 |> cont
-
         | ExtendedRegex.Star r ->
             ExtendedRegex.ToRegexImpl r <| fun r ->
                 Regex.Star r
                 |> cont
-
         | ExtendedRegex.Concat (r, s) ->
             ExtendedRegex.ToRegexImpl r <| fun r ->
             ExtendedRegex.ToRegexImpl s <| fun s ->
                 Regex.Concat (r, s)
                 |> cont
-
         | ExtendedRegex.Or (r, s) ->
             ExtendedRegex.ToRegexImpl r <| fun r ->
             ExtendedRegex.ToRegexImpl s <| fun s ->
                 Regex.Or (r, s)
                 |> cont
-
         | ExtendedRegex.And (r, s) ->
             ExtendedRegex.ToRegexImpl r <| fun r ->
             ExtendedRegex.ToRegexImpl s <| fun s ->
@@ -504,18 +506,24 @@ type ExtendedRegex =
                 |> cont
 
         (* These extended patterns can be rewritten using the simple patterns. *)
+        | ExtendedRegex.Empty ->
+            Regex.CharacterSet CharSet.empty
+            |> cont
+        | ExtendedRegex.Any ->
+            cont Regex.Any
+        | ExtendedRegex.Character c ->
+            Regex.Character c
+            |> cont
         | ExtendedRegex.OneOrMore r ->
             ExtendedRegex.ToRegexImpl r <| fun r ->
                 // Rewrite r+ as rr*
                 Regex.Concat (r, Regex.Star r)
                 |> cont
-
         | ExtendedRegex.Optional r ->
             ExtendedRegex.ToRegexImpl r <| fun r ->
                 // Rewrite r? as (|r)
                 Regex.Concat (Regex.Epsilon, r)
                 |> cont
-
         | ExtendedRegex.Repetition (r, m, n) ->
             // If not specified, the lower bound defaults to zero (0).
             let m = defaultArg m GenericZero

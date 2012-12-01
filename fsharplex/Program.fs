@@ -34,6 +34,7 @@ module internal AssemblyInfo =
     // Appease the F# compiler
     do ()
 
+
 //// TEMP : Only needed to compute tables.
 //open System.Collections.Generic
 //open System.Globalization
@@ -65,22 +66,22 @@ module internal AssemblyInfo =
 //        |> CharSet.intervals
 //        |> Seq.toArray)
 
-open SpecializedCollections
-open Regex
-
-let testRegex =
-    Regex.Or (
-        Regex.Or (
-            Regex.Character 'a',
-            Regex.Concat (Regex.Character 'b', Regex.Character 'a')),
-        Regex.Character 'c')
-
-let testUniverse =
-    CharSet.empty
-    |> CharSet.addRange 'a' 'z'
-
-let derivativeClasses =
-    Regex.DerivativeClasses (testRegex, testUniverse)
+//open SpecializedCollections
+//open Regex
+//
+//let testRegex =
+//    Regex.Or (
+//        Regex.Or (
+//            Regex.Character 'a',
+//            Regex.Concat (Regex.Character 'b', Regex.Character 'a')),
+//        Regex.Character 'c')
+//
+//let testUniverse =
+//    CharSet.empty
+//    |> CharSet.addRange 'a' 'z'
+//
+//let derivativeClasses =
+//    Regex.DerivativeClasses (testRegex, testUniverse)
 
 
 printfn "Press any key to exit..."

@@ -72,7 +72,7 @@ type LexerDfaGraph<[<Measure>]'Vertex>
         Map.tryFind key adjacencyMap
 
     //
-    member __.AddEdge (source : int<'Vertex>, target : int<'Vertex>, edge : char) =
+    member __.AddEdge (source : int<'Vertex>, target : int<'Vertex>, edge : CharSet) =
         // Preconditions
         if int source <= 0 || int source > vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
@@ -81,17 +81,18 @@ type LexerDfaGraph<[<Measure>]'Vertex>
 
         let key = EdgeEndpoints (source, target)
 
-        //
-        let edgeSet =
-            match Map.tryFind key adjacencyMap with
-            | Some edgeSet ->
-                CharSet.add edge edgeSet
-            | None ->
-                CharSet.singleton edge
+//        //
+//        let edgeSet =
+//            match Map.tryFind key adjacencyMap with
+//            | Some edgeSet ->
+//                CharSet.add edge edgeSet
+//            | None ->
+//                CharSet.singleton edge
 
         LexerDfaGraph (
             vertexCount,
-            Map.add key edgeSet adjacencyMap)
+            Map.add key edge adjacencyMap)
+            //Map.add key edgeSet adjacencyMap)
 
         
 /// Functions on LexerDfaGraph.
