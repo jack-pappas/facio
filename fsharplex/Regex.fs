@@ -191,6 +191,12 @@ type Regex =
             // This regex is canonical
             cont ``r*``
 
+        | Concat (Empty, _)
+        | Concat (_, Empty) ->
+            cont Empty
+        | Concat (Epsilon, r)
+        | Concat (r, Epsilon) ->
+            Regex.CanonicalizeImpl r charUniverse cont
         | Concat (r, Concat (s, t)) ->
             // Rewrite the expression so it's left-associative.
             let regex = Concat (Concat (r, s), t)
@@ -203,9 +209,9 @@ type Regex =
                 | Empty, _
                 | _, Empty ->
                     cont Empty
-                | Epsilon, regex
-                | regex, Epsilon ->
-                    Regex.CanonicalizeImpl regex charUniverse cont
+                | Epsilon, r'
+                | r', Epsilon ->
+                    Regex.CanonicalizeImpl r' charUniverse cont
                 | r', s' ->
                     Concat (r', s')
                     |> cont
@@ -226,19 +232,31 @@ type Regex =
                 // Try to simplify the expression, using the canonicalized components.
                 match r', s' with
                 | r', s' when r' = s' ->
-                    r'
+                    cont r'
+
+                | Empty, r
+                | r, Empty ->
+                    Regex.CanonicalizeImpl r charUniverse cont
+
+                | Any, _
+                | _, Any ->
+                    cont Any
+
                 | (Character c1 as charRegex), Character c2 ->
-                    if c1 = c2 then charRegex
+                    if c1 = c2 then
+                        charRegex
                     else
                         CharSet.empty
                         |> CharSet.add c1
                         |> CharSet.add c2
                         |> CharacterSet
+                    |> cont
 
                 | Character c, CharacterSet charSet
                 | CharacterSet charSet, Character c ->
                     CharSet.add c charSet
                     |> CharacterSet
+                    |> cont
 
                 | CharacterSet charSet1, CharacterSet charSet2 ->
                     // 'Or' is the disjunction (union) of two Regexes.
@@ -246,6 +264,7 @@ type Regex =
 
                     // Return the simplest Regex for the union set.
                     Regex.SimplifyCharacterSet charSetUnion
+                    |> cont
 
                 | r', s' ->
                     // Sort the components before returning; this takes care
@@ -254,7 +273,7 @@ type Regex =
                     // F#'s structural equality.
                     if r' < s' then Or (r', s')
                     else Or (s', r')
-                |> cont
+                    |> cont
         
         | And (Empty, _)
         | And (_, Empty) ->
@@ -272,19 +291,31 @@ type Regex =
                 // Try to simplify the expression, using the canonicalized components.
                 match r', s' with
                 | r', s' when r' = s' ->
-                    r'
+                    cont r'
+
+                | Empty, _
+                | _, Empty ->
+                    cont Empty
+
+                | Any, r
+                | r, Any ->
+                    Regex.CanonicalizeImpl r charUniverse cont
+
                 | (Character c1 as charRegex), Character c2 ->
-                    if c1 = c2 then charRegex
+                    if c1 = c2 then
+                        charRegex
                     else
                         // TODO : Emit a warning to TraceListener?
                         // The 'And' case represents a conjunction (intersection) of two Regexes;
                         // since the characters are different, the intersection must be empty.
                         Empty
+                    |> cont
 
                 | Character c, CharacterSet charSet
                 | CharacterSet charSet, Character c ->
                     CharSet.add c charSet
                     |> CharacterSet
+                    |> cont
 
                 | CharacterSet charSet1, CharacterSet charSet2 ->
                     // 'And' is the conjunction (intersection) of two Regexes.
@@ -292,6 +323,7 @@ type Regex =
 
                     // Return the simplest Regex for the intersection set.
                     Regex.SimplifyCharacterSet charSetIntersection
+                    |> cont
 
                 | r', s' ->
                     // Sort the components before returning; this takes care
@@ -300,7 +332,7 @@ type Regex =
                     // F#'s structural equality.
                     if r' < s' then And (r', s')
                     else And (s', r')
-                |> cont
+                    |> cont
 
     /// Creates a new Regex in canonical form from the given Regex.
     static member Canonicalize (regex : Regex, universe) : Regex =

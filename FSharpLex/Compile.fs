@@ -20,8 +20,8 @@ open Ast
 /// DFA compilation state.
 [<DebuggerDisplay(
     "States = {Transitions.VertexCount}, \
-     Transition Sets = {Transitions.EdgeSetCount}, \
-     FinalStates = {FinalStates.Count}")>]
+     Final States = {FinalStates.Count}, \
+     Transition Sets = {Transitions.EdgeSetCount}")>]
 type private CompilationState = {
     //
     Transitions : LexerDfaGraph;
@@ -204,7 +204,7 @@ let (*private*) rulePatternsToDfa (rulePatterns : RegularVector) : LexerRuleDfa 
     let universe = CharSet.empty
     let universe =
         CharSet.empty
-        |> CharSet.addRange 'a' 'z'
+        |> CharSet.addRange 'a' 'c'
     //raise <| System.NotImplementedException "rulePatternsToDfa"
 
     // The initial DFA compilation state.
@@ -221,20 +221,37 @@ let (*private*) rulePatternsToDfa (rulePatterns : RegularVector) : LexerRuleDfa 
         createDfa universe initialPending compilationState
 
     //
-    let qq =
-        // TEST
-        (Map.empty, compilationState.FinalStates)
-        ||> Set.fold (fun map finalDfaStateId ->
-            let acceptedRules : Set<RuleClauseIndex> =
-                // Get the regular vector represented by this DFA state.
-                compilationState.DfaStateToRegularVector
-                |> Map.find finalDfaStateId
-                // Determine which lexer rules are accepted by this regular vector.
-                |> RegularVector.acceptingElementsTagged
+    let ruleAcceptingStates =
+        //
+        let rulesAcceptedByDfaState =
+            // TEST
+            (Map.empty, compilationState.FinalStates)
+            ||> Set.fold (fun map finalDfaStateId ->
+                let acceptedRules : Set<RuleClauseIndex> =
+                    // Get the regular vector represented by this DFA state.
+                    compilationState.DfaStateToRegularVector
+                    |> Map.find finalDfaStateId
+                    // Determine which lexer rules are accepted by this regular vector.
+                    |> RegularVector.acceptingElementsTagged
                 
-            Map.add finalDfaStateId acceptedRules map)
+                Map.add finalDfaStateId acceptedRules map)
 
+        (Map.empty, rulesAcceptedByDfaState)
+        ||> Map.fold (fun ruleAcceptingStates finalDfaStateId acceptedRules ->
+            Debug.Assert (
+                not <| Set.isEmpty acceptedRules,
+                sprintf "DFA state '%i' is marked as a final state but does not accept any rules." (int finalDfaStateId))
 
+            (ruleAcceptingStates, acceptedRules)
+            ||> Set.fold (fun ruleAcceptingStates acceptedRuleIndex ->
+                let acceptingStates =
+                    match Map.tryFind acceptedRuleIndex ruleAcceptingStates with
+                    | Some acceptingStates ->
+                        Set.add finalDfaStateId acceptingStates
+                    | None ->
+                        Set.singleton finalDfaStateId
+
+                Map.add acceptedRuleIndex acceptingStates ruleAcceptingStates))
 
     // Create a LexerDfa record from the compiled DFA.
     {   Transitions = compilationState.Transitions;
