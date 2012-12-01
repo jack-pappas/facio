@@ -8,7 +8,7 @@ See LICENSE.TXT for licensing details.
 
 //
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module FSharpLex.Dfa
+module FSharpLex.Compile
 
 open System.Diagnostics
 open SpecializedCollections
@@ -17,16 +17,11 @@ open Regex
 open Ast
 
 
-/// DFA state.
-[<Measure>] type DfaState
-/// Unique identifier for a state within a DFA.
-type DfaStateId = int<DfaState>
-
 /// A deterministic finite automaton (DFA)
 /// implementing a lexer specification.
 type LexerDfa = {
     /// The transition graph of the DFA.
-    Transitions : LexerDfaGraph<DfaState>;
+    Transitions : LexerDfaGraph;
     /// For a DFA state, maps the out-edges (transitions) from that state
     /// to the state targeted by the transition.
     TransitionsBySymbol : Map<DfaStateId, Map<char, DfaStateId>>;
@@ -41,7 +36,7 @@ type LexerDfa = {
 //
 type private CompilationState = {
     //
-    Transitions : LexerDfaGraph<DfaState>;
+    Transitions : LexerDfaGraph;
     /// Maps regular vectors to the DFA state representing them.
     RegularVectorToDfaState : Map<RegularVector, DfaStateId>;
     /// Maps a DFA state to the regular vector it represents.

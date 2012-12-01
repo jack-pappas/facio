@@ -35,22 +35,26 @@ module internal AssemblyInfo =
     do ()
 
 
-//open SpecializedCollections
-//open Regex
-//
-//let testRegex =
-//    Regex.Or (
-//        Regex.Or (
-//            Regex.Character 'a',
-//            Regex.Concat (Regex.Character 'b', Regex.Character 'a')),
-//        Regex.Character 'c')
-//
-//let testUniverse =
-//    CharSet.empty
-//    |> CharSet.addRange 'a' 'z'
-//
-//let derivativeClasses =
-//    Regex.DerivativeClasses (testRegex, testUniverse)
+open SpecializedCollections
+open Regex
+
+let testRegex =
+    Regex.Or (
+        Regex.Or (
+            Regex.Character 'a',
+            Regex.Concat (Regex.Character 'b', Regex.Character 'a')),
+        Regex.Character 'c')
+
+let testUniverse =
+    CharSet.empty
+    |> CharSet.addRange 'a' 'z'
+
+let derivativeClasses =
+    Regex.DerivativeClasses (testRegex, testUniverse)
+
+// TEST : Compile a DFA for this regex.
+let testDfa =
+    Compile.rulePatternsToDfa [| testRegex |]
 
 
 printfn "Press any key to exit..."

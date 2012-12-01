@@ -14,15 +14,21 @@ open LanguagePrimitives
 open SpecializedCollections
 
 
-/// The endpoints of an edge in a graph.
-/// Used as a key for sparse graph implementations because
-/// it's more efficient than an F# tuple.
+/// DFA state.
+[<Measure>] type DfaState
+/// Unique identifier for a state within a DFA.
+type DfaStateId = int<DfaState>
+
+/// <summary>The source and target state of a transition
+/// edge in an NFA transition graph.</summary>
+/// <remarks>Used as a key for sparse graph implementations
+/// because it's more efficient than an F# tuple.</remarks>
 [<Struct>]
-type EdgeEndpoints< [<Measure>] 'Vertex> =
+type TransitionEdgeKey =
     /// The source vertex of the edge.
-    val Source : int<'Vertex>
+    val Source : DfaStateId
     /// The target vertex of the edge.
-    val Target : int<'Vertex>
+    val Target : DfaStateId
 
     new (source, target) =
         {   Source = source;
@@ -33,11 +39,14 @@ type EdgeEndpoints< [<Measure>] 'Vertex> =
 /// modified for better performance when creating DFAs for lexers.</summary>
 /// <remarks>Assumes vertex ids are assigned in order (i.e., there are no gaps in the values),
 /// starting at zero (0).</remarks>
-type LexerDfaGraph<[<Measure>]'Vertex>
-        private (vertexCount : int, adjacencyMap : Map<EdgeEndpoints<'Vertex>, CharSet>) =
+type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdgeKey, CharSet>) =
+    //
+    static let empty =
+        LexerDfaGraph (GenericZero, Map.empty)
+
     //
     static member internal Empty
-        with get () = LexerDfaGraph<'Vertex> (GenericZero, Map.empty)
+        with get () = empty
 
     //
     member __.IsEmpty
@@ -61,25 +70,25 @@ type LexerDfaGraph<[<Measure>]'Vertex>
             adjacencyMap)
 
     //
-    member __.TryGetEdgeSet (source : int<'Vertex>, target : int<'Vertex>) =
+    member __.TryGetEdgeSet (source : DfaStateId, target : DfaStateId) =
         // Preconditions
         if int source <= 0 || int source > vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
         elif int target <= 0 || int target > vertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        let key = EdgeEndpoints (source, target)
+        let key = TransitionEdgeKey (source, target)
         Map.tryFind key adjacencyMap
 
     //
-    member __.AddEdge (source : int<'Vertex>, target : int<'Vertex>, edge : CharSet) =
+    member __.AddEdge (source : DfaStateId, target : DfaStateId, edge : CharSet) =
         // Preconditions
         if int source <= 0 || int source > vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
         elif int target <= 0 || int target > vertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        let key = EdgeEndpoints (source, target)
+        let key = TransitionEdgeKey (source, target)
 
 //        //
 //        let edgeSet =
@@ -99,22 +108,21 @@ type LexerDfaGraph<[<Measure>]'Vertex>
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module LexerDfaGraph =
     /// The empty graph.
-    let empty<[<Measure>]'Vertex> =
-        LexerDfaGraph<'Vertex>.Empty
+    let empty = LexerDfaGraph.Empty
 
     /// Determines if the graph is empty -- i.e., if it's vertex set is empty.
-    let inline isEmpty (graph : LexerDfaGraph<'Vertex>) =
+    let inline isEmpty (graph : LexerDfaGraph) =
         graph.IsEmpty
 
     //
-    let inline createVertex (graph : LexerDfaGraph<'Vertex>) =
+    let inline createVertex (graph : LexerDfaGraph) =
         graph.CreateVertex ()
 
     //
-    let inline addEdge source target edge (graph : LexerDfaGraph<'Vertex>) =
+    let inline addEdge source target edge (graph : LexerDfaGraph) =
         graph.AddEdge (source, target, edge)
 
     //
-    let inline tryGetEdgeSet source target (graph : LexerDfaGraph<'Vertex>) =
+    let inline tryGetEdgeSet source target (graph : LexerDfaGraph) =
         graph.TryGetEdgeSet (source, target)
 

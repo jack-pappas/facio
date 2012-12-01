@@ -51,7 +51,7 @@
     <Compile Include="Lexer.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="Graph.fs" />
-    <Compile Include="Dfa.fs" />
+    <Compile Include="Compile.fs" />
     <Compile Include="CodeGen.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
