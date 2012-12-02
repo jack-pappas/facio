@@ -84,9 +84,17 @@ let testSpec = {
             ];
     StartRule = "TestRule"; }
 
-let testDfa =
+let compiledTestSpec =
     Compile.lexerSpec testSpec {
         Unicode = false; }
+
+let generatedCode =
+    match compiledTestSpec with
+    | Choice2Of2 errors ->
+        errors
+        |> Array.iter System.Console.WriteLine
+    | Choice1Of2 compiledTestSpec ->
+        CodeGen.generateString compiledTestSpec
 
 
 printfn "Press any key to exit..."

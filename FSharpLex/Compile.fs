@@ -181,6 +181,11 @@ let rec private createDfa universe pending compilationState =
             // Continue processing recursively.
             createDfa universe pending compilationState
 
+/// Lexer compilation options.
+type CompilationOptions = {
+    /// Enable unicode support in the lexer.
+    Unicode : bool;
+}
 
 /// A deterministic finite automaton (DFA) implementing a lexer rule.
 [<DebuggerDisplay(
@@ -190,23 +195,33 @@ type LexerRuleDfa = {
     /// The transition graph of the DFA.
     Transitions : LexerDfaGraph;
     //
-    RuleClauseFinalStates : DfaStateId[];
+    RuleClauseFinalStates : Set<DfaStateId>[];
     /// The initial state of the DFA.
     InitialState : DfaStateId;
 }
 
+/// A compiled lexer rule.
+type CompiledRule = {
+    /// The DFA compiled from the patterns of the rule clauses.
+    Dfa : LexerRuleDfa;
+    /// The semantic actions to be executed when the
+    /// rule clauses are matched.
+    RuleClauseActions : CodeFragment[];
+}
+
 //
-let private rulePatternsToDfa (rulePatterns : RegularVector) : LexerRuleDfa =
+let private rulePatternsToDfa (rulePatterns : RegularVector) (options : CompilationOptions) : LexerRuleDfa =
     // Preconditions
     if Array.isEmpty rulePatterns then
         invalidArg "rulePatterns" "The rule must contain at least one (1) pattern."
 
-    // TODO : Compute the "universe" for this rule pattern.
-    let universe = CharSet.empty
+    // Determine which "universe" to use when compiling this
+    // pattern based on the compilation settings.
     let universe =
-        CharSet.empty
-        |> CharSet.addRange 'a' 'c'
-    //raise <| System.NotImplementedException "rulePatternsToDfa"
+        if options.Unicode then
+            EncodingCharSet.unicode
+        else
+            EncodingCharSet.ascii
 
     // The initial DFA compilation state.
     let initialDfaStateId, compilationState =
@@ -225,7 +240,6 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) : LexerRuleDfa =
     let ruleAcceptingStates =
         //
         let rulesAcceptedByDfaState =
-            // TEST
             (Map.empty, compilationState.FinalStates)
             ||> Set.fold (fun map finalDfaStateId ->
                 let acceptedRules : Set<RuleClauseIndex> =
@@ -237,68 +251,56 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) : LexerRuleDfa =
                 
                 Map.add finalDfaStateId acceptedRules map)
 
-        (Map.empty, rulesAcceptedByDfaState)
-        ||> Map.fold (fun ruleAcceptingStates finalDfaStateId acceptedRules ->
+        let ruleAcceptingStates = Array.create (Array.length rulePatterns) Set.empty
+
+        rulesAcceptedByDfaState
+        |> Map.iter (fun finalDfaStateId acceptedRules ->
             Debug.Assert (
                 not <| Set.isEmpty acceptedRules,
                 sprintf "DFA state '%i' is marked as a final state but does not accept any rules." (int finalDfaStateId))
 
-            (ruleAcceptingStates, acceptedRules)
-            ||> Set.fold (fun ruleAcceptingStates acceptedRuleIndex ->
-                let acceptingStates =
-                    match Map.tryFind acceptedRuleIndex ruleAcceptingStates with
-                    | Some acceptingStates ->
-                        Set.add finalDfaStateId acceptingStates
-                    | None ->
-                        Set.singleton finalDfaStateId
+            acceptedRules
+            |> Set.iter (fun acceptedRuleIndex ->
+                ruleAcceptingStates.[int acceptedRuleIndex] <-
+                    ruleAcceptingStates.[int acceptedRuleIndex]
+                    |> Set.add finalDfaStateId))
 
-                Map.add acceptedRuleIndex acceptingStates ruleAcceptingStates))
+        ruleAcceptingStates
 
     // Create a LexerDfa record from the compiled DFA.
     {   Transitions = compilationState.Transitions;
-        RuleClauseFinalStates = Array.empty;    // TODO
+        RuleClauseFinalStates = ruleAcceptingStates;
         InitialState = initialDfaStateId; }
-
-/// Lexer compilation options.
-type CompilationOptions = {
-    /// Enable unicode support in the lexer.
-    Unicode : bool;
-}
-
-/// A compiled lexer rule.
-type CompiledRule = {
-    /// The DFA compiled from the patterns of the rule clauses.
-    Dfa : LexerRuleDfa;
-    /// The semantic actions to be executed when the
-    /// rule clauses are matched.
-    RuleClauseActions : CodeFragment[];
-}
 
 //
 let private compileRule (macros : Map<MacroIdentifier, _>) (rule : Rule) (options : CompilationOptions) : Choice<CompiledRule, (*TEMP*)string[]> =    
     // TODO : Replace uses of macros with the pattern assigned to that macro
     //        Also validate the rule patterns
 
-    // TODO : Convert the LexerPatterns to Regexes
+    let ruleClauses = List.toArray rule
+
     //
-    let ruleClauseRegexes : RegularVector =
-        rule
-        |> List.toArray
-        |> Array.map (fun clause ->
-            clause.Pattern
-            |> LexerPattern.ToRegex)
+    let compiledPatternDfa =
+        // Convert the LexerPatterns to Regexes
+        let ruleClauseRegexes : RegularVector =
+            ruleClauses
+            |> Array.map (fun clause ->
+                LexerPattern.ToRegex clause.Pattern)
+        // Compile the patterns into a DFA.
+        rulePatternsToDfa ruleClauseRegexes options
 
-    // Compile the patterns into a DFA.
-    let compiledPatternDfa = rulePatternsToDfa ruleClauseRegexes
-
-    // TODO
-    raise <| System.NotImplementedException "compileRule"
-    Choice2Of2 Array.empty
+    // Create a CompiledRule record from the compiled DFA.
+    Choice1Of2 {
+        Dfa = compiledPatternDfa;
+        RuleClauseActions =
+            ruleClauses
+            |> Array.map (fun clause ->
+                clause.Action); }
 
 /// Pre-processes a list of macros from a lexer specification.
 /// The macros are validated to verify correct usage, then macro
 /// expansion is performed to remove any nested macros.
-let private preprocessMacros (macros : (MacroIdentifier * LexerPattern) list) (options : CompilationOptions) : Choice<Map<_,_>, string[]> =
+let private preprocessMacros (macros : (MacroIdentifier * LexerPattern)[]) (options : CompilationOptions) : Choice<Map<_,_>, string[]> =
     (* TODO :   Validation rules:
                 - Macros are not allowed to be recursive
                 - Enfore macro scoping -- macros can only be used after they're declared.
@@ -326,8 +328,16 @@ type CompiledSpecification = {
 
 /// Creates pattern-matching DFAs from the lexer rules.
 let lexerSpec (spec : Specification) (options : CompilationOptions) : Choice<CompiledSpecification, (*TEMP*)string[]> =
+    // TEMP : Convert the list of macros to an array to avoid
+    // confusion about the ordering; later, we should be able
+    // to perform this conversion directly within the parser.
+    let macros =
+        spec.Macros
+        |> List.rev
+        |> List.toArray
+
     // Pre-process the macros.
-    match preprocessMacros spec.Macros options with
+    match preprocessMacros macros options with
     | Choice2Of2 errors ->
         Choice2Of2 errors
     | Choice1Of2 expandedMacros ->

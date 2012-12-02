@@ -24,7 +24,7 @@ type MacroIdentifier = string
 
 //
 [<RequireQualifiedAccess>]
-module private EncodingCharSet =
+module internal EncodingCharSet =
     open System
 
     //
