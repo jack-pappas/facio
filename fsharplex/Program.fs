@@ -75,16 +75,18 @@ let ``ac + bc`` =
 let testSpec = {
     Header = None;
     Footer = None;
-    Macros = Map.empty;
+    Macros = List.empty;
     Rules =
         Map.empty
         |> Map.add "TestRule" [
             { Pattern = ``ac + bc``; Action = ""; };
             { Pattern = ``(a + ba) + c``; Action = ""; };
-            ]; }
+            ];
+    StartRule = "TestRule"; }
 
 let testDfa =
-    Compile.lexerSpec testSpec
+    Compile.lexerSpec testSpec {
+        Unicode = false; }
 
 
 printfn "Press any key to exit..."

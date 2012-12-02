@@ -33,7 +33,8 @@ type private CompilationState = {
     DfaStateToRegularVector : Map<DfaStateId, RegularVector>;
 }
 
-//
+/// Functional operators related to the CompilationState record.
+/// These operators are designed to adhere to either the Reader or State monads.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module private CompilationState =
     /// Empty compilation state.
@@ -195,7 +196,7 @@ type LexerRuleDfa = {
 }
 
 //
-let (*private*) rulePatternsToDfa (rulePatterns : RegularVector) : LexerRuleDfa =
+let private rulePatternsToDfa (rulePatterns : RegularVector) : LexerRuleDfa =
     // Preconditions
     if Array.isEmpty rulePatterns then
         invalidArg "rulePatterns" "The rule must contain at least one (1) pattern."
@@ -258,19 +259,123 @@ let (*private*) rulePatternsToDfa (rulePatterns : RegularVector) : LexerRuleDfa 
         RuleClauseFinalStates = Array.empty;    // TODO
         InitialState = initialDfaStateId; }
 
-/// Creates pattern-matching DFAs from the lexer rules.
-let lexerSpec (spec : Specification) =
-    (*  TODO :  Implement a function which performs a single
-                traversal over the lexer rules and implements
-                several pieces of functionality:
-                -   Validate the rules: look for invalid macros, etc.
-                -   Replace uses of macros with the pattern assigned to that macro *)
+/// Lexer compilation options.
+type CompilationOptions = {
+    /// Enable unicode support in the lexer.
+    Unicode : bool;
+}
 
-    // TODO : Once the pre-processing steps are complete,
-    // compile the lexer rules into individual DFAs.
-    // Use Array.Parallel.map for this to provide better
-    // performance for large specifications.
+/// A compiled lexer rule.
+type CompiledRule = {
+    /// The DFA compiled from the patterns of the rule clauses.
+    Dfa : LexerRuleDfa;
+    /// The semantic actions to be executed when the
+    /// rule clauses are matched.
+    RuleClauseActions : CodeFragment[];
+}
 
+//
+let private compileRule (macros : Map<MacroIdentifier, _>) (rule : Rule) (options : CompilationOptions) : Choice<CompiledRule, (*TEMP*)string[]> =    
+    // TODO : Replace uses of macros with the pattern assigned to that macro
+    //        Also validate the rule patterns
+
+    // TODO : Convert the LexerPatterns to Regexes
     //
-    raise <| System.NotImplementedException "lexerSpec"
-    ()
+    let ruleClauseRegexes : RegularVector =
+        rule
+        |> List.toArray
+        |> Array.map (fun clause ->
+            clause.Pattern
+            |> LexerPattern.ToRegex)
+
+    // Compile the patterns into a DFA.
+    let compiledPatternDfa = rulePatternsToDfa ruleClauseRegexes
+
+    // TODO
+    raise <| System.NotImplementedException "compileRule"
+    Choice2Of2 Array.empty
+
+/// Pre-processes a list of macros from a lexer specification.
+/// The macros are validated to verify correct usage, then macro
+/// expansion is performed to remove any nested macros.
+let private preprocessMacros (macros : (MacroIdentifier * LexerPattern) list) (options : CompilationOptions) : Choice<Map<_,_>, string[]> =
+    (* TODO :   Validation rules:
+                - Macros are not allowed to be recursive
+                - Enfore macro scoping -- macros can only be used after they're declared.
+                - Emit a warning message for any unused user-defined macros *)
+    
+    // TODO
+    //raise <| System.NotImplementedException "preprocessMacros"
+    //Choice2Of2 Array.empty
+
+    // TEST
+    Choice1Of2 Map.empty
+
+
+/// A compiled lexer specification.
+type CompiledSpecification = {
+    //
+    Header : CodeFragment option;
+    //
+    Footer : CodeFragment option;
+    //
+    CompiledRules : Map<RuleIdentifier, CompiledRule>;
+    //
+    StartRule : RuleIdentifier;
+}
+
+/// Creates pattern-matching DFAs from the lexer rules.
+let lexerSpec (spec : Specification) (options : CompilationOptions) : Choice<CompiledSpecification, (*TEMP*)string[]> =
+    // Pre-process the macros.
+    match preprocessMacros spec.Macros options with
+    | Choice2Of2 errors ->
+        Choice2Of2 errors
+    | Choice1Of2 expandedMacros ->
+        (* Compile the lexer rules *)
+        (* TODO :   Simplify the code below using monadic operators. *)
+        let ruleIdentifiers, rules =
+            let ruleIdentifiers = Array.zeroCreate spec.Rules.Count
+            let rules = Array.zeroCreate spec.Rules.Count
+
+            (0, spec.Rules)
+            ||> Map.fold (fun index ruleId rule ->
+                ruleIdentifiers.[index] <- ruleId
+                rules.[index] <- rule
+                index + 1)
+            |> ignore
+
+            ruleIdentifiers, rules
+
+        let compiledRules, compilationErrors =
+            let compiledRulesOrErrors =
+                rules
+                |> Array.Parallel.map (fun rule ->
+                    compileRule expandedMacros rule options)
+
+            let compiledRules = ResizeArray<_> (Array.length rules)
+            let compilationErrors = ResizeArray<_> (Array.length rules)
+
+            compiledRulesOrErrors
+            |> Array.iter (function
+                | Choice1Of2 compiledRule ->
+                    compiledRules.Add compiledRule
+                | Choice2Of2 errors ->
+                    compilationErrors.AddRange errors)
+
+            compiledRules.ToArray (),
+            compilationErrors.ToArray ()
+
+        // If there are errors, return them; otherwise, create a
+        // CompiledSpecification record from the compiled rules.
+        if Array.isEmpty compilationErrors then
+            Choice1Of2 {
+                Header = spec.Header;
+                Footer = spec.Footer;
+                CompiledRules =
+                    (Map.empty, ruleIdentifiers, compiledRules)
+                    |||> Array.fold2 (fun map ruleId compiledRule ->
+                        Map.add ruleId compiledRule map);
+                StartRule = spec.StartRule; }
+        else
+            Choice2Of2 compilationErrors
+

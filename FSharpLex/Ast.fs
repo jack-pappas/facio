@@ -24,6 +24,20 @@ type MacroIdentifier = string
 
 //
 [<RequireQualifiedAccess>]
+module private EncodingCharSet =
+    open System
+
+    //
+    let ascii =
+        CharSet.ofRange Char.MinValue (char Byte.MaxValue)
+
+    //
+    let unicode =
+        CharSet.ofRange Char.MinValue Char.MaxValue
+
+
+//
+[<RequireQualifiedAccess>]
 module private Unicode =
     /// Maps each UnicodeCategory to the set of characters in the category.
     let categoryCharSet =
@@ -167,11 +181,12 @@ type LexerPattern =
 /// A fragment of F# code.
 type CodeFragment = string
 
-//
+/// A clause of a lexer rule.
 type RuleClause = {
-    //
+    /// The pattern matched by this clause.
     Pattern : LexerPattern;
-    //
+    /// The semantic action to be executed when
+    /// <see cref="Pattern"/> is matched by the lexer.
     Action : CodeFragment;
 }
 
@@ -193,8 +208,13 @@ type Specification = {
     //
     Footer : CodeFragment option;
     //
-    Macros : Map<MacroIdentifier, LexerPattern>;
+    // NOTE : This is specified as a list (instead of a Map) so we
+    // know the order in which the macros were specified (necessary
+    // for validating the specification).
+    Macros : (MacroIdentifier * LexerPattern) list;
     //
     Rules : Map<RuleIdentifier, Rule>;
+    //
+    StartRule : RuleIdentifier;
 }
 

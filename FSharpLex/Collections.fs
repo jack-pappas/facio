@@ -71,6 +71,20 @@ type CharSet =
     static member IntervalCount tree =
         CharSet.IntervalCountImpl tree id
 
+    /// The set containing the given element.
+    static member FromElement value =
+        Node (value, value, Empty, Empty)
+
+    /// The set containing the elements in the given range.
+    static member FromRange (lowerBound, upperBound) =
+        // For compatibility with the F# range operator,
+        // when lowerBound > upperBound it's just considered
+        // to be an empty range.
+        if lowerBound >= upperBound then
+            Empty
+        else
+            Node (lowerBound, upperBound, Empty, Empty)
+
 /// Functional programming operators related to the CharSet type.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module CharSet =
@@ -85,8 +99,14 @@ module CharSet =
         | Node (_,_,_,_) -> false
 
     /// The set containing the given element.
-    let singleton c =
-        Node (c, c, Empty, Empty)
+    [<CompiledName("FromElement")>]
+    let inline singleton c =
+        CharSet.FromElement c
+
+    /// The set containing the elements in the given range.
+    [<CompiledName("FromRange")>]
+    let inline ofRange lowerBound upperBound =
+        CharSet.FromRange (lowerBound, upperBound)
 
     /// Returns the number of elements in the set.
     [<CompiledName("Count")>]
@@ -471,14 +491,14 @@ module CharSet =
         ||> List.fold (fun tree el ->
             add el tree)
 
-    //
+    /// Creates a Set that contains the same elements as the given CharSet.
     [<CompiledName("ToSet")>]
     let toSet tree =
         (Set.empty, tree)
         ||> fold (fun set el ->
             Set.add el set)
 
-    //
+    /// Creates a CharSet that contains the same elements as the given Set.
     [<CompiledName("OfSet")>]
     let ofSet set =
         (empty, set)
@@ -521,6 +541,23 @@ module CharSet =
         (empty, seq)
         ||> Seq.fold (fun tree el ->
             add el tree)
+
+    /// Returns a sequence of tuples <c>(lower, upper)</c>
+    /// containing the intervals of values in the set.
+    [<CompiledName("Intervals")>]
+    let rec intervals tree =
+        seq {
+        match tree with
+        | Empty -> ()
+        | Node (lowerBound, upperBound, left, right) ->
+            // Produce the sequence for the left subtree.
+            yield! intervals left
+
+            // Return the current interval.
+            yield lowerBound, upperBound
+
+            // Produce the sequence for the right subtree.
+            yield! intervals right }
 
     /// Returns the highest (greatest) value in the set.
     [<CompiledName("MaxElement")>]
@@ -609,20 +646,4 @@ module CharSet =
         ||> fold (fun union el ->
             add el union)
 
-    /// Returns a sequence of tuples <c>(lower, upper)</c>
-    /// containing the intervals of values in the set.
-    [<CompiledName("Intervals")>]
-    let rec intervals tree =
-        seq {
-        match tree with
-        | Empty -> ()
-        | Node (lowerBound, upperBound, left, right) ->
-            // Produce the sequence for the left subtree.
-            yield! intervals left
-
-            // Return the current interval.
-            yield lowerBound, upperBound
-
-            // Produce the sequence for the right subtree.
-            yield! intervals right }
 
