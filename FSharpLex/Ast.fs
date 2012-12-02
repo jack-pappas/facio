@@ -189,9 +189,9 @@ type RuleIdentifier = string
 //
 type Specification = {
     //
-    Header : CodeFragment;
+    Header : CodeFragment option;
     //
-    Footer : CodeFragment;
+    Footer : CodeFragment option;
     //
     Macros : Map<MacroIdentifier, LexerPattern>;
     //

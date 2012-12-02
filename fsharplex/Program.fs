@@ -36,33 +36,55 @@ module internal AssemblyInfo =
 
 
 open SpecializedCollections
-open Regex
+open Ast
+
+//let ``(a + ba) + c`` =
+//    Regex.Or (
+//        Regex.Or (
+//            Regex.Character 'a',
+//            Regex.Concat (
+//                Regex.Character 'b',
+//                Regex.Character 'a')),
+//        Regex.Character 'c')
+//
+//let derivativeClasses =
+//    let testUniverse =
+//        CharSet.empty
+//        |> CharSet.addRange 'a' 'z'
+//    Regex.DerivativeClasses (``(a + ba) + c``, testUniverse)
 
 let ``(a + ba) + c`` =
-    Regex.Or (
-        Regex.Or (
-            Regex.Character 'a',
-            Regex.Concat (Regex.Character 'b', Regex.Character 'a')),
-        Regex.Character 'c')
-
-let derivativeClasses =
-    let testUniverse =
-        CharSet.empty
-        |> CharSet.addRange 'a' 'z'
-    Regex.DerivativeClasses (``(a + ba) + c``, testUniverse)
+    LexerPattern.Or (
+        LexerPattern.Or (
+            LexerPattern.Character 'a',
+            LexerPattern.Concat (
+                LexerPattern.Character 'b',
+                LexerPattern.Character 'a')),
+        LexerPattern.Character 'c')
 
 let ``ac + bc`` =
-    Regex.Or (
-        Regex.Concat (
-            Regex.Character 'a',
-            Regex.Character 'c'),
-        Regex.Concat (
-            Regex.Character 'b',
-            Regex.Character 'c'))
+    LexerPattern.Or (
+        LexerPattern.Concat (
+            LexerPattern.Character 'a',
+            LexerPattern.Character 'c'),
+        LexerPattern.Concat (
+            LexerPattern.Character 'b',
+            LexerPattern.Character 'c'))
 
-// TEST : Compile a DFA for this regex.
+// TEST : Compile a DFA for this spec.
+let testSpec = {
+    Header = None;
+    Footer = None;
+    Macros = Map.empty;
+    Rules =
+        Map.empty
+        |> Map.add "TestRule" [
+            { Pattern = ``ac + bc``; Action = ""; };
+            { Pattern = ``(a + ba) + c``; Action = ""; };
+            ]; }
+
 let testDfa =
-    Compile.rulePatternsToDfa [| ``ac + bc`` |]
+    Compile.lexerSpec testSpec
 
 
 printfn "Press any key to exit..."
