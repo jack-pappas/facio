@@ -22,49 +22,6 @@ open Regex
 //
 type MacroIdentifier = string
 
-//
-[<RequireQualifiedAccess>]
-module internal EncodingCharSet =
-    open System
-
-    //
-    let ascii =
-        CharSet.ofRange Char.MinValue (char Byte.MaxValue)
-
-    //
-    let unicode =
-        CharSet.ofRange Char.MinValue Char.MaxValue
-
-
-//
-[<RequireQualifiedAccess>]
-module private Unicode =
-    /// Maps each UnicodeCategory to the set of characters in the category.
-    let categoryCharSet =
-        // OPTIMIZE : If this takes "too long" to compute on-the-fly, we could pre-compute
-        // the category sets and implement code which recreates the CharSets from the intervals
-        // in the CharSets (not the individual values, which would be much slower).
-        let table = System.Collections.Generic.Dictionary<_,_> (30)
-        for i = 0 to 65535 do
-            /// The Unicode category of this character.
-            let category = System.Char.GetUnicodeCategory (char i)
-
-            // Add this character to the set for this category.
-            table.[category] <-
-                match table.TryGetValue category with
-                | true, charSet ->
-                    CharSet.add (char i) charSet
-                | false, _ ->
-                    CharSet.singleton (char i)
-
-        // TODO : Assert that the table contains an entry for every UnicodeCategory value.
-        // Otherwise, exceptions will be thrown at run-time if we try to retrive non-existent entries.
-
-        // Convert the dictionary to a Map
-        (Map.empty, table)
-        ||> Seq.fold (fun categoryMap kvp ->
-            Map.add kvp.Key kvp.Value categoryMap)
-
 /// <summary>A regular-expression-based pattern used to define patterns within the lexer.</summary>
 /// <remarks>This is a regular expression extended with additional
 /// operators (for convenience) and pattern macros.</remarks>
@@ -110,73 +67,6 @@ type LexerPattern =
     | Macro of MacroIdentifier
     //
     | UnicodeCategory of System.Globalization.UnicodeCategory
-
-    //
-    static member private ToRegexImpl (extRegex : LexerPattern) cont : Regex =
-        match extRegex with
-        | Epsilon ->
-            cont Regex.Epsilon        
-        | CharacterSet charSet ->
-            Regex.CharacterSet charSet
-            |> cont
-        | Negate r ->
-            LexerPattern.ToRegexImpl r <| fun r ->
-                Regex.Negate r
-                |> cont
-        | Star r ->
-            LexerPattern.ToRegexImpl r <| fun r ->
-                Regex.Star r
-                |> cont
-        | Concat (r, s) ->
-            LexerPattern.ToRegexImpl r <| fun r ->
-            LexerPattern.ToRegexImpl s <| fun s ->
-                Regex.Concat (r, s)
-                |> cont
-        | Or (r, s) ->
-            LexerPattern.ToRegexImpl r <| fun r ->
-            LexerPattern.ToRegexImpl s <| fun s ->
-                Regex.Or (r, s)
-                |> cont
-        | And (r, s) ->
-            LexerPattern.ToRegexImpl r <| fun r ->
-            LexerPattern.ToRegexImpl s <| fun s ->
-                Regex.And (r, s)
-                |> cont
-
-        (* These extended patterns can be rewritten using the simple patterns. *)
-        | Empty ->
-            Regex.CharacterSet CharSet.empty
-            |> cont
-        | Any ->
-            cont Regex.Any
-        | Character c ->
-            Regex.Character c
-            |> cont
-        | OneOrMore r ->
-            LexerPattern.ToRegexImpl r <| fun r ->
-                // Rewrite r+ as rr*
-                Regex.Concat (r, Regex.Star r)
-                |> cont
-        | Optional r ->
-            LexerPattern.ToRegexImpl r <| fun r ->
-                // Rewrite r? as (|r)
-                Regex.Concat (Regex.Epsilon, r)
-                |> cont
-        | Repetition (r, m, n) ->
-            // If not specified, the lower bound defaults to zero (0).
-            let m = defaultArg m GenericZero
-            raise <| System.NotImplementedException "ToRegexImpl"
-
-        (* Simplify the macro patterns. *)
-        | Macro macroId ->
-            raise <| System.NotImplementedException "ToRegexImpl"
-        | UnicodeCategory unicodeCategory ->
-            raise <| System.NotImplementedException "ToRegexImpl"
-
-    /// Simplifies an LexerPattern into a Regex.
-    static member ToRegex (extRegex : LexerPattern) : Regex =
-        LexerPattern.ToRegexImpl extRegex id
-
 
 /// A fragment of F# code.
 type CodeFragment = string
