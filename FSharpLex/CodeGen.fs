@@ -18,6 +18,34 @@ open Compile
 (* TODO :   Move the code generator (and any other back-ends we want to create)
             into plugins using the Managed Extensibility Framework (MEF). *)
 
+//
+[<RequireQualifiedAccess>]
+module private IndentedTextWriter =
+    open System.CodeDom.Compiler
+
+    //
+    let inline indent (itw : IndentedTextWriter) =
+        itw.Indent <- itw.Indent + 1
+
+    //
+    let inline unindent (itw : IndentedTextWriter) =
+        itw.Indent <- max 0 (itw.Indent - 1)
+
+    //
+    let indentBounded maxIndentLevel (itw : IndentedTextWriter) =
+        // Preconditions
+        if maxIndentLevel < 0 then
+            invalidArg "maxIndentLevel" "The maximum indent level cannot be less than zero (0)."
+
+        itw.Indent <- min maxIndentLevel (itw.Indent + 1)
+
+
+//
+let private indent (itw : IndentedTextWriter) (f : IndentedTextWriter -> 'T) =
+    IndentedTextWriter.indent itw
+    let result = f itw
+    IndentedTextWriter.unindent itw
+    result
 
 //
 let private generateCode (compiledSpec : CompiledSpecification) (writer : #TextWriter) : unit =
@@ -33,12 +61,16 @@ let private generateCode (compiledSpec : CompiledSpecification) (writer : #TextW
     |> Option.iter indentingWriter.WriteLine
 
     // Emit the compiled rules
+    IndentedTextWriter.indent indentingWriter
+
     compiledSpec.CompiledRules
     |> Map.iter (fun ruleId compiledRule ->
 
         // TODO
         raise <| System.NotImplementedException "generateCode"
         ())
+
+    IndentedTextWriter.unindent indentingWriter
 
     // Emit the footer (if present).
     compiledSpec.Footer
