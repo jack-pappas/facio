@@ -53,6 +53,7 @@
     <Compile Include="Parser.fs" />
     <Compile Include="Graph.fs" />
     <Compile Include="Compile.fs" />
+    <Compile Include="Emit.fs" />
     <Compile Include="CodeGen.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

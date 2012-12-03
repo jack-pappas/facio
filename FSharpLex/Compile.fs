@@ -273,7 +273,7 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (options : Compilat
         InitialState = initialDfaStateId; }
 
 //
-let private compileRule (macros : Map<MacroIdentifier, _>) (rule : Rule) (options : CompilationOptions) : Choice<CompiledRule, (*TEMP*)string[]> =    
+let private compileRule (macros : Map<MacroIdentifier, _>) (rule : Rule) (options : CompilationOptions) : Choice<CompiledRule, (*TEMP*)string[]> =
     // TODO : Replace uses of macros with the pattern assigned to that macro
     //        Also validate the rule patterns
 

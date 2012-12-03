@@ -10,6 +10,7 @@ See LICENSE.TXT for licensing details.
 module FSharpLex.CodeGen
 
 open System.CodeDom.Compiler
+open System.ComponentModel.Composition
 open System.IO
 open System.Text
 open Ast
