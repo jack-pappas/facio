@@ -196,7 +196,18 @@ type RuleClause = {
 type RuleClauseIndex = int<RuleClauseIdx>
 
 //
-type Rule = RuleClause list
+type Rule = {
+    /// Parameters of the rule.
+    // These are specified by name only -- their types will be inferred
+    // in the generated lexer code.
+    // NOTE : This list should be in reverse order; that is, the 'head'
+    // of the list should be the last (right-most) parameter of the rule.
+    Parameters : string list;
+    //
+    // NOTE : This list should be in reverse order; that is, the 'head'
+    // of the list should be the last (bottom-most) clause of the rule.
+    Clauses : RuleClause list;
+}
 
 //
 type RuleIdentifier = string
@@ -211,6 +222,8 @@ type Specification = {
     // NOTE : This is specified as a list (instead of a Map) so we
     // know the order in which the macros were specified (necessary
     // for validating the specification).
+    // NOTE : This list should be in reverse order; that is, the 'head'
+    // of the list should be the last (bottom-most) macro defined in the lexer definition.
     Macros : (MacroIdentifier * LexerPattern) list;
     //
     Rules : Map<RuleIdentifier, Rule>;

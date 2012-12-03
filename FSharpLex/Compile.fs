@@ -277,7 +277,10 @@ let private compileRule (macros : Map<MacroIdentifier, _>) (rule : Rule) (option
     // TODO : Replace uses of macros with the pattern assigned to that macro
     //        Also validate the rule patterns
 
-    let ruleClauses = List.toArray rule
+    let ruleClauses =
+        rule.Clauses
+        |> List.rev
+        |> List.toArray
 
     //
     let compiledPatternDfa =
@@ -300,19 +303,32 @@ let private compileRule (macros : Map<MacroIdentifier, _>) (rule : Rule) (option
 /// Pre-processes a list of macros from a lexer specification.
 /// The macros are validated to verify correct usage, then macro
 /// expansion is performed to remove any nested macros.
-let private preprocessMacros (macros : (MacroIdentifier * LexerPattern)[]) (options : CompilationOptions) : Choice<Map<_,_>, string[]> =
-    (* TODO :   Validation rules:
-                - Macros are not allowed to be recursive
-                - Enfore macro scoping -- macros can only be used after they're declared.
-                - Emit a warning message for any unused user-defined macros *)
-    
-    // TODO
-    //raise <| System.NotImplementedException "preprocessMacros"
-    //Choice2Of2 Array.empty
+let private preprocessMacros macros (options : CompilationOptions) : Choice<Map<_,_>, string[]> =
+    /// Recursively processes the list of macros.
+    let rec preprocessMacros macroEnv errors (macros : (MacroIdentifier * LexerPattern) list) =
+        match macros with
+        | [] ->
+            // If there are any errors, return them; otherwise,
+            // return the map containing the expanded macros.
+            match errors with
+            | [] ->
+                Choice1Of2 macroEnv
+            | errors ->
+                List.rev errors
+                |> List.toArray
+                |> Choice2Of2
 
-    // TEST
-    Choice1Of2 Map.empty
+        | macro :: macros ->
+            // TODO : Validate this macro
+            raise <| System.NotImplementedException "preprocessMacros"
 
+            preprocessMacros macroEnv errors macros
+
+    // Reverse the macro list so the macros will be processed in
+    // top-to-bottom order (i.e., as they were in the lexer definition).
+    List.rev macros
+    // Call the recursive preprocessor function.
+    |> preprocessMacros Map.empty List.empty
 
 /// A compiled lexer specification.
 type CompiledSpecification = {
@@ -328,16 +344,8 @@ type CompiledSpecification = {
 
 /// Creates pattern-matching DFAs from the lexer rules.
 let lexerSpec (spec : Specification) (options : CompilationOptions) : Choice<CompiledSpecification, (*TEMP*)string[]> =
-    // TEMP : Convert the list of macros to an array to avoid
-    // confusion about the ordering; later, we should be able
-    // to perform this conversion directly within the parser.
-    let macros =
-        spec.Macros
-        |> List.rev
-        |> List.toArray
-
     // Pre-process the macros.
-    match preprocessMacros macros options with
+    match preprocessMacros spec.Macros options with
     | Choice2Of2 errors ->
         Choice2Of2 errors
     | Choice1Of2 expandedMacros ->

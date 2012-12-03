@@ -78,23 +78,23 @@ let testSpec = {
     Macros = List.empty;
     Rules =
         Map.empty
-        |> Map.add "TestRule" [
-            { Pattern = ``ac + bc``; Action = ""; };
-            { Pattern = ``(a + ba) + c``; Action = ""; };
-            ];
+        |> Map.add "TestRule" {
+            Parameters = List.empty;
+            Clauses = [ { Pattern = ``ac + bc``; Action = ""; };
+                        { Pattern = ``(a + ba) + c``; Action = ""; }; ]; }
     StartRule = "TestRule"; }
 
 let compiledTestSpec =
     Compile.lexerSpec testSpec {
         Unicode = false; }
 
-let generatedCode =
-    match compiledTestSpec with
-    | Choice2Of2 errors ->
-        errors
-        |> Array.iter System.Console.WriteLine
-    | Choice1Of2 compiledTestSpec ->
-        CodeGen.generateString compiledTestSpec
+match compiledTestSpec with
+| Choice2Of2 errors ->
+    errors
+    |> Array.iter System.Console.WriteLine
+| Choice1Of2 compiledTestSpec ->
+    let generatedCode = CodeGen.generateString compiledTestSpec
+    ()
 
 
 printfn "Press any key to exit..."
