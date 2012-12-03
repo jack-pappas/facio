@@ -31,6 +31,11 @@ module internal AssemblyInfo =
     [<assembly: InternalsVisibleTo("FSharpLex.Tests")>]
     #endif
 
+    (* Dependency hints for Ngen *)
+    [<assembly: DependencyAttribute("FSharp.Core", LoadHint.Always)>]
+    [<assembly: DependencyAttribute("System", LoadHint.Always)>]
+    [<assembly: DependencyAttribute("System.ComponentModel.Composition", LoadHint.Always)>]
+
     // Appease the F# compiler
     do ()
 
