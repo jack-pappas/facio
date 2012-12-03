@@ -68,6 +68,63 @@ type LexerPattern =
     //
     | UnicodeCategory of System.Globalization.UnicodeCategory
 
+    /// Creates a LexerPattern which matches a string.
+    [<CompiledName("LiteralString")>]
+    static member literalString (str : string) =
+        // If the string is empty, return an Epsilon pattern; by definition,
+        // Epsilon is the acceptance of the empty string.
+        if str.Length < 1 then
+            LexerPattern.Epsilon
+        else
+            (* Construct the pattern backwards (i.e., starting at the end of the string) *)
+            let mutable pattern = LexerPattern.Character str.[str.Length - 1]
+
+            // Loop backwards through the string to prepend the rest of the characters
+            for i = str.Length - 2 downto 0 do
+                pattern <-
+                    LexerPattern.Concat (
+                        LexerPattern.Character str.[i],
+                        pattern)
+
+            // Return the constructed pattern.
+            pattern
+
+    //
+    [<CompiledName("ConcatenateList")>]
+    static member concatList list =
+        List.reduce (FuncConvert.FuncFromTupled LexerPattern.Concat) list
+
+    //
+    [<CompiledName("AndList")>]
+    static member andList list =
+        List.reduce (FuncConvert.FuncFromTupled LexerPattern.And) list
+
+    //
+    [<CompiledName("OrList")>]
+    static member orList list =
+        List.reduce (FuncConvert.FuncFromTupled LexerPattern.Or) list
+
+    //
+    [<CompiledName("ConcatenateArray")>]
+    static member concatArray array =
+        Array.reduce (FuncConvert.FuncFromTupled LexerPattern.Concat) array
+
+    //
+    [<CompiledName("AndArray")>]
+    static member andArray array =
+        Array.reduce (FuncConvert.FuncFromTupled LexerPattern.And) array
+
+    //
+    [<CompiledName("OrArray")>]
+    static member orArray array =
+        Array.reduce (FuncConvert.FuncFromTupled LexerPattern.Or) array
+
+    // TODO : Define operator overrides for ~, &&, ||
+    // TODO : And perhaps '+' for concatenation?
+    // TODO : And perhaps the range operator, for character ranges.
+            
+
+
 /// A fragment of F# code.
 type CodeFragment = string
 
