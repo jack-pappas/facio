@@ -301,24 +301,198 @@ let private compileRule (macros : Map<MacroIdentifier, _>) (rule : Rule) (option
                 clause.Action); }
 
 //
-let private preprocessMacro
-    (macroId : MacroIdentifier, pattern : LexerPattern)
-    (macroEnv : Map<MacroIdentifier, LexerPattern>, badMacros : Set<MacroIdentifier>)
+let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (macroEnv, badMacros)
     : Choice<LexerPattern, (*TEMP*)string[]> =
 
-    // TODO : Check for duplicate macro name
-    // TODO : Check for recursive macro
-    // TODO : Check for nested macros which aren't defined.
+    //
+    // OPTIMIZE : Modify this function to use a LazyList to hold the errors
+    // instead of an F# list to avoid the list concatenation overhead.
+    let rec preprocessMacro pattern cont =
+        match pattern with
+        | LexerPattern.Character c as pattern ->
+            // Make sure the character is an ASCII character unless the 'Unicode' option is set.
+            if options.Unicode || int c <= 255 then
+                Choice1Of2 pattern
+                |> cont
+            else
+                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                |> Choice2Of2
+                |> cont
 
-    // TODO
-    raise <| System.NotImplementedException "preprocessMacro"
+        | LexerPattern.CharacterSet charSet as pattern ->
+            // Make sure all of the characters in the set are ASCII characters unless the 'Unicode' option is set.
+            if options.Unicode || CharSet.forall (fun c -> int c <= 255) charSet then
+                Choice1Of2 pattern
+                |> cont
+            else
+                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                |> Choice2Of2
+                |> cont
+
+        | LexerPattern.Macro nestedMacroId ->
+            // Make sure this macro doesn't call itself -- macros cannot be recursive.
+            // NOTE : This could be handled by checking to see if this macro is already defined
+            // because we don't add macros to 'macroEnv' until they're successfully preprocessed;
+            // however, this separate check allows us to provide a more specific error message.
+            if macroId = nestedMacroId then
+                ["Recursive macro definitions are not allowed."]
+                |> Choice2Of2
+                |> cont
+            else
+                match Map.tryFind nestedMacroId macroEnv with
+                | None ->
+                    // Check the 'bad macros' set to avoid returning an error message
+                    // for this pattern when the referenced macro contains an error.
+                    if Set.contains nestedMacroId badMacros then
+                        // We have to return something, so return Empty to take the place
+                        // of this macro reference.
+                        Choice1Of2 LexerPattern.Empty
+                        |> cont
+                    else
+                        Choice2Of2 [ sprintf "The macro '%s' is not defined." nestedMacroId ]
+                        |> cont
+                | Some nestedMacro ->
+                    // Return the pattern for the nested macro so it'll be "inlined" into this pattern.
+                    Choice1Of2 nestedMacro
+                    |> cont
+
+        | LexerPattern.UnicodeCategory unicodeCategory as pattern ->
+            if options.Unicode then
+                Choice1Of2 pattern
+                |> cont
+            else
+                ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
+                |> Choice2Of2
+                |> cont
+
+        | LexerPattern.Empty
+        | LexerPattern.Epsilon
+        | LexerPattern.Any as pattern ->
+            Choice1Of2 pattern
+            |> cont
+
+        | LexerPattern.Negate r ->
+            preprocessMacro r <| fun rResult ->
+                match rResult with
+                | (Choice2Of2 _ as err) -> err
+                | Choice1Of2 r ->
+                    LexerPattern.Negate r
+                    |> Choice1Of2
+                |> cont
+
+        | LexerPattern.OneOrMore r ->
+            preprocessMacro r <| fun rResult ->
+                match rResult with
+                | (Choice2Of2 _ as err) -> err
+                | Choice1Of2 r ->
+                    LexerPattern.OneOrMore r
+                    |> Choice1Of2
+                |> cont
+
+        | LexerPattern.Optional r ->
+            preprocessMacro r <| fun rResult ->
+                match rResult with
+                | (Choice2Of2 _ as err) -> err
+                | Choice1Of2 r ->
+                    LexerPattern.Optional r
+                    |> Choice1Of2
+                |> cont
+
+        | LexerPattern.Repetition (r, atLeast, atMost) ->
+            preprocessMacro r <| fun rResult ->
+                match rResult with
+                | (Choice2Of2 _ as err) -> err
+                | Choice1Of2 r ->
+                    LexerPattern.Repetition (r, atLeast, atMost)
+                    |> Choice1Of2
+                |> cont
+
+        | LexerPattern.Star r ->
+            preprocessMacro r <| fun rResult ->
+                match rResult with
+                | (Choice2Of2 _ as err) -> err
+                | Choice1Of2 r ->
+                    LexerPattern.Star r
+                    |> Choice1Of2
+                |> cont
+
+        | LexerPattern.And (r, s) ->
+            preprocessMacro r <| fun rResult ->
+            preprocessMacro s <| fun sResult ->
+                match rResult, sResult with
+                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                    Choice2Of2 (rErrors @ sErrors)
+                | (Choice2Of2 _ as err), Choice1Of2 _
+                | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                    err
+                | Choice1Of2 r, Choice1Of2 s ->
+                    LexerPattern.And (r, s)
+                    |> Choice1Of2
+                |> cont
+
+        | LexerPattern.Concat (r, s) ->
+            preprocessMacro r <| fun rResult ->
+            preprocessMacro s <| fun sResult ->
+                match rResult, sResult with
+                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                    Choice2Of2 (rErrors @ sErrors)
+                | (Choice2Of2 _ as err), Choice1Of2 _
+                | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                    err
+                | Choice1Of2 r, Choice1Of2 s ->
+                    LexerPattern.And (r, s)
+                    |> Choice1Of2
+                |> cont
+
+        | LexerPattern.Or (r, s) ->
+            preprocessMacro r <| fun rResult ->
+            preprocessMacro s <| fun sResult ->
+                match rResult, sResult with
+                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                    Choice2Of2 (rErrors @ sErrors)
+                | (Choice2Of2 _ as err), Choice1Of2 _
+                | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                    err
+                | Choice1Of2 r, Choice1Of2 s ->
+                    LexerPattern.And (r, s)
+                    |> Choice1Of2
+                |> cont
+
+    /// Contains an error if a macro has already been defined with this name; otherwise, None.
+    let duplicateNameError =
+        if Map.containsKey macroId macroEnv then
+            Some <| sprintf "Duplicate macro name '%s'." macroId
+        else None
+
+    // Call the function which traverses the macro pattern to validate/preprocess it.
+    preprocessMacro pattern <| function
+        | Choice2Of2 errors ->
+            let errors =
+                match duplicateNameError with
+                | None -> errors
+                | Some duplicateNameError ->
+                    duplicateNameError :: errors
+
+            List.rev errors
+            |> List.toArray
+            |> Choice2Of2
+
+        | Choice1Of2 processedPattern ->
+            // If the duplicate name error was set, return it;
+            // otherwise there are no errors, so return the processed pattern.
+            match duplicateNameError with
+            | Some duplicateNameError ->
+                [| duplicateNameError |]
+                |> Choice2Of2
+            | None ->
+                Choice1Of2 processedPattern
 
 /// Pre-processes a list of macros from a lexer specification.
 /// The macros are validated to verify correct usage, then macro
 /// expansion is performed to remove any nested macros.
-let private preprocessMacros macros (options : CompilationOptions) : Choice<Map<_,_>, (*TEMP*)string[]> =
+let private preprocessMacros macros options =
     /// Recursively processes the list of macros.
-    let rec preprocessMacros (macros : (MacroIdentifier * LexerPattern) list) errors (macroEnv, badMacros) =
+    let rec preprocessMacros macros errors (macroEnv, badMacros) =
         match macros with
         | [] ->
             // If there are any errors, return them; otherwise,
@@ -332,7 +506,7 @@ let private preprocessMacros macros (options : CompilationOptions) : Choice<Map<
 
         | (macroId, _ as macro) :: macros ->
             // Validate/process this macro.
-            match preprocessMacro macro (macroEnv, badMacros) with
+            match preprocessMacro macro options (macroEnv, badMacros) with
             | Choice2Of2 macroErrors ->
                 // Add this macro's identifier to the set of bad macros.
                 let badMacros = Set.add macroId badMacros
@@ -368,7 +542,7 @@ type CompiledSpecification = {
 }
 
 /// Creates pattern-matching DFAs from the lexer rules.
-let lexerSpec (spec : Specification) (options : CompilationOptions) : Choice<CompiledSpecification, (*TEMP*)string[]> =
+let lexerSpec (spec : Specification) options =
     // Pre-process the macros.
     match preprocessMacros spec.Macros options with
     | Choice2Of2 errors ->
