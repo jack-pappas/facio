@@ -300,35 +300,60 @@ let private compileRule (macros : Map<MacroIdentifier, _>) (rule : Rule) (option
             |> Array.map (fun clause ->
                 clause.Action); }
 
+//
+let private preprocessMacro
+    (macroId : MacroIdentifier, pattern : LexerPattern)
+    (macroEnv : Map<MacroIdentifier, LexerPattern>, badMacros : Set<MacroIdentifier>)
+    : Choice<LexerPattern, (*TEMP*)string[]> =
+
+    // TODO : Check for duplicate macro name
+    // TODO : Check for recursive macro
+    // TODO : Check for nested macros which aren't defined.
+
+    // TODO
+    raise <| System.NotImplementedException "preprocessMacro"
+
 /// Pre-processes a list of macros from a lexer specification.
 /// The macros are validated to verify correct usage, then macro
 /// expansion is performed to remove any nested macros.
-let private preprocessMacros macros (options : CompilationOptions) : Choice<Map<_,_>, string[]> =
+let private preprocessMacros macros (options : CompilationOptions) : Choice<Map<_,_>, (*TEMP*)string[]> =
     /// Recursively processes the list of macros.
-    let rec preprocessMacros macroEnv errors (macros : (MacroIdentifier * LexerPattern) list) =
+    let rec preprocessMacros (macros : (MacroIdentifier * LexerPattern) list) errors (macroEnv, badMacros) =
         match macros with
         | [] ->
             // If there are any errors, return them; otherwise,
             // return the map containing the expanded macros.
             match errors with
-            | [] ->
+            | [| |] ->
+                assert (Set.isEmpty badMacros)
                 Choice1Of2 macroEnv
             | errors ->
-                List.rev errors
-                |> List.toArray
-                |> Choice2Of2
+                Choice2Of2 errors
 
-        | macro :: macros ->
-            // TODO : Validate this macro
-            raise <| System.NotImplementedException "preprocessMacros"
+        | (macroId, _ as macro) :: macros ->
+            // Validate/process this macro.
+            match preprocessMacro macro (macroEnv, badMacros) with
+            | Choice2Of2 macroErrors ->
+                // Add this macro's identifier to the set of bad macros.
+                let badMacros = Set.add macroId badMacros
 
-            preprocessMacros macroEnv errors macros
+                // Append the error messages to the existing error messages.
+                let errors = Array.append errors macroErrors
+
+                // Process the remaining macros.
+                preprocessMacros macros errors (macroEnv, badMacros)
+
+            | Choice1Of2 preprocessedMacroPattern ->
+                // Add the processed macro pattern to the processed macro map.
+                let macroEnv = Map.add macroId preprocessedMacroPattern macroEnv
+
+                // Process the remaining macros.
+                preprocessMacros macros errors (macroEnv, badMacros)
 
     // Reverse the macro list so the macros will be processed in
-    // top-to-bottom order (i.e., as they were in the lexer definition).
-    List.rev macros
-    // Call the recursive preprocessor function.
-    |> preprocessMacros Map.empty List.empty
+    // top-to-bottom order (i.e., as they were in the lexer
+    // definition), then call the preprocessor function.
+    preprocessMacros (List.rev macros) Array.empty (Map.empty, Set.empty)
 
 /// A compiled lexer specification.
 type CompiledSpecification = {
