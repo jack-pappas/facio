@@ -92,12 +92,12 @@ let private transitions regularVector universe (transitionsFromCurrentDfaState, 
         unvisitedTransitionTargets,
         compilationState
     else
-        // Choose an element from the derivative class; any element
-        // will do (which is the point behind the derivative classes).
-        let derivativeClassElement = CharSet.minElement derivativeClass
-
         // The derivative of the regular vector w.r.t. the chosen element.
         let regularVector' =
+            // Choose an element from the derivative class; any element
+            // will do (which is the point behind the derivative classes).
+            let derivativeClassElement = CharSet.minElement derivativeClass
+
             regularVector
             // Compute the derivative of the regular vector
             |> RegularVector.derivative derivativeClassElement
@@ -106,36 +106,47 @@ let private transitions regularVector universe (transitionsFromCurrentDfaState, 
             // will not work without this step.
             |> RegularVector.canonicalize universe
 
-        let targetDfaState, unvisitedTransitionTargets, compilationState =
-            let maybeDfaState =
-                CompilationState.tryGetDfaState regularVector' compilationState
+        (*  If the derivative of the regular vector represents the 'error' state,
+            ignore it. Instead of representing the error state with an explicit state
+            and creating transition edges to it, we will just handle it in the
+            back-end (code-generation phase) by transitioning to the error state
+            whenever we see an input which is not explicitly allowed.
+            This greatly reduces the number of edges in the transition graph. *)
+        if RegularVector.isEmpty regularVector' then
+            transitionsFromCurrentDfaState,
+            unvisitedTransitionTargets,
+            compilationState
+        else
+            let targetDfaState, unvisitedTransitionTargets, compilationState =
+                let maybeDfaState =
+                    CompilationState.tryGetDfaState regularVector' compilationState
 
-            match maybeDfaState with
-            | Some targetDfaState ->
-                targetDfaState,
-                unvisitedTransitionTargets,
-                compilationState
-            | None ->
-                // Create a DFA state for this regular vector.
-                let newDfaState, compilationState =
-                    CompilationState.createDfaState regularVector' compilationState
+                match maybeDfaState with
+                | Some targetDfaState ->
+                    targetDfaState,
+                    unvisitedTransitionTargets,
+                    compilationState
+                | None ->
+                    // Create a DFA state for this regular vector.
+                    let newDfaState, compilationState =
+                        CompilationState.createDfaState regularVector' compilationState
 
-                // Add this new DFA state to the set of unvisited states
-                // targeted by transitions from the current DFA state.
-                let unvisitedTransitionTargets =
-                    Set.add newDfaState unvisitedTransitionTargets
+                    // Add this new DFA state to the set of unvisited states
+                    // targeted by transitions from the current DFA state.
+                    let unvisitedTransitionTargets =
+                        Set.add newDfaState unvisitedTransitionTargets
 
-                newDfaState,
-                unvisitedTransitionTargets,
-                compilationState
+                    newDfaState,
+                    unvisitedTransitionTargets,
+                    compilationState
 
-        //
-        let transitionsFromCurrentDfaState =
-            Map.add derivativeClass targetDfaState transitionsFromCurrentDfaState
+            //
+            let transitionsFromCurrentDfaState =
+                Map.add derivativeClass targetDfaState transitionsFromCurrentDfaState
 
-        transitionsFromCurrentDfaState,
-        unvisitedTransitionTargets,
-        compilationState
+            transitionsFromCurrentDfaState,
+            unvisitedTransitionTargets,
+            compilationState
 
 //
 let rec private createDfa universe pending compilationState =
