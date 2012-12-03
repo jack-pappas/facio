@@ -42,7 +42,7 @@ type Regex =
     /// Boolean AND of two regular expressions.
     | And of Regex * Regex
 
-    (* TODO :   Remove these -- we'll leave them in ExtendedRegex for convenience
+    (* TODO :   Remove these -- we'll leave them in LexerPattern for convenience
                 but they can all be handled by the CharacterSet case here. *)
     /// The empty language.
     | Empty
@@ -90,7 +90,8 @@ type Regex =
         | Epsilon ->
             cont Empty
         | Any ->
-            raise <| System.NotImplementedException "DerivativeImpl"
+            // TODO : Double-check that this is correct.
+            cont Epsilon
         | Character c ->
             if c = wrtSymbol then Epsilon else Empty
             |> cont
