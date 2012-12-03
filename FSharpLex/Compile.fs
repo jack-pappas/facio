@@ -315,227 +315,6 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (options : Compilat
         RuleClauseFinalStates = ruleAcceptingStates;
         InitialState = initialDfaStateId; }
 
-//
-let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options : CompilationOptions) =
-    //
-    // OPTIMIZE : Modify this function to use a LazyList to hold the errors
-    // instead of an F# list to avoid the list concatenation overhead.
-    let rec validateAndSimplify pattern cont =
-        match pattern with
-        | LexerPattern.Epsilon ->
-            Choice1Of2 Regex.Epsilon
-            |> cont
-
-        | LexerPattern.CharacterSet charSet ->
-            // Make sure all of the characters in the set are ASCII characters unless the 'Unicode' option is set.
-            if options.Unicode || CharSet.forall (fun c -> int c <= 255) charSet then
-                Regex.CharacterSet charSet
-                |> Choice1Of2
-                |> cont
-            else
-                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
-                |> Choice2Of2
-                |> cont
-
-        | LexerPattern.Macro macroId ->
-            match Map.tryFind macroId macroEnv with
-            | None ->
-                // Check the 'bad macros' set to avoid returning an error message
-                // for this pattern when the referenced macro contains an error.
-                if Set.contains macroId badMacros then
-                    // We have to return something, so return Empty to
-                    // take the place of this macro reference.
-                    Choice1Of2 Regex.Empty
-                    |> cont
-                else
-                    Choice2Of2 [ sprintf "The macro '%s' is not defined." macroId ]
-                    |> cont
-            | Some nestedMacro ->
-                // Return the pattern for the nested macro so it'll be "inlined" into this pattern.
-                Choice1Of2 nestedMacro
-                |> cont
-
-        | LexerPattern.UnicodeCategory unicodeCategory ->
-            if options.Unicode then
-                // Return the CharSet representing this UnicodeCategory.
-                match Map.tryFind unicodeCategory Unicode.categoryCharSet with
-                | None ->
-                    [ sprintf "Unknown or invalid Unicode category specified. (Category = %i)" <| int unicodeCategory ]
-                    |> Choice2Of2
-                    |> cont
-                | Some charSet ->
-                    Regex.CharacterSet charSet
-                    |> Choice1Of2
-                    |> cont
-            else
-                ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
-                |> Choice2Of2
-                |> cont
-
-        | LexerPattern.Negate r ->
-            validateAndSimplify r <| fun rResult ->
-                match rResult with
-                | (Choice2Of2 _ as err) -> err
-                | Choice1Of2 r ->
-                    Regex.Negate r
-                    |> Choice1Of2
-                |> cont
-
-        | LexerPattern.Star r ->
-            validateAndSimplify r <| fun rResult ->
-                match rResult with
-                | (Choice2Of2 _ as err) -> err
-                | Choice1Of2 r ->
-                    Regex.Star r
-                    |> Choice1Of2
-                |> cont
-
-        | LexerPattern.Concat (r, s) ->
-            validateAndSimplify r <| fun rResult ->
-            validateAndSimplify s <| fun sResult ->
-                match rResult, sResult with
-                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                    Choice2Of2 (rErrors @ sErrors)
-                | (Choice2Of2 _ as err), Choice1Of2 _
-                | Choice1Of2 _, (Choice2Of2 _ as err) ->
-                    err
-                | Choice1Of2 r, Choice1Of2 s ->
-                    Regex.Concat (r, s)
-                    |> Choice1Of2
-                |> cont
-
-        | LexerPattern.And (r, s) ->
-            validateAndSimplify r <| fun rResult ->
-            validateAndSimplify s <| fun sResult ->
-                match rResult, sResult with
-                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                    Choice2Of2 (rErrors @ sErrors)
-                | (Choice2Of2 _ as err), Choice1Of2 _
-                | Choice1Of2 _, (Choice2Of2 _ as err) ->
-                    err
-                | Choice1Of2 r, Choice1Of2 s ->
-                    Regex.And (r, s)
-                    |> Choice1Of2
-                |> cont
-
-        | LexerPattern.Or (r, s) ->
-            validateAndSimplify r <| fun rResult ->
-            validateAndSimplify s <| fun sResult ->
-                match rResult, sResult with
-                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                    Choice2Of2 (rErrors @ sErrors)
-                | (Choice2Of2 _ as err), Choice1Of2 _
-                | Choice1Of2 _, (Choice2Of2 _ as err) ->
-                    err
-                | Choice1Of2 r, Choice1Of2 s ->
-                    Regex.Or (r, s)
-                    |> Choice1Of2
-                |> cont
-
-        (*  Extended patterns are rewritten using the cases of LexerPattern
-            which have corresponding cases in Regex. *)
-        | LexerPattern.Empty ->
-            Regex.CharacterSet CharSet.empty
-            |> Choice1Of2
-            |> cont
-        
-        | LexerPattern.Any ->
-            Choice1Of2 Regex.Any
-            |> cont
-
-        | LexerPattern.Character c ->
-            // Make sure the character is an ASCII character unless the 'Unicode' option is set.
-            if options.Unicode || int c <= 255 then
-                Regex.Character c
-                |> Choice1Of2
-                |> cont
-            else
-                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
-                |> Choice2Of2
-                |> cont
-
-        | LexerPattern.OneOrMore r ->
-            // Rewrite r+ as rr*
-            let rewritten =
-                LexerPattern.Concat (r, LexerPattern.Star r)
-
-            // Process the rewritten expression.
-            validateAndSimplify rewritten cont
-
-        | LexerPattern.Optional r ->
-            // Rewrite r? as (|r)
-            let rewritten =
-                LexerPattern.Concat (LexerPattern.Epsilon, r)
-
-            // Process the rewritten expression.
-            validateAndSimplify rewritten cont
-
-        | LexerPattern.Repetition (r, atLeast, atMost) ->
-            // If not specified, the lower bound defaults to zero (0).
-            let atLeast = defaultArg atLeast LanguagePrimitives.GenericZero
-
-            // TODO : Rewrite this pattern using simpler cases.
-            raise <| System.NotImplementedException "validateAndSimplifyPattern"
-
-            // Process the rewritten expression.
-            //validateAndSimplify rewritten cont
-
-    // Call the function which traverses the pattern to validate/preprocess it.
-    validateAndSimplify pattern <| function
-        | Choice2Of2 errors ->
-            List.rev errors
-            |> List.toArray
-            |> Choice2Of2
-        | Choice1Of2 processedPattern ->
-            Choice1Of2 processedPattern
-
-//
-let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, badMacros) =
-    let ruleClauses =
-        rule.Clauses
-        |> List.rev
-        |> List.toArray
-    
-    // Validate and simplify the patterns of the rule clauses.
-    let simplifiedRuleClausePatterns =
-        let simplifiedRuleClausePatterns =
-            ruleClauses
-            |> Array.map (fun clause ->
-                validateAndSimplifyPattern clause.Pattern (macroEnv, badMacros, options))
-
-        // Put all of the "results" in one array and all of the "errors" in another.
-        let results = ResizeArray<_> (Array.length simplifiedRuleClausePatterns)
-        let errors = ResizeArray<_> (Array.length simplifiedRuleClausePatterns)
-        simplifiedRuleClausePatterns
-        |> Array.iter (function
-            | Choice2Of2 errorArr ->
-                errors.AddRange errorArr
-            | Choice1Of2 result ->
-                results.Add result)
-
-        // If there are any errors, return them; otherwise, return the results.
-        if errors.Count > 0 then
-            Choice2Of2 <| errors.ToArray ()
-        else
-            Choice1Of2 <| results.ToArray ()
-
-    //
-    match simplifiedRuleClausePatterns with
-    | Choice2Of2 errors ->
-        Choice2Of2 errors
-    | Choice1Of2 ruleClauseRegexes ->
-        //
-        let compiledPatternDfa =
-            // Compile the patterns into a DFA.
-            rulePatternsToDfa ruleClauseRegexes options
-
-        // Create a CompiledRule record from the compiled DFA.
-        Choice1Of2 {
-            Dfa = compiledPatternDfa;
-            RuleClauseActions =
-                ruleClauses
-                |> Array.map (fun clause ->
-                    clause.Action); }
 
 //
 let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (macroEnv, badMacros) =
@@ -774,6 +553,234 @@ let private preprocessMacros macros options =
     // top-to-bottom order (i.e., as they were in the lexer
     // definition), then call the preprocessor function.
     preprocessMacros (List.rev macros) Array.empty (Map.empty, Set.empty)
+
+//
+let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options : CompilationOptions) =
+    //
+    // OPTIMIZE : Modify this function to use a LazyList to hold the errors
+    // instead of an F# list to avoid the list concatenation overhead.
+    let rec validateAndSimplify pattern cont =
+        match pattern with
+        | LexerPattern.Epsilon ->
+            Choice1Of2 Regex.Epsilon
+            |> cont
+
+        | LexerPattern.CharacterSet charSet ->
+            // Make sure all of the characters in the set are ASCII characters unless the 'Unicode' option is set.
+            if options.Unicode || CharSet.forall (fun c -> int c <= 255) charSet then
+                Regex.CharacterSet charSet
+                |> Choice1Of2
+                |> cont
+            else
+                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                |> Choice2Of2
+                |> cont
+
+        | LexerPattern.Macro macroId ->
+            match Map.tryFind macroId macroEnv with
+            | None ->
+                // Check the 'bad macros' set to avoid returning an error message
+                // for this pattern when the referenced macro contains an error.
+                if Set.contains macroId badMacros then
+                    // We have to return something, so return Empty to
+                    // take the place of this macro reference.
+                    Choice1Of2 Regex.Empty
+                    |> cont
+                else
+                    Choice2Of2 [ sprintf "The macro '%s' is not defined." macroId ]
+                    |> cont
+            | Some nestedMacro ->
+                // Return the pattern for the nested macro so it'll be "inlined" into this pattern.
+                Choice1Of2 nestedMacro
+                |> cont
+
+        | LexerPattern.UnicodeCategory unicodeCategory ->
+            if options.Unicode then
+                // Return the CharSet representing this UnicodeCategory.
+                match Map.tryFind unicodeCategory Unicode.categoryCharSet with
+                | None ->
+                    [ sprintf "Unknown or invalid Unicode category specified. (Category = %i)" <| int unicodeCategory ]
+                    |> Choice2Of2
+                    |> cont
+                | Some charSet ->
+                    Regex.CharacterSet charSet
+                    |> Choice1Of2
+                    |> cont
+            else
+                ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
+                |> Choice2Of2
+                |> cont
+
+        | LexerPattern.Negate r ->
+            validateAndSimplify r <| fun rResult ->
+                match rResult with
+                | (Choice2Of2 _ as err) -> err
+                | Choice1Of2 r ->
+                    Regex.Negate r
+                    |> Choice1Of2
+                |> cont
+
+        | LexerPattern.Star r ->
+            validateAndSimplify r <| fun rResult ->
+                match rResult with
+                | (Choice2Of2 _ as err) -> err
+                | Choice1Of2 r ->
+                    Regex.Star r
+                    |> Choice1Of2
+                |> cont
+
+        | LexerPattern.Concat (r, s) ->
+            validateAndSimplify r <| fun rResult ->
+            validateAndSimplify s <| fun sResult ->
+                match rResult, sResult with
+                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                    Choice2Of2 (rErrors @ sErrors)
+                | (Choice2Of2 _ as err), Choice1Of2 _
+                | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                    err
+                | Choice1Of2 r, Choice1Of2 s ->
+                    Regex.Concat (r, s)
+                    |> Choice1Of2
+                |> cont
+
+        | LexerPattern.And (r, s) ->
+            validateAndSimplify r <| fun rResult ->
+            validateAndSimplify s <| fun sResult ->
+                match rResult, sResult with
+                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                    Choice2Of2 (rErrors @ sErrors)
+                | (Choice2Of2 _ as err), Choice1Of2 _
+                | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                    err
+                | Choice1Of2 r, Choice1Of2 s ->
+                    Regex.And (r, s)
+                    |> Choice1Of2
+                |> cont
+
+        | LexerPattern.Or (r, s) ->
+            validateAndSimplify r <| fun rResult ->
+            validateAndSimplify s <| fun sResult ->
+                match rResult, sResult with
+                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                    Choice2Of2 (rErrors @ sErrors)
+                | (Choice2Of2 _ as err), Choice1Of2 _
+                | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                    err
+                | Choice1Of2 r, Choice1Of2 s ->
+                    Regex.Or (r, s)
+                    |> Choice1Of2
+                |> cont
+
+        (*  Extended patterns are rewritten using the cases of LexerPattern
+            which have corresponding cases in Regex. *)
+        | LexerPattern.Empty ->
+            Regex.CharacterSet CharSet.empty
+            |> Choice1Of2
+            |> cont
+        
+        | LexerPattern.Any ->
+            Choice1Of2 Regex.Any
+            |> cont
+
+        | LexerPattern.Character c ->
+            // Make sure the character is an ASCII character unless the 'Unicode' option is set.
+            if options.Unicode || int c <= 255 then
+                Regex.Character c
+                |> Choice1Of2
+                |> cont
+            else
+                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                |> Choice2Of2
+                |> cont
+
+        | LexerPattern.OneOrMore r ->
+            // Rewrite r+ as rr*
+            let rewritten =
+                LexerPattern.Concat (r, LexerPattern.Star r)
+
+            // Process the rewritten expression.
+            validateAndSimplify rewritten cont
+
+        | LexerPattern.Optional r ->
+            // Rewrite r? as (|r)
+            let rewritten =
+                LexerPattern.Concat (LexerPattern.Epsilon, r)
+
+            // Process the rewritten expression.
+            validateAndSimplify rewritten cont
+
+        | LexerPattern.Repetition (r, atLeast, atMost) ->
+            // If not specified, the lower bound defaults to zero (0).
+            let atLeast = defaultArg atLeast LanguagePrimitives.GenericZero
+
+            // TODO : Rewrite this pattern using simpler cases.
+            raise <| System.NotImplementedException "validateAndSimplifyPattern"
+
+            // Process the rewritten expression.
+            //validateAndSimplify rewritten cont
+
+    // Call the function which traverses the pattern to validate/preprocess it.
+    validateAndSimplify pattern <| function
+        | Choice2Of2 errors ->
+            List.rev errors
+            |> List.toArray
+            |> Choice2Of2
+        | Choice1Of2 processedPattern ->
+            Choice1Of2 processedPattern
+
+//
+let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, badMacros) =
+    let ruleClauses =
+        // The clauses are provided in reverse order from the way they're
+        // specified in the lexer definition, so reverse them to put them
+        // in the correct order.
+        // NOTE : The ordering only matters when two or more clauses overlap,
+        // because then the ordering is used to decide which action to execute.
+        rule.Clauses
+        |> List.rev
+        |> List.toArray
+    
+    // Validate and simplify the patterns of the rule clauses.
+    let simplifiedRuleClausePatterns =
+        let simplifiedRuleClausePatterns =
+            ruleClauses
+            |> Array.map (fun clause ->
+                validateAndSimplifyPattern clause.Pattern (macroEnv, badMacros, options))
+
+        // Put all of the "results" in one array and all of the "errors" in another.
+        let results = ResizeArray<_> (Array.length simplifiedRuleClausePatterns)
+        let errors = ResizeArray<_> (Array.length simplifiedRuleClausePatterns)
+        simplifiedRuleClausePatterns
+        |> Array.iter (function
+            | Choice2Of2 errorArr ->
+                errors.AddRange errorArr
+            | Choice1Of2 result ->
+                results.Add result)
+
+        // If there are any errors, return them; otherwise, return the results.
+        if errors.Count > 0 then
+            Choice2Of2 <| errors.ToArray ()
+        else
+            Choice1Of2 <| results.ToArray ()
+
+    //
+    match simplifiedRuleClausePatterns with
+    | Choice2Of2 errors ->
+        Choice2Of2 errors
+    | Choice1Of2 ruleClauseRegexes ->
+        /// The DFA compiled from the rule clause patterns.
+        let compiledPatternDfa = rulePatternsToDfa ruleClauseRegexes options
+
+        // TODO : Emit warnings about any overlapping patterns.
+        // E.g., "This pattern will never be matched."
+
+        // Create a CompiledRule record from the compiled DFA.
+        Choice1Of2 {
+            Dfa = compiledPatternDfa;
+            RuleClauseActions =
+                ruleClauses
+                |> Array.map (fun clause ->
+                    clause.Action); }
 
 /// A compiled lexer specification.
 type CompiledSpecification = {
