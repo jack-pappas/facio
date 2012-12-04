@@ -78,7 +78,7 @@ type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdge
 
     //
     member __.CreateVertex () =
-        let newVertex = Int32WithMeasure<'Vertex> <| vertexCount + 1
+        let newVertex = Int32WithMeasure<'Vertex> vertexCount
         newVertex,
         LexerDfaGraph (
             vertexCount + 1,
@@ -87,9 +87,9 @@ type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdge
     //
     member __.TryGetEdgeSet (source : DfaStateId, target : DfaStateId) =
         // Preconditions
-        if int source <= 0 || int source > vertexCount then
+        if int source < 0 || int source >= vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif int target <= 0 || int target > vertexCount then
+        elif int target < 0 || int target >= vertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
         let key = TransitionEdgeKey (source, target)
@@ -98,9 +98,9 @@ type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdge
     //
     member __.AddEdges (source : DfaStateId, target : DfaStateId, edges : CharSet) =
         // Preconditions
-        if int source <= 0 || int source > vertexCount then
+        if int source < 0 || int source >= vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif int target <= 0 || int target > vertexCount then
+        elif int target < 0 || int target >= vertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
         elif CharSet.isEmpty edges then
             invalidArg "edges" "The set of edges to be added is empty."

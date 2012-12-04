@@ -194,13 +194,11 @@ module private FsLex =
                             let targetStateId =
                                 ruleDfaTransitions.AdjacencyMap
                                 |> Map.tryPick (fun edgeKey edgeSet ->
-                                    // NOTE : In the DFA graph, the vertices are numbered starting at one (1),
-                                    // so we must adjust accordingly here or the emitted values will be wrong.
-                                    if int edgeKey.Source = (ruleDfaStateId + 1) &&
+                                    if int edgeKey.Source = ruleDfaStateId &&
                                         CharSet.contains (char c) edgeSet then
                                         // Add the starting state of this rule to the relative DFA state id
                                         // to get the DFA state id for the combined DFA table.
-                                        Some ((int edgeKey.Target - 1) + ruleStartingStateId)
+                                        Some (int edgeKey.Target + ruleStartingStateId)
                                     else None)
 
                             // If no transition edge was found for this character, return the

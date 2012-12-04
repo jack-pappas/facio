@@ -415,6 +415,27 @@ module CharSet =
         iterImpl action tree id
 
     //
+    let rec private iterIntervalsImpl (action : FSharpFunc<char, char, unit>) tree cont =
+        match tree with
+        | Empty ->
+            cont ()
+        | Node (lowerBound, upperBound, left, right) ->
+            // Iterate over the left subtree
+            iterIntervalsImpl action left <| fun () ->
+
+            // Apply this interval to the action.
+            action.Invoke (lowerBound, upperBound)
+
+            // Iterate over the right subtree
+            iterIntervalsImpl action right cont
+
+    /// Applies the given function to each element of the set, in order from least to greatest.
+    [<CompiledName("IterateIntervals")>]
+    let iterIntervals (action : char -> char -> unit) tree =
+        let action = FSharpFunc<_,_,_>.Adapt action
+        iterIntervalsImpl action tree id
+
+    //
     let rec private existsImpl (predicate : char -> bool) tree cont =
         match tree with
         | Empty ->
