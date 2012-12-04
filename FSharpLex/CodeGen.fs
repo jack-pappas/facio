@@ -41,13 +41,29 @@ module private IndentedTextWriter =
 
         itw.Indent <- min maxIndentLevel (itw.Indent + 1)
 
+    //
+    let atIndentLevel absoluteIndentLevel (itw : IndentedTextWriter) (f : IndentedTextWriter -> 'T) =
+        // Preconditions
+        if absoluteIndentLevel < 0 then
+            invalidArg "absoluteIndentLevel" "The indent level cannot be less than zero (0)."
 
-//
+        let originalIndentLevel = itw.Indent
+        itw.Indent <- absoluteIndentLevel
+        let result = f itw
+        itw.Indent <- originalIndentLevel
+        result
+
+    //
+    let inline indented (itw : IndentedTextWriter) (f : IndentedTextWriter -> 'T) =
+        indent itw
+        let result = f itw
+        unindent itw
+        result
+
+// TEMP : This is for compatibility with existing code; it can be removed once all instances
+// of 'indent' are replaced with 'IndentedTextWriter.indented'.
 let inline private indent (itw : IndentedTextWriter) (f : IndentedTextWriter -> 'T) =
-    IndentedTextWriter.indent itw
-    let result = f itw
-    IndentedTextWriter.unindent itw
-    result
+    IndentedTextWriter.indented itw f
 
 ////
 //[<RequireQualifiedAccess>]
@@ -115,6 +131,12 @@ module private FsLex =
     let [<Literal>] private actionTableVariableName = "actions"
     //
     let [<Literal>] private sentinelValue = System.UInt16.MaxValue
+    //
+    let [<Literal>] private lexerBufferVariableName = "lexbuf"
+    //
+    let [<Literal>] private lexerBufferTypeName = "FSharpx.Text.Lexing.LexBuffer<_>"
+    //
+    let [<Literal>] private lexingStateVariableName = "_fslex_state"
 
     //
     let private transitionAndActionTables (compiledRules : Map<RuleIdentifier, CompiledRule>) (indentingWriter : IndentedTextWriter) =
@@ -145,7 +167,7 @@ module private FsLex =
         |> indentingWriter.WriteLine
 
         // Indent the body of the "let" binding.
-        indent indentingWriter <| fun indentingWriter ->
+        IndentedTextWriter.indented indentingWriter <| fun indentingWriter ->
 
         // Documentation comments for the transition table.
         "/// <summary>Transition table.</summary>" |> indentingWriter.WriteLine
@@ -161,7 +183,7 @@ module private FsLex =
         |> indentingWriter.WriteLine
 
         // Indent the body of the "let" binding for the transition table.
-        indent indentingWriter <| fun indentingWriter ->
+        IndentedTextWriter.indented indentingWriter <| fun indentingWriter ->
             // Opening bracket of the array.
             indentingWriter.WriteLine "[|"
 
@@ -232,13 +254,33 @@ module private FsLex =
         |> indentingWriter.Write
 
         // Indent the body of the "let" binding for the action table.
-        indent indentingWriter <| fun indentingWriter ->
-            //
-            indentingWriter.Write "(* TODO *) "
+        IndentedTextWriter.indented indentingWriter <| fun indentingWriter ->
+            (0, compiledRules)
+            ||> Map.fold (fun ruleStartingStateId ruleId compiledRule ->
+                let ruleDfaTransitions = compiledRule.Dfa.Transitions
+                /// The number of states in this rule's DFA.
+                let ruleDfaStateCount = ruleDfaTransitions.VertexCount
 
-            // TODO : Emit the action table.
-            //raise <| System.NotImplementedException "emitTransitionTable"
-            ()
+                for dfaStateId = 0 to ruleDfaStateCount - 1 do
+                    // Determine the index of the rule clause accepted by this DFA state (if any).
+                    let acceptedRuleClauseIndex =
+                        compiledRule.Dfa.RuleAcceptedByState
+                        |> Map.tryFind (LanguagePrimitives.Int32WithMeasure dfaStateId)
+
+                    // Emit the accepted rule number.
+                    match acceptedRuleClauseIndex with
+                    | None ->
+                        // Emit the sentinel value which indicates this is not a final (accepting) state.
+                        sentinelValue.ToString () + "us; "
+                    | Some ruleClauseIndex ->
+                        // Emit the rule-clause index.
+                        ruleClauseIndex.ToString () + "us; "
+                    |> indentingWriter.Write
+
+                // Update the starting state ID for the next rule.
+                ruleStartingStateId + ruleDfaStateCount)
+            // Discard the threaded state ID counter
+            |> ignore
 
             // Emit the closing bracket for the array.
             indentingWriter.WriteLine "|]"
@@ -257,9 +299,87 @@ module private FsLex =
 
     /// Emits the code for the functions which execute the semantic actions of the rules.
     let private ruleFunctions (compiledRules : Map<RuleIdentifier, CompiledRule>) (indentingWriter : IndentedTextWriter) =
-        // TODO
-        //raise <| System.NotImplementedException "emitRuleFunctions"
-        ()
+        ((0, true), compiledRules)
+        ||> Map.fold (fun (ruleStartingStateId, isFirstRule) ruleId compiledRule ->
+            // Emit a comment with the name of this rule.
+            sprintf "(* Rule: %s *)" ruleId
+            |> indentingWriter.WriteLine
+
+            // Emit the let-binding for this rule's function.
+            sprintf "%s %s (%s : %s) ="
+                (if isFirstRule then "let rec" else "and")
+                ruleId
+                lexerBufferVariableName
+                lexerBufferTypeName
+            |> indentingWriter.WriteLine
+
+            // Indent and emit the body of the function.
+            IndentedTextWriter.indented indentingWriter <| fun indentingWriter ->
+                // Emit the "let" binding for the inner function.
+                sprintf "let _fslex_%s %s %s =" ruleId lexingStateVariableName lexerBufferVariableName
+                |> indentingWriter.WriteLine
+
+                // Indent and emit the body of the inner function, which is essentially
+                // a big "match" statement which calls the user-defined semantic actions.
+                IndentedTextWriter.indented indentingWriter <| fun indentingWriter ->
+                    // Emit the top of the "match" statement.
+                    sprintf "match %s.Interpret (%s, %s) with"
+                        interpreterVariableName
+                        lexingStateVariableName
+                        lexerBufferVariableName
+                    |> indentingWriter.WriteLine
+
+                    // Emit the match patterns (which are just the indices of the rules),
+                    // and within them emit the user-defined semantic action code.
+                    compiledRule.RuleClauseActions
+                    |> Array.iteri (fun ruleClauseIndex actionCode ->
+                        // Emit the index as a match pattern.
+                        "| " + ruleClauseIndex.ToString() + " ->"
+                        |> indentingWriter.Write    // 'Write', not 'WriteLine' (see comment below).
+
+                        // Decrease the indentation down to one (1) when emitting the user's code.
+                        // Due to a small bug in IndentedTextWriter, a change in indentation only
+                        // takes effect after WriteLine() is called. Therefore, we emit the newline
+                        // for the match pattern after the indent level has been changed, so the
+                        // indentation takes effect "immediately".
+                        IndentedTextWriter.atIndentLevel 1 indentingWriter <| fun indentingWriter ->
+                            // Emit the newline for the match pattern.
+                            indentingWriter.WriteLine ()
+
+                            // Emit the user-defined code for this pattern's semantic action.
+                            // This has to be done line-by-line so the indenting is correct!
+                            // OPTIMIZE : Speed this up a bit by using a fold or 'for' loop
+                            // to traverse the string, checking for newlines and writing each
+                            // non-newline character into 'indentingWriter'.
+                            actionCode.Split (
+                                [|"\r\n";"\r";"\n"|],
+                                System.StringSplitOptions.None)
+                            |> Array.iter indentingWriter.WriteLine)
+
+                    // Emit a catch-all pattern to handle possible errors.
+                    indentingWriter.WriteLine "| invalidAction ->"
+                    IndentedTextWriter.indented indentingWriter <| fun indentingWriter ->
+                        sprintf "failwithf \"Invalid action index (%%i) specified for the '%s' lexer rule.\" invalidAction" (string ruleId)
+                        |> indentingWriter.WriteLine
+
+                // Emit a newline before emitting the call to the inner function.
+                indentingWriter.WriteLine ()
+
+                // Emit the call to the inner function.
+                sprintf "_fslex_%s %i %s" ruleId
+                    (ruleStartingStateId + int compiledRule.Dfa.InitialState)
+                    lexerBufferVariableName
+                |> indentingWriter.WriteLine
+
+                // Emit a newline before emitting the next rule's function.
+                indentingWriter.WriteLine ()
+
+            // Update the starting state ID for the next rule.
+            ruleStartingStateId + compiledRule.Dfa.Transitions.VertexCount,
+            // The "isFirstRule" flag is always false after the first rule is emitted.
+            false)
+        // Discard the flag
+        |> ignore
 
     //
     let emit (compiledSpec : CompiledSpecification) (writer : #TextWriter) : unit =
@@ -280,6 +400,9 @@ module private FsLex =
         // Emit the transition/action table for the DFA.
         transitionAndActionTables compiledSpec.CompiledRules indentingWriter
         assert (indentingWriter.Indent = 0) // Make sure indentation was reset
+
+        // Emit a newline before emitting the semantic action functions.
+        indentingWriter.WriteLine ()
 
         // Emit the semantic functions for the rules.
         ruleFunctions compiledSpec.CompiledRules indentingWriter
