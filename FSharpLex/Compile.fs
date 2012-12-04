@@ -218,6 +218,8 @@ type LexerRuleDfa = {
 type CompiledRule = {
     /// The DFA compiled from the patterns of the rule clauses.
     Dfa : LexerRuleDfa;
+    //
+    Parameters : string[];
     /// The semantic actions to be executed when the
     /// rule clauses are matched.
     RuleClauseActions : CodeFragment[];
@@ -801,6 +803,10 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         // Create a CompiledRule record from the compiled DFA.
         Choice1Of2 {
             Dfa = compiledPatternDfa;
+            Parameters =
+                // Reverse the list so it's in the correct left-to-right order.
+                List.rev rule.Parameters
+                |> List.toArray
             RuleClauseActions =
                 ruleClauses
                 |> Array.map (fun clause ->

@@ -306,9 +306,19 @@ module private FsLex =
             |> indentingWriter.WriteLine
 
             // Emit the let-binding for this rule's function.
-            sprintf "%s %s (%s : %s) ="
+            sprintf "%s %s "
                 (if isFirstRule then "let rec" else "and")
                 ruleId
+            |> indentingWriter.Write
+
+            // Emit parameter names
+            compiledRule.Parameters
+            |> Array.iter (fun paramName ->
+                indentingWriter.Write paramName
+                indentingWriter.Write ' ')            
+
+            // Emit the lexer buffer parameter as the last (right-most) parameter.
+            sprintf "(%s : %s) ="
                 lexerBufferVariableName
                 lexerBufferTypeName
             |> indentingWriter.WriteLine
@@ -316,7 +326,17 @@ module private FsLex =
             // Indent and emit the body of the function.
             IndentedTextWriter.indented indentingWriter <| fun indentingWriter ->
                 // Emit the "let" binding for the inner function.
-                sprintf "let _fslex_%s %s %s =" ruleId lexingStateVariableName lexerBufferVariableName
+                sprintf "let _fslex_%s " ruleId
+                |> indentingWriter.Write
+
+                // Emit parameter names
+                compiledRule.Parameters
+                |> Array.iter (fun paramName ->
+                    indentingWriter.Write paramName
+                    indentingWriter.Write ' ')
+
+                // Emit the lexer-state and lexer buffer parameters.
+                sprintf "%s %s =" lexingStateVariableName lexerBufferVariableName
                 |> indentingWriter.WriteLine
 
                 // Indent and emit the body of the inner function, which is essentially
@@ -366,7 +386,15 @@ module private FsLex =
                 indentingWriter.WriteLine ()
 
                 // Emit the call to the inner function.
-                sprintf "_fslex_%s %i %s" ruleId
+                sprintf "_fslex_%s " ruleId
+                |> indentingWriter.Write
+                
+                compiledRule.Parameters
+                |> Array.iter (fun paramName ->
+                    indentingWriter.Write paramName
+                    indentingWriter.Write ' ')
+                
+                sprintf "%i %s"
                     (ruleStartingStateId + int compiledRule.Dfa.InitialState)
                     lexerBufferVariableName
                 |> indentingWriter.WriteLine
