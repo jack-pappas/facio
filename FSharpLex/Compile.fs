@@ -207,6 +207,9 @@ type LexerRuleDfa = {
     Transitions : LexerDfaGraph;
     //
     RuleClauseFinalStates : Set<DfaStateId>[];
+    /// For each accepting state of the DFA, specifies the
+    /// index of the rule-clause accepted by the state.
+    RuleAcceptedByState : Map<DfaStateId, RuleClauseIndex>;
     /// The initial state of the DFA.
     InitialState : DfaStateId;
 }
@@ -291,20 +294,29 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (options : Compilat
         createDfa universe initialPending compilationState
 
     //
-    let ruleAcceptingStates =
-        //
-        let rulesAcceptedByDfaState =
-            (Map.empty, compilationState.FinalStates)
-            ||> Set.fold (fun map finalDfaStateId ->
-                let acceptedRules : Set<RuleClauseIndex> =
-                    // Get the regular vector represented by this DFA state.
-                    compilationState.DfaStateToRegularVector
-                    |> Map.find finalDfaStateId
-                    // Determine which lexer rules are accepted by this regular vector.
-                    |> RegularVector.acceptingElementsTagged
+    let rulesAcceptedByDfaState =
+        (Map.empty, compilationState.FinalStates)
+        ||> Set.fold (fun map finalDfaStateId ->
+            let acceptedRules : Set<RuleClauseIndex> =
+                // Get the regular vector represented by this DFA state.
+                compilationState.DfaStateToRegularVector
+                |> Map.find finalDfaStateId
+                // Determine which lexer rules are accepted by this regular vector.
+                |> RegularVector.acceptingElementsTagged
                 
-                Map.add finalDfaStateId acceptedRules map)
+            Map.add finalDfaStateId acceptedRules map)
 
+    (* TODO :   Add code here to generate warnings about overlapping rules. *)
+
+    /// Maps final (accepting) DFA states to the rule clause they accept.
+    let ruleAcceptedByDfaState =
+        rulesAcceptedByDfaState
+        // Disambiguate overlapping patterns by choosing the rule-clause with the
+        // lowest index -- i.e., the rule which was declared earliest in the lexer definition.
+        |> Map.map (fun _ -> Set.minElement)
+
+    // TODO : Is this code still needed? If not, discard it.
+    let ruleAcceptingStates =
         let ruleAcceptingStates = Array.create (Array.length rulePatterns) Set.empty
 
         rulesAcceptedByDfaState
@@ -324,6 +336,7 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (options : Compilat
     // Create a LexerDfa record from the compiled DFA.
     {   Transitions = compilationState.Transitions;
         RuleClauseFinalStates = ruleAcceptingStates;
+        RuleAcceptedByState = ruleAcceptedByDfaState;
         InitialState = initialDfaStateId; }
 
 
