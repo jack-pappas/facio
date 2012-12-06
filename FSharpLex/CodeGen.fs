@@ -139,7 +139,56 @@ module private FsLex =
     let [<Literal>] private lexingStateVariableName = "_fslex_state"
 
     //
-    let private transitionAndActionTables (compiledRules : Map<RuleIdentifier, CompiledRule>) (indentingWriter : IndentedTextWriter) =
+    let private asciiTransitionVectorElements (compiledRule, ruleDfaStateId, ruleStartingStateId, indentingWriter : IndentedTextWriter) =
+        (*  The transition vector for each state in an 'fslex'-compatible ASCII transition table
+            has 257 elements. The first 256 elements represent each possible ASCII value; the last
+            element represents the 'end-of-file' marker and is always set to the sentinel value. *)
+
+        // TEST
+        let rightCurlyTransitions =
+            (Set.empty, compiledRule.Dfa.Transitions.AdjacencyMap)
+            ||> Map.fold (fun transitions edgeKey charSet ->
+                if CharSet.contains '}' charSet then
+                    Set.add edgeKey transitions
+                else
+                    transitions)
+
+        // Emit the transition vector elements, based on the transitions out of this state.
+        let ruleDfaTransitions = compiledRule.Dfa.Transitions
+        for c = 0 to 255 do
+            let targetStateId =
+                // Determine the id of the state we transition to when this character is the input.
+                // OPTIMIZE : This lookup is *really* slow -- we should create an optimized
+                // lookup table on-the-fly while compiling the DFA.
+                let targetStateId =
+                    ruleDfaTransitions.AdjacencyMap
+                    |> Map.tryPick (fun edgeKey edgeSet ->
+                        if int edgeKey.Source = ruleDfaStateId &&
+                            CharSet.contains (char c) edgeSet then
+                            // Add the starting state of this rule to the relative DFA state id
+                            // to get the DFA state id for the combined DFA table.
+                            Some (int edgeKey.Target + ruleStartingStateId)
+                        else None)
+
+                // If no transition edge was found for this character, return the
+                // sentinel value to indicate there's no transition.
+                defaultArg targetStateId (int sentinelValue)
+
+            // Emit the state number of the transition target.
+            sprintf "%uus; " targetStateId
+            |> indentingWriter.Write
+
+        // Emit the element representing the 'end-of'file' marker.
+        sprintf "%uus; " sentinelValue
+        |> indentingWriter.Write
+
+    //
+    let private unicodeTransitionVectorElements (compiledRule, ruleDfaStateId, ruleStartingStateId, indentingWriter : IndentedTextWriter) =
+        raise <| System.NotImplementedException "unicodeTransitionVectorElements"
+        ()
+
+    //
+    let private transitionAndActionTables (compiledRules : Map<RuleIdentifier, CompiledRule>) (options : CompilationOptions) (indentingWriter : IndentedTextWriter) =
         /// The combined number of DFA states in all of the DFAs.
         let combinedDfaStateCount =
             (0, compiledRules)
@@ -207,29 +256,12 @@ module private FsLex =
                     indentingWriter.Write "[| "
 
                     // Emit the transition vector elements, based on the transitions out of this state.
-                    let maxCharValue = int maxCharValue
-                    for c = 0 to maxCharValue do
-                        let targetStateId =
-                            // Determine the id of the state we transition to when this character is the input.
-                            // OPTIMIZE : This lookup is *really* slow -- we should create an optimized
-                            // lookup table on-the-fly while compiling the DFA.
-                            let targetStateId =
-                                ruleDfaTransitions.AdjacencyMap
-                                |> Map.tryPick (fun edgeKey edgeSet ->
-                                    if int edgeKey.Source = ruleDfaStateId &&
-                                        CharSet.contains (char c) edgeSet then
-                                        // Add the starting state of this rule to the relative DFA state id
-                                        // to get the DFA state id for the combined DFA table.
-                                        Some (int edgeKey.Target + ruleStartingStateId)
-                                    else None)
-
-                            // If no transition edge was found for this character, return the
-                            // sentinel value to indicate there's no transition.
-                            defaultArg targetStateId (int sentinelValue)
-
-                        // Emit the state number of the transition target.
-                        sprintf "%uus; " targetStateId
-                        |> indentingWriter.Write
+                    // In 'fslex', the length of the transition vector depends on whether
+                    // or not the lexer is generated with support for Unicode.
+                    if options.Unicode then
+                        unicodeTransitionVectorElements (compiledRule, ruleDfaStateId, ruleStartingStateId, indentingWriter)
+                    else
+                        asciiTransitionVectorElements (compiledRule, ruleDfaStateId, ruleStartingStateId, indentingWriter)
 
                     // Emit the closing bracket of the transition vector for this state,
                     // plus a semicolon to separate it from the next state's transition vector.
@@ -292,7 +324,8 @@ module private FsLex =
         "// Create the interpreter from the transition and action tables."
         |> indentingWriter.WriteLine
 
-        sprintf "FSharpx.Text.Lexing.UnicodeTables.Create (%s, %s)"
+        sprintf "FSharpx.Text.Lexing.%sTables.Create (%s, %s)"
+            (if options.Unicode then "Unicode" else "Ascii")
             transitionTableVariableName
             actionTableVariableName
         |> indentingWriter.WriteLine
@@ -410,7 +443,7 @@ module private FsLex =
         |> ignore
 
     //
-    let emit (compiledSpec : CompiledSpecification) (writer : #TextWriter) : unit =
+    let emit (compiledSpec : CompiledSpecification) (options : CompilationOptions) (writer : #TextWriter) : unit =
         // Preconditions
         if writer = null then
             nullArg "writer"
@@ -426,7 +459,7 @@ module private FsLex =
         indentingWriter.WriteLine ()
 
         // Emit the transition/action table for the DFA.
-        transitionAndActionTables compiledSpec.CompiledRules indentingWriter
+        transitionAndActionTables compiledSpec.CompiledRules options indentingWriter
         assert (indentingWriter.Indent = 0) // Make sure indentation was reset
 
         // Emit a newline before emitting the semantic action functions.
@@ -444,12 +477,12 @@ module private FsLex =
         |> Option.iter indentingWriter.WriteLine
 
 //
-let generateString (compiledSpec : CompiledSpecification) =
+let generateString (compiledSpec : CompiledSpecification) (options : CompilationOptions) =
     //
     let codeStringBuilder = StringBuilder ()
     
     //
-    using (new StringWriter (codeStringBuilder)) (FsLex.emit compiledSpec)
+    using (new StringWriter (codeStringBuilder)) (FsLex.emit compiledSpec options)
 
     // Return the generated code string.
     codeStringBuilder.ToString ()
