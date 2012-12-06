@@ -122,21 +122,20 @@ module Dgml =
             else
                 c.ToString ()
 
-    //
-    let private xlinqTest () =
-        let logged = XDocument ()
-
-        let name = "John Doe"
-        let category = "FooBar"
-        
-        logged.Add [|
-            XElement ("Properties",
-                XElement ("AcceptedRuleClauseIndex",
-                    XAttribute ("Name", name),
-                    XAttribute ("Category", category)))
-
-            |]
-        //logged.Save
+//    //
+//    let private xlinqTest () =
+//        let logged = XDocument ()
+//
+//        let name = "John Doe"
+//        let category = "FooBar"
+//        
+//        logged.Add [|
+//            XElement (XName.Get "Properties",
+//                XElement (XName.Get "AcceptedRuleClauseIndex",
+//                    XAttribute (XName.Get "Name", name),
+//                    XAttribute (XName.Get "Category", category)))
+//            |]
+//        //logged.Save
 
     // Emits DGML where each DFA is a separate component of the graph.
     let emitSeparate (compiledSpec : CompiledSpecification) (options : CompilationOptions) =
