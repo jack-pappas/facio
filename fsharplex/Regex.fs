@@ -28,6 +28,8 @@ open SpecializedCollections
 type Regex =
     /// The empty string.
     | Epsilon
+//    /// The end-of-file marker.
+//    | Eof
     /// A set of characters.
     | CharacterSet of CharSet
     /// Negation.
@@ -57,6 +59,7 @@ type Regex =
         | Epsilon
         | Star _ ->
             cont true
+//        | Eof
         | Empty
         | Any
         | Character _
@@ -89,6 +92,9 @@ type Regex =
         | Empty
         | Epsilon ->
             cont Empty
+//        | Eof ->
+//            // TODO : Double-check that this is correct.
+//            cont Eof
         | Any ->
             // TODO : Double-check that this is correct.
             cont Epsilon
@@ -143,8 +149,9 @@ type Regex =
     /// Implementation of the canonicalization function.
     static member private CanonicalizeImpl (regex : Regex) (charUniverse : CharSet) (cont : Regex -> Regex) =
         match regex with
-        | Empty
         | Epsilon
+//        | Eof
+        | Empty
         | Any
         | Character _ as regex ->
             cont regex
@@ -365,6 +372,8 @@ type Regex =
         | Empty ->
             Set.singleton universe
             |> cont
+//        | Eof ->
+//            cont Set.empty
         | Any ->
             Set.singleton universe
             |> Set.add CharSet.empty

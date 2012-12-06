@@ -29,6 +29,8 @@ type LexerPattern =
     (* Regex cases *)
     /// The empty string.
     | Epsilon
+//    /// The end-of-file marker.
+//    | Eof
     /// A set of characters.
     | CharacterSet of CharSet
     /// Negation.
