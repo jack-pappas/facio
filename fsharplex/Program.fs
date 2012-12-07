@@ -268,7 +268,7 @@ let ``fslex rules`` =
 
                 {   Pattern = Macro "char";
                     Action =
-                        "        let s = lexeme lexbuf\r\n        CHAR (if s.[1] = '\\' then escape s.[2] else s.[1])"; };
+                        "        let s = lexeme lexbuf\r\n        CHAR (if s.[1] = '\\\\' then escape s.[2] else s.[1])"; };
 
                 {   Pattern =
                         LexerPattern.concatArray [|
@@ -437,11 +437,11 @@ let ``fslex rules`` =
 
                 {   Pattern = Character '"';
                     Action =
-                        "        newline lexbuf\r\n        buff.AppendLine () |> ignore\r\n        string p buff lexbuf"; };
+                        "        STRING <| buff.ToString ()"; };
 
                 {   Pattern = Macro "newline";
                     Action =
-                        ""; };
+                        "        newline lexbuf\r\n        buff.AppendLine () |> ignore\r\n        string p buff lexbuf"; };
 
                 {   Pattern =
                         OneOrMore (
@@ -566,7 +566,7 @@ let ``fslex rules`` =
                     Action = "        try comment p lexbuf\r\n        with Failure s ->\r\n            let msg = s + System.Environment.NewLine + sprintf \"Error while processing nested comment started at (%d,%d).\" p.pos_lnum (p.pos_cnum - p.pos_bol)\r\n            raise <| exn msg\r\n        |> ignore\r\n        comment p lexbuf"; };
 
                 {   Pattern = Macro "newline";
-                    Action = "        newline lexbuf\r\n          comment p lexbuf"; };
+                    Action = "        newline lexbuf\r\n        comment p lexbuf"; };
 
                 {   Pattern = LexerPattern.literalString "*)";
                     Action = "        ()"; };
