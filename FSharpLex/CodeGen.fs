@@ -13,12 +13,20 @@ open System.CodeDom.Compiler
 open System.ComponentModel.Composition
 open System.IO
 open System.Text
+open LanguagePrimitives
 open SpecializedCollections
 open Ast
 open Compile
 
 (* TODO :   Move the code generator (and any other back-ends we want to create)
             into plugins using the Managed Extensibility Framework (MEF). *)
+(* TODO :   In the code-generation backends below, where the user-defined semantic actions
+            are emitted, it might be useful to add a bit of code which emits a single-line
+            comment before emitting the semantic action code when the action will never be
+            executed because that action's pattern is overlapped by some earlier pattern.
+            E.g., "This code is unreachable because it's pattern will never be matched."
+            This would just serve as a reminder to the user later on (after the code is generated)
+            in case they don't see the warning message we emit. *)
 
 //
 [<RequireQualifiedAccess>]
@@ -139,10 +147,10 @@ module private FsLex =
     let [<Literal>] private lexingStateVariableName = "_fslex_state"
 
     //
-    let private asciiTransitionVectorElements (compiledRule, ruleDfaStateId, ruleStartingStateId, indentingWriter : IndentedTextWriter) =
-        (*  The transition vector for each state in an 'fslex'-compatible ASCII transition table
-            has 257 elements. The first 256 elements represent each possible ASCII value; the last
-            element represents the 'end-of-file' marker and is always set to the sentinel value. *)
+    let private asciiTransitionVectorElements (compiledRule, ruleDfaStateId, baseDfaStateId, indentingWriter : IndentedTextWriter) =
+        (*  The transition vector for each state in an 'fslex'-compatible ASCII transition
+            table has 257 elements. The first 256 elements represent each possible ASCII value;
+            the last element represents the 'end-of-file' marker. *)
 
         // Emit the transition vector elements, based on the transitions out of this state.
         let ruleDfaTransitions = compiledRule.Dfa.Transitions
@@ -154,27 +162,39 @@ module private FsLex =
                 let targetStateId =
                     ruleDfaTransitions.AdjacencyMap
                     |> Map.tryPick (fun edgeKey edgeSet ->
-                        if int edgeKey.Source = ruleDfaStateId &&
+                        if edgeKey.Source = ruleDfaStateId &&
                             CharSet.contains (char c) edgeSet then
                             // Add the starting state of this rule to the relative DFA state id
                             // to get the DFA state id for the combined DFA table.
-                            Some (int edgeKey.Target + ruleStartingStateId)
+                            Some (edgeKey.Target + baseDfaStateId)
                         else None)
 
                 // If no transition edge was found for this character, return the
                 // sentinel value to indicate there's no transition.
-                defaultArg targetStateId (int sentinelValue)
+                defaultArg targetStateId (Int32WithMeasure <| int sentinelValue)
 
             // Emit the state number of the transition target.
-            sprintf "%uus; " targetStateId
+            sprintf "%uus; " (Checked.uint16 targetStateId)
             |> indentingWriter.Write
 
-        // Emit the element representing the 'end-of'file' marker.
-        sprintf "%uus; " sentinelValue
+        // Emit the element representing the state to transition
+        // into when the 'end-of'file' marker is consumed.
+        // NOTE : Only the initial DFA state of a rule can consume the EOF marker!
+        let eofTransitionTarget =
+            if compiledRule.Dfa.InitialState = ruleDfaStateId then
+                match ruleDfaTransitions.EofTransition with
+                | None -> sentinelValue
+                | Some edgeKey ->
+                    // Remember the target DFA state is _relative_ to this DFA --
+                    // add it to the base DFA state id to get it's state id for the combined DFA.
+                    Checked.uint16 (edgeKey.Target + baseDfaStateId)
+            else sentinelValue
+
+        sprintf "%uus; " eofTransitionTarget
         |> indentingWriter.Write
 
     //
-    let private unicodeTransitionVectorElements (compiledRule, ruleDfaStateId, ruleStartingStateId, indentingWriter : IndentedTextWriter) =
+    let private unicodeTransitionVectorElements (compiledRule, ruleDfaStateId, baseDfaStateId, indentingWriter : IndentedTextWriter) =
         raise <| System.NotImplementedException "unicodeTransitionVectorElements"
         ()
 
@@ -229,7 +249,7 @@ module private FsLex =
 
             // Emit the transition vector for each state in the combined DFA.
             (0, compiledRules)
-            ||> Map.fold (fun ruleStartingStateId ruleId compiledRule ->
+            ||> Map.fold (fun baseDfaStateId ruleId compiledRule ->
                 // Emit a comment with the name of the rule.
                 sprintf "(*** Rule: %s ***)" ruleId
                 |> indentingWriter.WriteLine
@@ -240,7 +260,7 @@ module private FsLex =
                 // Write the transition vectors for the states in this rule's DFA.
                 for ruleDfaStateId = 0 to ruleDfaStateCount - 1 do
                     // Emit a comment with the state number (in the overall combined DFA).
-                    sprintf "(* State %i *)" <| ruleStartingStateId + ruleDfaStateId
+                    sprintf "(* State %i *)" <| baseDfaStateId + ruleDfaStateId
                     |> indentingWriter.WriteLine
 
                     // Emit the opening bracket of the transition vector for this state.
@@ -250,16 +270,24 @@ module private FsLex =
                     // In 'fslex', the length of the transition vector depends on whether
                     // or not the lexer is generated with support for Unicode.
                     if options.Unicode then
-                        unicodeTransitionVectorElements (compiledRule, ruleDfaStateId, ruleStartingStateId, indentingWriter)
+                        unicodeTransitionVectorElements (
+                            compiledRule,
+                            Int32WithMeasure ruleDfaStateId,
+                            Int32WithMeasure baseDfaStateId,
+                            indentingWriter)
                     else
-                        asciiTransitionVectorElements (compiledRule, ruleDfaStateId, ruleStartingStateId, indentingWriter)
+                        asciiTransitionVectorElements (
+                            compiledRule,
+                            Int32WithMeasure ruleDfaStateId,
+                            Int32WithMeasure baseDfaStateId,
+                            indentingWriter)
 
                     // Emit the closing bracket of the transition vector for this state,
                     // plus a semicolon to separate it from the next state's transition vector.
                     indentingWriter.WriteLine "|];"
 
                 // Advance to the next rule.
-                ruleStartingStateId + ruleDfaStateCount)
+                baseDfaStateId + ruleDfaStateCount)
             // Discard the state id accumulator, it's no longer needed.
             |> ignore
 
@@ -274,12 +302,16 @@ module private FsLex =
 
         // Emit the "let" binding for the action table.
         sprintf "let %s : uint16[] = [| " actionTableVariableName
-        |> indentingWriter.Write
+        |> indentingWriter.WriteLine
 
         // Indent the body of the "let" binding for the action table.
         IndentedTextWriter.indented indentingWriter <| fun indentingWriter ->
             (0, compiledRules)
             ||> Map.fold (fun ruleStartingStateId ruleId compiledRule ->
+                // Write a comment with the name of this rule.
+                sprintf "(*** Rule: %s ***)" ruleId
+                |> indentingWriter.WriteLine
+
                 let ruleDfaTransitions = compiledRule.Dfa.Transitions
                 /// The number of states in this rule's DFA.
                 let ruleDfaStateCount = ruleDfaTransitions.VertexCount
@@ -299,6 +331,9 @@ module private FsLex =
                         // Emit the rule-clause index.
                         ruleClauseIndex.ToString () + "us; "
                     |> indentingWriter.Write
+
+                // End the line containing the transition elements for this rule.
+                indentingWriter.WriteLine ()
 
                 // Update the starting state ID for the next rule.
                 ruleStartingStateId + ruleDfaStateCount)

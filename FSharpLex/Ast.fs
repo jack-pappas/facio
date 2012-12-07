@@ -130,17 +130,15 @@ type Pattern =
 
 /// <summary>A pattern defined in some clause (case) of a lexer rule.</summary>
 /// <remarks>
-/// This type can be thought of as extending <see cref="Pattern" /> with some additional cases
-/// representing special patterns which may only appear by themselves (i.e., they cannot be
-/// combined with any other patterns).
+/// This type can be thought of as extending <see cref="Pattern" /> with additional
+/// cases representing special patterns which can only appear by themselves; i.e.,
+/// they cannot be combined with any other patterns.
 /// </remarks>
 type RuleClausePattern =
     /// A pattern.
     | Pattern of Pattern
     /// The end-of-file marker.
     | EndOfFile
-    /// The wildcard ("catch-all") pattern.
-    | Wildcard
 
 /// A fragment of F# code.
 type CodeFragment = string
