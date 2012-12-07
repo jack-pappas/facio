@@ -206,8 +206,6 @@ type CompilationOptions = {
 type LexerRuleDfa = {
     /// The transition graph of the DFA.
     Transitions : LexerDfaGraph;
-    //
-    RuleClauseFinalStates : Set<DfaStateId>[];
     /// For each accepting state of the DFA, specifies the
     /// index of the rule-clause accepted by the state.
     RuleAcceptedByState : Map<DfaStateId, RuleClauseIndex>;
@@ -270,10 +268,12 @@ module private Unicode =
             Map.add kvp.Key kvp.Value categoryMap)
 
 //
-let private rulePatternsToDfa (rulePatterns : RegularVector) (options : CompilationOptions) : LexerRuleDfa =
+let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : RuleClauseIndex[]) (options : CompilationOptions) : LexerRuleDfa =
     // Preconditions
     if Array.isEmpty rulePatterns then
         invalidArg "rulePatterns" "The rule must contain at least one (1) pattern."
+    elif Array.length rulePatterns <> Array.length patternIndices then
+        invalidArg "patternIndices" "The array must have the same length as 'rulePatterns'."
 
     // Determine which "universe" to use when compiling this
     // pattern based on the compilation settings.
@@ -305,7 +305,11 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (options : Compilat
                 compilationState.DfaStateToRegularVector
                 |> Map.find finalDfaStateId
                 // Determine which lexer rules are accepted by this regular vector.
-                |> RegularVector.acceptingElementsTagged
+                |> RegularVector.acceptingElements
+                // Map the indices of the patterns in the regular vector back to their
+                // original RuleClauseIndex (it can be different if there are EOF-accepting
+                // clauses defined within the same rule).
+                |> Set.map (Array.get patternIndices)
                 
             Map.add finalDfaStateId acceptedRules map)
 
@@ -318,27 +322,8 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (options : Compilat
         // lowest index -- i.e., the rule which was declared earliest in the lexer definition.
         |> Map.map (fun _ -> Set.minElement)
 
-    // TODO : Is this code still needed? If not, discard it.
-    let ruleAcceptingStates =
-        let ruleAcceptingStates = Array.create (Array.length rulePatterns) Set.empty
-
-        rulesAcceptedByDfaState
-        |> Map.iter (fun finalDfaStateId acceptedRules ->
-            Debug.Assert (
-                not <| Set.isEmpty acceptedRules,
-                sprintf "DFA state '%i' is marked as a final state but does not accept any rules." (int finalDfaStateId))
-
-            acceptedRules
-            |> Set.iter (fun acceptedRuleIndex ->
-                ruleAcceptingStates.[int acceptedRuleIndex] <-
-                    ruleAcceptingStates.[int acceptedRuleIndex]
-                    |> Set.add finalDfaStateId))
-
-        ruleAcceptingStates
-
     // Create a LexerDfa record from the compiled DFA.
     {   Transitions = compilationState.Transitions;
-        RuleClauseFinalStates = ruleAcceptingStates;
         RuleAcceptedByState = ruleAcceptedByDfaState;
         InitialState = initialDfaStateId; }
 
@@ -788,7 +773,9 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             let clause = ruleClauses.[i]
             match clause.Pattern with
             | Pattern pattern ->
-                patterns.Add pattern
+                patterns.Add (
+                    (Int32WithMeasure i : RuleClauseIndex),
+                    pattern)
             | EndOfFile ->
                 eofClauseIndices <-
                     Set.add (Int32WithMeasure i : RuleClauseIndex) eofClauseIndices
@@ -816,8 +803,13 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
     let simplifiedRuleClausePatterns =
         let simplifiedRuleClausePatterns =
             patterns
-            |> Array.map (fun pattern ->
-                validateAndSimplifyPattern pattern (macroEnv, badMacros, options))
+            |> Array.map (fun (originalRuleClauseIndex, pattern) ->
+                // TODO : Simplify using Choice.Result.map
+                match validateAndSimplifyPattern pattern (macroEnv, badMacros, options) with
+                | Choice2Of2 errors ->
+                    Choice2Of2 errors
+                | Choice1Of2 pattern ->
+                    Choice1Of2 (originalRuleClauseIndex, pattern))
 
         // Put all of the "results" in one array and all of the "errors" in another.
         let results = ResizeArray<_> (Array.length simplifiedRuleClausePatterns)
@@ -841,7 +833,11 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         Choice2Of2 errors
     | Choice1Of2 ruleClauseRegexes ->
         /// The DFA compiled from the rule clause patterns.
-        let compiledPatternDfa = rulePatternsToDfa ruleClauseRegexes options
+        let compiledPatternDfa =
+            let regexOriginalClauseIndices, ruleClauseRegexes =
+                Array.unzip ruleClauseRegexes
+            
+            rulePatternsToDfa ruleClauseRegexes regexOriginalClauseIndices options
 
         // If this rule has a pattern accepting the end-of-file marker,
         // create an additional DFA state to serve as the EOF-accepting state
@@ -856,14 +852,6 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
                     LexerDfaGraph.addEofEdge compiledPatternDfa.InitialState dfaAcceptingState transitions
                 { compiledPatternDfa with
                     Transitions = transitions;
-                    RuleClauseFinalStates =
-                        // Create a new copy to avoid mutating the old array.
-                        // This shouldn't matter, but it's a small array so it doesn't hurt to be safe.
-                        compiledPatternDfa.RuleClauseFinalStates
-                        |> Array.mapi (fun clauseIndex finalStates ->
-                            if int eofAcceptingClause = clauseIndex then
-                                Set.singleton dfaAcceptingState
-                            else finalStates);
                     RuleAcceptedByState =
                         compiledPatternDfa.RuleAcceptedByState
                         |> Map.add dfaAcceptingState eofAcceptingClause; }
