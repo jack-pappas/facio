@@ -43,6 +43,13 @@ type Pattern =
     /// Boolean AND of two regular expressions.
     | And of Pattern * Pattern
 
+    (* TODO :   The Xor pattern can be implemented easily by rewriting it with one of the identities:
+                p XOR q => (p OR q) AND (NOT (p AND q))
+                -- or --
+                p XOR q => (p AND (NOT q)) OR ((NOT p) AND q) *)
+//    /// Exclusive-OR (XOR) of two regular expressions.
+//    | Xor of Pattern * Pattern
+
     (* Extensions *)
     /// The empty language.
     | Empty
