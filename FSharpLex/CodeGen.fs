@@ -144,15 +144,6 @@ module private FsLex =
             has 257 elements. The first 256 elements represent each possible ASCII value; the last
             element represents the 'end-of-file' marker and is always set to the sentinel value. *)
 
-        // TEST
-        let rightCurlyTransitions =
-            (Set.empty, compiledRule.Dfa.Transitions.AdjacencyMap)
-            ||> Map.fold (fun transitions edgeKey charSet ->
-                if CharSet.contains '}' charSet then
-                    Set.add edgeKey transitions
-                else
-                    transitions)
-
         // Emit the transition vector elements, based on the transitions out of this state.
         let ruleDfaTransitions = compiledRule.Dfa.Transitions
         for c = 0 to 255 do
