@@ -25,44 +25,44 @@ type MacroIdentifier = string
 /// <summary>A regular-expression-based pattern used to define patterns within the lexer.</summary>
 /// <remarks>This is a regular expression extended with additional
 /// operators (for convenience) and pattern macros.</remarks>
-type LexerPattern =
+type Pattern =
     (* Regex cases *)
     /// The empty string.
     | Epsilon
-//    /// The end-of-file marker.
-//    | Eof
     /// A set of characters.
     | CharacterSet of CharSet
     /// Negation.
-    | Negate of LexerPattern
+    | Negate of Pattern
     /// Kleene *-closure.
-    /// The specified LexerPattern will be matched zero (0) or more times.
-    | Star of LexerPattern
-    /// Concatenation. A LexerPattern immediately followed by another LexerPattern.
-    | Concat of LexerPattern * LexerPattern
+    /// The specified Pattern will be matched zero (0) or more times.
+    | Star of Pattern
+    /// Concatenation. A Pattern immediately followed by another Pattern.
+    | Concat of Pattern * Pattern
     /// Choice between two regular expressions (i.e., boolean OR).
-    | Or of LexerPattern * LexerPattern
+    | Or of Pattern * Pattern
     /// Boolean AND of two regular expressions.
-    | And of LexerPattern * LexerPattern
+    | And of Pattern * Pattern
 
     (* Extensions *)
     /// The empty language.
     | Empty
-    /// Any character except for newline ('\n').
+    /// Any character.
+    // NOTE : This actually represents *any* character; it is not the same as the '.' pattern
+    // in a lexer definition ('.' represents any character _except_ for '\n').
     | Any
     /// A character.
     | Character of char
-    /// The specified LexerPattern is matched one (1) or more times.
+    /// The specified Pattern is matched one (1) or more times.
     /// This is the Plus (+) operator in a regular expression.
-    | OneOrMore of LexerPattern
-    /// The specified LexerPattern is optionally matched (i.e., it will
+    | OneOrMore of Pattern
+    /// The specified Pattern is optionally matched (i.e., it will
     /// be matched zero (0) or one (1) times).
     /// This is the QuestionMark (?) operator in a regular expression.
-    | Optional of LexerPattern
-    /// Match the specified LexerPattern at least
+    | Optional of Pattern
+    /// Match the specified Pattern at least
     /// 'm' times and at most 'n' times.
     /// This is the {} operator in a regular expression.
-    | Repetition of LexerPattern * uint32 option * uint32 option
+    | Repetition of Pattern * uint32 option * uint32 option
 
     (* Macros *)
     //
@@ -70,22 +70,22 @@ type LexerPattern =
     //
     | UnicodeCategory of System.Globalization.UnicodeCategory
 
-    /// Creates a LexerPattern which matches a string.
+    /// Creates a Pattern which matches a string.
     [<CompiledName("LiteralString")>]
     static member literalString (str : string) =
         // If the string is empty, return an Epsilon pattern; by definition,
         // Epsilon is the acceptance of the empty string.
         if str.Length < 1 then
-            LexerPattern.Epsilon
+            Pattern.Epsilon
         else
             (* Construct the pattern backwards (i.e., starting at the end of the string) *)
-            let mutable pattern = LexerPattern.Character str.[str.Length - 1]
+            let mutable pattern = Pattern.Character str.[str.Length - 1]
 
             // Loop backwards through the string to prepend the rest of the characters
             for i = str.Length - 2 downto 0 do
                 pattern <-
-                    LexerPattern.Concat (
-                        LexerPattern.Character str.[i],
+                    Pattern.Concat (
+                        Pattern.Character str.[i],
                         pattern)
 
             // Return the constructed pattern.
@@ -94,38 +94,46 @@ type LexerPattern =
     //
     [<CompiledName("ConcatenateList")>]
     static member concatList list =
-        List.reduce (FuncConvert.FuncFromTupled LexerPattern.Concat) list
+        List.reduce (FuncConvert.FuncFromTupled Pattern.Concat) list
 
     //
     [<CompiledName("AndList")>]
     static member andList list =
-        List.reduce (FuncConvert.FuncFromTupled LexerPattern.And) list
+        List.reduce (FuncConvert.FuncFromTupled Pattern.And) list
 
     //
     [<CompiledName("OrList")>]
     static member orList list =
-        List.reduce (FuncConvert.FuncFromTupled LexerPattern.Or) list
+        List.reduce (FuncConvert.FuncFromTupled Pattern.Or) list
 
     //
     [<CompiledName("ConcatenateArray")>]
     static member concatArray array =
-        Array.reduce (FuncConvert.FuncFromTupled LexerPattern.Concat) array
+        Array.reduce (FuncConvert.FuncFromTupled Pattern.Concat) array
 
     //
     [<CompiledName("AndArray")>]
     static member andArray array =
-        Array.reduce (FuncConvert.FuncFromTupled LexerPattern.And) array
+        Array.reduce (FuncConvert.FuncFromTupled Pattern.And) array
 
     //
     [<CompiledName("OrArray")>]
     static member orArray array =
-        Array.reduce (FuncConvert.FuncFromTupled LexerPattern.Or) array
+        Array.reduce (FuncConvert.FuncFromTupled Pattern.Or) array
 
-    // TODO : Define operator overrides for ~, &&, ||
-    // TODO : And perhaps '+' for concatenation?
-    // TODO : And perhaps the range operator, for character ranges.
-            
-
+/// <summary>A pattern defined in some clause (case) of a lexer rule.</summary>
+/// <remarks>
+/// This type can be thought of as extending <see cref="Pattern" /> with some additional cases
+/// representing special patterns which may only appear by themselves (i.e., they cannot be
+/// combined with any other patterns).
+/// </remarks>
+type RuleClausePattern =
+    /// A pattern.
+    | Pattern of Pattern
+    /// The end-of-file marker.
+    | EndOfFile
+    /// The wildcard ("catch-all") pattern.
+    | Wildcard
 
 /// A fragment of F# code.
 type CodeFragment = string
@@ -133,7 +141,7 @@ type CodeFragment = string
 /// A clause of a lexer rule.
 type RuleClause = {
     /// The pattern matched by this clause.
-    Pattern : LexerPattern;
+    Pattern : RuleClausePattern;
     /// The semantic action to be executed when
     /// <see cref="Pattern"/> is matched by the lexer.
     Action : CodeFragment;
@@ -173,7 +181,7 @@ type Specification = {
     // for validating the specification).
     // NOTE : This list should be in reverse order; that is, the 'head'
     // of the list should be the last (bottom-most) macro defined in the lexer definition.
-    Macros : (MacroIdentifier * LexerPattern) list;
+    Macros : (MacroIdentifier * Pattern) list;
     //
     Rules : Map<RuleIdentifier, Rule>;
     //

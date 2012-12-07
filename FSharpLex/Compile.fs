@@ -349,10 +349,10 @@ let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (m
     // instead of an F# list to avoid the list concatenation overhead.
     let rec preprocessMacro pattern cont =
         match pattern with
-        | LexerPattern.Epsilon ->
+        | Pattern.Epsilon ->
             Choice1Of2 Regex.Epsilon
 
-        | LexerPattern.CharacterSet charSet ->
+        | Pattern.CharacterSet charSet ->
             // Make sure all of the characters in the set are ASCII characters unless the 'Unicode' option is set.
             if options.Unicode || CharSet.forall (fun c -> int c <= 255) charSet then
                 Regex.CharacterSet charSet
@@ -363,7 +363,7 @@ let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (m
                 |> Choice2Of2
                 |> cont
 
-        | LexerPattern.Negate r ->
+        | Pattern.Negate r ->
             preprocessMacro r <| fun rResult ->
                 match rResult with
                 | (Choice2Of2 _ as err) -> err
@@ -372,7 +372,7 @@ let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (m
                     |> Choice1Of2
                 |> cont
 
-        | LexerPattern.Star r ->
+        | Pattern.Star r ->
             preprocessMacro r <| fun rResult ->
                 match rResult with
                 | (Choice2Of2 _ as err) -> err
@@ -381,7 +381,7 @@ let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (m
                     |> Choice1Of2
                 |> cont
 
-        | LexerPattern.Concat (r, s) ->
+        | Pattern.Concat (r, s) ->
             preprocessMacro r <| fun rResult ->
             preprocessMacro s <| fun sResult ->
                 match rResult, sResult with
@@ -395,7 +395,7 @@ let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (m
                     |> Choice1Of2
                 |> cont
 
-        | LexerPattern.And (r, s) ->
+        | Pattern.And (r, s) ->
             preprocessMacro r <| fun rResult ->
             preprocessMacro s <| fun sResult ->
                 match rResult, sResult with
@@ -409,7 +409,7 @@ let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (m
                     |> Choice1Of2
                 |> cont
 
-        | LexerPattern.Or (r, s) ->
+        | Pattern.Or (r, s) ->
             preprocessMacro r <| fun rResult ->
             preprocessMacro s <| fun sResult ->
                 match rResult, sResult with
@@ -423,18 +423,18 @@ let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (m
                     |> Choice1Of2
                 |> cont
 
-        (*  Extended patterns are rewritten using the cases of LexerPattern
+        (*  Extended patterns are rewritten using the cases of Pattern
             which have corresponding cases in Regex. *)
-        | LexerPattern.Empty ->
+        | Pattern.Empty ->
             Regex.CharacterSet CharSet.empty
             |> Choice1Of2
             |> cont
         
-        | LexerPattern.Any ->
+        | Pattern.Any ->
             Choice1Of2 Regex.Any
             |> cont
 
-        | LexerPattern.Character c ->
+        | Pattern.Character c ->
             // Make sure the character is an ASCII character unless the 'Unicode' option is set.
             if options.Unicode || int c <= 255 then
                 Regex.Character c
@@ -445,23 +445,23 @@ let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (m
                 |> Choice2Of2
                 |> cont
 
-        | LexerPattern.OneOrMore r ->
+        | Pattern.OneOrMore r ->
             // Rewrite r+ as rr*
             let rewritten =
-                LexerPattern.Concat (r, LexerPattern.Star r)
+                Pattern.Concat (r, Pattern.Star r)
 
             // Process the rewritten expression.
             preprocessMacro rewritten cont
 
-        | LexerPattern.Optional r ->
+        | Pattern.Optional r ->
             // Rewrite r? as (|r)
             let rewritten =
-                LexerPattern.Concat (LexerPattern.Epsilon, r)
+                Pattern.Concat (Pattern.Epsilon, r)
 
             // Process the rewritten expression.
             preprocessMacro rewritten cont
 
-        | LexerPattern.Repetition (r, atLeast, atMost) ->
+        | Pattern.Repetition (r, atLeast, atMost) ->
             // If not specified, the lower bound defaults to zero (0).
             let atLeast = defaultArg atLeast LanguagePrimitives.GenericZero
 
@@ -472,7 +472,7 @@ let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (m
             //preprocessMacro rewritten cont
 
         (* Macro patterns *)
-        | LexerPattern.Macro nestedMacroId ->
+        | Pattern.Macro nestedMacroId ->
             // Make sure this macro doesn't call itself -- macros cannot be recursive.
             // NOTE : This could be handled by checking to see if this macro is already defined
             // because we don't add macros to 'macroEnv' until they're successfully preprocessed;
@@ -499,7 +499,7 @@ let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (m
                     Choice1Of2 nestedMacro
                     |> cont
 
-        | LexerPattern.UnicodeCategory unicodeCategory ->
+        | Pattern.UnicodeCategory unicodeCategory ->
             if options.Unicode then
                 Regex.CharacterSet EncodingCharSet.unicode
                 |> Choice1Of2
@@ -581,17 +581,17 @@ let private preprocessMacros macros options =
     preprocessMacros (List.rev macros) Array.empty (Map.empty, Set.empty)
 
 //
-let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options : CompilationOptions) =
+let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
     //
     // OPTIMIZE : Modify this function to use a LazyList to hold the errors
     // instead of an F# list to avoid the list concatenation overhead.
     let rec validateAndSimplify pattern cont =
         match pattern with
-        | LexerPattern.Epsilon ->
+        | Pattern.Epsilon ->
             Choice1Of2 Regex.Epsilon
             |> cont
 
-        | LexerPattern.CharacterSet charSet ->
+        | Pattern.CharacterSet charSet ->
             // Make sure all of the characters in the set are ASCII characters unless the 'Unicode' option is set.
             if options.Unicode || CharSet.forall (fun c -> int c <= 255) charSet then
                 Regex.CharacterSet charSet
@@ -602,7 +602,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options : C
                 |> Choice2Of2
                 |> cont
 
-        | LexerPattern.Macro macroId ->
+        | Pattern.Macro macroId ->
             match Map.tryFind macroId macroEnv with
             | None ->
                 // Check the 'bad macros' set to avoid returning an error message
@@ -620,7 +620,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options : C
                 Choice1Of2 nestedMacro
                 |> cont
 
-        | LexerPattern.UnicodeCategory unicodeCategory ->
+        | Pattern.UnicodeCategory unicodeCategory ->
             if options.Unicode then
                 // Return the CharSet representing this UnicodeCategory.
                 match Map.tryFind unicodeCategory Unicode.categoryCharSet with
@@ -637,7 +637,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options : C
                 |> Choice2Of2
                 |> cont
 
-        | LexerPattern.Negate r ->
+        | Pattern.Negate r ->
             validateAndSimplify r <| fun rResult ->
                 match rResult with
                 | (Choice2Of2 _ as err) -> err
@@ -646,7 +646,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options : C
                     |> Choice1Of2
                 |> cont
 
-        | LexerPattern.Star r ->
+        | Pattern.Star r ->
             validateAndSimplify r <| fun rResult ->
                 match rResult with
                 | (Choice2Of2 _ as err) -> err
@@ -655,7 +655,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options : C
                     |> Choice1Of2
                 |> cont
 
-        | LexerPattern.Concat (r, s) ->
+        | Pattern.Concat (r, s) ->
             validateAndSimplify r <| fun rResult ->
             validateAndSimplify s <| fun sResult ->
                 match rResult, sResult with
@@ -669,7 +669,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options : C
                     |> Choice1Of2
                 |> cont
 
-        | LexerPattern.And (r, s) ->
+        | Pattern.And (r, s) ->
             validateAndSimplify r <| fun rResult ->
             validateAndSimplify s <| fun sResult ->
                 match rResult, sResult with
@@ -683,7 +683,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options : C
                     |> Choice1Of2
                 |> cont
 
-        | LexerPattern.Or (r, s) ->
+        | Pattern.Or (r, s) ->
             validateAndSimplify r <| fun rResult ->
             validateAndSimplify s <| fun sResult ->
                 match rResult, sResult with
@@ -697,18 +697,18 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options : C
                     |> Choice1Of2
                 |> cont
 
-        (*  Extended patterns are rewritten using the cases of LexerPattern
+        (*  Extended patterns are rewritten using the cases of Pattern
             which have corresponding cases in Regex. *)
-        | LexerPattern.Empty ->
+        | Pattern.Empty ->
             Regex.CharacterSet CharSet.empty
             |> Choice1Of2
             |> cont
         
-        | LexerPattern.Any ->
+        | Pattern.Any ->
             Choice1Of2 Regex.Any
             |> cont
 
-        | LexerPattern.Character c ->
+        | Pattern.Character c ->
             // Make sure the character is an ASCII character unless the 'Unicode' option is set.
             if options.Unicode || int c <= 255 then
                 Regex.Character c
@@ -719,23 +719,23 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options : C
                 |> Choice2Of2
                 |> cont
 
-        | LexerPattern.OneOrMore r ->
+        | Pattern.OneOrMore r ->
             // Rewrite r+ as rr*
             let rewritten =
-                LexerPattern.Concat (r, LexerPattern.Star r)
+                Pattern.Concat (r, Pattern.Star r)
 
             // Process the rewritten expression.
             validateAndSimplify rewritten cont
 
-        | LexerPattern.Optional r ->
+        | Pattern.Optional r ->
             // Rewrite r? as (|r)
             let rewritten =
-                LexerPattern.Concat (LexerPattern.Epsilon, r)
+                Pattern.Concat (Pattern.Epsilon, r)
 
             // Process the rewritten expression.
             validateAndSimplify rewritten cont
 
-        | LexerPattern.Repetition (r, atLeast, atMost) ->
+        | Pattern.Repetition (r, atLeast, atMost) ->
             // If not specified, the lower bound defaults to zero (0).
             let atLeast = defaultArg atLeast LanguagePrimitives.GenericZero
 
@@ -771,7 +771,14 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         let simplifiedRuleClausePatterns =
             ruleClauses
             |> Array.map (fun clause ->
-                validateAndSimplifyPattern clause.Pattern (macroEnv, badMacros, options))
+                match clause.Pattern with
+                | Pattern pattern ->
+                    validateAndSimplifyPattern pattern (macroEnv, badMacros, options)
+                | EndOfFile ->
+                    raise <| System.NotImplementedException "compileRule"
+                | Wildcard ->
+                    raise <| System.NotImplementedException "compileRule"
+                    )
 
         // Put all of the "results" in one array and all of the "errors" in another.
         let results = ResizeArray<_> (Array.length simplifiedRuleClausePatterns)
