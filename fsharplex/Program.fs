@@ -245,276 +245,345 @@ let ``fslex rules`` =
     |> Map.add "token" {
         Parameters = List.empty;
         Clauses =
-           [{  Action = "               RULE ";
-                Pattern =
-                    LexerPattern.literalString "rule"; };
-            {  Action = "                PARSE ";
-                Pattern =
-                    LexerPattern.literalString "parse"; };
-            {  Action = "              EOF ";
-                Pattern =
-                    LexerPattern.literalString "eof"; };
-            {  Action = "              LET ";
-                Pattern =
-                    LexerPattern.literalString "let"; };
-            {  Action = "              AND ";
-                Pattern =
-                    LexerPattern.literalString "and"; };
-            {  Action = "            \r\n        let s = lexeme lexbuf\r\n        CHAR (if s.[1] = '\\\\' then escape s.[2] else s.[1]) ";
-                Pattern =
-                    Macro "char"; };
-            {  Action = "                          \r\n        let s = lexeme lexbuf\r\n        CHAR (trigraph s.[2] s.[3] s.[4]) ";
-                Pattern =
-                    LexerPattern.concatArray [|
-                        Character '\'';
-                        Macro "trigraph";
-                        Character '\'';
-                        |]; };
-            {  Action = "                          \r\n        let s = lexeme lexbuf\r\n        CHAR (hexgraph s.[3] s.[4]) ";
-                Pattern =
-                    LexerPattern.concatArray [|
-                        Character '\'';
-                        Macro "hexgraph";
-                        Character '\'';
-                        |]; };
-            {  Action = "                                    \r\n        let s = lexeme lexbuf\r\n        CHAR (unicodegraph_short s.[3..6]) ";
-                Pattern =
-                    LexerPattern.concatArray [|
-                        Character '\'';
-                        Macro "unicodegraph_short";
-                        Character '\'';
-                        |]; };
-            {  Action = "                                   \r\n        let s = lexeme lexbuf\r\n        match unicodegraph_long s.[3..10] with\r\n        | None, c -> CHAR c\r\n        | Some _ , _ -> failwith \"Unicode characters needing surrogate pairs are not yet supported by this tool.\" ";
-                Pattern =
-                    LexerPattern.concatArray [|
-                        Character '\'';
-                        Macro "unicodegraph_long";
-                        Character '\'';
-                        |]; };
-            {  Action = "                                          \r\n        let s = (lexeme lexbuf).[2..3]\r\n        UNICODE_CATEGORY s ";
-                Pattern =
-                    LexerPattern.concatArray [|
-                        Character '\'';
-                        Character '\\';
-                        CharacterSet <| CharSet.ofRange 'A' 'Z';
-                        CharacterSet <| CharSet.ofRange 'a' 'z';
-                        Character '\'';                        
-                        |]; };
-            {  Action = "           \r\n        let p = lexbuf.StartPos\r\n        let buff = StringBuilder 100\r\n        // adjust the first line to get even indentation for all lines w.r.t. the left hand margin\r\n        buff.Append (String.replicate (lexbuf.StartPos.Column + 1) \" \") |> ignore\r\n        code p buff lexbuf ";
-                Pattern =
-                    Character '{'; };
-            {  Action = "           \r\n        string lexbuf.StartPos (StringBuilder 100) lexbuf ";
-                Pattern =
-                    Character '"'; };
-            {  Action = "                     token lexbuf ";
-                Pattern =
-                    OneOrMore (Macro "whitespace"); };
-            {  Action = "               \r\n        newline lexbuf\r\n        token lexbuf ";
-                Pattern =
-                    Macro "newline"; };
-            {  Action = "                                     IDENT (lexeme lexbuf) ";
-                Pattern =
-                    Concat (
-                        Macro "ident_start_char",
-                        Star (Macro "ident_char")); };
-            {  Action = "            BAR ";
-                Pattern =
-                    Character '|'; };
-            {  Action = "            DOT ";
-                Pattern =
-                    Character '.'; };
-            {  Action = "            PLUS ";
-                Pattern =
-                    Character '+'; };
-            {  Action = "            STAR ";
-                Pattern =
-                    Character '*'; };
-            {  Action = "            QMARK ";
-                Pattern =
-                    Character '?'; };
-            {  Action = "            EQUALS ";
-                Pattern =
-                    Character '='; };
-            {  Action = "            LBRACK ";
-                Pattern =
-                    Character '['; };
-            {  Action = "            RBRACK ";
-                Pattern =
-                    Character ']'; };
-            {  Action = "            LPAREN ";
-                Pattern =
-                    Character '('; };
-            {  Action = "            RPAREN ";
-                Pattern =
-                    Character ')'; };
-            {  Action = "            UNDERSCORE ";
-                Pattern =
-                    Character '_'; };
-            {  Action = "            HAT ";
-                Pattern =
-                    Character '^'; };
-            {  Action = "            DASH ";
-                Pattern =
-                    Character '-'; };
-            {  Action = "            \r\n        comment lexbuf.StartPos lexbuf\r\n        |> ignore\r\n        token lexbuf ";
-                Pattern =
-                    LexerPattern.literalString "(*"; };
-            {  Action = "                          token lexbuf ";
-                Pattern =
-                    Concat (
-                        LexerPattern.literalString "//",
-                        Star (Negate (CharacterSet <| CharSet.ofList ['\n'; '\r']))); };
-            {  Action = "          unexpected_char lexbuf ";
-                Pattern =
-                    Any; };
-            {  Action = "            EOF ";
-                Pattern =
-                    // TODO : How to represent the end-of-file marker?
-                    Epsilon; };
-            ] |> List.rev; }
+            List.rev [
+                {   Pattern = LexerPattern.literalString "rule";
+                    Action =
+                        "        RULE"; };
+
+                {   Pattern = LexerPattern.literalString "parse";
+                    Action =
+                        "        PARSE"; };
+
+                {   Pattern = LexerPattern.literalString "eof";
+                    Action =
+                        "        EOF"; };
+
+                {   Pattern = LexerPattern.literalString "let";
+                    Action =
+                        "        LET"; };
+
+                {   Pattern = LexerPattern.literalString "and";
+                    Action =
+                        "        AND"; };
+
+                {   Pattern = Macro "char";
+                    Action =
+                        "        let s = lexeme lexbuf\r\n        CHAR (if s.[1] = '\\' then escape s.[2] else s.[1])"; };
+
+                {   Pattern =
+                        LexerPattern.concatArray [|
+                            Character '\'';
+                            Macro "trigraph";
+                            Character '\'';
+                            |];
+                    Action =
+                        "        let s = lexeme lexbuf\r\n        CHAR (trigraph s.[2] s.[3] s.[4])"; };
+
+                {   Pattern =
+                        LexerPattern.concatArray [|
+                            Character '\'';
+                            Macro "hexgraph";
+                            Character '\'';
+                            |];
+                    Action =
+                        "        let s = lexeme lexbuf\r\n        CHAR (hexgraph s.[3] s.[4])"; };
+
+                {   Pattern =
+                        LexerPattern.concatArray [|
+                            Character '\'';
+                            Macro "unicodegraph_short";
+                            Character '\'';
+                            |];
+                    Action =
+                        "        let s = lexeme lexbuf\r\n        CHAR (unicodegraph_short s.[3..6])"; };
+
+                {   Pattern =
+                        LexerPattern.concatArray [|
+                            Character '\'';
+                            Macro "unicodegraph_long";
+                            Character '\'';
+                            |];
+                    Action =
+                        "        let s = lexeme lexbuf\r\n        match unicodegraph_long s.[3..10] with\r\n        | None, c -> CHAR c\r\n        | Some _ , _ -> failwith \"Unicode characters needing surrogate pairs are not yet supported by this tool.\""; };
+
+                {   Pattern =
+                        LexerPattern.concatArray [|
+                            Character '\'';
+                            Character '\\';
+                            CharacterSet <| CharSet.ofRange 'A' 'Z';
+                            CharacterSet <| CharSet.ofRange 'a' 'z';
+                            Character '\'';                        
+                            |];
+                    Action =
+                        "        let s = (lexeme lexbuf).[2..3]\r\n        UNICODE_CATEGORY s"; };
+
+                {   Pattern = Character '{';
+                    Action =
+                        "        let p = lexbuf.StartPos\r\n        let buff = StringBuilder 100\r\n        // adjust the first line to get even indentation for all lines w.r.t. the left hand margin\r\n        buff.Append (String.replicate (lexbuf.StartPos.Column + 1) \" \") |> ignore\r\n        code p buff lexbuf"; };
+
+                {   Pattern = Character '"';
+                    Action =
+                        "        string lexbuf.StartPos (StringBuilder 100) lexbuf"; };
+
+                {   Pattern = OneOrMore (Macro "whitespace");
+                    Action =
+                        "        token lexbuf"; };
+
+                {   Pattern = Macro "newline";
+                    Action =
+                        "        newline lexbuf\r\n        token lexbuf"; };
+
+                {   Pattern =
+                        Concat (
+                            Macro "ident_start_char",
+                            Star (Macro "ident_char"));
+                    Action =
+                        "        IDENT (lexeme lexbuf)"; };
+
+                {   Pattern = Character '|';
+                    Action =
+                        "        BAR"; };
+
+                {   Pattern = Character '.';
+                    Action =
+                        "        DOT"; };
+
+                {   Pattern = Character '+';
+                    Action =
+                        "        PLUS"; };
+
+                {   Pattern = Character '*';
+                    Action =
+                        "        STAR"; };
+
+                {   Pattern = Character '?';
+                    Action =
+                        "        QMARK"; };
+
+                {   Pattern = Character '=';
+                    Action =
+                        "        EQUALS"; };
+
+                {   Pattern = Character '[';
+                    Action =
+                        "        LBRACK"; };
+
+                {   Pattern = Character ']';
+                    Action =
+                        "        RBRACK"; };
+
+                {   Pattern = Character '(';
+                    Action =
+                        "        LPAREN"; };
+
+                {   Pattern = Character ')';
+                    Action =
+                        "        RPAREN"; };
+
+                {   Pattern = Character '_';
+                    Action =
+                        "        UNDERSCORE"; };
+
+                {   Pattern = Character '^';
+                    Action =
+                        "        HAT"; };
+
+                {   Pattern = Character '-';
+                    Action =
+                        "        DASH"; };
+
+                {   Pattern = LexerPattern.literalString "(*";
+                    Action =
+                        "        comment lexbuf.StartPos lexbuf\r\n        |> ignore\r\n        token lexbuf"; };
+
+                {   Pattern =
+                        Concat (
+                            LexerPattern.literalString "//",
+                            Star (Negate (CharacterSet <| CharSet.ofList ['\n'; '\r'])));
+                    Action =
+                        "        token lexbuf"; };
+
+                {   Pattern = Any;
+                    Action =
+                        "        unexpected_char lexbuf"; };
+
+                // TODO : How to represent the end-of-file marker?
+                {   Pattern = Empty;
+                    Action =
+                        "        EOF"; };
+                ]; }
+
      |> Map.add "string" {
         Parameters = ["buff"; "p"];
         Clauses =
-           [{  Action = "                     \r\n        newline lexbuf\r\n        string p buff lexbuf ";
-                Pattern =
-                    Concat (
-                        Character '\\',
-                        Macro "newline"); };
-            {  Action = "                                                          \r\n        buff.Append (escape (lexeme lexbuf).[1]) |> ignore\r\n        string p buff lexbuf ";
-                Pattern =
-                    Concat (
-                        Character '\\',
-                        CharacterSet <| CharSet.ofList ['"' ; '\\' ; '\'' ; 'n' ; 't' ; 'b' ; 'r']); };
-            {  Action = "                \r\n        let s = lexeme lexbuf\r\n        trigraph s.[1] s.[2] s.[3]\r\n        |> buff.Append\r\n        |> ignore\r\n        string p buff lexbuf ";
-                Pattern =
-                    Macro "trigraph"; };
-            {  Action = "            STRING <| buff.ToString () ";
-                Pattern =
-                    Character '"'; };
-            {  Action = "               \r\n        newline lexbuf\r\n        buff.AppendLine () |> ignore\r\n        string p buff lexbuf ";
-                Pattern =
-                    Macro "newline"; };
-            {  Action = "                                      \r\n        buff.Append (lexeme lexbuf) |> ignore\r\n        string p buff lexbuf ";
-                Pattern =
-                    OneOrMore (
-                        LexerPattern.orArray [|
-                            Macro "whitespace";
-                            Macro "letter";
-                            Macro "digit";
-                            |]); };
-            {  Action = "           \r\n        let msg = sprintf \"End of file in string started at (%d,%d).\" p.pos_lnum (p.pos_cnum - p.pos_bol)\r\n        raise <| exn msg ";
-                Pattern =
-                    // TODO : How to represent the end-of-file marker?
-                    Epsilon; };
-            {  Action = "         \r\n        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        string p buff lexbuf ";
-                Pattern =
-                    Any; };
-            ] |> List.rev; }
+            List.rev [
+                {   Pattern =
+                        Concat (
+                            Character '\\',
+                            Macro "newline");
+                    Action =
+                        "        newline lexbuf\r\n        string p buff lexbuf"; };
+
+                {   Pattern =
+                        Concat (
+                            Character '\\',
+                            CharacterSet <| CharSet.ofList ['"' ; '\\' ; '\'' ; 'n' ; 't' ; 'b' ; 'r']);
+                    Action =
+                        "        buff.Append (escape (lexeme lexbuf).[1]) |> ignore\r\n        string p buff lexbuf"; };
+
+                {   Pattern = Macro "trigraph";
+                    Action =
+                        "        let s = lexeme lexbuf\r\n        trigraph s.[1] s.[2] s.[3]\r\n        |> buff.Append\r\n        |> ignore\r\n        string p buff lexbuf"; };
+
+                {   Pattern = Character '"';
+                    Action =
+                        "        newline lexbuf\r\n        buff.AppendLine () |> ignore\r\n        string p buff lexbuf"; };
+
+                {   Pattern = Macro "newline";
+                    Action =
+                        ""; };
+
+                {   Pattern =
+                        OneOrMore (
+                            LexerPattern.orArray [|
+                                Macro "whitespace";
+                                Macro "letter";
+                                Macro "digit";
+                                |]);
+                    Action =
+                        "        buff.Append (lexeme lexbuf) |> ignore\r\n        string p buff lexbuf"; };
+
+                // TODO : How to represent the end-of-file marker?
+                {   Pattern = Empty;
+                    Action =
+                        "        let msg = sprintf \"End of file in string started at (%d,%d).\" p.pos_lnum (p.pos_cnum - p.pos_bol)\r\n        raise <| exn msg"; };
+
+                {   Pattern = Any;
+                    Action =
+                        "        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        string p buff lexbuf"; };
+                ]; }
+
      |> Map.add "code" {
         Parameters = ["buff"; "p"];
         Clauses =
-           [{  Action = "         \r\n        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        string p buff lexbuf ";
-                Pattern =
-                    LexerPattern.literalString "}"; };
-            {  Action = "            CODE (buff.ToString (), p) ";
-                Pattern =
-                    LexerPattern.literalString "{"; };
-            {  Action = "           \r\n        buff.Append (lexeme lexbuf) |> ignore\r\n        code p buff lexbuf |> ignore\r\n        buff.Append \"}\" |> ignore\r\n        code p buff lexbuf ";
-                Pattern =
-                    Concat (
-                        Character '\\',
-                        Or (Character '"', Character '\\')); };
-            {  Action = "                         \r\n        buff.Append (lexeme lexbuf) |> ignore\r\n        code p buff lexbuf ";
-                Pattern =
-                    LexerPattern.literalString "\""; };
-            {  Action = "            \r\n        buff.Append (lexeme lexbuf) |> ignore\r\n        codestring buff lexbuf |> ignore\r\n        code p buff lexbuf ";
-                Pattern =
-                    Macro "newline"; };
-            {  Action = "               \r\n        newline lexbuf\r\n        buff.AppendLine () |> ignore\r\n        code p buff lexbuf ";
-                Pattern =
-                    OneOrMore (
-                        LexerPattern.orArray [|
-                            Macro "whitespace";
-                            Macro "letter";
-                            Macro "digit";
-                            |]); };
-            {  Action = "                                      \r\n        buff.Append (lexeme lexbuf) |> ignore\r\n        code p buff lexbuf ";
-                Pattern =
-                    Concat (
-                        LexerPattern.literalString "//",
-                        Star (Negate (CharacterSet <| CharSet.ofList ['\n'; '\r']))); };
-            {  Action = "                         \r\n        buff.Append (lexeme lexbuf) |> ignore\r\n        code p buff lexbuf ";
-                Pattern =
-                    Empty; };
-            {  Action = "            EOF ";
-                Pattern =
-                    // TODO : How to represent the end-of-file marker?
-                    Epsilon; };
-            {  Action = "         \r\n        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        code p buff lexbuf ";
-                Pattern =
-                    Any; };
-            ] |> List.rev; }
+            List.rev [
+                {   Pattern =
+                        LexerPattern.literalString "}";
+                    Action =
+                        "        CODE (buff.ToString (), p)"; };
+
+                {   Pattern =
+                        LexerPattern.literalString "{";
+                    Action =
+                        "        buff.Append (lexeme lexbuf) |> ignore\r\n        code p buff lexbuf |> ignore\r\n        buff.Append \"}\" |> ignore\r\n        code p buff lexbuf"; };
+
+                {   Pattern =
+                        Concat (
+                            Character '\\',
+                            Or (Character '"', Character '\\'));
+                    Action =
+                        "        buff.Append (lexeme lexbuf) |> ignore\r\n        code p buff lexbuf"; };
+
+                {   Pattern = LexerPattern.literalString "\"";
+                    Action =
+                        "        buff.Append (lexeme lexbuf) |> ignore\r\n        codestring buff lexbuf |> ignore\r\n        code p buff lexbuf"; };
+
+                {   Pattern = Macro "newline";
+                    Action =
+                        "        newline lexbuf\r\n        buff.AppendLine () |> ignore\r\n        code p buff lexbuf"; };
+
+                {   Pattern =
+                        OneOrMore (
+                            LexerPattern.orArray [|
+                                Macro "whitespace";
+                                Macro "letter";
+                                Macro "digit";
+                                |]);
+                    Action =
+                        "        buff.Append (lexeme lexbuf) |> ignore\r\n        code p buff lexbuf"; };
+
+                {   Pattern =
+                        Concat (
+                            LexerPattern.literalString "//",
+                            Star (Negate (CharacterSet <| CharSet.ofList ['\n'; '\r'])));
+                    Action =
+                        "        buff.Append (lexeme lexbuf) |> ignore\r\n        code p buff lexbuf"; };
+
+                // TODO : How to represent the end-of-file marker?
+                {   Pattern = Empty;
+                    Action =
+                        "        EOF"; };
+
+                {   Pattern = Any;
+                    Action =
+                        "        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        code p buff lexbuf"; };
+                ]; }
+
      |> Map.add "codestring" {
         Parameters = ["buff"];
         Clauses =
-           [{  Action = "                          \r\n        buff.Append (lexeme lexbuf) |> ignore\r\n        codestring buff lexbuf ";
-                Pattern =
-                    Concat (
-                        Character '\\',
-                        Or (Character '"', Character '\\')); };
-            {  Action = "           \r\n        buff.Append (lexeme lexbuf) |> ignore\r\n        buff.ToString () ";
-                Pattern =
-                    Character '"'; };
-            {  Action = "               \r\n        newline lexbuf\r\n        buff.AppendLine () |> ignore\r\n        codestring buff lexbuf ";
-                Pattern =
-                    Macro "newline"; };
-            {  Action = "                                      \r\n        buff.Append (lexeme lexbuf) |> ignore\r\n        codestring buff lexbuf ";
-                Pattern =
-                    OneOrMore (
-                        LexerPattern.orArray [|
-                            Macro "whitespace";
-                            Macro "letter";
-                            Macro "digit";
-                            |]); };
-            {  Action = "            failwith \"Unterminated string in code.\" ";
-                Pattern =
-                    // TODO : How to handle the end-of-file marker?
-                    Epsilon; };
-            {  Action = "         \r\n        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        codestring buff lexbuf ";
-                Pattern =
-                    Any; };
-            ] |> List.rev; }
+            List.rev [
+                {   Pattern =
+                        Concat (
+                            Character '\\',
+                            Or (Character '"', Character '\\'));
+                    Action = "        buff.Append (lexeme lexbuf) |> ignore\r\n        codestring buff lexbuf"; };
+
+                {   Pattern = Character '"';
+                    Action = "        buff.Append (lexeme lexbuf) |> ignore\r\n        buff.ToString ()"; };
+
+                {   Pattern = Macro "newline";
+                    Action = "        newline lexbuf\r\n        buff.AppendLine () |> ignore\r\n        codestring buff lexbuf"; };
+
+                {   Pattern =
+                        OneOrMore (
+                            LexerPattern.orArray [|
+                                Macro "whitespace";
+                                Macro "letter";
+                                Macro "digit";
+                                |]);
+                    Action = "        buff.Append (lexeme lexbuf) |> ignore\r\n        codestring buff lexbuf"; };
+
+                // TODO : How to handle the end-of-file marker?
+                {   Pattern = Empty;
+                    Action = "        failwith \"Unterminated string in code.\""; };
+
+                {   Pattern = Any;
+                    Action = "        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        codestring buff lexbuf"; };
+                ]; }
+
      |> Map.add "comment" {
         Parameters = ["p"];
         Clauses =
-           [{  Action = "              comment p lexbuf ";
-                Pattern =
-                    Macro "char"; };
-            {  Action = "           \r\n        try string lexbuf.StartPos (StringBuilder 100) lexbuf\r\n        with Failure s ->\r\n            let msg = s + \"\\n\" + sprintf \"Error while processing string nested in comment started at (%d,%d).\" p.pos_lnum (p.pos_cnum - p.pos_bol)\r\n            raise <| exn msg\r\n        |> ignore\r\n        comment p lexbuf ";
-                Pattern =
-                    Character '"'; };
-            {  Action = "            \r\n        try comment p lexbuf\r\n        with Failure s ->\r\n            let msg = s + \"\\n\" + sprintf \"Error while processing nested comment started at (%d,%d).\" p.pos_lnum (p.pos_cnum - p.pos_bol)\r\n            raise <| exn msg\r\n        |> ignore\r\n        comment p lexbuf ";
-                Pattern =
-                    LexerPattern.literalString "(*"; };
-            {  Action = "               \r\n          newline lexbuf\r\n          comment p lexbuf ";
-                Pattern =
-                    Macro "newline"; };
-            {  Action = "             () ";
-                Pattern =
-                    LexerPattern.literalString "*)"; };
-            {  Action = "           \r\n          let msg = sprintf \"End of file in comment started at (%d,%d).\" p.pos_lnum (p.pos_cnum - p.pos_bol)\r\n          raise <| exn msg ";
-                Pattern =
-                    // TODO : How to handle the end-of-file marker?
-                    Epsilon; };
-            {  Action = "                                             comment p lexbuf ";
-                Pattern =
-                    OneOrMore (
-                        Negate (
-                            CharacterSet <| CharSet.ofList ['\''; '('; '*'; '\n'; '\r'; '"'; ')'])); };
-            {  Action = "          comment p lexbuf ";
-                Pattern =
-                    Any; };
-            ] |> List.rev; }
+            List.rev [
+                {   Pattern = Macro "char";
+                    Action = "        comment p lexbuf"; };
+
+                {   Pattern = Character '"';
+                    Action = "        try string lexbuf.StartPos (StringBuilder 100) lexbuf\r\n        with Failure s ->\r\n            let msg = s + System.Environment.NewLine + sprintf \"Error while processing string nested in comment started at (%d,%d).\" p.pos_lnum (p.pos_cnum - p.pos_bol)\r\n            raise <| exn msg\r\n        |> ignore\r\n        comment p lexbuf"; };
+
+                {   Pattern = LexerPattern.literalString "(*";
+                    Action = "        try comment p lexbuf\r\n        with Failure s ->\r\n            let msg = s + System.Environment.NewLine + sprintf \"Error while processing nested comment started at (%d,%d).\" p.pos_lnum (p.pos_cnum - p.pos_bol)\r\n            raise <| exn msg\r\n        |> ignore\r\n        comment p lexbuf"; };
+
+                {   Pattern = Macro "newline";
+                    Action = "        newline lexbuf\r\n          comment p lexbuf"; };
+
+                {   Pattern = LexerPattern.literalString "*)";
+                    Action = "        ()"; };
+
+                // TODO : How to handle the end-of-file marker?
+                {   Pattern = Empty;
+                    Action = "        let msg = sprintf \"End of file in comment started at (%d,%d).\" p.pos_lnum (p.pos_cnum - p.pos_bol)\r\n        raise <| exn msg"; };
+
+                {   Pattern =
+                        OneOrMore (
+                            Negate (
+                                CharacterSet <| CharSet.ofList ['\''; '('; '*'; '\n'; '\r'; '"'; ')']));
+                    Action = "        comment p lexbuf"; };
+
+                {   Pattern = Any;
+                    Action = "        comment p lexbuf"; };
+                ]; }
 
 let ``fslex specification`` = {
     Header = Some ``fslex header``;
@@ -534,8 +603,8 @@ match ``compiled fslex spec`` with
     errors
     |> Array.iter System.Console.WriteLine
 | Choice1Of2 compiledTestSpec ->
-    //let generatedCode = CodeGen.generateString compiledTestSpec options
-    GraphGen.Dgml.emitSeparate compiledTestSpec options
+    let generatedCode = CodeGen.generateString compiledTestSpec options
+    //GraphGen.Dgml.emitSeparate compiledTestSpec options
     ()
 
 
