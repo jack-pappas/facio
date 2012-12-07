@@ -263,6 +263,11 @@ module Dgml =
                     dfaStateNode.Attributes.Append acceptedRuleClauseIndexAttr |> ignore
                     acceptedRuleClauseIndexAttr.Value <- acceptedRuleClauseIndex.ToString ())
 
+            // TODO : Add a node if this rule contains a clause which accepts EndOfFile.
+                // Set the Id to (ruleId + "_EOF")
+                // What label to use for the node?
+            // Add an edge from the initial DFA state to this node, and label the edge as "EOF".
+
             // Add the transitions for this rule's DFA.
             compiledRule.Dfa.Transitions.AdjacencyMap
             |> Map.iter (fun edgeKey edgeSet ->

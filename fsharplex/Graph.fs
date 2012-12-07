@@ -43,10 +43,10 @@ type TransitionEdgeKey =
     "Vertices = {VertexCount}, \
      EdgeSets = {EdgeSetCount}, \
      Edges = {EdgeCount}")>]
-type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdgeKey, CharSet>) =
+type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdgeKey, CharSet>, eofTransition : TransitionEdgeKey option) =
     //
     static let empty =
-        LexerDfaGraph (GenericZero, Map.empty)
+        LexerDfaGraph (GenericZero, Map.empty, None)
 
     //
     static member internal Empty
@@ -66,23 +66,29 @@ type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdge
         with get () = vertexCount
 
     //
+    member __.EofTransition
+        with get () = eofTransition
+
+    //
     member internal __.EdgeSetCount
         with get () = adjacencyMap.Count
 
     //
     member internal __.EdgeCount
         with get () =
-            (0, adjacencyMap)
+            let seed = if Option.isSome eofTransition then 1 else 0
+            (seed, adjacencyMap)
             ||> Map.fold (fun edgeCount _ edgeSet ->
                 edgeCount + CharSet.count edgeSet)
 
     //
     member __.CreateVertex () =
-        let newVertex = Int32WithMeasure<'Vertex> vertexCount
+        let newVertex : DfaStateId = Int32WithMeasure vertexCount
         newVertex,
         LexerDfaGraph (
             vertexCount + 1,
-            adjacencyMap)
+            adjacencyMap,
+            eofTransition)
 
     //
     member __.TryGetEdgeSet (source : DfaStateId, target : DfaStateId) =
@@ -117,8 +123,23 @@ type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdge
 
         LexerDfaGraph (
             vertexCount,
-            Map.add key edgeSet adjacencyMap)
+            Map.add key edgeSet adjacencyMap,
+            eofTransition)
 
+    //
+    member __.AddEofEdge (source : DfaStateId, target : DfaStateId) =
+        // Preconditions
+        if int source < 0 || int source >= vertexCount then
+            invalidArg "source" "The vertex is not in the graph's vertex-set."
+        elif int target < 0 || int target >= vertexCount then
+            invalidArg "target" "The vertex is not in the graph's vertex-set."
+
+        let eofEdgeKey = TransitionEdgeKey (source, target)
+
+        LexerDfaGraph (
+            vertexCount,
+            adjacencyMap,
+            Some eofEdgeKey)
         
 /// Functions on LexerDfaGraph.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -141,4 +162,8 @@ module LexerDfaGraph =
     //
     let inline tryGetEdgeSet source target (graph : LexerDfaGraph) =
         graph.TryGetEdgeSet (source, target)
+
+    //
+    let inline addEofEdge source target (graph : LexerDfaGraph) =
+        graph.AddEofEdge (source, target)
 

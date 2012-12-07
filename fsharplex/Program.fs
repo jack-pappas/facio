@@ -410,7 +410,7 @@ let ``fslex rules`` =
                     Action =
                         "        token lexbuf"; };
 
-                {   Pattern = Wildcard;
+                {   Pattern = Pattern Any;
                     Action =
                         "        unexpected_char lexbuf"; };
 
@@ -466,7 +466,7 @@ let ``fslex rules`` =
                     Action =
                         "        let msg = sprintf \"End of file in string started at (%d,%d).\" p.pos_lnum (p.pos_cnum - p.pos_bol)\r\n        raise <| exn msg"; };
 
-                {   Pattern = Wildcard;
+                {   Pattern = Pattern Any;
                     Action =
                         "        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        string p buff lexbuf"; };
                 ]; }
@@ -522,7 +522,7 @@ let ``fslex rules`` =
                     Action =
                         "        EOF"; };
 
-                {   Pattern = Wildcard;
+                {   Pattern = Pattern Any;
                     Action =
                         "        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        code p buff lexbuf"; };
                 ]; }
@@ -557,7 +557,7 @@ let ``fslex rules`` =
                 {   Pattern = EndOfFile;
                     Action = "        failwith \"Unterminated string in code.\""; };
 
-                {   Pattern = Wildcard;
+                {   Pattern = Pattern Any;
                     Action = "        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        codestring buff lexbuf"; };
                 ]; }
 
@@ -590,7 +590,7 @@ let ``fslex rules`` =
                                 CharacterSet <| CharSet.ofList ['\''; '('; '*'; '\n'; '\r'; '"'; ')']));
                     Action = "        comment p lexbuf"; };
 
-                {   Pattern = Wildcard;
+                {   Pattern = Pattern Any;
                     Action = "        comment p lexbuf"; };
                 ]; }
 

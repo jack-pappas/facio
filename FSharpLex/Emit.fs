@@ -12,6 +12,9 @@ module FSharpLex.Emit
 open System.ComponentModel.Composition
 open Compile
 
+(* TODO :   Determine how the user will select the backend they want to use,
+            and also how we can allow backend-specific options to be specified. *)
+
 //
 [<Interface>]
 type IBackend =

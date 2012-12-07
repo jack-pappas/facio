@@ -12,6 +12,7 @@ module FSharpLex.Compile
 
 open System.Diagnostics
 open SpecializedCollections
+open LanguagePrimitives
 open Graph
 open Regex
 open Ast
@@ -218,7 +219,7 @@ type LexerRuleDfa = {
 type CompiledRule = {
     /// The DFA compiled from the patterns of the rule clauses.
     Dfa : LexerRuleDfa;
-    //
+    /// The formal parameters of the rule.
     Parameters : string[];
     /// The semantic actions to be executed when the
     /// rule clauses are matched.
@@ -756,6 +757,11 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
 
 //
 let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, badMacros) =
+    (* TODO :   Simplify this function by folding over rule.Clauses; this way,
+                we don't create so many intermediate data structures and we avoid
+                the need to split the clauses based on which RuleClausePattern
+                they're defined with. *)
+
     let ruleClauses =
         // The clauses are provided in reverse order from the way they're
         // specified in the lexer definition, so reverse them to put them
@@ -765,20 +771,53 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         rule.Clauses
         |> List.rev
         |> List.toArray
-    
+
+    // Extract any clauses which match the end-of-file pattern;
+    // these are handled separately from the other patterns.
+    let patterns, eofClauseIndices =
+        // TODO : Simplify the code below using the splitter function from ExtCore.
+
+        let ruleClauseCount = Array.length ruleClauses
+        
+        let patterns = ResizeArray<_> (Array.length ruleClauses)
+        let mutable eofClauseIndices = Set.empty
+
+        // Extract the relevant information from the pattern of each clause,
+        // based on which case of RuleClausePattern they're defined with.
+        for i = 0 to ruleClauseCount - 1 do
+            let clause = ruleClauses.[i]
+            match clause.Pattern with
+            | Pattern pattern ->
+                patterns.Add pattern
+            | EndOfFile ->
+                eofClauseIndices <-
+                    Set.add (Int32WithMeasure i : RuleClauseIndex) eofClauseIndices
+
+        // Return the data.
+        patterns.ToArray (),
+        eofClauseIndices
+
+    /// The index of the rule clause whose action will be executed
+    /// if the lexer attempts to match this rule once the end-of-file
+    /// has been reached.
+    let eofAcceptingClause =
+        if Set.isEmpty eofClauseIndices then
+            None
+        else
+            // Only the earliest use of the "eof" pattern will be matched.
+            let acceptingClause = Set.minElement eofClauseIndices
+            let neverMatchedClauseIndices = Set.remove acceptingClause eofClauseIndices
+
+            // TODO : Implement code to emit warning messages when 'neverMatchedClauseIndices'
+            // is non-empty. (E.g., "This pattern will never be matched.")
+            Some acceptingClause
+
     // Validate and simplify the patterns of the rule clauses.
     let simplifiedRuleClausePatterns =
         let simplifiedRuleClausePatterns =
-            ruleClauses
-            |> Array.map (fun clause ->
-                match clause.Pattern with
-                | Pattern pattern ->
-                    validateAndSimplifyPattern pattern (macroEnv, badMacros, options)
-                | EndOfFile ->
-                    raise <| System.NotImplementedException "compileRule"
-                | Wildcard ->
-                    raise <| System.NotImplementedException "compileRule"
-                    )
+            patterns
+            |> Array.map (fun pattern ->
+                validateAndSimplifyPattern pattern (macroEnv, badMacros, options))
 
         // Put all of the "results" in one array and all of the "errors" in another.
         let results = ResizeArray<_> (Array.length simplifiedRuleClausePatterns)
@@ -803,6 +842,31 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
     | Choice1Of2 ruleClauseRegexes ->
         /// The DFA compiled from the rule clause patterns.
         let compiledPatternDfa = rulePatternsToDfa ruleClauseRegexes options
+
+        // If this rule has a pattern accepting the end-of-file marker,
+        // create an additional DFA state to serve as the EOF-accepting state
+        // and create a transition edge labeled with the EOF symbol to it.
+        let compiledPatternDfa =
+            match eofAcceptingClause with
+            | None -> compiledPatternDfa
+            | Some eofAcceptingClause ->
+                let dfaAcceptingState, transitions =
+                    LexerDfaGraph.createVertex compiledPatternDfa.Transitions
+                let transitions =
+                    LexerDfaGraph.addEofEdge compiledPatternDfa.InitialState dfaAcceptingState transitions
+                { compiledPatternDfa with
+                    Transitions = transitions;
+                    RuleClauseFinalStates =
+                        // Create a new copy to avoid mutating the old array.
+                        // This shouldn't matter, but it's a small array so it doesn't hurt to be safe.
+                        compiledPatternDfa.RuleClauseFinalStates
+                        |> Array.mapi (fun clauseIndex finalStates ->
+                            if int eofAcceptingClause = clauseIndex then
+                                Set.singleton dfaAcceptingState
+                            else finalStates);
+                    RuleAcceptedByState =
+                        compiledPatternDfa.RuleAcceptedByState
+                        |> Map.add dfaAcceptingState eofAcceptingClause; }
 
         // TODO : Emit warnings about any overlapping patterns.
         // E.g., "This pattern will never be matched."
