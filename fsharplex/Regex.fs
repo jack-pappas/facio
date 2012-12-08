@@ -90,7 +90,6 @@ type Regex =
         | Epsilon ->
             cont Empty
         | Any ->
-            // TODO : Double-check that this is correct.
             cont Epsilon
         | Character c ->
             if c = wrtSymbol then Epsilon else Empty
@@ -104,7 +103,8 @@ type Regex =
                 |> cont
         | Star r as ``r*`` ->
             Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-                Concat (r', ``r*``)
+                Or (Epsilon,
+                    Concat (r', ``r*``))
                 |> cont
         | Concat (r, s) ->
             let ``nu(r)`` = if Regex.IsNullable r then Epsilon else Empty
@@ -434,20 +434,6 @@ module RegularVector =
         for i = 0 to len - 1 do
             if Regex.IsNullable regVec.[i] then
                 accepting <- Set.add i accepting
-
-        // Return the computed set of indices.
-        accepting
-
-    /// The indices of the element expressions (if any)
-    /// that accept the empty string (epsilon).
-    let acceptingElementsTagged< [<Measure>] 'Tag > (regVec : RegularVector) =
-        /// The indices of the expressions accepting the empty string.
-        let mutable accepting = Set.empty
-
-        let len = Array.length regVec
-        for i = 0 to len - 1 do
-            if Regex.IsNullable regVec.[i] then
-                accepting <- Set.add (Int32WithMeasure<'Tag> i) accepting
 
         // Return the computed set of indices.
         accepting
