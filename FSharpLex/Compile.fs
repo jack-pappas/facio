@@ -329,7 +329,7 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
 
 
 //
-let private preprocessMacro (macroId, pattern) (options : CompilationOptions) (macroEnv, badMacros) =
+let private preprocessMacro ((macroIdPosition : SourcePosition option, macroId), pattern) (options : CompilationOptions) (macroEnv, badMacros) =
     //
     // OPTIMIZE : Modify this function to use a LazyList to hold the errors
     // instead of an F# list to avoid the list concatenation overhead.
@@ -541,7 +541,7 @@ let private preprocessMacros macros options =
             | errors ->
                 Choice2Of2 (macroEnv, badMacros, errors)
 
-        | (macroId, _ as macro) :: macros ->
+        | ((_, macroId), _ as macro) :: macros ->
             // Validate/process this macro.
             match preprocessMacro macro options (macroEnv, badMacros) with
             | Choice2Of2 macroErrors ->
@@ -865,7 +865,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             Parameters =
                 // Reverse the list so it's in the correct left-to-right order.
                 List.rev rule.Parameters
-                |> List.toArray
+                |> List.toArray;
             RuleClauseActions =
                 ruleClauses
                 |> Array.map (fun clause ->
@@ -940,7 +940,7 @@ let lexerSpec (spec : Specification) options =
                 Footer = spec.Footer;
                 CompiledRules =
                     (Map.empty, ruleIdentifiers, compiledRules)
-                    |||> Array.fold2 (fun map ruleId compiledRule ->
+                    |||> Array.fold2 (fun map (_, ruleId) compiledRule ->
                         Map.add ruleId compiledRule map);
                 StartRule = spec.StartRule; }
         else

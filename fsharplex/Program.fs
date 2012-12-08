@@ -224,24 +224,24 @@ let ``fslex macros`` =
             Macro "hex";
             |]
 
-    [   "letter", letter;
-        "digit", digit;
-        "whitespace", whitespace;
-        "char", char;
-        "hex", hex;
-        "hexgraph", hexgraph;
-        "trigraph", trigraph;
-        "newline", newline;
-        "ident_start_char", ident_start_char;
-        "ident_char", ident_char;
-        "ident", ident;
-        "unicodegraph_short", unicodegraph_short;
-        "unicodegraph_long", unicodegraph_long; ]
+    [   (None, "letter"), letter;
+        (None, "digit"), digit;
+        (None, "whitespace"), whitespace;
+        (None, "char"), char;
+        (None, "hex"), hex;
+        (None, "hexgraph"), hexgraph;
+        (None, "trigraph"), trigraph;
+        (None, "newline"), newline;
+        (None, "ident_start_char"), ident_start_char;
+        (None, "ident_char"), ident_char;
+        (None, "ident"), ident;
+        (None, "unicodegraph_short"), unicodegraph_short;
+        (None, "unicodegraph_long"), unicodegraph_long; ]
     // Reverse the list before returning, because it's expected to be in reverse order.
     |> List.rev
 
 let ``fslex rules`` =
-    [   "token", {
+    [   (None, "token"), {
         Parameters = List.empty;
         Clauses =
             List.rev [
@@ -418,7 +418,7 @@ let ``fslex rules`` =
                         "        EOF"; };
                 ]; };
 
-        "string", {
+        (None, "string"), {
         Parameters = ["buff"; "p"];
         Clauses =
             List.rev [
@@ -470,7 +470,7 @@ let ``fslex rules`` =
                         "        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        string p buff lexbuf"; };
                 ]; };
 
-        "code", {
+        (None, "code"), {
         Parameters = ["buff"; "p"];
         Clauses =
             List.rev [
@@ -526,7 +526,7 @@ let ``fslex rules`` =
                         "        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        code p buff lexbuf"; };
                 ]; };
 
-        "codestring", {
+        (None, "codestring"), {
         Parameters = ["buff"];
         Clauses =
             List.rev [
@@ -560,7 +560,7 @@ let ``fslex rules`` =
                     Action = "        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        codestring buff lexbuf"; };
                 ]; }
 
-        "comment", {
+        (None, "comment"), {
         Parameters = ["p"];
         Clauses =
             List.rev [

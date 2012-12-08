@@ -274,14 +274,14 @@ type Specification = {
     // for validating the specification).
     // NOTE : This list should be in reverse order; that is, the 'head'
     // of the list should be the last (bottom-most) macro defined in the lexer definition.
-    Macros : (MacroIdentifier * Pattern) list;
+    Macros : (MacroIdentifierWithPosition * Pattern) list;
     //
     // NOTE : This is specified as a list (instead of a Map) so we
     // know the order in which the rules were specified and also so we can
     // emit error messages for rules with duplicate names.
     // NOTE : This list should be in reverse order; that is, the 'head'
     // of the list should be the last (bottom-most) rule defined in the lexer definition.
-    Rules : (RuleIdentifier * Rule) list;
+    Rules : (RuleIdentifierWithPosition * Rule) list;
     //
     StartRule : RuleIdentifier;
 }
