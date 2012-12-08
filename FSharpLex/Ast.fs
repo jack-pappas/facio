@@ -14,13 +14,96 @@ open LanguagePrimitives
 open SpecializedCollections
 open Regex
 
-(* TODO :   Add an annotation for position information (i.e., position
-            in the lexer source file) to the CodeFragment type;
-            perhaps also add it to RuleClause for the Pattern field so
-            we can provide warnings when a rule clause won't ever be matched.  *)
+(* TODO :   Add annotations for position information (i.e., position in the lexer
+            definition file) to:
+            -   CodeFragment
+            -   Most cases in the Pattern type; some cases, like Epsilon and Empty,
+                can't be explicity used in a lexer definition file so they don't have
+                source positions.
+            
+            Create new type aliases 'MacroIdentifierWithPosition' and 'RuleIdentifierWithPosition',
+            defined as (MacroIdentifier * SourcePosition) and (RuleIdentifier * SourcePosition),
+            respectively. Modify the Specification record type to use these new aliases instead of
+            MacroIdentifier and RuleIdentifier -- this allows us to keep position information for
+            these identifiers (for emitting warnings/errors), but without actually making it part
+            of the identifier type.
 
-//
+            We do NOT need to add a position annotation to RuleClause as previously thought,
+            because the position information will already be containing within the Pattern instance. *)
+
+/// Unique identifier for a pattern macro
+/// defined by a lexer specification.
 type MacroIdentifier = string
+
+/// A position within a source file (e.g., a lexer definition file).
+[<Struct; CustomEquality; CustomComparison>]
+type SourcePosition =
+    /// The zero-based line number.
+    val Line : uint32
+    /// The zero-based column number.
+    val Column : uint32
+
+    //
+    new (line, column) = {
+        Line = line;
+        Column = column;
+        }
+
+    /// Determines if two SourcePositions are equivalent.
+    static member Equals (x : SourcePosition, y : SourcePosition) =
+        x.Line = y.Line && x.Column = y.Column
+
+    /// Compares two SourcePositions and returns an indication of their relative values.
+    static member Compare (x : SourcePosition, y : SourcePosition) =
+        match compare x.Line y.Line with
+        | 0 ->
+            compare x.Column y.Column
+        | x -> x
+
+    override this.GetHashCode () =
+        (*  Most files will have fewer than 65535 lines and 65535 columns,
+            so computing the hash code like this means we'll almost never
+            have hash conflicts in practice. *)
+
+        // Shift the line number up by 16 bits, implicitly chopping
+        // off the top 16 bits of the value.
+        (this.Line <<< 16)
+        // Mask out the top 16 bits of the column value, then combine
+        // the result with the truncated and up-shifted line number.
+        &&& (this.Column &&& 0x0000ffffu)
+        // Convert to a signed integer value. Note that this doesn't generate
+        // any CPU instructions (it's effectively a no-op).
+        |> int
+
+    override this.Equals value =
+        match value with
+        | null -> false
+        | :? SourcePosition as other ->
+            SourcePosition.Equals (this, other)
+        | _ ->
+            invalidArg "value" "The value is not an instance of SourcePosition."
+
+    override this.ToString () =
+        this.Line.ToString ()
+        + ", "
+        + this.Column.ToString ()
+
+    interface System.IEquatable<SourcePosition> with
+        member this.Equals other =
+            SourcePosition.Equals (this, other)
+
+    interface System.IComparable with
+        member this.CompareTo value =
+            match value with
+            | null -> 1
+            | :? SourcePosition as other ->
+                SourcePosition.Compare (this, other)
+            | _ ->
+                invalidArg "value" "The value is not an instance of SourcePosition."
+
+    interface System.IComparable<SourcePosition> with
+        member this.CompareTo other =
+            SourcePosition.Compare (this, other)
 
 /// <summary>A regular-expression-based pattern used to define patterns within the lexer.</summary>
 /// <remarks>This is a regular expression extended with additional
@@ -98,32 +181,36 @@ type Pattern =
             // Return the constructed pattern.
             pattern
 
-    //
+    /// Returns a Pattern created by concatenating the Patterns in the specified list.
     [<CompiledName("ConcatenateList")>]
     static member concatList list =
         List.reduce (FuncConvert.FuncFromTupled Pattern.Concat) list
 
-    //
-    [<CompiledName("AndList")>]
-    static member andList list =
-        List.reduce (FuncConvert.FuncFromTupled Pattern.And) list
-
-    //
-    [<CompiledName("OrList")>]
-    static member orList list =
-        List.reduce (FuncConvert.FuncFromTupled Pattern.Or) list
-
-    //
+    /// Returns a Pattern created by concatenating the Patterns in the specified array.
     [<CompiledName("ConcatenateArray")>]
     static member concatArray array =
         Array.reduce (FuncConvert.FuncFromTupled Pattern.Concat) array
 
-    //
+    /// Returns a Pattern created by combining the Patterns in the
+    /// specified list together using the logical AND relation.
+    [<CompiledName("AndList")>]
+    static member andList list =
+        List.reduce (FuncConvert.FuncFromTupled Pattern.And) list
+
+    /// Returns a Pattern created by combining the Patterns in the
+    /// specified array together using the logical AND relation.
     [<CompiledName("AndArray")>]
     static member andArray array =
         Array.reduce (FuncConvert.FuncFromTupled Pattern.And) array
 
-    //
+    /// Returns a Pattern created by combining the Patterns in the
+    /// specified list together using the logical OR relation.
+    [<CompiledName("OrList")>]
+    static member orList list =
+        List.reduce (FuncConvert.FuncFromTupled Pattern.Or) list    
+
+    /// Returns a Pattern created by combining the Patterns in the
+    /// specified array together using the logical OR relation.
     [<CompiledName("OrArray")>]
     static member orArray array =
         Array.reduce (FuncConvert.FuncFromTupled Pattern.Or) array
@@ -171,10 +258,10 @@ type Rule = {
     Clauses : RuleClause list;
 }
 
-//
+/// Unique identifier for a lexer rule.
 type RuleIdentifier = string
 
-//
+/// A complete specification of a lexer.
 type Specification = {
     //
     Header : CodeFragment option;
