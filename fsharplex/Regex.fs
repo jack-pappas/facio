@@ -83,51 +83,6 @@ type Regex =
     static member IsNullable (regex : Regex) =
         Regex.IsNullableImpl regex id
 
-    //
-    static member private DerivativeImpl wrtSymbol regex cont =
-        match regex with
-        | Empty
-        | Epsilon ->
-            cont Empty
-        | Any ->
-            cont Epsilon
-        | Character c ->
-            if c = wrtSymbol then Epsilon else Empty
-            |> cont
-        | CharacterSet charSet ->
-            if CharSet.contains wrtSymbol charSet then Epsilon else Empty
-            |> cont
-        | Negate r ->
-            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-                Negate r'
-                |> cont
-        | Star r as ``r*`` ->
-            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-                Or (Epsilon,
-                    Concat (r', ``r*``))
-                |> cont
-        | Concat (r, s) ->
-            let ``nu(r)`` = if Regex.IsNullable r then Epsilon else Empty
-            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-            Regex.DerivativeImpl wrtSymbol s <| fun s' ->
-                Or (Concat (r', s),
-                    Concat (``nu(r)``, s'))
-                |> cont
-        | Or (r, s) ->
-            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-            Regex.DerivativeImpl wrtSymbol s <| fun s' ->
-                Or (r', s')
-                |> cont
-        | And (r, s) ->
-            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-            Regex.DerivativeImpl wrtSymbol s <| fun s' ->
-                And (r', s')
-                |> cont        
-
-    /// Computes the derivative of a Regex with respect to a specified symbol.
-    static member Derivative symbol regex =
-        Regex.DerivativeImpl symbol regex id
-
     /// Given a CharSet from a CharacterSet case, returns the simplest Regex
     /// representing the CharSet.
     static member inline private SimplifyCharacterSet (charSet : CharSet) =
@@ -163,7 +118,9 @@ type Regex =
         | Negate Empty ->
             cont Any
         | Negate Any ->
-            cont Empty        
+            cont Empty
+        | Negate Epsilon ->
+            cont Empty
         | Negate (Character c) ->
              let anyMinusChar = CharSet.remove c charUniverse
              Regex.SimplifyCharacterSet anyMinusChar
@@ -342,6 +299,50 @@ type Regex =
             invalidArg "universe" "The character universe (set of all characters used in the lexer) is empty."
         
         Regex.CanonicalizeImpl regex universe id
+
+    //
+    static member private DerivativeImpl wrtSymbol regex cont =
+        match regex with
+        | Empty
+        | Epsilon ->
+            cont Empty
+        | Any ->
+            cont Epsilon
+        | Character c ->
+            if c = wrtSymbol then Epsilon else Empty
+            |> cont
+        | CharacterSet charSet ->
+            if CharSet.contains wrtSymbol charSet then Epsilon else Empty
+            |> cont
+        | Negate r ->
+            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
+                Negate r'
+                |> cont
+        | Star r as ``r*`` ->
+            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
+                Concat (r', ``r*``)
+                |> cont
+        | Concat (r, s) ->
+            let ``nu(r)`` = if Regex.IsNullable r then Epsilon else Empty
+            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
+            Regex.DerivativeImpl wrtSymbol s <| fun s' ->
+                Or (Concat (r', s),
+                    Concat (``nu(r)``, s'))
+                |> cont
+        | Or (r, s) ->
+            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
+            Regex.DerivativeImpl wrtSymbol s <| fun s' ->
+                Or (r', s')
+                |> cont
+        | And (r, s) ->
+            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
+            Regex.DerivativeImpl wrtSymbol s <| fun s' ->
+                And (r', s')
+                |> cont
+
+    /// Computes the derivative of a Regex with respect to a specified symbol.
+    static member Derivative symbol regex =
+        Regex.DerivativeImpl symbol regex id
 
     /// Computes a conservative approximation of the intersection of two sets of
     /// derivative classes. This is needed when computing the set of derivative
