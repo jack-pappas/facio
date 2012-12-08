@@ -31,10 +31,6 @@ open Regex
             We do NOT need to add a position annotation to RuleClause as previously thought,
             because the position information will already be containing within the Pattern instance. *)
 
-/// Unique identifier for a pattern macro
-/// defined by a lexer specification.
-type MacroIdentifier = string
-
 /// A position within a source file (e.g., a lexer definition file).
 [<Struct; CustomEquality; CustomComparison>]
 type SourcePosition =
@@ -104,6 +100,13 @@ type SourcePosition =
     interface System.IComparable<SourcePosition> with
         member this.CompareTo other =
             SourcePosition.Compare (this, other)
+
+/// Unique identifier for a pattern macro
+/// defined by a lexer specification.
+type MacroIdentifier = string
+
+//
+type MacroIdentifierWithPosition = SourcePosition option * MacroIdentifier
 
 /// <summary>A regular-expression-based pattern used to define patterns within the lexer.</summary>
 /// <remarks>This is a regular expression extended with additional
@@ -240,11 +243,6 @@ type RuleClause = {
 }
 
 //
-[<Measure>] type RuleClauseIdx
-//
-type RuleClauseIndex = int<RuleClauseIdx>
-
-//
 type Rule = {
     /// Parameters of the rule.
     // These are specified by name only -- their types will be inferred
@@ -261,6 +259,9 @@ type Rule = {
 /// Unique identifier for a lexer rule.
 type RuleIdentifier = string
 
+//
+type RuleIdentifierWithPosition = SourcePosition option * RuleIdentifier
+
 /// A complete specification of a lexer.
 type Specification = {
     //
@@ -275,8 +276,18 @@ type Specification = {
     // of the list should be the last (bottom-most) macro defined in the lexer definition.
     Macros : (MacroIdentifier * Pattern) list;
     //
-    Rules : Map<RuleIdentifier, Rule>;
+    // NOTE : This is specified as a list (instead of a Map) so we
+    // know the order in which the rules were specified and also so we can
+    // emit error messages for rules with duplicate names.
+    // NOTE : This list should be in reverse order; that is, the 'head'
+    // of the list should be the last (bottom-most) rule defined in the lexer definition.
+    Rules : (RuleIdentifier * Rule) list;
     //
     StartRule : RuleIdentifier;
 }
+
+//
+[<Measure>] type RuleClauseIdx
+//
+type RuleClauseIndex = int<RuleClauseIdx>
 

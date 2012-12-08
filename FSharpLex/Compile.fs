@@ -895,14 +895,16 @@ let lexerSpec (spec : Specification) options =
         (* Compile the lexer rules *)
         (* TODO :   Simplify the code below using monadic operators. *)
         let ruleIdentifiers, rules =
-            let ruleIdentifiers = Array.zeroCreate spec.Rules.Count
-            let rules = Array.zeroCreate spec.Rules.Count
+            let ruleCount = List.length spec.Rules
+            let ruleIdentifiers = Array.zeroCreate ruleCount
+            let rules = Array.zeroCreate ruleCount
 
-            (0, spec.Rules)
-            ||> Map.fold (fun index ruleId rule ->
+            // TODO : Check for duplicate rule identifiers
+            (ruleCount - 1, spec.Rules)
+            ||> List.fold (fun index (ruleId, rule) ->
                 ruleIdentifiers.[index] <- ruleId
                 rules.[index] <- rule
-                index + 1)
+                index - 1)
             |> ignore
 
             ruleIdentifiers, rules

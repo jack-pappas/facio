@@ -241,8 +241,7 @@ let ``fslex macros`` =
     |> List.rev
 
 let ``fslex rules`` =
-    Map.empty
-    |> Map.add "token" {
+    [   "token", {
         Parameters = List.empty;
         Clauses =
             List.rev [
@@ -417,9 +416,9 @@ let ``fslex rules`` =
                 {   Pattern = EndOfFile;
                     Action =
                         "        EOF"; };
-                ]; }
+                ]; };
 
-     |> Map.add "string" {
+        "string", {
         Parameters = ["buff"; "p"];
         Clauses =
             List.rev [
@@ -469,9 +468,9 @@ let ``fslex rules`` =
                 {   Pattern = Pattern Any;
                     Action =
                         "        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        string p buff lexbuf"; };
-                ]; }
+                ]; };
 
-     |> Map.add "code" {
+        "code", {
         Parameters = ["buff"; "p"];
         Clauses =
             List.rev [
@@ -525,9 +524,9 @@ let ``fslex rules`` =
                 {   Pattern = Pattern Any;
                     Action =
                         "        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        code p buff lexbuf"; };
-                ]; }
+                ]; };
 
-     |> Map.add "codestring" {
+        "codestring", {
         Parameters = ["buff"];
         Clauses =
             List.rev [
@@ -561,7 +560,7 @@ let ``fslex rules`` =
                     Action = "        buff.Append (lexeme lexbuf).[0] |> ignore\r\n        codestring buff lexbuf"; };
                 ]; }
 
-     |> Map.add "comment" {
+        "comment", {
         Parameters = ["p"];
         Clauses =
             List.rev [
@@ -592,7 +591,8 @@ let ``fslex rules`` =
 
                 {   Pattern = Pattern Any;
                     Action = "        comment p lexbuf"; };
-                ]; }
+                ]; };
+        ] // End rule list
 
 let ``fslex specification`` = {
     Header = Some ``fslex header``;
