@@ -18,10 +18,7 @@ open Ast
 open Compile
 
 // TODO : Move these into a separate assembly to avoid loading System.Xml.dll unless necessary.
-
-// TODO : Implement back-ends which generate graph output, e.g., for debugging and presentation.
-// DGML (for Visual Studio)
-// dot (for graphviz)
+// TODO : Implement a backend for the dot (graphviz) format.
 
 /// Functions for generating color palettes.
 // Reference : http://martin.ankerl.com/2009/12/09/how-to-create-random-colors-programmatically/
@@ -263,11 +260,6 @@ module Dgml =
                     dfaStateNode.Attributes.Append acceptedRuleClauseIndexAttr |> ignore
                     acceptedRuleClauseIndexAttr.Value <- acceptedRuleClauseIndex.ToString ())
 
-            // TODO : Add a node if this rule contains a clause which accepts EndOfFile.
-                // Set the Id to (ruleId + "_EOF")
-                // What label to use for the node?
-            // Add an edge from the initial DFA state to this node, and label the edge as "EOF".
-
             // Add the transitions for this rule's DFA.
             compiledRule.Dfa.Transitions.AdjacencyMap
             |> Map.iter (fun edgeKey edgeSet ->
@@ -321,6 +313,32 @@ module Dgml =
                         // Remove the trailing "," before returning.
                         sb.Length <- sb.Length - 1
                         sb.ToString ())
+
+            // Add the EOF transition if this rule has one.
+            compiledRule.Dfa.Transitions.EofTransition
+            |> Option.iter (fun edgeKey ->
+                /// The Link element representing this transition edge.
+                let transitionEdgeLink =
+                    dgmlDoc.CreateElement ("Link", directedGraph.NamespaceURI)
+                    |> links.AppendChild
+
+                // Set the Source attribute value to the identifier for the source DFA state.
+                let sourceAttr = dgmlDoc.CreateAttribute "Source"
+                transitionEdgeLink.Attributes.Append sourceAttr |> ignore
+                sourceAttr.Value <- dfaStateUniqueNodeId ruleId edgeKey.Source
+
+                // Set the Target attribute value to the identifier for the target DFA state.
+                let targetAttr = dgmlDoc.CreateAttribute "Target"
+                transitionEdgeLink.Attributes.Append targetAttr |> ignore
+                targetAttr.Value <- dfaStateUniqueNodeId ruleId edgeKey.Target
+
+                // Set the Label attribute value.
+                // This is the label shown for this edge when the graph is rendered.
+                let labelAttr = dgmlDoc.CreateAttribute "Label"
+                transitionEdgeLink.Attributes.Append labelAttr |> ignore
+                labelAttr.Value <- "EOF"
+                )
+
             // Increment the rule index
             ruleIndex + 1)
         // Discard the rule index
