@@ -6,11 +6,8 @@ This code is provided under the terms of the 2-clause ("Simplified") BSD license
 See LICENSE.TXT for licensing details.
 *)
 
+//
 module FSharpYacc.Program
-
-//open LR
-open Ast
-
 
 /// Assembly-level attributes specific to this assembly.
 module private AssemblyInfo =
@@ -39,6 +36,19 @@ module private AssemblyInfo =
 
     // Appease the F# compiler
     do ()
+
+
+open Ast    // TEMP : Remove this once the test specification is compiled correctly.
+
+
+
+
+
+
+
+
+
+
 
 
 printfn "Press any key to exit..."

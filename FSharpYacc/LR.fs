@@ -420,7 +420,7 @@ module internal Lr0 =
 [<RequireQualifiedAccess>]
 module Slr =
     //
-    let rec private createTableImpl grammar analysis (tableGenState : Lr0TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
+    let rec private createTableImpl (grammar : Grammar<_,_>) analysis (tableGenState : Lr0TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
         // Preconditions
         assert (not <| Map.isEmpty tableGenState.ParserStates)
 
