@@ -8,9 +8,6 @@ See LICENSE.TXT for licensing details.
 
 module FSharpLex.Program
 
-open Graph
-open Regex
-
 //
 module internal AssemblyInfo =
     open System.Reflection
@@ -40,14 +37,7 @@ module internal AssemblyInfo =
     do ()
 
 
-open SpecializedCollections
-open Ast
-
-
-//
-let private ofCharList list =
-    CharSet.ofList list
-    |> Pattern.CharacterSet
+open Ast    // TEMP : Remove this once the testing code (below) is removed.
 
 
 // TEST : Try compiling a more-complex test specification.
@@ -125,12 +115,12 @@ let ``fslex macros`` =
     let letter =
         // ['A'-'Z'] | ['a'-'z']
         Pattern.Or (
-            CharacterSet <| CharSet.ofRange 'A' 'Z',
-            CharacterSet <| CharSet.ofRange 'a' 'z')
+            Pattern.ofCharRange 'A' 'Z',
+            Pattern.ofCharRange 'a' 'z')
 
     let digit =
         // ['0'-'9']
-        CharacterSet <| CharSet.ofRange '0' '9'
+        Pattern.ofCharRange '0' '9'
 
     let whitespace =
         // [' ' '\t']
@@ -145,15 +135,15 @@ let ``fslex macros`` =
                 Or (Negate (Character '\''),
                     Concat (
                         Character '\\',
-                        ofCharList ['\\' ; '\'' ; '"' ; 'n' ; 't' ; 'b' ; 'r'])),
+                        Pattern.ofCharList ['\\' ; '\'' ; '"' ; 'n' ; 't' ; 'b' ; 'r'])),
                 Character '\''))
 
     let hex =
         // ['0'-'9'] | ['A'-'F'] | ['a'-'f']
         Pattern.orArray [|
-            CharacterSet <| CharSet.ofRange '0' '9';
-            CharacterSet <| CharSet.ofRange 'A' 'F';
-            CharacterSet <| CharSet.ofRange 'a' 'f';
+            Pattern.ofCharRange '0' '9';
+            Pattern.ofCharRange 'A' 'F';
+            Pattern.ofCharRange 'a' 'f';
         |]
 
     let hexgraph =
@@ -189,7 +179,7 @@ let ``fslex macros`` =
         Pattern.orArray [|
             Macro "ident_start_char";
             Macro "digit";
-            CharacterSet <| CharSet.ofList ['\''; '_']
+            Pattern.ofCharList ['\''; '_']
             |]
 
     let ident =
@@ -314,8 +304,8 @@ let ``fslex rules`` =
                         Pattern.concatArray [|
                             Character '\'';
                             Character '\\';
-                            CharacterSet <| CharSet.ofRange 'A' 'Z';
-                            CharacterSet <| CharSet.ofRange 'a' 'z';
+                            Pattern.ofCharRange 'A' 'Z';
+                            Pattern.ofCharRange 'a' 'z';
                             Character '\'';                        
                             |];
                     Action =
@@ -405,7 +395,7 @@ let ``fslex rules`` =
                         Pattern <|
                         Concat (
                             Pattern.literalString "//",
-                            Star (Negate (CharacterSet <| CharSet.ofList ['\n'; '\r'])));
+                            Star (Negate (Pattern.ofCharList ['\n'; '\r'])));
                     Action =
                         "        token lexbuf"; };
 
@@ -434,7 +424,7 @@ let ``fslex rules`` =
                         Pattern <|
                         Concat (
                             Character '\\',
-                            CharacterSet <| CharSet.ofList ['"' ; '\\' ; '\'' ; 'n' ; 't' ; 'b' ; 'r']);
+                            Pattern.ofCharList ['"' ; '\\' ; '\'' ; 'n' ; 't' ; 'b' ; 'r']);
                     Action =
                         "        buff.Append (escape (lexeme lexbuf).[1]) |> ignore\r\n        string p buff lexbuf"; };
 
@@ -513,7 +503,7 @@ let ``fslex rules`` =
                         Pattern <|
                         Concat (
                             Pattern.literalString "//",
-                            Star (Negate (CharacterSet <| CharSet.ofList ['\n'; '\r'])));
+                            Star (Negate (Pattern.ofCharList ['\n'; '\r'])));
                     Action =
                         "        buff.Append (lexeme lexbuf) |> ignore\r\n        code p buff lexbuf"; };
 
@@ -586,7 +576,7 @@ let ``fslex rules`` =
                         Pattern <|
                         OneOrMore (
                             Negate (
-                                CharacterSet <| CharSet.ofList ['\''; '('; '*'; '\n'; '\r'; '"'; ')']));
+                                Pattern.ofCharList ['\''; '('; '*'; '\n'; '\r'; '"'; ')']));
                     Action = "        comment p lexbuf"; };
 
                 {   Pattern = Pattern Any;

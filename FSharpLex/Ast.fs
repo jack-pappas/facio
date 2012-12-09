@@ -158,10 +158,10 @@ type Pattern =
     | Repetition of Pattern * uint32 option * uint32 option
 
     (* Macros *)
-    //
+    /// Match a pattern specified by a pattern macro.
     | Macro of MacroIdentifier
-    //
-    | UnicodeCategory of System.Globalization.UnicodeCategory
+    /// Match a character belonging to a specific Unicode category.
+    | UnicodeCategory of UnicodeCategory
 
     /// Creates a Pattern which matches a string.
     [<CompiledName("LiteralString")>]
@@ -183,6 +183,19 @@ type Pattern =
 
             // Return the constructed pattern.
             pattern
+
+    /// Creates a pattern which matches any one character in the specified list.
+    [<CompiledName("OfCharacterList")>]
+    static member ofCharList list =
+        CharSet.ofList list
+        |> CharacterSet
+
+    /// <summary>Creates a pattern which matches any one character in the range
+    /// specified by [<paramref name="lower"/>, <paramref name="upper"/>].</summary>
+    [<CompiledName("OfCharacterRange")>]
+    static member ofCharRange lower upper =
+        CharSet.ofRange lower upper
+        |> CharacterSet
 
     /// Returns a Pattern created by concatenating the Patterns in the specified list.
     [<CompiledName("ConcatenateList")>]
