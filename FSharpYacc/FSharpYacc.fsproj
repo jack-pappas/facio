@@ -50,6 +50,8 @@
     <Compile Include="Predictive.fs" />
     <Compile Include="LR.fs" />
     <Compile Include="LeftCorner.fs" />
+    <Compile Include="Lexer.fs" />
+    <Compile Include="Parser.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\FSharp\1.0\Microsoft.FSharp.Targets" Condition="!Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
