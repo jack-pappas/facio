@@ -183,11 +183,11 @@ type ProductionRule = {
     // NOTE : This list is in reverse order from the way the symbols appear in the parser
     // specification file. I.e., the last (right-most) symbol is the head of the list.
     Symbols : SymbolIdentifier list;
+    /// A semantic action to be executed when this rule is matched.
+    Action : CodeFragment option;
     /// When set, the default associativity and precedence of this rule is overridden
     /// and the associativity and precedence of the specified symbol used instead.
     ImpersonatedPrecedence : SymbolIdentifier option;
-    /// A semantic action to be executed when this rule is matched.
-    Action : CodeFragment option;
 }
 
 /// A complete parser specification of a grammar.
@@ -206,7 +206,9 @@ type Specification = {
     TerminalDeclarations : (DeclaredType option * SymbolIdentifier list) list;
     /// The starting production(s) of the grammar.
     /// Only nonterminals can be specified, and all nonterminals specified as starting
-    /// productions must also have explicit type declarations.    
+    /// productions must also have explicit type declarations.
+    /// At least one (1) nonterminal must be specified;
+    /// a Specification is invalid if this field is empty.
     StartingProductions : SymbolIdentifier list;
     /// Explicitly declared associativities of symbols (terminals and nonterminals).
     /// The precedences of the symbols in the grammar are implied by their ordering
