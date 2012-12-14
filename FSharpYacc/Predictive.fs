@@ -9,7 +9,7 @@ See LICENSE.TXT for licensing details.
 //
 module FSharpYacc.Predictive
 
-open Ast
+open Grammar
 
 
 //

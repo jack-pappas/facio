@@ -38,7 +38,10 @@ module private AssemblyInfo =
     do ()
 
 
-open Ast    // TEMP : Remove this once the test specification is compiled correctly.
+// TEMP : Remove these 'open' declarations once the test specification is compiled correctly.
+open Grammar
+open Ast
+
 
 // TEST : Try to compile a real-world specification to make sure this tool works correctly.
 let ``fslex parser header`` =

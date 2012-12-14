@@ -9,3 +9,6 @@ See LICENSE.TXT for licensing details.
 //
 module FSharpYacc.Emit
 
+open System.ComponentModel.Composition
+//open Compile
+

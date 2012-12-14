@@ -9,3 +9,15 @@ See LICENSE.TXT for licensing details.
 //
 module FSharpYacc.CodeGen
 
+open System.CodeDom.Compiler
+open System.ComponentModel.Composition
+open System.IO
+open System.Text
+open LanguagePrimitives
+//open SpecializedCollections
+open Ast
+//open Compile
+
+(* TODO :   Move the code generator (and any other back-ends we want to create)
+            into plugins using the Managed Extensibility Framework (MEF). *)
+

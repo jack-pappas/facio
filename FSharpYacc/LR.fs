@@ -9,7 +9,7 @@ See LICENSE.TXT for licensing details.
 //
 module FSharpYacc.LR
 
-open Ast
+open Grammar
 open Predictive
 
 
@@ -38,8 +38,8 @@ type LrParserAction =
 
 //
 type LrParsingTable<'NonterminalId, 'Token
-        when 'NonterminalId : comparison
-        and 'Token : comparison> = {
+    when 'NonterminalId : comparison
+    and 'Token : comparison> = {
     //
     Table : Map<ParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserAction>>;
     //
@@ -50,8 +50,8 @@ type LrParsingTable<'NonterminalId, 'Token
 
 /// An LR(0) item.
 type internal Lr0Item<'NonterminalId, 'Token
-        when 'NonterminalId : comparison
-        and 'Token : comparison> = {
+    when 'NonterminalId : comparison
+    and 'Token : comparison> = {
     //
     Nonterminal : 'NonterminalId;
     //
@@ -159,13 +159,13 @@ module internal Lr0Item =
 
 /// An LR(0) parser state -- i.e., a set of LR(0) items.
 type internal Lr0ParserState<'NonterminalId, 'Token
-        when 'NonterminalId : comparison
-        and 'Token : comparison> = Set<Lr0Item<'NonterminalId, 'Token>>
+    when 'NonterminalId : comparison
+    and 'Token : comparison> = Set<Lr0Item<'NonterminalId, 'Token>>
 
 /// LR(0) parser table generation state.
 type internal Lr0TableGenState<'NonterminalId, 'Token
-        when 'NonterminalId : comparison
-        and 'Token : comparison> = {
+    when 'NonterminalId : comparison
+    and 'Token : comparison> = {
     //
     Table : Map<ParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserAction>>;
     //
@@ -394,7 +394,7 @@ module internal Lr0 =
     /// Creates an LR(0) parser table from the specified grammar.
     let createTable (grammar : Grammar<'NonterminalId, 'Token>) =
         // Augment the grammar with the start production and end-of-file token.
-        let grammar = AugmentedGrammar.ofGrammar grammar
+        let grammar = Grammar.augment grammar
 
         /// The initial state (set of items) passed to 'createTable'.
         let initialParserState =
@@ -504,7 +504,7 @@ module Slr =
     /// Creates a Simple LR (SLR) parser table from the specified grammar.
     let createTable (grammar : Grammar<'NonterminalId, 'Token>) =
         // Augment the grammar with the start production and end-of-file token.
-        let grammar = AugmentedGrammar.ofGrammar grammar
+        let grammar = Grammar.augment grammar
 
         /// Predictive sets of the augmented grammar.
         let analysis = PredictiveSets.ofGrammar grammar
@@ -531,8 +531,8 @@ module Slr =
 
 /// An LR(1) item.
 type internal Lr1Item<'NonterminalId, 'Token
-        when 'NonterminalId : comparison
-        and 'Token : comparison> = {
+    when 'NonterminalId : comparison
+    and 'Token : comparison> = {
     //
     Nonterminal : 'NonterminalId;
     //
@@ -700,13 +700,13 @@ module internal Lr1Item =
 
 /// An LR(1) parser state -- i.e., a set of LR(1) items.
 type internal Lr1ParserState<'NonterminalId, 'Token
-        when 'NonterminalId : comparison
-        and 'Token : comparison> = Set<Lr1Item<'NonterminalId, 'Token>>
+    when 'NonterminalId : comparison
+    and 'Token : comparison> = Set<Lr1Item<'NonterminalId, 'Token>>
 
 /// LR(1) parser table generation state.
 type internal Lr1TableGenState<'NonterminalId, 'Token
-        when 'NonterminalId : comparison
-        and 'Token : comparison> = {
+    when 'NonterminalId : comparison
+    and 'Token : comparison> = {
     //
     Table : Map<ParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserAction>>;
     //
@@ -928,7 +928,7 @@ module Lr1 =
     //
     let private createTableGenState (grammar : Grammar<'NonterminalId, 'Token>) =
         // Augment the grammar with the start production and end-of-file token.
-        let grammar = AugmentedGrammar.ofGrammar grammar
+        let grammar = Grammar.augment grammar
 
         /// Analysis of the augmented grammar.
         let predictiveSets = PredictiveSets.ofGrammar grammar

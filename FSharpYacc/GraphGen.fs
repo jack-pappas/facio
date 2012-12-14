@@ -9,3 +9,14 @@ See LICENSE.TXT for licensing details.
 //
 module FSharpYacc.GraphGen
 
+open System.ComponentModel.Composition
+open System.IO
+open System.Text
+//open SpecializedCollections
+//open Graph
+open Ast
+//open Compile
+
+// TODO : Move these into a separate assembly to avoid loading System.Xml.dll unless necessary.
+// TODO : Implement a backend for the dot (graphviz) format.
+

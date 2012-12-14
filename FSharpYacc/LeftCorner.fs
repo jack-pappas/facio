@@ -9,34 +9,8 @@ See LICENSE.TXT for licensing details.
 //
 module FSharpYacc.LeftCorner
 
-open Ast
-
-
-/// Classifies a parser position (within a parser item), based on
-/// how the insertion of a semantic routine at that position would
-/// change the classification of the grammar.
-type PositionClassification =
-    /// No semantic routine may be called at this position.
-    // Inserting a semantic routine here always causes the grammar
-    // to become non-deterministic.
-    | Forbidden
-    /// It is sometimes safe to call a semantic routine at this position.
-    // Inserting a semantic routine here may cause the grammar to
-    // become non-deterministic.
-    | Contingent
-    /// It is always safe to call a semantic routine at this position.
-    // Inserting a semantic routine here preserves the grammar class;
-    // e.g., an LR(1) grammar will still be LR(1) after inserting the routine.
-    | Free
-
-//
-[<RequireQualifiedAccess>]
-module PositionAnalysis =
-    //
-    let analyze (grammar : Grammar<'NonterminalId, 'Token>) =
-        // TODO : Need to implement some graph functionality (for dominators)
-        // before this algorithm can be implemented.
-        failwith "TODO"
+open Grammar
+open Analysis
 
 
 /// An action which manipulates the state of the
@@ -65,8 +39,8 @@ type LeftCornerParserAction =
 
 //
 type LeftCornerParserTable<'NonterminalId, 'Token
-        when 'NonterminalId : comparison
-        and 'Token : comparison> = {
+    when 'NonterminalId : comparison
+    and 'Token : comparison> = {
     //
     Table : Map<ParserStateId * Symbol<'NonterminalId, 'Token>, Set<LeftCornerParserAction>>;
     //
@@ -77,8 +51,8 @@ type LeftCornerParserTable<'NonterminalId, 'Token
 
 /// A Left-Corner parser item.
 type internal LeftCornerItem<'NonterminalId, 'Token
-        when 'NonterminalId : comparison
-        and 'Token : comparison> = {
+    when 'NonterminalId : comparison
+    and 'Token : comparison> = {
     //
     Nonterminal : 'NonterminalId;
     //
@@ -186,8 +160,8 @@ module internal LeftCornerItem =
 
 /// A Left-Corner parser state -- i.e., a set of Left-Corner items.
 type internal LeftCornerParserState<'NonterminalId, 'Token
-        when 'NonterminalId : comparison
-        and 'Token : comparison> = Set<LeftCornerItem<'NonterminalId, 'Token>>
+    when 'NonterminalId : comparison
+    and 'Token : comparison> = Set<LeftCornerItem<'NonterminalId, 'Token>>
 
 
 
