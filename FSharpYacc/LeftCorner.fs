@@ -50,6 +50,12 @@ type LeftCornerParserTable<'Nonterminal, 'Terminal
     ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
 }
 
+//// Utility functions for generating left-corner parsers.
+//module internal Utilities =
+//    let [<Literal>] ihat = "\u0069\u0302"
+//    let [<Literal>] turnstile = '\u22a2'
+//    let [<Literal>] rev_turnstile = '\u22a3'
+
 /// A Left-Corner parser item.
 type internal LeftCornerItem<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
@@ -165,23 +171,4 @@ type internal LeftCornerParserState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     Set<LeftCornerItem<'Nonterminal, 'Terminal>>
-
-
-
-//// Utility functions for generating left-corner parsers.
-//module internal Utilities =
-//    let [<Literal>] ihat = "\u0069\u0302"
-//    let [<Literal>] turnstile = '\u22a2'
-//    let [<Literal>] rev_turnstile = '\u22a3'
-
-
-// TODO : Implement modules for generating other types of parsers
-    // Deterministic
-    // SGLC -- Simple Generalized Left-Corner, accomodates SLR(1) grammars
-    // XLC(1) - eXtended generalized Left-Corner(1), accomodates LR(1) grammars
-    // LAXLC(1) - Look-Ahead eXtended generalized Left-Corner(1), accomodates LALR(1) grammars
-
-    // Nondeterministic
-    // GLR -- Generalized LR (perhaps as Scannerless GLR (SGLR))
-    // GLC -- Generalized Left-Corner (see Nederhof, "Generalized Left-Corner Parsing")
 
