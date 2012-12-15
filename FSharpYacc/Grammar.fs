@@ -12,8 +12,8 @@ module FSharpYacc.Grammar
 
 /// A symbol within a context-free grammar (CFG).
 type Symbol<'NonterminalId, 'Token
-                when 'NonterminalId : comparison
-                and 'Token : comparison> =
+    when 'NonterminalId : comparison
+    and 'Token : comparison> =
     //
     | Terminal of 'Token
     //

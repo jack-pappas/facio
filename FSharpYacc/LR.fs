@@ -10,7 +10,7 @@ See LICENSE.TXT for licensing details.
 module FSharpYacc.LR
 
 open Grammar
-open Predictive
+open Analysis
 
 
 /// An action which manipulates the state of the
@@ -37,27 +37,29 @@ type LrParserAction =
             "a"
 
 //
-type LrParsingTable<'NonterminalId, 'Token
-    when 'NonterminalId : comparison
-    and 'Token : comparison> = {
+type LrParsingTable<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> = {
     //
-    Table : Map<ParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserAction>>;
+    Table : Map<ParserStateId * Symbol<'Nonterminal, 'Terminal>, Set<LrParserAction>>;
     //
     ParserStateCount : uint32;
     //
-    ReductionRulesById : Map<ReductionRuleId, 'NonterminalId * Symbol<'NonterminalId, 'Token>[]>;
+    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
 }
 
-/// An LR(0) item.
-type internal Lr0Item<'NonterminalId, 'Token
-    when 'NonterminalId : comparison
-    and 'Token : comparison> = {
+/// An LR(k) item.
+type internal LrItem<'Nonterminal, 'Terminal, 'Lookahead
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> = {
     //
-    Nonterminal : 'NonterminalId;
+    Nonterminal : 'Nonterminal;
     //
-    Production : Symbol<'NonterminalId, 'Token>[];
+    Production : Symbol<'Nonterminal, 'Terminal>[];
     //
     Position : int<ParserPosition>;
+    //
+    Lookahead : 'Lookahead;
 } with
     override this.ToString () =
         let sb = System.Text.StringBuilder ()
@@ -77,7 +79,19 @@ type internal Lr0Item<'NonterminalId, 'Token
                 this.Production.[i - 1].ToString ()
                 |> sb.Append |> ignore
 
+        // Append the lookahead symbol, if applicable.
+        if typeof<'Lookahead> <> typeof<unit> then
+            sb.Append ", " |> ignore
+            this.Lookahead.ToString () |> sb.Append |> ignore
+
         sb.ToString ()
+
+
+/// An LR(0) item.
+type internal Lr0Item<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
+    LrItem<'Nonterminal, 'Terminal, unit>
 
 /// Functions for manipulating LR(0) parser items.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -86,7 +100,7 @@ module internal Lr0Item =
     // TODO : Modify this to use a worklist-style algorithm to avoid
     // reprocessing items which already exist in the set (i.e., when iterating,
     // we only process items added to the set in the previous iteration).
-    let closure (productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>) items =
+    let closure (productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>) items =
         /// Implementation of the LR(0) closure algorithm.
         let rec closure items =
             let items' =
@@ -114,7 +128,8 @@ module internal Lr0Item =
                                 let newItem = {
                                     Nonterminal = nontermId;
                                     Production = production;
-                                    Position = 0<_>; }
+                                    Position = 0<_>;
+                                    Lookahead = (); }
 
                                 Set.add newItem items))
 
@@ -130,7 +145,7 @@ module internal Lr0Item =
 
     /// Moves the 'dot' (the current parser position) past the
     /// specified symbol for each item in a set of items.
-    let goto symbol items (productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>) =
+    let goto symbol items (productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>) =
         /// The updated 'items' set.
         let items =
             (Set.empty, items)
@@ -158,22 +173,22 @@ module internal Lr0Item =
 
 
 /// An LR(0) parser state -- i.e., a set of LR(0) items.
-type internal Lr0ParserState<'NonterminalId, 'Token
-    when 'NonterminalId : comparison
-    and 'Token : comparison> = Set<Lr0Item<'NonterminalId, 'Token>>
+type internal Lr0ParserState<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> = Set<Lr0Item<'Nonterminal, 'Terminal>>
 
 /// LR(0) parser table generation state.
-type internal Lr0TableGenState<'NonterminalId, 'Token
-    when 'NonterminalId : comparison
-    and 'Token : comparison> = {
+type internal Lr0TableGenState<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> = {
     //
-    Table : Map<ParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserAction>>;
+    Table : Map<ParserStateId * Symbol<'Nonterminal, 'Terminal>, Set<LrParserAction>>;
     //
-    ParserStates : Map<Lr0ParserState<'NonterminalId, 'Token>, ParserStateId>;
+    ParserStates : Map<Lr0ParserState<'Nonterminal, 'Terminal>, ParserStateId>;
     //
-    ReductionRules : Map<'NonterminalId * Symbol<'NonterminalId, 'Token>[], ReductionRuleId>;
+    ReductionRules : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], ReductionRuleId>;
     //
-    ReductionRulesById : Map<ReductionRuleId, 'NonterminalId * Symbol<'NonterminalId, 'Token>[]>;
+    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
 }
 
 /// Functions which use the State monad to manipulate an LR(0) table-generation state.
@@ -181,7 +196,7 @@ type internal Lr0TableGenState<'NonterminalId, 'Token
 module internal Lr0TableGenState =
     /// Returns an empty Lr0TableGenState with the given
     /// nonterminal and terminal types.
-    let empty : Lr0TableGenState<'NonterminalId, 'Token> = {
+    let empty : Lr0TableGenState<'Nonterminal, 'Terminal> = {
         Table = Map.empty;
         ParserStates = Map.empty;
         ReductionRules = Map.empty;
@@ -190,7 +205,7 @@ module internal Lr0TableGenState =
     /// Retrives the identifier for a given parser state (set of items).
     /// If the state has not been assigned an identifier, one is created
     /// and added to the table-generation state before returning.
-    let stateId (parserState : Lr0ParserState<'NonterminalId, 'Token>) (tableGenState : Lr0TableGenState<'NonterminalId, 'Token>) =
+    let stateId (parserState : Lr0ParserState<'Nonterminal, 'Terminal>) (tableGenState : Lr0TableGenState<'Nonterminal, 'Terminal>) =
         // Try to retrieve an existing id for this state.
         match Map.tryFind parserState tableGenState.ParserStates with
         | Some parserStateId ->
@@ -206,7 +221,7 @@ module internal Lr0TableGenState =
                 ParserStates = Map.add parserState parserStateId tableGenState.ParserStates; }
 
     //
-    let reductionRuleId (reductionRule : 'NonterminalId * Symbol<'NonterminalId, 'Token>[]) (tableGenState : Lr0TableGenState<'NonterminalId, 'Token>) =
+    let reductionRuleId (reductionRule : 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]) (tableGenState : Lr0TableGenState<'Nonterminal, 'Terminal>) =
         // Reduction rules should only be added, but for safety we'll check to
         // see if the rule has already been assigned an identifier.
         match Map.tryFind reductionRule tableGenState.ReductionRules with
@@ -225,9 +240,9 @@ module internal Lr0TableGenState =
 
     /// Add a 'shift' action to the parser table.
     let shift (sourceState : ParserStateId)
-                (transitionSymbol : 'Token)
+                (transitionSymbol : 'Terminal)
                 (targetState : ParserStateId)
-                (tableGenState : Lr0TableGenState<'NonterminalId, 'Token>) =
+                (tableGenState : Lr0TableGenState<'Nonterminal, 'Terminal>) =
         //
         let tableKey = sourceState, Symbol.Terminal transitionSymbol
 
@@ -247,9 +262,9 @@ module internal Lr0TableGenState =
 
     /// Add a 'goto' action to the parser table.
     let goto (sourceState : ParserStateId)
-                (transitionSymbol : 'NonterminalId)
+                (transitionSymbol : 'Nonterminal)
                 (targetState : ParserStateId)
-                (tableGenState : Lr0TableGenState<'NonterminalId, 'Token>) =
+                (tableGenState : Lr0TableGenState<'Nonterminal, 'Terminal>) =
         //
         let tableKey = sourceState, Symbol.Nonterminal transitionSymbol
 
@@ -268,7 +283,7 @@ module internal Lr0TableGenState =
             Table = Map.add tableKey entry tableGenState.Table; }
 
     /// Add an 'accept' action to the parser table.
-    let accept (sourceState : ParserStateId) (tableGenState : Lr0TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
+    let accept (sourceState : ParserStateId) (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
         //
         let tableKey = sourceState, Symbol.Terminal EndOfFile
 
@@ -288,7 +303,7 @@ module internal Lr0TableGenState =
             Table = Map.add tableKey entry tableGenState.Table; }
 
     /// Add 'reduce' actions to the parser table for each terminal (token) in the grammar.
-    let reduce (sourceState : ParserStateId) (reductionRuleId : ReductionRuleId) (terminals : Set<_>) (tableGenState : Lr0TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
+    let reduce (sourceState : ParserStateId) (reductionRuleId : ReductionRuleId) (terminals : Set<_>) (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
         // Fold over the set of terminals (tokens) in the grammar.
         let table =
             (tableGenState.Table, terminals)
@@ -317,7 +332,7 @@ module internal Lr0TableGenState =
 [<RequireQualifiedAccess>]
 module internal Lr0 =
     //
-    let rec private createTableImpl grammar (tableGenState : Lr0TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
+    let rec private createTableImpl grammar (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
         // Preconditions
         assert (not <| Map.isEmpty tableGenState.ParserStates)
 
@@ -392,7 +407,7 @@ module internal Lr0 =
                 ReductionRulesById = tableGenState.ReductionRulesById; }
 
     /// Creates an LR(0) parser table from the specified grammar.
-    let createTable (grammar : Grammar<'NonterminalId, 'Token>) =
+    let createTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
         // Augment the grammar with the start production and end-of-file token.
         let grammar = Grammar.augment grammar
 
@@ -403,9 +418,10 @@ module internal Lr0 =
             |> Set.map (fun production ->
                 // Create an 'item', with the parser position at
                 // the beginning of the production.
-                { Nonterminal = Start;
+                {   Nonterminal = Start;
                     Production = production;
-                    Position = 0<_>; })
+                    Position = 0<_>;
+                    Lookahead = (); })
             |> Lr0Item.closure grammar.Productions
 
         // The initial table-gen state.
@@ -420,7 +436,7 @@ module internal Lr0 =
 [<RequireQualifiedAccess>]
 module Slr =
     //
-    let rec private createTableImpl (grammar : Grammar<_,_>) analysis (tableGenState : Lr0TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
+    let rec private createTableImpl (grammar : Grammar<_,_>) analysis (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
         // Preconditions
         assert (not <| Map.isEmpty tableGenState.ParserStates)
 
@@ -502,7 +518,7 @@ module Slr =
                 ReductionRulesById = tableGenState.ReductionRulesById; }
 
     /// Creates a Simple LR (SLR) parser table from the specified grammar.
-    let createTable (grammar : Grammar<'NonterminalId, 'Token>) =
+    let createTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
         // Augment the grammar with the start production and end-of-file token.
         let grammar = Grammar.augment grammar
 
@@ -516,9 +532,10 @@ module Slr =
             |> Set.map (fun production ->
                 // Create an 'item', with the parser position at
                 // the beginning of the production.
-                { Nonterminal = Start;
+                {   Nonterminal = Start;
                     Production = production;
-                    Position = 0<_>; })
+                    Position = 0<_>;
+                    Lookahead = (); })
             |> Lr0Item.closure grammar.Productions
 
         // The initial table-gen state.
@@ -530,48 +547,17 @@ module Slr =
 
 
 /// An LR(1) item.
-type internal Lr1Item<'NonterminalId, 'Token
-    when 'NonterminalId : comparison
-    and 'Token : comparison> = {
-    //
-    Nonterminal : 'NonterminalId;
-    //
-    Production : Symbol<'NonterminalId, 'Token>[];
-    //
-    Position : int<ParserPosition>;
-    //
-    LookaheadSymbol : 'Token;
-} with
-    override this.ToString () =
-        let sb = System.Text.StringBuilder ()
-
-        // Add the nonterminal text and arrow to the StringBuilder.
-        sprintf "%O \u2192 " this.Nonterminal
-        |> sb.Append |> ignore
-
-        for i = 0 to Array.length this.Production do
-            if i < int this.Position then
-                this.Production.[i].ToString ()
-                |> sb.Append |> ignore
-            elif i = int this.Position then
-                // Append the dot character representing the parser position.
-                sb.Append "\u2022" |> ignore
-            else
-                this.Production.[i - 1].ToString ()
-                |> sb.Append |> ignore
-
-        // Append the lookahead symbol
-        sb.Append ", " |> ignore
-        this.LookaheadSymbol.ToString () |> sb.Append |> ignore
-
-        sb.ToString ()
+type internal Lr1Item<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
+    LrItem<'Nonterminal, 'Terminal, 'Terminal>
 
 /// Functions for manipulating LR(1) parser items.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module internal Lr1Item =
     /// Computes the FIRST set of a string of symbols.
     /// The string is a "substring" of a production, followed by a lookahead token.
-    let firstSetOfString (production : Symbol<'NonterminalId, 'Token>[]) startIndex (lookahead : 'Token) (predictiveSets : PredictiveSets<'NonterminalId, 'Token>) : Set<'Token> =
+    let firstSetOfString (production : Symbol<'Nonterminal, 'Terminal>[]) startIndex (lookahead : 'Terminal) (predictiveSets : PredictiveSets<'Nonterminal, 'Terminal>) : Set<'Terminal> =
         // Preconditions
         if startIndex < 0 then
             invalidArg "startIndex" "The start index cannot be negative."
@@ -616,7 +602,7 @@ module internal Lr1Item =
     // TODO : Modify this to use a worklist-style algorithm to avoid
     // reprocessing items which already exist in the set (i.e., when iterating,
     // we only process items added to the set in the previous iteration).
-    let closure (grammar : Grammar<'NonterminalId, 'Token>) (predictiveSets : PredictiveSets<'NonterminalId, 'Token>) items =
+    let closure (grammar : Grammar<'Nonterminal, 'Terminal>) (predictiveSets : PredictiveSets<'Nonterminal, 'Terminal>) items =
         /// Implementation of the LR(1) closure algorithm.
         let rec closure items =
             let items' =
@@ -640,7 +626,7 @@ module internal Lr1Item =
                             /// (i.e., the symbols following this nonterminal symbol),
                             /// plus the lookahead token from the item.
                             let firstSetOfRemainingSymbols =
-                                firstSetOfString item.Production (int item.Position + 1) item.LookaheadSymbol predictiveSets
+                                firstSetOfString item.Production (int item.Position + 1) item.Lookahead predictiveSets
 
                             // For all productions of this nonterminal, create a new item
                             // with the parser position at the beginning of the production.
@@ -655,7 +641,7 @@ module internal Lr1Item =
                                         Nonterminal = nontermId;
                                         Production = production;
                                         Position = 0<_>;
-                                        LookaheadSymbol = nontermFollowToken; }
+                                        Lookahead = nontermFollowToken; }
 
                                     Set.add newItem items)))
 
@@ -671,7 +657,7 @@ module internal Lr1Item =
 
     /// Moves the 'dot' (the current parser position) past the
     /// specified symbol for each item in a set of items.
-    let goto symbol items (grammar : Grammar<'NonterminalId, 'Token>) (predictiveSets : PredictiveSets<_,_>) =
+    let goto symbol items (grammar : Grammar<'Nonterminal, 'Terminal>) (predictiveSets : PredictiveSets<_,_>) =
         /// The updated 'items' set.
         let items =
             (Set.empty, items)
@@ -699,22 +685,23 @@ module internal Lr1Item =
 
 
 /// An LR(1) parser state -- i.e., a set of LR(1) items.
-type internal Lr1ParserState<'NonterminalId, 'Token
-    when 'NonterminalId : comparison
-    and 'Token : comparison> = Set<Lr1Item<'NonterminalId, 'Token>>
+type internal Lr1ParserState<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
+    Set<Lr1Item<'Nonterminal, 'Terminal>>
 
 /// LR(1) parser table generation state.
-type internal Lr1TableGenState<'NonterminalId, 'Token
-    when 'NonterminalId : comparison
-    and 'Token : comparison> = {
+type internal Lr1TableGenState<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> = {
     //
-    Table : Map<ParserStateId * Symbol<'NonterminalId, 'Token>, Set<LrParserAction>>;
+    Table : Map<ParserStateId * Symbol<'Nonterminal, 'Terminal>, Set<LrParserAction>>;
     //
-    ParserStates : Map<Lr1ParserState<'NonterminalId, 'Token>, ParserStateId>;
+    ParserStates : Map<Lr1ParserState<'Nonterminal, 'Terminal>, ParserStateId>;
     //
-    ReductionRules : Map<'NonterminalId * Symbol<'NonterminalId, 'Token>[], ReductionRuleId>;
+    ReductionRules : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], ReductionRuleId>;
     //
-    ReductionRulesById : Map<ReductionRuleId, 'NonterminalId * Symbol<'NonterminalId, 'Token>[]>;
+    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
 }
 
 /// Functions which use the State monad to manipulate an LR(1) table-generation state.
@@ -722,7 +709,7 @@ type internal Lr1TableGenState<'NonterminalId, 'Token
 module internal Lr1TableGenState =
     /// Returns an empty Lr1TableGenState with the given
     /// nonterminal and terminal types.
-    let empty : Lr1TableGenState<'NonterminalId, 'Token> = {
+    let empty : Lr1TableGenState<'Nonterminal, 'Terminal> = {
         Table = Map.empty;
         ParserStates = Map.empty;
         ReductionRules = Map.empty;
@@ -731,7 +718,7 @@ module internal Lr1TableGenState =
     /// Retrives the identifier for a given parser state (set of items).
     /// If the state has not been assigned an identifier, one is created
     /// and added to the table-generation state before returning.
-    let stateId (parserState : Lr1ParserState<'NonterminalId, 'Token>) (tableGenState : Lr1TableGenState<'NonterminalId, 'Token>) =
+    let stateId (parserState : Lr1ParserState<'Nonterminal, 'Terminal>) (tableGenState : Lr1TableGenState<'Nonterminal, 'Terminal>) =
         // Try to retrieve an existing id for this state.
         match Map.tryFind parserState tableGenState.ParserStates with
         | Some parserStateId ->
@@ -747,7 +734,7 @@ module internal Lr1TableGenState =
                 ParserStates = Map.add parserState parserStateId tableGenState.ParserStates; }
 
     //
-    let reductionRuleId (reductionRule : 'NonterminalId * Symbol<'NonterminalId, 'Token>[]) (tableGenState : Lr1TableGenState<'NonterminalId, 'Token>) =
+    let reductionRuleId (reductionRule : 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]) (tableGenState : Lr1TableGenState<'Nonterminal, 'Terminal>) =
         // Reduction rules should only be added, but for safety we'll check to
         // see if the rule has already been assigned an identifier.
         match Map.tryFind reductionRule tableGenState.ReductionRules with
@@ -766,9 +753,9 @@ module internal Lr1TableGenState =
 
     /// Add a 'shift' action to the parser table.
     let shift (sourceState : ParserStateId)
-                (transitionSymbol : 'Token)
+                (transitionSymbol : 'Terminal)
                 (targetState : ParserStateId)
-                (tableGenState : Lr1TableGenState<'NonterminalId, 'Token>) =
+                (tableGenState : Lr1TableGenState<'Nonterminal, 'Terminal>) =
         //
         let tableKey = sourceState, Symbol.Terminal transitionSymbol
 
@@ -788,9 +775,9 @@ module internal Lr1TableGenState =
 
     /// Add a 'goto' action to the parser table.
     let goto (sourceState : ParserStateId)
-                (transitionSymbol : 'NonterminalId)
+                (transitionSymbol : 'Nonterminal)
                 (targetState : ParserStateId)
-                (tableGenState : Lr1TableGenState<'NonterminalId, 'Token>) =
+                (tableGenState : Lr1TableGenState<'Nonterminal, 'Terminal>) =
         //
         let tableKey = sourceState, Symbol.Nonterminal transitionSymbol
 
@@ -809,7 +796,7 @@ module internal Lr1TableGenState =
             Table = Map.add tableKey entry tableGenState.Table; }
 
     /// Add an 'accept' action to the parser table.
-    let accept (sourceState : ParserStateId) (tableGenState : Lr1TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
+    let accept (sourceState : ParserStateId) (tableGenState : Lr1TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
         //
         let tableKey = sourceState, Symbol.Terminal EndOfFile
 
@@ -829,7 +816,7 @@ module internal Lr1TableGenState =
             Table = Map.add tableKey entry tableGenState.Table; }
 
     /// Add a 'reduce' action to the parser table for the specified lookahead token.
-    let reduce (sourceState : ParserStateId) (reductionRuleId : ReductionRuleId) (lookaheadToken : AugmentedTerminal<'Token>) (tableGenState : Lr1TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
+    let reduce (sourceState : ParserStateId) (reductionRuleId : ReductionRuleId) (lookaheadToken : AugmentedTerminal<'Terminal>) (tableGenState : Lr1TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
         //
         let tableKey = sourceState, Symbol.Terminal lookaheadToken
 
@@ -852,7 +839,7 @@ module internal Lr1TableGenState =
 [<RequireQualifiedAccess>]
 module Lr1 =
     //
-    let rec private createTableImpl grammar predictiveSets (tableGenState : Lr1TableGenState<'NonterminalId, AugmentedTerminal<'Token>>) =
+    let rec private createTableImpl grammar predictiveSets (tableGenState : Lr1TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
         // Preconditions
         assert (not <| Map.isEmpty tableGenState.ParserStates)
 
@@ -870,7 +857,7 @@ module Lr1 =
                             Lr1TableGenState.reductionRuleId (item.Nonterminal, item.Production) tableGenState
 
                         // Add a 'reduce' action for the entry with this state and lookahead token.
-                        Lr1TableGenState.reduce stateId reductionRuleId item.LookaheadSymbol tableGenState
+                        Lr1TableGenState.reduce stateId reductionRuleId item.Lookahead tableGenState
                         // TEMP : Discard the unit return value until we can use a monadic fold.
                         |> snd
                     else
@@ -926,7 +913,7 @@ module Lr1 =
             tableGenState
 
     //
-    let private createTableGenState (grammar : Grammar<'NonterminalId, 'Token>) =
+    let private createTableGenState (grammar : Grammar<'Nonterminal, 'Terminal>) =
         // Augment the grammar with the start production and end-of-file token.
         let grammar = Grammar.augment grammar
 
@@ -947,7 +934,7 @@ module Lr1 =
                     // Any token can be used here, because the end-of-file symbol
                     // (in the augmented start production) will never be shifted.
                     // We use the EndOfFile token itself here to keep the code generic.
-                    LookaheadSymbol = EndOfFile; }
+                    Lookahead = EndOfFile; }
                 Set.add item items)
             |> Lr1Item.closure grammar predictiveSets
 
@@ -959,7 +946,7 @@ module Lr1 =
         createTableImpl grammar predictiveSets initialTableGenState
 
     /// Create an LR(1) parser table for the specified grammar.
-    let createTable (grammar : Grammar<'NonterminalId, 'Token>) =
+    let createTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
         // Create the table-gen state.
         let tableGenState = createTableGenState grammar
 
@@ -984,21 +971,22 @@ module Lr1 =
     /// <remarks>Uses the Lr0Item type because it has the exact same fields as Lr1Item
     /// when the lookahead token is discarded, and therefore we avoid creating a type
     /// which would be exactly the same except for it's semantics.</remarks>
-    type private Lr1ParserStateNoLookahead<'NonterminalId, 'Token
-        when 'NonterminalId : comparison
-        and 'Token : comparison> = Set<Lr0Item<'NonterminalId, 'Token>>
+    type private Lr1ParserStateNoLookahead<'Nonterminal, 'Terminal
+        when 'Nonterminal : comparison
+        and 'Terminal : comparison> = Set<Lr0Item<'Nonterminal, 'Terminal>>
 
     /// Discards the lookahead tokens from the items in an LR(1) parser state.
-    let private discardLookaheadTokens (lr1ParserState : Lr1ParserState<'NonterminalId, 'Token>)
-        : Lr1ParserStateNoLookahead<'NonterminalId, 'Token> =
+    let private discardLookaheadTokens (lr1ParserState : Lr1ParserState<'Nonterminal, 'Terminal>)
+        : Lr1ParserStateNoLookahead<'Nonterminal, 'Terminal> =
         lr1ParserState
         |> Set.map (fun lr1Item ->
             {   Nonterminal = lr1Item.Nonterminal;
                 Production = lr1Item.Production;
-                Position = lr1Item.Position; } : Lr0Item<_,_>)
+                Position = lr1Item.Position;
+                Lookahead = (); } : Lr0Item<_,_>)
 
     /// Create a LALR(1) parser table for the specified grammar.
-    let createCompressedTable (grammar : Grammar<'NonterminalId, 'Token>) =
+    let createCompressedTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
         // Create the table-gen state.
         let tableGenState = createTableGenState grammar
 
