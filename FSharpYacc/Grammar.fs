@@ -75,14 +75,14 @@ type Grammar<'Nonterminal, 'Terminal
     //
     Nonterminals : Set<'Nonterminal>;
     //
-    Productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>;
+    Productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>;
     //
     StartSymbol : 'Nonterminal;
 } with
     //
     [<CompiledName("Augment")>]
     static member augment (grammar : Grammar<'Nonterminal, 'Terminal>)
-        : Grammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>> =
+        : AugmentedGrammar<'Nonterminal, 'Terminal> =
         // Based on the input grammar, create a new grammar with an additional
         // nonterminal and production for the start symbol and an additional token
         // representing the end-of-file marker.
@@ -104,14 +104,20 @@ type Grammar<'Nonterminal, 'Terminal
                 ||> Map.fold (fun productionMap nontermId nontermProductions ->
                     let nontermProductions =
                         nontermProductions
-                        |> Set.map (Array.map (function
+                        |> Array.map (Array.map (function
                             | Symbol.Nonterminal nontermId ->
                                 Symbol.Nonterminal <| Nonterminal nontermId
                             | Symbol.Terminal token ->
                                 Symbol.Terminal <| Terminal token))
                     Map.add (Nonterminal nontermId) nontermProductions productionMap)
                 // Add the (only) production of the new start symbol.
-                |> Map.add Start (Set.singleton startProduction); }
+                |> Map.add Start ([| startProduction |]); }
+
+//
+and AugmentedGrammar<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
+    Grammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
 
 //
 [<Measure>] type ProductionIndex

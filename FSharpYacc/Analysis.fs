@@ -35,7 +35,7 @@ module PredictiveSets =
                     avoid re-processing values which haven't changed. *)
 
     //
-    let internal computeNullable (productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>) =
+    let internal computeNullable (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) =
         /// Implementation of the nullable-map-computing algorithm.
         let rec computeNullable (nullable : Map<'Nonterminal, bool>) =
             let nullable, updated =
@@ -48,7 +48,7 @@ module PredictiveSets =
                         /// When set, denotes that this nonterminal is nullable.
                         let isNullable =
                             productions
-                            |> Set.exists (Array.forall (function
+                            |> Array.exists (Array.forall (function
                                 | Symbol.Terminal _ ->
                                     false
                                 | Symbol.Nonterminal nontermId ->
@@ -94,14 +94,14 @@ module PredictiveSets =
         result
 
     //
-    let internal computeFirst (productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>, nullable : Map<'Nonterminal, bool>) =
+    let internal computeFirst (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>, nullable : Map<'Nonterminal, bool>) =
         /// Implementation of the algorithm for computing the FIRST sets of the nonterminals.
         let rec computeFirst (firstSets : Map<'Nonterminal, Set<'Terminal>>) =
             let firstSets, updated =
                 ((firstSets, false), productions)
                 ||> Map.fold (fun (firstSets, updated) nontermId productions ->
                     ((firstSets, updated), productions)
-                    ||> Set.fold (fun (firstSets, updated) production ->
+                    ||> Array.fold (fun (firstSets, updated) production ->
                         let mutable firstSets = firstSets
                         let mutable updated = updated
 
@@ -147,7 +147,7 @@ module PredictiveSets =
         |> computeFirst
 
     //
-    let internal computeFollow (grammar : Grammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>,
+    let internal computeFollow (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>,
                                 nullable : Map<AugmentedNonterminal<'Nonterminal>, bool>,
                                 firstSets : Map<AugmentedNonterminal<'Nonterminal>, Set<AugmentedTerminal<'Terminal>>>) =
         /// Implementation of the algorithm for computing the FOLLOW sets of the nonterminals.
@@ -156,7 +156,7 @@ module PredictiveSets =
                 ((followSets, false), grammar.Productions)
                 ||> Map.fold (fun (followSets, updated) nontermId productions ->
                     ((followSets, updated), productions)
-                    ||> Set.fold (fun (followSets, updated) production ->
+                    ||> Array.fold (fun (followSets, updated) production ->
                         let mutable followSets = followSets
                         let mutable updated = updated
 
@@ -248,7 +248,7 @@ module PredictiveSets =
         |> computeFollow
 
     //
-    let ofGrammar (grammar : Grammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>) =
+    let ofGrammar (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
         /// Map denoting which nonterminals in the grammar are nullable.
         let nullable = computeNullable grammar.Productions
 

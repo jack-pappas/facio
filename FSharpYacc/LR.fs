@@ -100,7 +100,7 @@ module internal Lr0Item =
     // TODO : Modify this to use a worklist-style algorithm to avoid
     // reprocessing items which already exist in the set (i.e., when iterating,
     // we only process items added to the set in the previous iteration).
-    let closure (productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>) items =
+    let closure (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) items =
         /// Implementation of the LR(0) closure algorithm.
         let rec closure items =
             let items' =
@@ -124,7 +124,7 @@ module internal Lr0Item =
                             // with the parser position at the beginning of the production.
                             // Add these new items into the set of items.
                             (items, nontermProductions)
-                            ||> Set.fold (fun items production ->
+                            ||> Array.fold (fun items production ->
                                 let newItem = {
                                     Nonterminal = nontermId;
                                     Production = production;
@@ -145,7 +145,7 @@ module internal Lr0Item =
 
     /// Moves the 'dot' (the current parser position) past the
     /// specified symbol for each item in a set of items.
-    let goto symbol items (productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>) =
+    let goto symbol items (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) =
         /// The updated 'items' set.
         let items =
             (Set.empty, items)
@@ -415,13 +415,14 @@ module internal Lr0 =
         let initialParserState =
             grammar.Productions
             |> Map.find Start
-            |> Set.map (fun production ->
+            |> Array.map (fun production ->
                 // Create an 'item', with the parser position at
                 // the beginning of the production.
                 {   Nonterminal = Start;
                     Production = production;
                     Position = 0<_>;
                     Lookahead = (); })
+            |> Set.ofArray
             |> Lr0Item.closure grammar.Productions
 
         // The initial table-gen state.
@@ -529,13 +530,14 @@ module Slr =
         let initialParserState =
             grammar.Productions
             |> Map.find Start
-            |> Set.map (fun production ->
+            |> Array.map (fun production ->
                 // Create an 'item', with the parser position at
                 // the beginning of the production.
                 {   Nonterminal = Start;
                     Production = production;
                     Position = 0<_>;
                     Lookahead = (); })
+            |> Set.ofArray
             |> Lr0Item.closure grammar.Productions
 
         // The initial table-gen state.
@@ -632,7 +634,7 @@ module internal Lr1Item =
                             // with the parser position at the beginning of the production.
                             // Add these new items into the set of items.
                             (items, nontermProductions)
-                            ||> Set.fold (fun items production ->
+                            ||> Array.fold (fun items production ->
                                 // Combine the production with each token which could
                                 // possibly follow this nonterminal.
                                 (items, firstSetOfRemainingSymbols)
@@ -924,7 +926,7 @@ module Lr1 =
         let initialParserState : Lr1ParserState<_,_> =
             let startProductions = Map.find Start grammar.Productions
             (Set.empty, startProductions)
-            ||> Set.fold (fun items production ->
+            ||> Array.fold (fun items production ->
                 // Create an 'item', with the parser position at
                 // the beginning of the production.
                 let item = {
