@@ -13,16 +13,16 @@ open Grammar
 
 
 //
-type PredictiveSets<'NonterminalId, 'Token
-    when 'NonterminalId : comparison
-    and 'Token : comparison> = {
+type PredictiveSets<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> = {
     //
-    First : Map<'NonterminalId, Set<'Token>>;
+    First : Map<'Nonterminal, Set<'Terminal>>;
     //
-    Follow : Map<'NonterminalId, Set<'Token>>;
+    Follow : Map<'Nonterminal, Set<'Terminal>>;
     //
-    Nullable : Map<'NonterminalId, bool>;
-    }
+    Nullable : Map<'Nonterminal, bool>;
+}
 
 //
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -35,9 +35,9 @@ module PredictiveSets =
                     avoid re-processing values which haven't changed. *)
 
     //
-    let internal computeNullable (productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>) =
+    let internal computeNullable (productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>) =
         /// Implementation of the nullable-map-computing algorithm.
-        let rec computeNullable (nullable : Map<'NonterminalId, bool>) =
+        let rec computeNullable (nullable : Map<'Nonterminal, bool>) =
             let nullable, updated =
                 ((nullable, false), productions)
                 ||> Map.fold (fun (nullable, updated) nontermId productions ->
@@ -76,7 +76,7 @@ module PredictiveSets =
         |> computeNullable
 
     /// Determines if all symbols within the specified slice of a production are nullable.
-    let inline private allNullableInSlice (production : Symbol<'NonterminalId, 'Token>[], startInclusive, endInclusive, nullable : Map<'NonterminalId, bool>) =
+    let inline private allNullableInSlice (production : Symbol<'Nonterminal, 'Terminal>[], startInclusive, endInclusive, nullable : Map<'Nonterminal, bool>) =
         let mutable result = true
         let mutable index = startInclusive
         while result && index <= endInclusive do
@@ -94,9 +94,9 @@ module PredictiveSets =
         result
 
     //
-    let internal computeFirst (productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>, nullable : Map<'NonterminalId, bool>) =
+    let internal computeFirst (productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>, nullable : Map<'Nonterminal, bool>) =
         /// Implementation of the algorithm for computing the FIRST sets of the nonterminals.
-        let rec computeFirst (firstSets : Map<'NonterminalId, Set<'Token>>) =
+        let rec computeFirst (firstSets : Map<'Nonterminal, Set<'Terminal>>) =
             let firstSets, updated =
                 ((firstSets, false), productions)
                 ||> Map.fold (fun (firstSets, updated) nontermId productions ->
@@ -147,11 +147,11 @@ module PredictiveSets =
         |> computeFirst
 
     //
-    let internal computeFollow (grammar : Grammar<AugmentedNonterminal<'NonterminalId>, AugmentedTerminal<'Token>>,
-                                nullable : Map<AugmentedNonterminal<'NonterminalId>, bool>,
-                                firstSets : Map<AugmentedNonterminal<'NonterminalId>, Set<AugmentedTerminal<'Token>>>) =
+    let internal computeFollow (grammar : Grammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>,
+                                nullable : Map<AugmentedNonterminal<'Nonterminal>, bool>,
+                                firstSets : Map<AugmentedNonterminal<'Nonterminal>, Set<AugmentedTerminal<'Terminal>>>) =
         /// Implementation of the algorithm for computing the FOLLOW sets of the nonterminals.
-        let rec computeFollow (followSets : Map<AugmentedNonterminal<'NonterminalId>, Set<AugmentedTerminal<'Token>>>) =
+        let rec computeFollow (followSets : Map<AugmentedNonterminal<'Nonterminal>, Set<AugmentedTerminal<'Terminal>>>) =
             let followSets, updated =
                 ((followSets, false), grammar.Productions)
                 ||> Map.fold (fun (followSets, updated) nontermId productions ->
@@ -248,7 +248,7 @@ module PredictiveSets =
         |> computeFollow
 
     //
-    let ofGrammar (grammar : Grammar<AugmentedNonterminal<'NonterminalId>, AugmentedTerminal<'Token>>) =
+    let ofGrammar (grammar : Grammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>) =
         /// Map denoting which nonterminals in the grammar are nullable.
         let nullable = computeNullable grammar.Productions
 
@@ -294,7 +294,7 @@ module Grammar =
                 of a grammar, so we'll also need to implement a decent sparse graph library. *)
 
     //
-    let classifyPositions (grammar : Grammar<'NonterminalId, 'Token>) =
+    let classifyPositions (grammar : Grammar<'Nonterminal, 'Terminal>) =
         // TODO : Need to implement some graph functionality (for dominators)
         // before this algorithm can be implemented.
         failwith "TODO"
