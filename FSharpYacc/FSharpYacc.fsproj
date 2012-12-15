@@ -49,6 +49,7 @@
     <Compile Include="Grammar.fs" />
     <Compile Include="Analysis.fs" />
     <Compile Include="LR.fs" />
+    <Compile Include="Classify.fs" />
     <Compile Include="LeftCorner.fs" />
     <Compile Include="Options.fs" />
     <Compile Include="Ast.fs" />

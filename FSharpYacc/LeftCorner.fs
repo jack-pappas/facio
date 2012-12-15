@@ -10,7 +10,7 @@ See LICENSE.TXT for licensing details.
 module FSharpYacc.LeftCorner
 
 open Grammar
-open Analysis
+open FSharpYacc.Analysis
 
 
 /// An action which manipulates the state of the
@@ -26,6 +26,7 @@ type LeftCornerParserAction =
     /// Accept.
     | Accept
 
+    /// <inherit />
     override this.ToString () =
         match this with
         | Shift stateId ->
@@ -60,6 +61,7 @@ type internal LeftCornerItem<'Nonterminal, 'Terminal
     //
     Position : int<ParserPosition>;
 } with
+    /// <inherit />
     override this.ToString () =
         let sb = System.Text.StringBuilder ()
 

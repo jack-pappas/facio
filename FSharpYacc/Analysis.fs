@@ -7,8 +7,9 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-module FSharpYacc.Analysis
+namespace FSharpYacc.Analysis
 
+open FSharpYacc
 open Grammar
 
 
@@ -264,38 +265,21 @@ module PredictiveSets =
             Follow = followSets; }
 
 
-/// Classifies a parser position (within a parser item), based on
-/// how the insertion of a semantic routine at that position would
-/// change the classification of the grammar.
-type PositionClassification =
-    /// No semantic routine may be called at this position.
-    // Inserting a semantic routine here always causes the grammar
-    // to become non-deterministic.
-    | Forbidden
-    /// It is sometimes safe to call a semantic routine at this position.
-    // Inserting a semantic routine here may cause the grammar to
-    // become non-deterministic.
-    | Contingent
-    /// It is always safe to call a semantic routine at this position.
-    // Inserting a semantic routine here preserves the grammar class;
-    // e.g., an LR(1) grammar will still be LR(1) after inserting the routine.
-    | Free
-
+///// Reachability analyses on context-free grammars.
+//[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+//module Reachability =
+//    (* TODO :   These analyses are probably easiest to implement using a graph representation
+//                of a grammar, so we'll also need to implement a decent sparse graph library. *)
 //
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module Grammar =
-    (* TODO :   Implement functions to perform other useful analyses on grammars; for example:
-                    - Detect unreachable/dead nonterminals
-                    - Detect unreachable productions (i.e., productions overlapped by some earlier
-                      production of the same nonterminal).
-                    - Ambiguity detection.
+//    // Detect unreachable/dead nonterminals
+//    let unreachableNonterminals () =
+//        raise <| System.NotImplementedException "Grammar.unreachableNonterminals"
+//
+//    // Detect unreachable productions; i.e., productions overlapped
+//    // by some earlier production of the same nonterminal.
+//    let unreachableProductions () =
+//        raise <| System.NotImplementedException "Grammar.unreachableProductions"
 
-                These analyses are probably easiest to implement using a graph representation
-                of a grammar, so we'll also need to implement a decent sparse graph library. *)
 
-    //
-    let classifyPositions (grammar : Grammar<'Nonterminal, 'Terminal>) =
-        // TODO : Need to implement some graph functionality (for dominators)
-        // before this algorithm can be implemented.
-        failwith "TODO"
+(* TODO :   Implement an ambiguity detection module. *)
 

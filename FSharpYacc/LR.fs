@@ -10,7 +10,7 @@ See LICENSE.TXT for licensing details.
 module FSharpYacc.LR
 
 open Grammar
-open Analysis
+open FSharpYacc.Analysis
 
 
 /// An action which manipulates the state of the
