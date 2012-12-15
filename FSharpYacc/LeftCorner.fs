@@ -38,25 +38,25 @@ type LeftCornerParserAction =
             "a"
 
 //
-type LeftCornerParserTable<'NonterminalId, 'Token
-    when 'NonterminalId : comparison
-    and 'Token : comparison> = {
+type LeftCornerParserTable<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> = {
     //
-    Table : Map<ParserStateId * Symbol<'NonterminalId, 'Token>, Set<LeftCornerParserAction>>;
+    Table : Map<ParserStateId * Symbol<'Nonterminal, 'Terminal>, Set<LeftCornerParserAction>>;
     //
     ParserStateCount : uint32;
     //
-    ReductionRulesById : Map<ReductionRuleId, 'NonterminalId * Symbol<'NonterminalId, 'Token>[]>;
+    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
 }
 
 /// A Left-Corner parser item.
-type internal LeftCornerItem<'NonterminalId, 'Token
-    when 'NonterminalId : comparison
-    and 'Token : comparison> = {
+type internal LeftCornerItem<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> = {
     //
-    Nonterminal : 'NonterminalId;
+    Nonterminal : 'Nonterminal;
     //
-    Production : Symbol<'NonterminalId, 'Token>[];
+    Production : Symbol<'Nonterminal, 'Terminal>[];
     //
     Position : int<ParserPosition>;
 } with
@@ -87,7 +87,7 @@ module internal LeftCornerItem =
     // TODO : Modify this to use a worklist-style algorithm to avoid
     // reprocessing items which already exist in the set (i.e., when iterating,
     // we only process items added to the set in the previous iteration).
-    let closure (productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>) items =
+    let closure (productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>) items =
         /// Implementation of the LR(0) closure algorithm.
         let rec closure items =
             let items' =
@@ -131,7 +131,7 @@ module internal LeftCornerItem =
 
     /// Moves the 'dot' (the current parser position) past the
     /// specified symbol for each item in a set of items.
-    let goto symbol items (productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>) =
+    let goto symbol items (productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>) =
         /// The updated 'items' set.
         let items =
             (Set.empty, items)
@@ -159,9 +159,10 @@ module internal LeftCornerItem =
 
 
 /// A Left-Corner parser state -- i.e., a set of Left-Corner items.
-type internal LeftCornerParserState<'NonterminalId, 'Token
-    when 'NonterminalId : comparison
-    and 'Token : comparison> = Set<LeftCornerItem<'NonterminalId, 'Token>>
+type internal LeftCornerParserState<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
+    Set<LeftCornerItem<'Nonterminal, 'Terminal>>
 
 
 

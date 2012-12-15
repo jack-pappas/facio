@@ -11,13 +11,13 @@ module FSharpYacc.Grammar
 
 
 /// A symbol within a context-free grammar (CFG).
-type Symbol<'NonterminalId, 'Token
-                when 'NonterminalId : comparison
-                and 'Token : comparison> =
+type Symbol<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
     //
-    | Terminal of 'Token
+    | Terminal of 'Terminal
     //
-    | Nonterminal of 'NonterminalId
+    | Nonterminal of 'Nonterminal
 
     override this.ToString () =
         match this with
@@ -28,9 +28,9 @@ type Symbol<'NonterminalId, 'Token
 
 /// Represents nonterminals augmented with an additional nonterminal
 /// representing the start production of an augmented grammar.
-type AugmentedNonterminal<'NonterminalId when 'NonterminalId : comparison> =
+type AugmentedNonterminal<'Nonterminal when 'Nonterminal : comparison> =
     /// A nonterminal specified in the original grammar.
-    | Nonterminal of 'NonterminalId
+    | Nonterminal of 'Nonterminal
     /// Represents the start production of the grammar.
     | Start
 
@@ -42,9 +42,9 @@ type AugmentedNonterminal<'NonterminalId when 'NonterminalId : comparison> =
             "\xabStart\xbb"
 
 //
-type AugmentedTerminal<'Token when 'Token : comparison> =
+type AugmentedTerminal<'Terminal when 'Terminal : comparison> =
     //
-    | Terminal of 'Token
+    | Terminal of 'Terminal
     //
     | EndOfFile
 
@@ -67,22 +67,22 @@ type Associativity =
     | Right
 
 /// A context-free grammar (CFG).
-type Grammar<'NonterminalId, 'Token
-                when 'NonterminalId : comparison
-                and 'Token : comparison> = {
+type Grammar<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> = {
     //
-    Terminals : Set<'Token>;
+    Terminals : Set<'Terminal>;
     //
-    Nonterminals : Set<'NonterminalId>;
+    Nonterminals : Set<'Nonterminal>;
     //
-    Productions : Map<'NonterminalId, Set<Symbol<'NonterminalId, 'Token>[]>>;
+    Productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>;
     //
-    StartSymbol : 'NonterminalId;
+    StartSymbol : 'Nonterminal;
 } with
     //
     [<CompiledName("Augment")>]
-    static member augment (grammar : Grammar<'NonterminalId, 'Token>)
-        : Grammar<AugmentedNonterminal<'NonterminalId>, AugmentedTerminal<'Token>> =
+    static member augment (grammar : Grammar<'Nonterminal, 'Terminal>)
+        : Grammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>> =
         // Based on the input grammar, create a new grammar with an additional
         // nonterminal and production for the start symbol and an additional token
         // representing the end-of-file marker.
@@ -119,13 +119,13 @@ type Grammar<'NonterminalId, 'Token
 type ProductionId = int<ProductionIndex>
 
 ////
-//type Production<'NonterminalId, 'Token
-//        when 'NonterminalId : comparison
-//        and 'Token : comparison> = {
+//type Production<'Nonterminal, 'Terminal
+//        when 'Nonterminal : comparison
+//        and 'Terminal : comparison> = {
 //    //
-//    Nonterminal : 'NonterminalId;
+//    Nonterminal : 'Nonterminal;
 //    //
-//    Symbols : Symbol<'NonterminalId, 'Token>[];
+//    Symbols : Symbol<'Nonterminal, 'Terminal>[];
 //} with
 //    override this.ToString () =
 //        let sb = System.Text.StringBuilder ()
