@@ -14,7 +14,7 @@ open System.IO
 open System.Text
 //open SpecializedCollections
 //open Graph
-open Ast
+open FSharpYacc.Ast
 //open Compile
 
 // TODO : Move these into a separate assembly to avoid loading System.Xml.dll unless necessary.

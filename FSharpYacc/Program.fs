@@ -39,8 +39,8 @@ module private AssemblyInfo =
 
 
 // TEMP : Remove these 'open' declarations once the test specification is compiled correctly.
-open Grammar
-open Ast
+open FSharpYacc.Grammar
+open FSharpYacc.Ast
 
 
 // TEST : Try to compile a real-world specification to make sure this tool works correctly.

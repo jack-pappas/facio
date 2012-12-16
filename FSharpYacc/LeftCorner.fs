@@ -7,9 +7,9 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-module FSharpYacc.LeftCorner
+namespace FSharpYacc.LeftCorner
 
-open Grammar
+open FSharpYacc.Grammar
 open FSharpYacc.Analysis
 
 

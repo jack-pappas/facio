@@ -15,7 +15,7 @@ open System.IO
 open System.Text
 open LanguagePrimitives
 //open SpecializedCollections
-open Ast
+open FSharpYacc.Ast
 //open Compile
 
 (* TODO :   Move the code generator (and any other back-ends we want to create)

@@ -7,9 +7,9 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-module FSharpYacc.LR
+namespace FSharpYacc.LR
 
-open Grammar
+open FSharpYacc.Grammar
 open FSharpYacc.Analysis
 
 
@@ -25,6 +25,7 @@ type LrParserAction =
     /// Accept.
     | Accept
 
+    /// <inherit />
     override this.ToString () =
         match this with
         | Shift stateId ->
@@ -51,7 +52,8 @@ type LrParsingTable<'Nonterminal, 'Terminal
 /// An LR(k) item.
 type internal LrItem<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
-    and 'Terminal : comparison> = {
+    and 'Terminal : comparison
+    and 'Lookahead : comparison> = {
     //
     Nonterminal : 'Nonterminal;
     //
@@ -61,6 +63,7 @@ type internal LrItem<'Nonterminal, 'Terminal, 'Lookahead
     //
     Lookahead : 'Lookahead;
 } with
+    /// <inherit />
     override this.ToString () =
         let sb = System.Text.StringBuilder ()
 
@@ -85,6 +88,144 @@ type internal LrItem<'Nonterminal, 'Terminal, 'Lookahead
             this.Lookahead.ToString () |> sb.Append |> ignore
 
         sb.ToString ()
+
+/// An LR(k) parser state -- i.e., a set of LR(k) items.
+type internal LrParserState<'Nonterminal, 'Terminal, 'Lookahead
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison
+    and 'Lookahead : comparison> =
+    Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead>>
+
+/// LR(k) parser table generation state.
+type internal LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison
+    and 'Lookahead : comparison> = {
+    //
+    Table : Map<ParserStateId * Symbol<'Nonterminal, 'Terminal>, Set<LrParserAction>>;
+    //
+    ParserStates : Map<LrParserState<'Nonterminal, 'Terminal, 'Lookahead>, ParserStateId>;
+    //
+    ReductionRules : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], ReductionRuleId>;
+    //
+    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
+}
+
+/// Functions which use the State monad to manipulate an LR(k) table-generation state.
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module internal LrTableGenState =
+    /// Returns an empty Lr0TableGenState with the given
+    /// nonterminal and terminal types.
+    let empty : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> = {
+        Table = Map.empty;
+        ParserStates = Map.empty;
+        ReductionRules = Map.empty;
+        ReductionRulesById = Map.empty; }
+
+    /// Retrives the identifier for a given parser state (set of items).
+    /// If the state has not been assigned an identifier, one is created
+    /// and added to the table-generation state before returning.
+    let stateId (parserState : LrParserState<'Nonterminal, 'Terminal, 'Lookahead>) (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+        // Try to retrieve an existing id for this state.
+        match Map.tryFind parserState tableGenState.ParserStates with
+        | Some parserStateId ->
+            parserStateId, tableGenState
+
+        | None ->
+            // Create a new ID for this state.
+            let parserStateId =
+                tableGenState.ParserStates.Count + 1
+                |> LanguagePrimitives.Int32WithMeasure
+
+            // Return the id, along with the updated table-gen state.
+            parserStateId,
+            { tableGenState with
+                ParserStates = Map.add parserState parserStateId tableGenState.ParserStates; }
+
+    //
+    let reductionRuleId (reductionRule : 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]) (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+        // Reduction rules should only be added, but for safety we'll check to
+        // see if the rule has already been assigned an identifier.
+        match Map.tryFind reductionRule tableGenState.ReductionRules with
+        | Some reductionRuleId ->
+            reductionRuleId, tableGenState
+
+        | None ->
+            // Create a new ID for this reduction rule.
+            let reductionRuleId =
+                tableGenState.ReductionRules.Count + 1
+                |> LanguagePrimitives.Int32WithMeasure
+
+            // Return the id, along with the updated table-gen state.
+            reductionRuleId,
+            { tableGenState with
+                ReductionRules = Map.add reductionRule reductionRuleId tableGenState.ReductionRules;
+                ReductionRulesById = Map.add reductionRuleId reductionRule tableGenState.ReductionRulesById; }
+
+    /// Add a 'shift' action to the parser table.
+    let shift (sourceState : ParserStateId)
+                (transitionSymbol : 'Terminal)
+                (targetState : ParserStateId)
+                (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+        //
+        let tableKey = sourceState, Symbol.Terminal transitionSymbol
+
+        //
+        let entry =
+            let action = Shift targetState
+            match Map.tryFind tableKey tableGenState.Table with
+            | None ->
+                Set.singleton action
+            | Some entry ->
+                Set.add action entry
+
+        // Update the table with the new entry.
+        (),
+        { tableGenState with
+            Table = Map.add tableKey entry tableGenState.Table; }
+
+    /// Add a 'goto' action to the parser table.
+    let goto (sourceState : ParserStateId)
+                (transitionSymbol : 'Nonterminal)
+                (targetState : ParserStateId)
+                (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+        //
+        let tableKey = sourceState, Symbol.Nonterminal transitionSymbol
+
+        //
+        let entry =
+            let action = Goto targetState
+            match Map.tryFind tableKey tableGenState.Table with
+            | None ->
+                Set.singleton action
+            | Some entry ->
+                Set.add action entry
+
+        // Update the table with the new entry.
+        (),
+        { tableGenState with
+            Table = Map.add tableKey entry tableGenState.Table; }
+
+    /// Add an 'accept' action to the parser table.
+    let accept (sourceState : ParserStateId) (tableGenState : LrTableGenState<'Nonterminal, AugmentedTerminal<'Terminal>, 'Lookahead>) =
+        //
+        let tableKey = sourceState, Symbol.Terminal EndOfFile
+
+        //
+        let entry =
+            match Map.tryFind tableKey tableGenState.Table with
+            | None ->
+                // Create a new 'accept' action for this table entry.
+                Set.singleton Accept
+            | Some entry ->
+                // Create a new 'accept' action and add it to the existing table entry.
+                Set.add Accept entry
+
+        // Update the table with the new entry.
+        (),
+        { tableGenState with
+            Table = Map.add tableKey entry tableGenState.Table; }
+
 
 
 /// An LR(0) item.
@@ -175,133 +316,18 @@ module internal Lr0Item =
 /// An LR(0) parser state -- i.e., a set of LR(0) items.
 type internal Lr0ParserState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
-    and 'Terminal : comparison> = Set<Lr0Item<'Nonterminal, 'Terminal>>
+    and 'Terminal : comparison> =
+    LrParserState<'Nonterminal, 'Terminal, unit>
 
 /// LR(0) parser table generation state.
 type internal Lr0TableGenState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
-    and 'Terminal : comparison> = {
-    //
-    Table : Map<ParserStateId * Symbol<'Nonterminal, 'Terminal>, Set<LrParserAction>>;
-    //
-    ParserStates : Map<Lr0ParserState<'Nonterminal, 'Terminal>, ParserStateId>;
-    //
-    ReductionRules : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], ReductionRuleId>;
-    //
-    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
-}
+    and 'Terminal : comparison> =
+    LrTableGenState<'Nonterminal, 'Terminal, unit>
 
 /// Functions which use the State monad to manipulate an LR(0) table-generation state.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module internal Lr0TableGenState =
-    /// Returns an empty Lr0TableGenState with the given
-    /// nonterminal and terminal types.
-    let empty : Lr0TableGenState<'Nonterminal, 'Terminal> = {
-        Table = Map.empty;
-        ParserStates = Map.empty;
-        ReductionRules = Map.empty;
-        ReductionRulesById = Map.empty; }
-
-    /// Retrives the identifier for a given parser state (set of items).
-    /// If the state has not been assigned an identifier, one is created
-    /// and added to the table-generation state before returning.
-    let stateId (parserState : Lr0ParserState<'Nonterminal, 'Terminal>) (tableGenState : Lr0TableGenState<'Nonterminal, 'Terminal>) =
-        // Try to retrieve an existing id for this state.
-        match Map.tryFind parserState tableGenState.ParserStates with
-        | Some parserStateId ->
-            parserStateId, tableGenState
-
-        | None ->
-            // Create a new ID for this state.
-            let parserStateId = LanguagePrimitives.Int32WithMeasure <| tableGenState.ParserStates.Count + 1
-
-            // Return the id, along with the updated table-gen state.
-            parserStateId,
-            { tableGenState with
-                ParserStates = Map.add parserState parserStateId tableGenState.ParserStates; }
-
-    //
-    let reductionRuleId (reductionRule : 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]) (tableGenState : Lr0TableGenState<'Nonterminal, 'Terminal>) =
-        // Reduction rules should only be added, but for safety we'll check to
-        // see if the rule has already been assigned an identifier.
-        match Map.tryFind reductionRule tableGenState.ReductionRules with
-        | Some reductionRuleId ->
-            reductionRuleId, tableGenState
-
-        | None ->
-            // Create a new ID for this reduction rule.
-            let reductionRuleId = LanguagePrimitives.Int32WithMeasure <| tableGenState.ReductionRules.Count + 1
-
-            // Return the id, along with the updated table-gen state.
-            reductionRuleId,
-            { tableGenState with
-                ReductionRules = Map.add reductionRule reductionRuleId tableGenState.ReductionRules;
-                ReductionRulesById = Map.add reductionRuleId reductionRule tableGenState.ReductionRulesById; }
-
-    /// Add a 'shift' action to the parser table.
-    let shift (sourceState : ParserStateId)
-                (transitionSymbol : 'Terminal)
-                (targetState : ParserStateId)
-                (tableGenState : Lr0TableGenState<'Nonterminal, 'Terminal>) =
-        //
-        let tableKey = sourceState, Symbol.Terminal transitionSymbol
-
-        //
-        let entry =
-            let action = Shift targetState
-            match Map.tryFind tableKey tableGenState.Table with
-            | None ->
-                Set.singleton action
-            | Some entry ->
-                Set.add action entry
-
-        // Update the table with the new entry.
-        (),
-        { tableGenState with
-            Table = Map.add tableKey entry tableGenState.Table; }
-
-    /// Add a 'goto' action to the parser table.
-    let goto (sourceState : ParserStateId)
-                (transitionSymbol : 'Nonterminal)
-                (targetState : ParserStateId)
-                (tableGenState : Lr0TableGenState<'Nonterminal, 'Terminal>) =
-        //
-        let tableKey = sourceState, Symbol.Nonterminal transitionSymbol
-
-        //
-        let entry =
-            let action = Goto targetState
-            match Map.tryFind tableKey tableGenState.Table with
-            | None ->
-                Set.singleton action
-            | Some entry ->
-                Set.add action entry
-
-        // Update the table with the new entry.
-        (),
-        { tableGenState with
-            Table = Map.add tableKey entry tableGenState.Table; }
-
-    /// Add an 'accept' action to the parser table.
-    let accept (sourceState : ParserStateId) (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
-        //
-        let tableKey = sourceState, Symbol.Terminal EndOfFile
-
-        //
-        let entry =
-            match Map.tryFind tableKey tableGenState.Table with
-            | None ->
-                // Create a new 'accept' action for this table entry.
-                Set.singleton Accept
-            | Some entry ->
-                // Create a new 'accept' action and add it to the existing table entry.
-                Set.add Accept entry
-
-        // Update the table with the new entry.
-        (),
-        { tableGenState with
-            Table = Map.add tableKey entry tableGenState.Table; }
-
     /// Add 'reduce' actions to the parser table for each terminal (token) in the grammar.
     let reduce (sourceState : ParserStateId) (reductionRuleId : ReductionRuleId) (terminals : Set<_>) (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
         // Fold over the set of terminals (tokens) in the grammar.
@@ -347,7 +373,7 @@ module internal Lr0 =
                         // First, add this reduction rule to the table-gen state,
                         // which gives us an identifier for the rule.
                         let reductionRuleId, tableGenState =
-                            Lr0TableGenState.reductionRuleId (item.Nonterminal, item.Production) tableGenState
+                            LrTableGenState.reductionRuleId (item.Nonterminal, item.Production) tableGenState
 
                         // Add 'reduce' actions to the parser table.
                         Lr0TableGenState.reduce stateId reductionRuleId grammar.Terminals tableGenState
@@ -360,7 +386,7 @@ module internal Lr0 =
                             // When the end-of-file symbol is the next to be parsed,
                             // add an 'accept' action to the table to indicate the
                             // input has been parsed successfully.
-                            Lr0TableGenState.accept stateId tableGenState
+                            LrTableGenState.accept stateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
 
@@ -371,11 +397,11 @@ module internal Lr0 =
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
-                                Lr0TableGenState.stateId targetState tableGenState
+                                LrTableGenState.stateId targetState tableGenState
 
                             // The next symbol to be parsed is a terminal (token),
                             // so add a 'shift' action to this entry of the table.
-                            Lr0TableGenState.shift stateId token targetStateId tableGenState
+                            LrTableGenState.shift stateId token targetStateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
 
@@ -386,11 +412,11 @@ module internal Lr0 =
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
-                                Lr0TableGenState.stateId targetState tableGenState
+                                LrTableGenState.stateId targetState tableGenState
 
                             // The next symbol to be parsed is a nonterminal,
                             // so add a 'goto' action to this entry of the table.
-                            Lr0TableGenState.goto stateId nonterm targetStateId tableGenState
+                            LrTableGenState.goto stateId nonterm targetStateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
                         ))
@@ -409,7 +435,7 @@ module internal Lr0 =
     /// Creates an LR(0) parser table from the specified grammar.
     let createTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
         // Augment the grammar with the start production and end-of-file token.
-        let grammar = Grammar.augment grammar
+        let grammar = Grammar.Augment grammar
 
         /// The initial state (set of items) passed to 'createTable'.
         let initialParserState =
@@ -427,7 +453,7 @@ module internal Lr0 =
 
         // The initial table-gen state.
         let initialParserStateId, initialTableGenState =
-            Lr0TableGenState.stateId initialParserState Lr0TableGenState.empty
+            LrTableGenState.stateId initialParserState LrTableGenState.empty
 
         // Create the parser table.
         createTableImpl grammar initialTableGenState
@@ -452,7 +478,7 @@ module Slr =
                         // First, add this reduction rule to the table-gen state,
                         // which gives us an identifier for the rule.
                         let reductionRuleId, tableGenState =
-                            Lr0TableGenState.reductionRuleId (item.Nonterminal, item.Production) tableGenState
+                            LrTableGenState.reductionRuleId (item.Nonterminal, item.Production) tableGenState
 
                         (*  Simple LR (SLR) parsers only differ from LR(0) parsers in one way:
                             instead of creating 'reduce' actions for all terminals (tokens)
@@ -472,7 +498,7 @@ module Slr =
                             // When the end-of-file symbol is the next to be parsed,
                             // add an 'accept' action to the table to indicate the
                             // input has been parsed successfully.
-                            Lr0TableGenState.accept stateId tableGenState
+                            LrTableGenState.accept stateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
 
@@ -483,11 +509,11 @@ module Slr =
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
-                                Lr0TableGenState.stateId targetState tableGenState
+                                LrTableGenState.stateId targetState tableGenState
 
                             // The next symbol to be parsed is a terminal (token),
                             // so add a 'shift' action to this entry of the table.
-                            Lr0TableGenState.shift stateId token targetStateId tableGenState
+                            LrTableGenState.shift stateId token targetStateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
 
@@ -498,11 +524,11 @@ module Slr =
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
-                                Lr0TableGenState.stateId targetState tableGenState
+                                LrTableGenState.stateId targetState tableGenState
 
                             // The next symbol to be parsed is a nonterminal,
                             // so add a 'goto' action to this entry of the table.
-                            Lr0TableGenState.goto stateId nonterm targetStateId tableGenState
+                            LrTableGenState.goto stateId nonterm targetStateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
                         ))
@@ -521,7 +547,7 @@ module Slr =
     /// Creates a Simple LR (SLR) parser table from the specified grammar.
     let createTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
         // Augment the grammar with the start production and end-of-file token.
-        let grammar = Grammar.augment grammar
+        let grammar = Grammar.Augment grammar
 
         /// Predictive sets of the augmented grammar.
         let analysis = PredictiveSets.ofGrammar grammar
@@ -542,7 +568,7 @@ module Slr =
 
         // The initial table-gen state.
         let initialParserStateId, initialTableGenState =
-            Lr0TableGenState.stateId initialParserState Lr0TableGenState.empty
+            LrTableGenState.stateId initialParserState LrTableGenState.empty
 
         // Create the parser table.
         createTableImpl grammar analysis initialTableGenState
@@ -690,133 +716,17 @@ module internal Lr1Item =
 type internal Lr1ParserState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
-    Set<Lr1Item<'Nonterminal, 'Terminal>>
+    LrParserState<'Nonterminal, 'Terminal, 'Terminal>
 
 /// LR(1) parser table generation state.
 type internal Lr1TableGenState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
-    and 'Terminal : comparison> = {
-    //
-    Table : Map<ParserStateId * Symbol<'Nonterminal, 'Terminal>, Set<LrParserAction>>;
-    //
-    ParserStates : Map<Lr1ParserState<'Nonterminal, 'Terminal>, ParserStateId>;
-    //
-    ReductionRules : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], ReductionRuleId>;
-    //
-    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
-}
+    and 'Terminal : comparison> =
+    LrTableGenState<'Nonterminal, 'Terminal, 'Terminal>
 
 /// Functions which use the State monad to manipulate an LR(1) table-generation state.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module internal Lr1TableGenState =
-    /// Returns an empty Lr1TableGenState with the given
-    /// nonterminal and terminal types.
-    let empty : Lr1TableGenState<'Nonterminal, 'Terminal> = {
-        Table = Map.empty;
-        ParserStates = Map.empty;
-        ReductionRules = Map.empty;
-        ReductionRulesById = Map.empty; }
-
-    /// Retrives the identifier for a given parser state (set of items).
-    /// If the state has not been assigned an identifier, one is created
-    /// and added to the table-generation state before returning.
-    let stateId (parserState : Lr1ParserState<'Nonterminal, 'Terminal>) (tableGenState : Lr1TableGenState<'Nonterminal, 'Terminal>) =
-        // Try to retrieve an existing id for this state.
-        match Map.tryFind parserState tableGenState.ParserStates with
-        | Some parserStateId ->
-            parserStateId, tableGenState
-
-        | None ->
-            // Create a new ID for this state.
-            let parserStateId = LanguagePrimitives.Int32WithMeasure <| tableGenState.ParserStates.Count + 1
-
-            // Return the id, along with the updated table-gen state.
-            parserStateId,
-            { tableGenState with
-                ParserStates = Map.add parserState parserStateId tableGenState.ParserStates; }
-
-    //
-    let reductionRuleId (reductionRule : 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]) (tableGenState : Lr1TableGenState<'Nonterminal, 'Terminal>) =
-        // Reduction rules should only be added, but for safety we'll check to
-        // see if the rule has already been assigned an identifier.
-        match Map.tryFind reductionRule tableGenState.ReductionRules with
-        | Some reductionRuleId ->
-            reductionRuleId, tableGenState
-
-        | None ->
-            // Create a new ID for this reduction rule.
-            let reductionRuleId = LanguagePrimitives.Int32WithMeasure <| tableGenState.ReductionRules.Count + 1
-
-            // Return the id, along with the updated table-gen state.
-            reductionRuleId,
-            { tableGenState with
-                ReductionRules = Map.add reductionRule reductionRuleId tableGenState.ReductionRules;
-                ReductionRulesById = Map.add reductionRuleId reductionRule tableGenState.ReductionRulesById; }
-
-    /// Add a 'shift' action to the parser table.
-    let shift (sourceState : ParserStateId)
-                (transitionSymbol : 'Terminal)
-                (targetState : ParserStateId)
-                (tableGenState : Lr1TableGenState<'Nonterminal, 'Terminal>) =
-        //
-        let tableKey = sourceState, Symbol.Terminal transitionSymbol
-
-        //
-        let entry =
-            let action = Shift targetState
-            match Map.tryFind tableKey tableGenState.Table with
-            | None ->
-                Set.singleton action
-            | Some entry ->
-                Set.add action entry
-
-        // Update the table with the new entry.
-        (),
-        { tableGenState with
-            Table = Map.add tableKey entry tableGenState.Table; }
-
-    /// Add a 'goto' action to the parser table.
-    let goto (sourceState : ParserStateId)
-                (transitionSymbol : 'Nonterminal)
-                (targetState : ParserStateId)
-                (tableGenState : Lr1TableGenState<'Nonterminal, 'Terminal>) =
-        //
-        let tableKey = sourceState, Symbol.Nonterminal transitionSymbol
-
-        //
-        let entry =
-            let action = Goto targetState
-            match Map.tryFind tableKey tableGenState.Table with
-            | None ->
-                Set.singleton action
-            | Some entry ->
-                Set.add action entry
-
-        // Update the table with the new entry.
-        (),
-        { tableGenState with
-            Table = Map.add tableKey entry tableGenState.Table; }
-
-    /// Add an 'accept' action to the parser table.
-    let accept (sourceState : ParserStateId) (tableGenState : Lr1TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
-        //
-        let tableKey = sourceState, Symbol.Terminal EndOfFile
-
-        //
-        let entry =
-            match Map.tryFind tableKey tableGenState.Table with
-            | None ->
-                // Create a new 'accept' action for this table entry.
-                Set.singleton Accept
-            | Some entry ->
-                // Create a new 'accept' action and add it to the existing table entry.
-                Set.add Accept entry
-
-        // Update the table with the new entry.
-        (),
-        { tableGenState with
-            Table = Map.add tableKey entry tableGenState.Table; }
-
     /// Add a 'reduce' action to the parser table for the specified lookahead token.
     let reduce (sourceState : ParserStateId) (reductionRuleId : ReductionRuleId) (lookaheadToken : AugmentedTerminal<'Terminal>) (tableGenState : Lr1TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
         //
@@ -856,7 +766,7 @@ module Lr1 =
                         // First, add this reduction rule to the table-gen state,
                         // which gives us an identifier for the rule.
                         let reductionRuleId, tableGenState =
-                            Lr1TableGenState.reductionRuleId (item.Nonterminal, item.Production) tableGenState
+                            LrTableGenState.reductionRuleId (item.Nonterminal, item.Production) tableGenState
 
                         // Add a 'reduce' action for the entry with this state and lookahead token.
                         Lr1TableGenState.reduce stateId reductionRuleId item.Lookahead tableGenState
@@ -869,7 +779,7 @@ module Lr1 =
                             // When the end-of-file symbol is the next to be parsed,
                             // add an 'accept' action to the table to indicate the
                             // input has been parsed successfully.
-                            Lr1TableGenState.accept stateId tableGenState
+                            LrTableGenState.accept stateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
 
@@ -880,11 +790,11 @@ module Lr1 =
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
-                                Lr1TableGenState.stateId targetState tableGenState
+                                LrTableGenState.stateId targetState tableGenState
 
                             // The next symbol to be parsed is a terminal (token),
                             // so add a 'shift' action to this entry of the table.
-                            Lr1TableGenState.shift stateId token targetStateId tableGenState
+                            LrTableGenState.shift stateId token targetStateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
 
@@ -895,11 +805,11 @@ module Lr1 =
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
-                                Lr1TableGenState.stateId targetState tableGenState
+                                LrTableGenState.stateId targetState tableGenState
 
                             // The next symbol to be parsed is a nonterminal,
                             // so add a 'goto' action to this entry of the table.
-                            Lr1TableGenState.goto stateId nonterm targetStateId tableGenState
+                            LrTableGenState.goto stateId nonterm targetStateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
                         ))
@@ -917,7 +827,7 @@ module Lr1 =
     //
     let private createTableGenState (grammar : Grammar<'Nonterminal, 'Terminal>) =
         // Augment the grammar with the start production and end-of-file token.
-        let grammar = Grammar.augment grammar
+        let grammar = Grammar.Augment grammar
 
         /// Analysis of the augmented grammar.
         let predictiveSets = PredictiveSets.ofGrammar grammar
@@ -942,7 +852,7 @@ module Lr1 =
 
         // The initial table-gen state.
         let initialParserStateId, initialTableGenState =
-            Lr1TableGenState.stateId initialParserState Lr1TableGenState.empty
+            LrTableGenState.stateId initialParserState LrTableGenState.empty
 
         // Create the table-gen state.
         createTableImpl grammar predictiveSets initialTableGenState

@@ -9,8 +9,7 @@ See LICENSE.TXT for licensing details.
 //
 namespace FSharpYacc.Analysis
 
-open FSharpYacc
-open Grammar
+open FSharpYacc.Grammar
 
 
 //

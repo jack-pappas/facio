@@ -7,7 +7,7 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-module FSharpYacc.Grammar
+namespace FSharpYacc.Grammar
 
 
 /// A symbol within a context-free grammar (CFG).
@@ -87,8 +87,7 @@ type Grammar<'Nonterminal, 'Terminal
     StartSymbol : 'Nonterminal;
 } with
     /// Augments a Grammar with a special "start" symbol and the end-of-file marker.
-    [<CompiledName("Augment")>]
-    static member augment (grammar : Grammar<'Nonterminal, 'Terminal>)
+    static member Augment (grammar : Grammar<'Nonterminal, 'Terminal>)
         : AugmentedGrammar<'Nonterminal, 'Terminal> =
         // Based on the input grammar, create a new grammar with an additional
         // nonterminal and production for the start symbol and an additional token
