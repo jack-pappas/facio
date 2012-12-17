@@ -105,7 +105,7 @@ type internal ShiftOrReduce =
     | Reduce of ReductionRuleId
 
 /// A node in a Parser State Position Graph (PSPG).
-type internal PspgNode<'Nonterminal, 'Terminal, 'Lookahead
+type internal ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
     and 'Lookahead : comparison> =
@@ -113,6 +113,21 @@ type internal PspgNode<'Nonterminal, 'Terminal, 'Lookahead
     | Item of LrItem<'Nonterminal, 'Terminal, 'Lookahead>
     /// A final state of a parser state position graph (PSPG).
     | Final of ShiftOrReduce
+
+/// <summary>A Parser State Position Graph (PSPG).</summary>
+/// <remarks>
+/// <para>A Parser State Position Graph represents the possible epsilon-moves
+/// between the items of a parser state. These graphs are used to classify
+/// parser positions as 'free' or 'forbidden'; semantic actions can be
+/// safely inserted at a position iff the position is 'free'.</para>
+/// <para>The graph is represented as a set of directed edges.</para>
+/// </remarks>
+type internal ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison
+    and 'Lookahead : comparison> =
+    Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead> *
+        ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>>
 
 /// LR(k) parser table generation state.
 type internal LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
@@ -130,9 +145,7 @@ type internal LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
     /// Contains a Parser State Position Graph (PSPG) for each parser state.
     /// These graphs are used to determine which parser positions are 'free' positions.
     ParserStatePositionGraphs :
-        Map<ParserStateId,
-            Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead> *
-                PspgNode<'Nonterminal, 'Terminal, 'Lookahead>>>;
+        Map<ParserStateId, ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>>;
 }
 
 /// Functions which use the State monad to manipulate an LR(k) table-generation state.
@@ -150,7 +163,9 @@ module internal LrTableGenState =
     /// Retrives the identifier for a given parser state (set of items).
     /// If the state has not been assigned an identifier, one is created
     /// and added to the table-generation state before returning.
-    let stateId (parserState : LrParserState<'Nonterminal, 'Terminal, 'Lookahead>) (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+    let stateId
+        (parserState : LrParserState<'Nonterminal, 'Terminal, 'Lookahead>)
+        (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
         // Try to retrieve an existing id for this state.
         match Map.tryFind parserState tableGenState.ParserStates with
         | Some parserStateId ->
@@ -165,10 +180,13 @@ module internal LrTableGenState =
             // Return the id, along with the updated table-gen state.
             parserStateId,
             { tableGenState with
-                ParserStates = Map.add parserState parserStateId tableGenState.ParserStates; }
+                ParserStates =
+                    Map.add parserState parserStateId tableGenState.ParserStates; }
 
     //
-    let reductionRuleId (reductionRule : 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]) (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+    let reductionRuleId
+        (reductionRule : 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[])
+        (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
         // Reduction rules should only be added, but for safety we'll check to
         // see if the rule has already been assigned an identifier.
         match Map.tryFind reductionRule tableGenState.ReductionRules with
@@ -184,8 +202,10 @@ module internal LrTableGenState =
             // Return the id, along with the updated table-gen state.
             reductionRuleId,
             { tableGenState with
-                ReductionRules = Map.add reductionRule reductionRuleId tableGenState.ReductionRules;
-                ReductionRulesById = Map.add reductionRuleId reductionRule tableGenState.ReductionRulesById; }
+                ReductionRules =
+                    Map.add reductionRule reductionRuleId tableGenState.ReductionRules;
+                ReductionRulesById =
+                    Map.add reductionRuleId reductionRule tableGenState.ReductionRulesById; }
 
     /// Add a 'shift' action to the parser table.
     let shift (sourceState : ParserStateId)
@@ -488,7 +508,7 @@ module internal Lr0 =
 
 // Simple LR (SLR) parser tables.
 [<RequireQualifiedAccess>]
-module Slr =
+module internal Slr =
     //
     let rec private createTableImpl (grammar : Grammar<_,_>) analysis (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
         // Preconditions
@@ -599,6 +619,16 @@ module Slr =
 
         // Create the parser table.
         createTableImpl grammar analysis initialTableGenState
+
+
+/// Bounded right-context (BRC(1,1)) parser tables.
+[<RequireQualifiedAccess>]
+module internal Brc =
+    /// Creates a bounded right-context (BRC(1,1)) parser table from the specified grammar.
+    let createTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
+        // TODO : Implement the algorithm which converts an
+        // SLR(1) grammar into a BRC(1,1) grammar.
+        raise <| System.NotImplementedException "Brc.createTable"
 
 
 /// An LR(1) item.
