@@ -16,6 +16,14 @@
 ### Implement modules for generating other types of parsers
 
 - Deterministic
+  - IELR(1) -- Inadequacy Elimination LR(1)
+    - This algorithm is interesting because it provides some important advantages over
+      the Canonical LR(1) algorithm employed in Menhir, mainly:
+      - Provides more robust and accurate conflict resolution. Menhir uses Pager's algorithm
+        to avoid the *mysterious* conflicts which can arise when merging LR(1) states to
+        form LALR(1) states; however, Pager's algorithm fails to detect certain kinds of
+        mysterious conflicts while the IELR(1) algorithm is able to handle them correctly.
+      - Produces more efficient parsers.
   - SGLC -- Simple Generalized Left-Corner, accomodates SLR(1) grammars
   - XLC(1) -- eXtended generalized Left-Corner(1), accomodates LR(1) grammars
   - LAXLC(1) -- Look-Ahead eXtended generalized Left-Corner(1), accomodates LALR(1) grammars
