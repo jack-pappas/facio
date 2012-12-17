@@ -98,11 +98,13 @@ type internal LrParserState<'Nonterminal, 'Terminal, 'Lookahead
     Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead>>
 
 //
-type internal ShiftOrReduce =
-    /// Shift into a state.
-    | Shift of ParserStateId
+type internal ParserStatePositionGraphAction<'Terminal when 'Terminal : comparison> =
+    /// Shift the specified terminal (token) onto the parser stack.
+    | Shift of 'Terminal
     /// Reduce by a production rule.
     | Reduce of ReductionRuleId
+    /// Accept.
+    | Accept
 
 /// A node in a Parser State Position Graph (PSPG).
 type internal ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead
@@ -111,8 +113,8 @@ type internal ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead
     and 'Lookahead : comparison> =
     /// An LR(k) item.
     | Item of LrItem<'Nonterminal, 'Terminal, 'Lookahead>
-    /// A final state of a parser state position graph (PSPG).
-    | Final of ShiftOrReduce
+    /// A parser action.
+    | Action of ParserStatePositionGraphAction<'Terminal>
 
 /// <summary>A Parser State Position Graph (PSPG).</summary>
 /// <remarks>
@@ -261,10 +263,10 @@ module internal LrTableGenState =
             match Map.tryFind tableKey tableGenState.Table with
             | None ->
                 // Create a new 'accept' action for this table entry.
-                Set.singleton Accept
+                Set.singleton LrParserAction.Accept
             | Some entry ->
                 // Create a new 'accept' action and add it to the existing table entry.
-                Set.add Accept entry
+                Set.add LrParserAction.Accept entry
 
         // Update the table with the new entry.
         (),
@@ -340,7 +342,7 @@ module internal Lr0 =
                 else
                     closure items'
 
-            // Compute the closure, starting with the specified initial item.
+            // Compute the closure, starting with the specified initial items.
             closure items
 
         /// Moves the 'dot' (the current parser position) past the
@@ -947,7 +949,7 @@ module Lalr1 =
             Goto <| Map.find lrParserStateId lrToLalrIdMap
         // These actions don't change
         | LrParserAction.Reduce _
-        | Accept as action ->
+        | LrParserAction.Accept as action ->
             action
 
     /// Discards the lookahead tokens from the items in an LR(1) parser state.
