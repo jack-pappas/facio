@@ -6,9 +6,10 @@ This code is provided under the terms of the 2-clause ("Simplified") BSD license
 See LICENSE.TXT for licensing details.
 *)
 
-//
+/// Parser table generators for LR(k) grammars.
 namespace FSharpYacc.LR
 
+open LanguagePrimitives
 open FSharpYacc.Grammar
 open FSharpYacc.Analysis
 
@@ -84,8 +85,8 @@ type internal LrItem<'Nonterminal, 'Terminal, 'Lookahead
 
         // Append the lookahead symbol, if applicable.
         if typeof<'Lookahead> <> typeof<unit> then
-            sb.Append ", " |> ignore
-            this.Lookahead.ToString () |> sb.Append |> ignore
+            sprintf ", %A" this.Lookahead
+            |> sb.Append |> ignore
 
         sb.ToString ()
 
@@ -95,6 +96,23 @@ type internal LrParserState<'Nonterminal, 'Terminal, 'Lookahead
     and 'Terminal : comparison
     and 'Lookahead : comparison> =
     Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead>>
+
+//
+type internal ShiftOrReduce =
+    /// Shift into a state.
+    | Shift of ParserStateId
+    /// Reduce by a production rule.
+    | Reduce of ReductionRuleId
+
+/// A node in a Parser State Position Graph (PSPG).
+type internal PspgNode<'Nonterminal, 'Terminal, 'Lookahead
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison
+    and 'Lookahead : comparison> =
+    /// An LR(k) item.
+    | Item of LrItem<'Nonterminal, 'Terminal, 'Lookahead>
+    /// A final state of a parser state position graph (PSPG).
+    | Final of ShiftOrReduce
 
 /// LR(k) parser table generation state.
 type internal LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
@@ -109,6 +127,12 @@ type internal LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
     ReductionRules : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], ReductionRuleId>;
     //
     ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
+    /// Contains a Parser State Position Graph (PSPG) for each parser state.
+    /// These graphs are used to determine which parser positions are 'free' positions.
+    ParserStatePositionGraphs :
+        Map<ParserStateId,
+            Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead> *
+                PspgNode<'Nonterminal, 'Terminal, 'Lookahead>>>;
 }
 
 /// Functions which use the State monad to manipulate an LR(k) table-generation state.
@@ -120,7 +144,8 @@ module internal LrTableGenState =
         Table = Map.empty;
         ParserStates = Map.empty;
         ReductionRules = Map.empty;
-        ReductionRulesById = Map.empty; }
+        ReductionRulesById = Map.empty;
+        ParserStatePositionGraphs = Map.empty; }
 
     /// Retrives the identifier for a given parser state (set of items).
     /// If the state has not been assigned an identifier, one is created
@@ -135,7 +160,7 @@ module internal LrTableGenState =
             // Create a new ID for this state.
             let parserStateId =
                 tableGenState.ParserStates.Count + 1
-                |> LanguagePrimitives.Int32WithMeasure
+                |> Int32WithMeasure
 
             // Return the id, along with the updated table-gen state.
             parserStateId,
@@ -154,7 +179,7 @@ module internal LrTableGenState =
             // Create a new ID for this reduction rule.
             let reductionRuleId =
                 tableGenState.ReductionRules.Count + 1
-                |> LanguagePrimitives.Int32WithMeasure
+                |> Int32WithMeasure
 
             // Return the id, along with the updated table-gen state.
             reductionRuleId,
@@ -172,7 +197,7 @@ module internal LrTableGenState =
 
         //
         let entry =
-            let action = Shift targetState
+            let action = LrParserAction.Shift targetState
             match Map.tryFind tableKey tableGenState.Table with
             | None ->
                 Set.singleton action
@@ -227,91 +252,11 @@ module internal LrTableGenState =
             Table = Map.add tableKey entry tableGenState.Table; }
 
 
-
 /// An LR(0) item.
 type internal Lr0Item<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     LrItem<'Nonterminal, 'Terminal, unit>
-
-/// Functions for manipulating LR(0) parser items.
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module internal Lr0Item =
-    /// Computes the LR(0) closure of a set of items.
-    // TODO : Modify this to use a worklist-style algorithm to avoid
-    // reprocessing items which already exist in the set (i.e., when iterating,
-    // we only process items added to the set in the previous iteration).
-    let closure (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) items =
-        /// Implementation of the LR(0) closure algorithm.
-        let rec closure items =
-            let items' =
-                (items, items)
-                ||> Set.fold (fun items item ->
-                    // If the position is at the end of the production,
-                    // there's nothing that needs to be done for this item.
-                    if int item.Position = Array.length item.Production then
-                        items
-                    else
-                        // Determine what to do based on the next symbol to be parsed.
-                        match item.Production.[int item.Position] with
-                        | Symbol.Terminal _ ->
-                            // Nothing to do for terminals
-                            items
-                        | Symbol.Nonterminal nontermId ->
-                            /// The productions of this nonterminal.
-                            let nontermProductions = Map.find nontermId productions
-
-                            // For all productions of this nonterminal, create a new item
-                            // with the parser position at the beginning of the production.
-                            // Add these new items into the set of items.
-                            (items, nontermProductions)
-                            ||> Array.fold (fun items production ->
-                                let newItem = {
-                                    Nonterminal = nontermId;
-                                    Production = production;
-                                    Position = 0<_>;
-                                    Lookahead = (); }
-
-                                Set.add newItem items))
-
-            // If the items set has changed, recurse for another iteration.
-            // If not, we're done processing and the set is returned.
-            if items' = items then
-                items
-            else
-                closure items'
-
-        // Compute the closure, starting with the specified initial item.
-        closure items
-
-    /// Moves the 'dot' (the current parser position) past the
-    /// specified symbol for each item in a set of items.
-    let goto symbol items (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) =
-        /// The updated 'items' set.
-        let items =
-            (Set.empty, items)
-            ||> Set.fold (fun updatedItems item ->
-                // If the position is at the end of the production, we know
-                // this item can't be a match, so continue to to the next item.
-                if int item.Position = Array.length item.Production then
-                    updatedItems
-                else
-                    // If the next symbol to be parsed in the production is the
-                    // specified symbol, create a new item with the position advanced
-                    // to the right of the symbol and add it to the updated items set.
-                    if item.Production.[int item.Position] = symbol then
-                        let updatedItem =
-                            { item with
-                                Position = item.Position + 1<_>; }
-                        Set.add updatedItem updatedItems
-                    else
-                        // The symbol did not match, so this item won't be added to
-                        // the updated items set.
-                        updatedItems)
-
-        // Return the closure of the item set.
-        closure productions items
-
 
 /// An LR(0) parser state -- i.e., a set of LR(0) items.
 type internal Lr0ParserState<'Nonterminal, 'Terminal
@@ -325,38 +270,120 @@ type internal Lr0TableGenState<'Nonterminal, 'Terminal
     and 'Terminal : comparison> =
     LrTableGenState<'Nonterminal, 'Terminal, unit>
 
-/// Functions which use the State monad to manipulate an LR(0) table-generation state.
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module internal Lr0TableGenState =
-    /// Add 'reduce' actions to the parser table for each terminal (token) in the grammar.
-    let reduce (sourceState : ParserStateId) (reductionRuleId : ReductionRuleId) (terminals : Set<_>) (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
-        // Fold over the set of terminals (tokens) in the grammar.
-        let table =
-            (tableGenState.Table, terminals)
-            ||> Set.fold (fun table token ->
-                //
-                let tableKey = sourceState, Symbol.Terminal token
-
-                //
-                let entry =
-                    let action = Reduce reductionRuleId
-                    match Map.tryFind tableKey table with
-                    | None ->
-                        Set.singleton action
-                    | Some entry ->
-                        Set.add action entry
-
-                // Update the table with the entry.
-                Map.add tableKey entry table)
-
-        // Return the updated table-gen state.
-        (),
-        { tableGenState with
-            Table = table; }
-
 /// LR(0) parser tables.
 [<RequireQualifiedAccess>]
 module internal Lr0 =
+    /// Functions for manipulating LR(0) parser items.
+    [<RequireQualifiedAccess>]
+    module Item =
+        /// Computes the LR(0) closure of a set of items.
+        // TODO : Modify this to use a worklist-style algorithm to avoid
+        // reprocessing items which already exist in the set (i.e., when iterating,
+        // we only process items added to the set in the previous iteration).
+        let closure (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) items =
+            /// Implementation of the LR(0) closure algorithm.
+            let rec closure items =
+                let items' =
+                    (items, items)
+                    ||> Set.fold (fun items item ->
+                        // If the position is at the end of the production,
+                        // there's nothing that needs to be done for this item.
+                        if int item.Position = Array.length item.Production then
+                            items
+                        else
+                            // Determine what to do based on the next symbol to be parsed.
+                            match item.Production.[int item.Position] with
+                            | Symbol.Terminal _ ->
+                                // Nothing to do for terminals
+                                items
+                            | Symbol.Nonterminal nontermId ->
+                                /// The productions of this nonterminal.
+                                let nontermProductions = Map.find nontermId productions
+
+                                // For all productions of this nonterminal, create a new item
+                                // with the parser position at the beginning of the production.
+                                // Add these new items into the set of items.
+                                (items, nontermProductions)
+                                ||> Array.fold (fun items production ->
+                                    let newItem = {
+                                        Nonterminal = nontermId;
+                                        Production = production;
+                                        Position = GenericZero;
+                                        Lookahead = (); }
+
+                                    Set.add newItem items))
+
+                // If the items set has changed, recurse for another iteration.
+                // If not, we're done processing and the set is returned.
+                if items' = items then
+                    items
+                else
+                    closure items'
+
+            // Compute the closure, starting with the specified initial item.
+            closure items
+
+        /// Moves the 'dot' (the current parser position) past the
+        /// specified symbol for each item in a set of items.
+        let goto symbol items (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) =
+            /// The updated 'items' set.
+            let items =
+                (Set.empty, items)
+                ||> Set.fold (fun updatedItems item ->
+                    // If the position is at the end of the production, we know
+                    // this item can't be a match, so continue to to the next item.
+                    if int item.Position = Array.length item.Production then
+                        updatedItems
+                    else
+                        // If the next symbol to be parsed in the production is the
+                        // specified symbol, create a new item with the position advanced
+                        // to the right of the symbol and add it to the updated items set.
+                        if item.Production.[int item.Position] = symbol then
+                            let updatedItem =
+                                { item with
+                                    Position = item.Position + 1<_>; }
+                            Set.add updatedItem updatedItems
+                        else
+                            // The symbol did not match, so this item won't be added to
+                            // the updated items set.
+                            updatedItems)
+
+            // Return the closure of the item set.
+            closure productions items
+
+    /// Functions which use the State monad to manipulate an LR(0) table-generation state.
+    [<RequireQualifiedAccess>]
+    module TableGenState =
+        /// Add 'reduce' actions to the parser table for each terminal (token) in the grammar.
+        let reduce (sourceState : ParserStateId)
+                    (reductionRuleId : ReductionRuleId)
+                    (terminals : Set<_>)
+                    (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
+            // Fold over the set of terminals (tokens) in the grammar.
+            let table =
+                (tableGenState.Table, terminals)
+                ||> Set.fold (fun table token ->
+                    //
+                    let tableKey = sourceState, Symbol.Terminal token
+
+                    //
+                    let entry =
+                        let action = LrParserAction.Reduce reductionRuleId
+                        match Map.tryFind tableKey table with
+                        | None ->
+                            Set.singleton action
+                        | Some entry ->
+                            Set.add action entry
+
+                    // Update the table with the entry.
+                    Map.add tableKey entry table)
+
+            // Return the updated table-gen state.
+            (),
+            { tableGenState with
+                Table = table; }
+
+
     //
     let rec private createTableImpl grammar (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
         // Preconditions
@@ -376,7 +403,7 @@ module internal Lr0 =
                             LrTableGenState.reductionRuleId (item.Nonterminal, item.Production) tableGenState
 
                         // Add 'reduce' actions to the parser table.
-                        Lr0TableGenState.reduce stateId reductionRuleId grammar.Terminals tableGenState
+                        TableGenState.reduce stateId reductionRuleId grammar.Terminals tableGenState
                         // TEMP : Discard the unit return value until we can use a monadic fold.
                         |> snd
                     else
@@ -393,7 +420,7 @@ module internal Lr0 =
                         | Symbol.Terminal (Terminal _ as token) as symbol ->                            
                             /// The state (set of items) transitioned into
                             /// via the edge labeled with this symbol.
-                            let targetState = Lr0Item.goto symbol stateItems grammar.Productions
+                            let targetState = Item.goto symbol stateItems grammar.Productions
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
@@ -408,7 +435,7 @@ module internal Lr0 =
                         | Symbol.Nonterminal nonterm as symbol ->
                             /// The state (set of items) transitioned into
                             /// via the edge labeled with this symbol.
-                            let targetState = Lr0Item.goto symbol stateItems grammar.Productions
+                            let targetState = Item.goto symbol stateItems grammar.Productions
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
@@ -446,10 +473,10 @@ module internal Lr0 =
                 // the beginning of the production.
                 {   Nonterminal = Start;
                     Production = production;
-                    Position = 0<_>;
+                    Position = GenericZero;
                     Lookahead = (); })
             |> Set.ofArray
-            |> Lr0Item.closure grammar.Productions
+            |> Item.closure grammar.Productions
 
         // The initial table-gen state.
         let initialParserStateId, initialTableGenState =
@@ -488,7 +515,7 @@ module Slr =
                         let tokens = Map.find item.Nonterminal analysis.Follow                            
 
                         // Add 'reduce' actions to the parser table.
-                        Lr0TableGenState.reduce stateId reductionRuleId tokens tableGenState
+                        Lr0.TableGenState.reduce stateId reductionRuleId tokens tableGenState
                         // TEMP : Discard the unit return value until we can use a monadic fold.
                         |> snd
                     else
@@ -505,7 +532,7 @@ module Slr =
                         | Symbol.Terminal (Terminal _ as token) as symbol ->                            
                             /// The state (set of items) transitioned into
                             /// via the edge labeled with this symbol.
-                            let targetState = Lr0Item.goto symbol stateItems grammar.Productions
+                            let targetState = Lr0.Item.goto symbol stateItems grammar.Productions
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
@@ -520,7 +547,7 @@ module Slr =
                         | Symbol.Nonterminal nonterm as symbol ->
                             /// The state (set of items) transitioned into
                             /// via the edge labeled with this symbol.
-                            let targetState = Lr0Item.goto symbol stateItems grammar.Productions
+                            let targetState = Lr0.Item.goto symbol stateItems grammar.Productions
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
@@ -561,10 +588,10 @@ module Slr =
                 // the beginning of the production.
                 {   Nonterminal = Start;
                     Production = production;
-                    Position = 0<_>;
+                    Position = GenericZero;
                     Lookahead = (); })
             |> Set.ofArray
-            |> Lr0Item.closure grammar.Productions
+            |> Lr0.Item.closure grammar.Productions
 
         // The initial table-gen state.
         let initialParserStateId, initialTableGenState =
@@ -580,138 +607,6 @@ type internal Lr1Item<'Nonterminal, 'Terminal
     and 'Terminal : comparison> =
     LrItem<'Nonterminal, 'Terminal, 'Terminal>
 
-/// Functions for manipulating LR(1) parser items.
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module internal Lr1Item =
-    /// Computes the FIRST set of a string of symbols.
-    /// The string is a "substring" of a production, followed by a lookahead token.
-    let firstSetOfString (production : Symbol<'Nonterminal, 'Terminal>[]) startIndex (lookahead : 'Terminal) (predictiveSets : PredictiveSets<'Nonterminal, 'Terminal>) : Set<'Terminal> =
-        // Preconditions
-        if startIndex < 0 then
-            invalidArg "startIndex" "The start index cannot be negative."
-        elif startIndex > Array.length production then
-            invalidArg "startIndex" "The start index cannot be greater than the length of the production."
-
-        let productionLength = Array.length production
-
-        //
-        let rec firstSetOfString firstSet symbolIndex =
-            // If we've reached the end of the production,
-            // add the lookahead token to the set and return.
-            if symbolIndex = productionLength then
-                Set.add lookahead firstSet
-            else
-                // Match on the current symbol of the production.
-                match production.[symbolIndex] with
-                | Symbol.Terminal token ->
-                    // Add the token to the set; then, return
-                    // because tokens are never nullable.
-                    Set.add token firstSet
-
-                | Symbol.Nonterminal nontermId ->
-                    /// The FIRST set of this nonterminal symbol.
-                    let nontermFirstSet = Map.find nontermId predictiveSets.First
-
-                    // Merge the FIRST set of this nonterminal symbol into
-                    // the FIRST set of the string.
-                    let firstSet = Set.union firstSet nontermFirstSet
-
-                    // If this symbol is nullable, continue processing with
-                    // the next symbol in the production; otherwise, return.
-                    if Map.find nontermId predictiveSets.Nullable then
-                        firstSetOfString firstSet (symbolIndex + 1)
-                    else
-                        firstSet
-
-        // Call the recursive implementation to compute the FIRST set.
-        firstSetOfString Set.empty startIndex
-
-    /// Computes the LR(1) closure of a set of items.
-    // TODO : Modify this to use a worklist-style algorithm to avoid
-    // reprocessing items which already exist in the set (i.e., when iterating,
-    // we only process items added to the set in the previous iteration).
-    let closure (grammar : Grammar<'Nonterminal, 'Terminal>) (predictiveSets : PredictiveSets<'Nonterminal, 'Terminal>) items =
-        /// Implementation of the LR(1) closure algorithm.
-        let rec closure items =
-            let items' =
-                (items, items)
-                ||> Set.fold (fun items item ->
-                    // If the position is at the end of the production,
-                    // there's nothing that needs to be done for this item.
-                    if int item.Position = Array.length item.Production then
-                        items
-                    else
-                        // Determine what to do based on the next symbol to be parsed.
-                        match item.Production.[int item.Position] with
-                        | Symbol.Terminal _ ->
-                            // Nothing to do for terminals
-                            items
-                        | Symbol.Nonterminal nontermId ->
-                            /// The productions of this nonterminal.
-                            let nontermProductions = Map.find nontermId grammar.Productions
-                            
-                            /// The FIRST set of the remaining symbols in this production
-                            /// (i.e., the symbols following this nonterminal symbol),
-                            /// plus the lookahead token from the item.
-                            let firstSetOfRemainingSymbols =
-                                firstSetOfString item.Production (int item.Position + 1) item.Lookahead predictiveSets
-
-                            // For all productions of this nonterminal, create a new item
-                            // with the parser position at the beginning of the production.
-                            // Add these new items into the set of items.
-                            (items, nontermProductions)
-                            ||> Array.fold (fun items production ->
-                                // Combine the production with each token which could
-                                // possibly follow this nonterminal.
-                                (items, firstSetOfRemainingSymbols)
-                                ||> Set.fold (fun items nontermFollowToken ->
-                                    let newItem = {
-                                        Nonterminal = nontermId;
-                                        Production = production;
-                                        Position = 0<_>;
-                                        Lookahead = nontermFollowToken; }
-
-                                    Set.add newItem items)))
-
-            // If the items set has changed, recurse for another iteration.
-            // If not, we're done processing and the set is returned.
-            if items' = items then
-                items
-            else
-                closure items'
-
-        // Compute the closure, starting with the specified initial item.
-        closure items
-
-    /// Moves the 'dot' (the current parser position) past the
-    /// specified symbol for each item in a set of items.
-    let goto symbol items (grammar : Grammar<'Nonterminal, 'Terminal>) (predictiveSets : PredictiveSets<_,_>) =
-        /// The updated 'items' set.
-        let items =
-            (Set.empty, items)
-            ||> Set.fold (fun updatedItems item ->
-                // If the position is at the end of the production, we know
-                // this item can't be a match, so continue to to the next item.
-                if int item.Position = Array.length item.Production then
-                    updatedItems
-                else
-                    // If the next symbol to be parsed in the production is the
-                    // specified symbol, create a new item with the position advanced
-                    // to the right of the symbol and add it to the updated items set.
-                    if item.Production.[int item.Position] = symbol then
-                        let updatedItem =
-                            { item with
-                                Position = item.Position + 1<_>; }
-                        Set.add updatedItem updatedItems
-                    else
-                        // The symbol did not match, so this item won't be added to
-                        // the updated items set.
-                        updatedItems)
-
-        // Return the closure of the item set.
-        closure grammar predictiveSets items
-
-
 /// An LR(1) parser state -- i.e., a set of LR(1) items.
 type internal Lr1ParserState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
@@ -724,32 +619,166 @@ type internal Lr1TableGenState<'Nonterminal, 'Terminal
     and 'Terminal : comparison> =
     LrTableGenState<'Nonterminal, 'Terminal, 'Terminal>
 
-/// Functions which use the State monad to manipulate an LR(1) table-generation state.
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module internal Lr1TableGenState =
-    /// Add a 'reduce' action to the parser table for the specified lookahead token.
-    let reduce (sourceState : ParserStateId) (reductionRuleId : ReductionRuleId) (lookaheadToken : AugmentedTerminal<'Terminal>) (tableGenState : Lr1TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
-        //
-        let tableKey = sourceState, Symbol.Terminal lookaheadToken
-
-        //
-        let entry =
-            let action = Reduce reductionRuleId
-            match Map.tryFind tableKey tableGenState.Table with
-            | None ->
-                Set.singleton action
-            | Some entry ->
-                Set.add action entry
-
-        // Update the table with the new entry.
-        (),
-        { tableGenState with
-            Table = Map.add tableKey entry tableGenState.Table; }
-
-
 /// LR(1) parser tables.
 [<RequireQualifiedAccess>]
-module Lr1 =
+module internal Lr1 =
+    /// Functions for manipulating LR(1) parser items.
+    [<RequireQualifiedAccess>]
+    module Item =
+        /// Computes the FIRST set of a string of symbols.
+        /// The string is a "substring" of a production, followed by a lookahead token.
+        let firstSetOfString (production : Symbol<'Nonterminal, 'Terminal>[]) startIndex lookahead predictiveSets =
+            // Preconditions
+            if startIndex < 0 then
+                invalidArg "startIndex" "The start index cannot be negative."
+            elif startIndex > Array.length production then
+                invalidArg "startIndex" "The start index cannot be greater than the length of the production."
+
+            let productionLength = Array.length production
+
+            //
+            let rec firstSetOfString firstSet symbolIndex =
+                // If we've reached the end of the production,
+                // add the lookahead token to the set and return.
+                if symbolIndex = productionLength then
+                    Set.add lookahead firstSet
+                else
+                    // Match on the current symbol of the production.
+                    match production.[symbolIndex] with
+                    | Symbol.Terminal token ->
+                        // Add the token to the set; then, return
+                        // because tokens are never nullable.
+                        Set.add token firstSet
+
+                    | Symbol.Nonterminal nontermId ->
+                        /// The FIRST set of this nonterminal symbol.
+                        let nontermFirstSet = Map.find nontermId predictiveSets.First
+
+                        // Merge the FIRST set of this nonterminal symbol into
+                        // the FIRST set of the string.
+                        let firstSet = Set.union firstSet nontermFirstSet
+
+                        // If this symbol is nullable, continue processing with
+                        // the next symbol in the production; otherwise, return.
+                        if Map.find nontermId predictiveSets.Nullable then
+                            firstSetOfString firstSet (symbolIndex + 1)
+                        else
+                            firstSet
+
+            // Call the recursive implementation to compute the FIRST set.
+            firstSetOfString Set.empty startIndex
+
+        /// Computes the LR(1) closure of a set of items.
+        // TODO : Modify this to use a worklist-style algorithm to avoid
+        // reprocessing items which already exist in the set (i.e., when iterating,
+        // we only process items added to the set in the previous iteration).
+        let closure (grammar : Grammar<'Nonterminal, 'Terminal>) predictiveSets items =
+            /// Implementation of the LR(1) closure algorithm.
+            let rec closure items =
+                let items' =
+                    (items, items)
+                    ||> Set.fold (fun items item ->
+                        // If the position is at the end of the production,
+                        // there's nothing that needs to be done for this item.
+                        if int item.Position = Array.length item.Production then
+                            items
+                        else
+                            // Determine what to do based on the next symbol to be parsed.
+                            match item.Production.[int item.Position] with
+                            | Symbol.Terminal _ ->
+                                // Nothing to do for terminals
+                                items
+                            | Symbol.Nonterminal nontermId ->
+                                /// The productions of this nonterminal.
+                                let nontermProductions = Map.find nontermId grammar.Productions
+                            
+                                /// The FIRST set of the remaining symbols in this production
+                                /// (i.e., the symbols following this nonterminal symbol),
+                                /// plus the lookahead token from the item.
+                                let firstSetOfRemainingSymbols =
+                                    firstSetOfString item.Production (int item.Position + 1) item.Lookahead predictiveSets
+
+                                // For all productions of this nonterminal, create a new item
+                                // with the parser position at the beginning of the production.
+                                // Add these new items into the set of items.
+                                (items, nontermProductions)
+                                ||> Array.fold (fun items production ->
+                                    // Combine the production with each token which could
+                                    // possibly follow this nonterminal.
+                                    (items, firstSetOfRemainingSymbols)
+                                    ||> Set.fold (fun items nontermFollowToken ->
+                                        let newItem = {
+                                            Nonterminal = nontermId;
+                                            Production = production;
+                                            Position = GenericZero;
+                                            Lookahead = nontermFollowToken; }
+
+                                        Set.add newItem items)))
+
+                // If the items set has changed, recurse for another iteration.
+                // If not, we're done processing and the set is returned.
+                if items' = items then
+                    items
+                else
+                    closure items'
+
+            // Compute the closure, starting with the specified initial item.
+            closure items
+
+        /// Moves the 'dot' (the current parser position) past the
+        /// specified symbol for each item in a set of items.
+        let goto symbol items (grammar : Grammar<'Nonterminal, 'Terminal>) predictiveSets =
+            /// The updated 'items' set.
+            let items =
+                (Set.empty, items)
+                ||> Set.fold (fun updatedItems item ->
+                    // If the position is at the end of the production, we know
+                    // this item can't be a match, so continue to to the next item.
+                    if int item.Position = Array.length item.Production then
+                        updatedItems
+                    else
+                        // If the next symbol to be parsed in the production is the
+                        // specified symbol, create a new item with the position advanced
+                        // to the right of the symbol and add it to the updated items set.
+                        if item.Production.[int item.Position] = symbol then
+                            let updatedItem =
+                                { item with
+                                    Position = item.Position + 1<_>; }
+                            Set.add updatedItem updatedItems
+                        else
+                            // The symbol did not match, so this item won't be added to
+                            // the updated items set.
+                            updatedItems)
+
+            // Return the closure of the item set.
+            closure grammar predictiveSets items
+
+    /// Functions which use the State monad to manipulate an LR(1) table-generation state.
+    [<RequireQualifiedAccess>]
+    module TableGenState =
+        /// Add a 'reduce' action to the parser table for the specified lookahead token.
+        let reduce (sourceState : ParserStateId)
+                    (reductionRuleId : ReductionRuleId)
+                    (lookaheadToken : AugmentedTerminal<'Terminal>)
+                    (tableGenState : Lr1TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
+            //
+            let tableKey = sourceState, Symbol.Terminal lookaheadToken
+
+            //
+            let entry =
+                let action = LrParserAction.Reduce reductionRuleId
+                match Map.tryFind tableKey tableGenState.Table with
+                | None ->
+                    Set.singleton action
+                | Some entry ->
+                    Set.add action entry
+
+            // Update the table with the new entry.
+            (),
+            { tableGenState with
+                Table = Map.add tableKey entry tableGenState.Table; }
+
+
     //
     let rec private createTableImpl grammar predictiveSets (tableGenState : Lr1TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
         // Preconditions
@@ -769,7 +798,7 @@ module Lr1 =
                             LrTableGenState.reductionRuleId (item.Nonterminal, item.Production) tableGenState
 
                         // Add a 'reduce' action for the entry with this state and lookahead token.
-                        Lr1TableGenState.reduce stateId reductionRuleId item.Lookahead tableGenState
+                        TableGenState.reduce stateId reductionRuleId item.Lookahead tableGenState
                         // TEMP : Discard the unit return value until we can use a monadic fold.
                         |> snd
                     else
@@ -786,7 +815,7 @@ module Lr1 =
                         | Symbol.Terminal (Terminal _ as token) as symbol ->                            
                             /// The state (set of items) transitioned into
                             /// via the edge labeled with this symbol.
-                            let targetState = Lr1Item.goto symbol stateItems grammar predictiveSets
+                            let targetState = Item.goto symbol stateItems grammar predictiveSets
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
@@ -801,7 +830,7 @@ module Lr1 =
                         | Symbol.Nonterminal nonterm as symbol ->
                             /// The state (set of items) transitioned into
                             /// via the edge labeled with this symbol.
-                            let targetState = Lr1Item.goto symbol stateItems grammar predictiveSets
+                            let targetState = Item.goto symbol stateItems grammar predictiveSets
 
                             /// The identifier of the target state.
                             let targetStateId, tableGenState =
@@ -825,7 +854,7 @@ module Lr1 =
             tableGenState
 
     //
-    let private createTableGenState (grammar : Grammar<'Nonterminal, 'Terminal>) =
+    let internal createTableGenState (grammar : Grammar<'Nonterminal, 'Terminal>) =
         // Augment the grammar with the start production and end-of-file token.
         let grammar = Grammar.Augment grammar
 
@@ -842,13 +871,13 @@ module Lr1 =
                 let item = {
                     Nonterminal = Start;
                     Production = production;
-                    Position = 0<_>;
+                    Position = GenericZero;
                     // Any token can be used here, because the end-of-file symbol
                     // (in the augmented start production) will never be shifted.
                     // We use the EndOfFile token itself here to keep the code generic.
                     Lookahead = EndOfFile; }
                 Set.add item items)
-            |> Lr1Item.closure grammar predictiveSets
+            |> Item.closure grammar predictiveSets
 
         // The initial table-gen state.
         let initialParserStateId, initialTableGenState =
@@ -866,30 +895,34 @@ module Lr1 =
         {   Table = tableGenState.Table;
             ParserStateCount = uint32 tableGenState.ParserStates.Count;
             ReductionRulesById = tableGenState.ReductionRulesById; }
+            
 
+/// <summary>A LALR(1) parser state. This is simply an LR(1) parser state
+/// (set of LR(1) items) whose lookahead tokens have been discarded.</summary>
+type internal Lalr1ParserState<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
+    Set<LrItem<'Nonterminal, 'Terminal, unit>>
+
+/// LALR(1) parser tables.
+[<RequireQualifiedAccess>]
+module Lalr1 =
     /// Create a LALR(1) action from an LR(1) action.
     let private lalrAction lrToLalrIdMap lrAction =
         match lrAction with
-        | Shift lrParserStateId ->
-            Shift <| Map.find lrParserStateId lrToLalrIdMap
+        | LrParserAction.Shift lrParserStateId ->
+            Map.find lrParserStateId lrToLalrIdMap
+            |> LrParserAction.Shift
         | Goto lrParserStateId ->
             Goto <| Map.find lrParserStateId lrToLalrIdMap
         // These actions don't change
-        | Reduce _
+        | LrParserAction.Reduce _
         | Accept as action ->
             action
 
-    /// <summary>An LR(1) parser state (set of LR(1) items) without lookahead tokens.</summary>
-    /// <remarks>Uses the Lr0Item type because it has the exact same fields as Lr1Item
-    /// when the lookahead token is discarded, and therefore we avoid creating a type
-    /// which would be exactly the same except for it's semantics.</remarks>
-    type private Lr1ParserStateNoLookahead<'Nonterminal, 'Terminal
-        when 'Nonterminal : comparison
-        and 'Terminal : comparison> = Set<Lr0Item<'Nonterminal, 'Terminal>>
-
     /// Discards the lookahead tokens from the items in an LR(1) parser state.
     let private discardLookaheadTokens (lr1ParserState : Lr1ParserState<'Nonterminal, 'Terminal>)
-        : Lr1ParserStateNoLookahead<'Nonterminal, 'Terminal> =
+        : Lalr1ParserState<'Nonterminal, 'Terminal> =
         lr1ParserState
         |> Set.map (fun lr1Item ->
             {   Nonterminal = lr1Item.Nonterminal;
@@ -900,7 +933,7 @@ module Lr1 =
     /// Create a LALR(1) parser table for the specified grammar.
     let createCompressedTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
         // Create the table-gen state.
-        let tableGenState = createTableGenState grammar
+        let tableGenState = Lr1.createTableGenState grammar
 
         // Fold over the LR(1) table-gen state to determine which LR(1) states
         // (sets of LR(1) items) are equivalent except for their lookahead
@@ -913,7 +946,7 @@ module Lr1 =
                 // noLookaheadStateIdMap -- Maps LR(1) states whose lookahead tokens have been
                 // discarded to the LALR(1) state identifier representing that state and any
                 // other equivalent states which have been merged into it.
-                ||> Map.fold (fun (lrToLalrIdMap, noLookaheadStateIdMap : Map<Lr1ParserStateNoLookahead<_,_>, ParserStateId>) lrParserState lrParserStateId ->
+                ||> Map.fold (fun (lrToLalrIdMap, noLookaheadStateIdMap : Map<Lalr1ParserState<_,_>, ParserStateId>) lrParserState lrParserStateId ->
                     /// The LALR(1) state identifier for this LR(1) state.
                     let lalrParserStateId, noLookaheadStateIdMap =
                         /// The items of this LR(1) state, without their lookahead tokens.
@@ -927,7 +960,8 @@ module Lr1 =
                         | None ->
                             // Create a new LALR(1) state identifier for this state.
                             let lalrParserStateId : ParserStateId =
-                                LanguagePrimitives.Int32WithMeasure <| noLookaheadStateIdMap.Count + 1
+                                noLookaheadStateIdMap.Count + 1
+                                |> Int32WithMeasure
 
                             // Add this state and it's identifier to the map.
                             let noLookaheadStateIdMap =
