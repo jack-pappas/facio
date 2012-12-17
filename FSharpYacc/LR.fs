@@ -98,13 +98,15 @@ type internal LrParserState<'Nonterminal, 'Terminal, 'Lookahead
     Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead>>
 
 //
-type internal ParserStatePositionGraphAction<'Terminal when 'Terminal : comparison> =
+type internal ParserStatePositionGraphAction<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
     /// Shift the specified terminal (token) onto the parser stack.
     | Shift of 'Terminal
     /// Reduce by a production rule.
-    | Reduce of ReductionRuleId
-    /// Accept.
-    | Accept
+    // NOTE : When 'Nonterminal is instantiated as AugmentedNonterminal<'Nonterminal>,
+    // note that (Reduce Start) is the "Accept" action.
+    | Reduce of 'Nonterminal
 
 /// A node in a Parser State Position Graph (PSPG).
 type internal ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead
@@ -114,7 +116,7 @@ type internal ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead
     /// An LR(k) item.
     | Item of LrItem<'Nonterminal, 'Terminal, 'Lookahead>
     /// A parser action.
-    | Action of ParserStatePositionGraphAction<'Terminal>
+    | Action of ParserStatePositionGraphAction<'Nonterminal, 'Terminal>
 
 /// <summary>A Parser State Position Graph (PSPG).</summary>
 /// <remarks>
@@ -144,10 +146,6 @@ type internal LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
     ReductionRules : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], ReductionRuleId>;
     //
     ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
-    /// Contains a Parser State Position Graph (PSPG) for each parser state.
-    /// These graphs are used to determine which parser positions are 'free' positions.
-    ParserStatePositionGraphs :
-        Map<ParserStateId, ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>>;
 }
 
 /// Functions which use the State monad to manipulate an LR(k) table-generation state.
@@ -159,8 +157,7 @@ module internal LrTableGenState =
         Table = Map.empty;
         ParserStates = Map.empty;
         ReductionRules = Map.empty;
-        ReductionRulesById = Map.empty;
-        ParserStatePositionGraphs = Map.empty; }
+        ReductionRulesById = Map.empty; }
 
     /// Retrives the identifier for a given parser state (set of items).
     /// If the state has not been assigned an identifier, one is created
@@ -348,30 +345,27 @@ module internal Lr0 =
         /// Moves the 'dot' (the current parser position) past the
         /// specified symbol for each item in a set of items.
         let goto symbol items (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) =
-            /// The updated 'items' set.
-            let items =
-                (Set.empty, items)
-                ||> Set.fold (fun updatedItems item ->
-                    // If the position is at the end of the production, we know
-                    // this item can't be a match, so continue to to the next item.
-                    if int item.Position = Array.length item.Production then
-                        updatedItems
+            (Set.empty, items)
+            ||> Set.fold (fun updatedItems item ->
+                // If the position is at the end of the production, we know
+                // this item can't be a match, so continue to to the next item.
+                if int item.Position = Array.length item.Production then
+                    updatedItems
+                else
+                    // If the next symbol to be parsed in the production is the
+                    // specified symbol, create a new item with the position advanced
+                    // to the right of the symbol and add it to the updated items set.
+                    if item.Production.[int item.Position] = symbol then
+                        let updatedItem =
+                            { item with
+                                Position = item.Position + 1<_>; }
+                        Set.add updatedItem updatedItems
                     else
-                        // If the next symbol to be parsed in the production is the
-                        // specified symbol, create a new item with the position advanced
-                        // to the right of the symbol and add it to the updated items set.
-                        if item.Production.[int item.Position] = symbol then
-                            let updatedItem =
-                                { item with
-                                    Position = item.Position + 1<_>; }
-                            Set.add updatedItem updatedItems
-                        else
-                            // The symbol did not match, so this item won't be added to
-                            // the updated items set.
-                            updatedItems)
-
+                        // The symbol did not match, so this item won't be added to
+                        // the updated items set.
+                        updatedItems)
             // Return the closure of the item set.
-            closure productions items
+            |> closure productions
 
     /// Functions which use the State monad to manipulate an LR(0) table-generation state.
     [<RequireQualifiedAccess>]
@@ -405,6 +399,58 @@ module internal Lr0 =
             { tableGenState with
                 Table = table; }
 
+
+    /// Computes the Parser State Position Graph of an LR(0) parser state.
+    let positionGraph (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) (parserState : Lr0ParserState<'Nonterminal, 'Terminal>)
+        : ParserStatePositionGraph<_,_,_> =
+        // OPTIMIZE : The code below can be improved slightly (for correctness and speed)
+        // by using our Set.mapPartition function.
+
+        //
+        let transitionItems, actionItems =
+            parserState
+            |> Set.partition (fun item ->
+                // Does this item represent the derivation of the entire production?
+                if int item.Position = Array.length item.Production then
+                    false   // Reduce
+                else
+                    match item.Production.[int item.Position] with
+                    | Symbol.Terminal _ -> false    // Shift
+                    | Symbol.Nonterminal _ -> true)
+
+        /// Edges which representing parser actions.
+        let actionEdges =
+            (Set.empty, actionItems)
+            ||> Set.fold (fun actionEdges item ->
+                if int item.Position = Array.length item.Production then
+                    Set.add (item, Action <| Reduce item.Nonterminal) actionEdges
+                else
+                    match item.Production.[int item.Position] with
+                    | Symbol.Nonterminal _ ->
+                        invalidOp "A transition item was found where an action item was expected."
+                    | Symbol.Terminal terminal ->
+                        Set.add (item, Action <| Shift terminal) actionEdges)
+
+        // Find edges representing derivations of non-terminals and add them to
+        // the existing set of graph edges (which may already contain some shift edges).
+        (actionEdges, transitionItems)
+        ||> Set.fold (fun pspgEdges nonterminalDerivingItem ->
+            /// The nonterminal being derived by this item.
+            let derivingNonterminal =
+                match nonterminalDerivingItem.Production.[int nonterminalDerivingItem.Position] with
+                | Symbol.Nonterminal nt -> nt
+                | Symbol.Terminal _ ->
+                    invalidOp "A terminal was found where a nonterminal was expected."
+
+            (pspgEdges, parserState)
+            ||> Set.fold (fun pspgEdges item ->
+                // A derivation edge exists iff the nonterminal produced by this item
+                // is the one we're trying to derive AND the parser position of this
+                // item is the initial position.
+                if item.Nonterminal = derivingNonterminal && item.Position = 0<_> then
+                    Set.add (nonterminalDerivingItem, Item item) pspgEdges
+                else
+                    pspgEdges))
 
     //
     let rec private createTableImpl grammar (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
@@ -476,36 +522,49 @@ module internal Lr0 =
             tableGenState.Table <> tableGenState'.Table then
             createTableImpl grammar tableGenState'
         else
-            // Create the parser table from the table-gen state.
-            { Table = tableGenState.Table;
-                ParserStateCount = uint32 tableGenState.ParserStates.Count;
-                ReductionRulesById = tableGenState.ReductionRulesById; }
+            tableGenState
 
     /// Creates an LR(0) parser table from the specified grammar.
     let createTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
         // Augment the grammar with the start production and end-of-file token.
         let grammar = Grammar.Augment grammar
 
-        /// The initial state (set of items) passed to 'createTable'.
-        let initialParserState =
-            grammar.Productions
-            |> Map.find Start
-            |> Array.map (fun production ->
-                // Create an 'item', with the parser position at
-                // the beginning of the production.
-                {   Nonterminal = Start;
-                    Production = production;
-                    Position = GenericZero;
-                    Lookahead = (); })
-            |> Set.ofArray
-            |> Item.closure grammar.Productions
+        /// The final table-gen state.
+        let finalTableGenState =
+            /// The initial state (set of items) passed to 'createTable'.
+            let initialParserState =
+                grammar.Productions
+                |> Map.find Start
+                |> Array.map (fun production ->
+                    // Create an 'item', with the parser position at
+                    // the beginning of the production.
+                    {   Nonterminal = Start;
+                        Production = production;
+                        Position = GenericZero;
+                        Lookahead = (); })
+                |> Set.ofArray
+                |> Item.closure grammar.Productions
 
-        // The initial table-gen state.
-        let initialParserStateId, initialTableGenState =
-            LrTableGenState.stateId initialParserState LrTableGenState.empty
+            // The initial table-gen state.
+            let initialParserStateId, initialTableGenState =
+                LrTableGenState.stateId initialParserState LrTableGenState.empty
+            
+            // Create the parser table.
+            createTableImpl grammar initialTableGenState
 
-        // Create the parser table.
-        createTableImpl grammar initialTableGenState
+        // Compute the Parser State Position Graph for each parser state.
+        let parserStatePositionGraphs =
+            (Map.empty, finalTableGenState.ParserStates)
+            ||> Map.fold (fun parserStatePositionGraphs parserState parserStateId ->
+                let pspg = positionGraph grammar.Productions parserState
+                Map.add parserStateId pspg parserStatePositionGraphs)
+
+        // Create the parser table from the table-gen state.
+        { Table = finalTableGenState.Table;
+            ParserStateCount = uint32 finalTableGenState.ParserStates.Count;
+            ReductionRulesById = finalTableGenState.ReductionRulesById; },
+            // TEMP
+            parserStatePositionGraphs
 
 
 // Simple LR (SLR) parser tables.
