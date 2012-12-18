@@ -292,15 +292,11 @@ let figure4 =
     }
 
 
-// Create the LR(0) states of the grammar.
-let internal lr0ParserTable, parserStatePositionGraphs =
-    FSharpYacc.LR.Lr0.createTable figure4
-
-// The PSPG of the first (initial) parser state.
-let figure4_state0_pspg =
-    parserStatePositionGraphs
-    |> Map.find 1<_>
-
+// The free positions of the grammar
+let internal freePositions =
+    LR.FreePositions.ofAugmentedGrammar <| Grammar.Augment figure4
+    // TEMP
+    |> ignore
 
 
 printfn "Press any key to exit..."

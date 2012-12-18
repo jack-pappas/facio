@@ -367,6 +367,19 @@ module internal Lr0 =
             // Return the closure of the item set.
             |> closure productions
 
+        /// Determines if an LR(0) item is a 'kernel' item.
+        let isKernelItem (item : LrItem<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>, unit>) =
+            // An LR(0) item is a kernel item iff it is the initial item or
+            // the dot (representing the parser position) is NOT in the leftmost
+            // (zeroth) position of the production.
+            if item.Position > 0<_> then true
+            else
+                // Is this the initial item?
+                match item.Nonterminal with
+                | Start -> true
+                | Nonterminal _ -> false
+
+
     /// Functions which use the State monad to manipulate an LR(0) table-generation state.
     [<RequireQualifiedAccess>]
     module TableGenState =
@@ -400,60 +413,8 @@ module internal Lr0 =
                 Table = table; }
 
 
-    /// Computes the Parser State Position Graph of an LR(0) parser state.
-    let positionGraph (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) (parserState : Lr0ParserState<'Nonterminal, 'Terminal>)
-        : ParserStatePositionGraph<_,_,_> =
-        // OPTIMIZE : The code below can be improved slightly (for correctness and speed)
-        // by using our Set.mapPartition function.
-
-        //
-        let transitionItems, actionItems =
-            parserState
-            |> Set.partition (fun item ->
-                // Does this item represent the derivation of the entire production?
-                if int item.Position = Array.length item.Production then
-                    false   // Reduce
-                else
-                    match item.Production.[int item.Position] with
-                    | Symbol.Terminal _ -> false    // Shift
-                    | Symbol.Nonterminal _ -> true)
-
-        /// Edges which representing parser actions.
-        let actionEdges =
-            (Set.empty, actionItems)
-            ||> Set.fold (fun actionEdges item ->
-                if int item.Position = Array.length item.Production then
-                    Set.add (item, Action <| Reduce item.Nonterminal) actionEdges
-                else
-                    match item.Production.[int item.Position] with
-                    | Symbol.Nonterminal _ ->
-                        invalidOp "A transition item was found where an action item was expected."
-                    | Symbol.Terminal terminal ->
-                        Set.add (item, Action <| Shift terminal) actionEdges)
-
-        // Find edges representing derivations of non-terminals and add them to
-        // the existing set of graph edges (which may already contain some shift edges).
-        (actionEdges, transitionItems)
-        ||> Set.fold (fun pspgEdges nonterminalDerivingItem ->
-            /// The nonterminal being derived by this item.
-            let derivingNonterminal =
-                match nonterminalDerivingItem.Production.[int nonterminalDerivingItem.Position] with
-                | Symbol.Nonterminal nt -> nt
-                | Symbol.Terminal _ ->
-                    invalidOp "A terminal was found where a nonterminal was expected."
-
-            (pspgEdges, parserState)
-            ||> Set.fold (fun pspgEdges item ->
-                // A derivation edge exists iff the nonterminal produced by this item
-                // is the one we're trying to derive AND the parser position of this
-                // item is the initial position.
-                if item.Nonterminal = derivingNonterminal && item.Position = 0<_> then
-                    Set.add (nonterminalDerivingItem, Item item) pspgEdges
-                else
-                    pspgEdges))
-
     //
-    let rec private createTableImpl grammar (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
+    let rec internal createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) (tableGenState : Lr0TableGenState<_,_>) =
         // Preconditions
         assert (not <| Map.isEmpty tableGenState.ParserStates)
 
@@ -525,10 +486,7 @@ module internal Lr0 =
             tableGenState
 
     /// Creates an LR(0) parser table from the specified grammar.
-    let createTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
-        // Augment the grammar with the start production and end-of-file token.
-        let grammar = Grammar.Augment grammar
-
+    let createTable (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
         /// The final table-gen state.
         let finalTableGenState =
             /// The initial state (set of items) passed to 'createTable'.
@@ -552,19 +510,127 @@ module internal Lr0 =
             // Create the parser table.
             createTableImpl grammar initialTableGenState
 
-        // Compute the Parser State Position Graph for each parser state.
-        let parserStatePositionGraphs =
-            (Map.empty, finalTableGenState.ParserStates)
-            ||> Map.fold (fun parserStatePositionGraphs parserState parserStateId ->
-                let pspg = positionGraph grammar.Productions parserState
-                Map.add parserStateId pspg parserStatePositionGraphs)
-
         // Create the parser table from the table-gen state.
         { Table = finalTableGenState.Table;
             ParserStateCount = uint32 finalTableGenState.ParserStates.Count;
-            ReductionRulesById = finalTableGenState.ReductionRulesById; },
-            // TEMP
-            parserStatePositionGraphs
+            ReductionRulesById = finalTableGenState.ReductionRulesById; }
+
+
+//
+[<RequireQualifiedAccess>]
+module internal FreePositions =
+    /// Computes the Parser State Position Graph of an LR(0) parser state.
+    let private positionGraph (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) (parserState : Lr0ParserState<'Nonterminal, 'Terminal>)
+        : ParserStatePositionGraph<_,_,_> =
+        // OPTIMIZE : The code below can be improved slightly (for correctness and speed)
+        // by using our Set.mapPartition function.
+
+        //
+        let transitionItems, actionItems =
+            parserState
+            |> Set.partition (fun item ->
+                // Does this item represent the derivation of the entire production?
+                if int item.Position = Array.length item.Production then
+                    false   // Reduce
+                else
+                    match item.Production.[int item.Position] with
+                    | Symbol.Terminal _ -> false    // Shift
+                    | Symbol.Nonterminal _ -> true)
+
+        /// Edges which representing parser actions.
+        let actionEdges =
+            (Set.empty, actionItems)
+            ||> Set.fold (fun actionEdges item ->
+                if int item.Position = Array.length item.Production then
+                    Set.add (item, Action <| Reduce item.Nonterminal) actionEdges
+                else
+                    match item.Production.[int item.Position] with
+                    | Symbol.Nonterminal _ ->
+                        invalidOp "A transition item was found where an action item was expected."
+                    | Symbol.Terminal terminal ->
+                        Set.add (item, Action <| Shift terminal) actionEdges)
+
+        // Find edges representing derivations of non-terminals and add them to
+        // the existing set of graph edges (which may already contain some shift edges).
+        (actionEdges, transitionItems)
+        ||> Set.fold (fun pspgEdges nonterminalDerivingItem ->
+            /// The nonterminal being derived by this item.
+            let derivingNonterminal =
+                match nonterminalDerivingItem.Production.[int nonterminalDerivingItem.Position] with
+                | Symbol.Nonterminal nt -> nt
+                | Symbol.Terminal _ ->
+                    invalidOp "A terminal was found where a nonterminal was expected."
+
+            (pspgEdges, parserState)
+            ||> Set.fold (fun pspgEdges item ->
+                // A derivation edge exists iff the nonterminal produced by this item
+                // is the one we're trying to derive AND the parser position of this
+                // item is the initial position.
+                if item.Nonterminal = derivingNonterminal && item.Position = 0<_> then
+                    Set.add (nonterminalDerivingItem, Item item) pspgEdges
+                else
+                    pspgEdges))
+
+    //
+    let private positionGraphs (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
+        /// The final table-gen state.
+        let finalTableGenState =
+            /// The initial state (set of items) passed to 'createTable'.
+            let initialParserState =
+                grammar.Productions
+                |> Map.find Start
+                |> Array.map (fun production ->
+                    // Create an 'item', with the parser position at
+                    // the beginning of the production.
+                    {   Nonterminal = Start;
+                        Production = production;
+                        Position = GenericZero;
+                        Lookahead = (); })
+                |> Set.ofArray
+                |> Lr0.Item.closure grammar.Productions
+
+            // The initial table-gen state.
+            let initialParserStateId, initialTableGenState =
+                LrTableGenState.stateId initialParserState LrTableGenState.empty
+            
+            // Create the parser table.
+            Lr0.createTableImpl grammar initialTableGenState
+
+        // Compute the Parser State Position Graph for each parser state.
+        (Map.empty, finalTableGenState.ParserStates)
+        ||> Map.fold (fun parserStatePositionGraphs parserState parserStateId ->
+            let pspg = positionGraph grammar.Productions parserState
+            Map.add parserStateId pspg parserStatePositionGraphs)
+
+    //
+    let private dominators (pspg : ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>)
+        : Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead>> =
+        // TODO
+        raise <| System.NotImplementedException "FreePositions.dominators"
+
+    //
+    let ofAugmentedGrammar (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
+        // Compute the parser state position graphs of the LR(0) parser states of the augmented grammar.
+        let positionGraphs = positionGraphs grammar
+
+        raise <| System.NotImplementedException "FreePositions.ofAugmentedGrammar"
+
+        // Compute the dominators for each position graph; these represent free positions.
+        // However, positions are only free if they are free in every PSPG they appear in,
+        // so we compute the intersection of all the dominator sets to determine the free
+        // positions for the entire grammar.
+        (Set.empty, positionGraphs)
+        ||> Map.fold (fun freePositions _ pspg ->
+            /// The dominator set for this state's PSPG.
+            let dominators =
+                dominators pspg
+                // TODO : Remove any self-deriving positions -- these are always forbidden.
+                //|> Set.filter (fun dominator ->
+
+            // Intersect the dominator set with the current free position set
+            // to remove any positions which are NOT free.
+            // TODO
+            freePositions)
 
 
 // Simple LR (SLR) parser tables.
@@ -653,10 +719,7 @@ module internal Slr =
                 ReductionRulesById = tableGenState.ReductionRulesById; }
 
     /// Creates a Simple LR (SLR) parser table from the specified grammar.
-    let createTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
-        // Augment the grammar with the start production and end-of-file token.
-        let grammar = Grammar.Augment grammar
-
+    let createTable (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
         /// Predictive sets of the augmented grammar.
         let analysis = PredictiveSets.ofGrammar grammar
 
@@ -686,7 +749,7 @@ module internal Slr =
 [<RequireQualifiedAccess>]
 module internal Brc =
     /// Creates a bounded right-context (BRC(1,1)) parser table from the specified grammar.
-    let createTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
+    let createTable (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
         // TODO : Implement the algorithm which converts an
         // SLR(1) grammar into a BRC(1,1) grammar.
         raise <| System.NotImplementedException "Brc.createTable"
@@ -871,7 +934,7 @@ module internal Lr1 =
 
 
     //
-    let rec private createTableImpl grammar predictiveSets (tableGenState : Lr1TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
+    let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) predictiveSets (tableGenState : Lr1TableGenState<_,_>) =
         // Preconditions
         assert (not <| Map.isEmpty tableGenState.ParserStates)
 
@@ -945,10 +1008,7 @@ module internal Lr1 =
             tableGenState
 
     //
-    let internal createTableGenState (grammar : Grammar<'Nonterminal, 'Terminal>) =
-        // Augment the grammar with the start production and end-of-file token.
-        let grammar = Grammar.Augment grammar
-
+    let internal createTableGenState (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
         /// Analysis of the augmented grammar.
         let predictiveSets = PredictiveSets.ofGrammar grammar
 
@@ -978,7 +1038,7 @@ module internal Lr1 =
         createTableImpl grammar predictiveSets initialTableGenState
 
     /// Create an LR(1) parser table for the specified grammar.
-    let createTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
+    let createTable (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
         // Create the table-gen state.
         let tableGenState = createTableGenState grammar
 
@@ -1022,7 +1082,7 @@ module Lalr1 =
                 Lookahead = (); } : Lr0Item<_,_>)
 
     /// Create a LALR(1) parser table for the specified grammar.
-    let createCompressedTable (grammar : Grammar<'Nonterminal, 'Terminal>) =
+    let createCompressedTable (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
         // Create the table-gen state.
         let tableGenState = Lr1.createTableGenState grammar
 
