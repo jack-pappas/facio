@@ -279,7 +279,6 @@ let figure4 =
             [| Symbol.Terminal "t3" |]; |]
 
     {
-    StartSymbol = 'A';
     Nonterminals =
         Set.ofArray [| 'A'; 'B'; 'C' |];
     Terminals =
@@ -291,10 +290,10 @@ let figure4 =
         |> Map.add 'C' C;
     }
 
-
 // The free positions of the grammar
 let internal freePositions =
-    LR.FreePositions.ofAugmentedGrammar <| Grammar.Augment figure4
+    Grammar.Augment (figure4, 'A')
+    |> LR.FreePositions.ofAugmentedGrammar
     // TEMP
     |> ignore
 

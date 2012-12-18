@@ -10,6 +10,36 @@ See LICENSE.TXT for licensing details.
 namespace FSharpYacc.Grammar
 
 
+/// A nonterminal or the start symbol.
+type AugmentedNonterminal<'Nonterminal when 'Nonterminal : comparison> =
+    /// A nonterminal symbol specified by a grammar.
+    | Nonterminal of 'Nonterminal
+    /// The start symbol.
+    | Start
+
+    /// <inherit />
+    override this.ToString () =
+        match this with
+        | Nonterminal nonterm ->
+            nonterm.ToString ()
+        | Start ->
+            "\xabStart\xbb"
+
+/// A terminal (token) or the end-of-file marker.
+type AugmentedTerminal<'Terminal when 'Terminal : comparison> =
+    /// A terminal symbol specified by a grammar.
+    | Terminal of 'Terminal
+    /// The end-of-file marker.
+    | EndOfFile
+
+    /// <inherit />
+    override this.ToString () =
+        match this with
+        | Terminal token ->
+            token.ToString ()
+        | EndOfFile ->
+            "$"
+
 /// A symbol within a context-free grammar (CFG).
 type Symbol<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
@@ -30,37 +60,12 @@ type Symbol<'Nonterminal, 'Terminal
         | Nonterminal nonterm ->
             nonterm.ToString ()
 
-/// Represents nonterminals augmented with an additional nonterminal
-/// representing the start production of an augmented grammar.
-type AugmentedNonterminal<'Nonterminal when 'Nonterminal : comparison> =
-    /// A nonterminal symbol specified by a grammar.
-    | Nonterminal of 'Nonterminal
-    /// Represents the start production of a grammar.
-    | Start
-
-    /// <inherit />
-    override this.ToString () =
-        match this with
-        | Nonterminal nonterm ->
-            nonterm.ToString ()
-        | Start ->
-            "\xabStart\xbb"
-
-/// Represents terminals augmented with an additional terminal
-/// representing the end-of-file marker.
-type AugmentedTerminal<'Terminal when 'Terminal : comparison> =
-    /// A terminal symbol specified by a grammar.
-    | Terminal of 'Terminal
-    /// Represents the end of a file being parsed.
-    | EndOfFile
-
-    /// <inherit />
-    override this.ToString () =
-        match this with
-        | Terminal token ->
-            token.ToString ()
-        | EndOfFile ->
-            "$"
+/// A symbol within a context-free grammar (CFG) augmented with
+/// the start symbol and end-of-file marker.
+type AugmentedSymbol<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
+    Symbol<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
 
 /// Associativity of a terminal (token).
 /// This can be explicitly specified to override the
@@ -83,27 +88,27 @@ type Grammar<'Nonterminal, 'Terminal
     Nonterminals : Set<'Nonterminal>;
     //
     Productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>;
-    //
-    StartSymbol : 'Nonterminal;
 } with
-    /// Augments a Grammar with a special "start" symbol and the end-of-file marker.
-    static member Augment (grammar : Grammar<'Nonterminal, 'Terminal>)
+    /// <summary>Augments a Grammar with a unique "start" symbol and the end-of-file marker.</summary>
+    /// <param name="grammar">The grammar to be augmented.</param>
+    /// <param name="startSymbol">The parser will begin parsing with this symbol.</param>
+    /// <returns>A grammar augmented with the Start symbol and the EndOfFile marker.</returns>
+    static member Augment (grammar : Grammar<'Nonterminal, 'Terminal>, startSymbol : 'Nonterminal)
         : AugmentedGrammar<'Nonterminal, 'Terminal> =
         // Based on the input grammar, create a new grammar with an additional
         // nonterminal and production for the start symbol and an additional token
         // representing the end-of-file marker.
         let startProduction = [|
-            Symbol.Nonterminal <| Nonterminal grammar.StartSymbol;
+            Symbol.Nonterminal <| AugmentedNonterminal.Nonterminal startSymbol;
             Symbol.Terminal EndOfFile; |]
 
-        {   StartSymbol = Start;
-            Terminals =
+        {   Terminals =
                 grammar.Terminals
-                |> Set.map Terminal
+                |> Set.map AugmentedTerminal.Terminal
                 |> Set.add EndOfFile;
             Nonterminals =
                 grammar.Nonterminals
-                |> Set.map Nonterminal
+                |> Set.map AugmentedNonterminal.Nonterminal
                 |> Set.add Start;
             Productions =
                 (Map.empty, grammar.Productions)
@@ -112,10 +117,10 @@ type Grammar<'Nonterminal, 'Terminal
                         nontermProductions
                         |> Array.map (Array.map (function
                             | Symbol.Nonterminal nontermId ->
-                                Symbol.Nonterminal <| Nonterminal nontermId
+                                Symbol.Nonterminal <| AugmentedNonterminal.Nonterminal nontermId
                             | Symbol.Terminal token ->
-                                Symbol.Terminal <| Terminal token))
-                    Map.add (Nonterminal nontermId) nontermProductions productionMap)
+                                Symbol.Terminal <| AugmentedTerminal.Terminal token))
+                    Map.add (AugmentedNonterminal.Nonterminal nontermId) nontermProductions productionMap)
                 // Add the (only) production of the new start symbol.
                 |> Map.add Start ([| startProduction |]); }
 
@@ -182,4 +187,20 @@ type ParserStateId = int<ParserStateIdentifier>
 [<Measure>] type ReductionRuleIdentifier
 //
 type ReductionRuleId = int<ReductionRuleIdentifier>
+
+/// Active patterns which simplify pattern matching on augmented grammars.
+module AugmentedPatterns =
+    let inline internal (|Nonterminal|Start|) (augmentedNonterminal : AugmentedNonterminal<'Nonterminal>) =
+        match augmentedNonterminal with
+        | AugmentedNonterminal.Nonterminal nonterminal ->
+            Nonterminal nonterminal
+        | AugmentedNonterminal.Start ->
+            Start
+
+    let inline internal (|Terminal|EndOfFile|) (augmentedTerminal : AugmentedTerminal<'Terminal>) =
+        match augmentedTerminal with
+        | AugmentedTerminal.Terminal terminal ->
+            Terminal terminal
+        | AugmentedTerminal.EndOfFile ->
+            EndOfFile
 

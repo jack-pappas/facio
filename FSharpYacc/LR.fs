@@ -11,6 +11,7 @@ namespace FSharpYacc.LR
 
 open LanguagePrimitives
 open FSharpYacc.Grammar
+open AugmentedPatterns
 open FSharpYacc.Analysis
 
 
