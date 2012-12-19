@@ -20,8 +20,8 @@ open FSharpYacc.Analysis
 type LrParserAction =
     /// Shift into a state.
     | Shift of ParserStateId
-    /// Goto a state.
-    | Goto of ParserStateId
+//    /// Goto a state.
+//    | Goto of ParserStateId
     /// Reduce by a production rule.
     | Reduce of ReductionRuleId
     /// Accept.
@@ -32,8 +32,8 @@ type LrParserAction =
         match this with
         | Shift stateId ->
             "s" + stateId.ToString ()
-        | Goto stateId ->
-            "g" + stateId.ToString ()
+//        | Goto stateId ->
+//            "g" + stateId.ToString ()
         | Reduce ruleId ->
             "r" + ruleId.ToString ()
         | Accept ->
@@ -44,7 +44,9 @@ type LrParsingTable<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> = {
     //
-    Table : Map<ParserStateId * Symbol<'Nonterminal, 'Terminal>, Set<LrParserAction>>;
+    ActionTable : Map<ParserStateId * 'Terminal, Set<LrParserAction>>;
+    //
+    GotoTable : Map<ParserStateId * 'Nonterminal, ParserStateId>;
     //
     ParserStateCount : uint32;
     //
@@ -140,7 +142,9 @@ type internal LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
     and 'Terminal : comparison
     and 'Lookahead : comparison> = {
     //
-    Table : Map<ParserStateId * Symbol<'Nonterminal, 'Terminal>, Set<LrParserAction>>;
+    ActionTable : Map<ParserStateId * 'Terminal, Set<LrParserAction>>;
+    //
+    GotoTable : Map<ParserStateId * 'Nonterminal, ParserStateId>;
     //
     ParserStates : Map<LrParserState<'Nonterminal, 'Terminal, 'Lookahead>, ParserStateId>;
     //
@@ -155,7 +159,8 @@ module internal LrTableGenState =
     /// Returns an empty Lr0TableGenState with the given
     /// nonterminal and terminal types.
     let empty : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> = {
-        Table = Map.empty;
+        ActionTable = Map.empty;
+        GotoTable = Map.empty;
         ParserStates = Map.empty;
         ReductionRules = Map.empty;
         ReductionRulesById = Map.empty; }
@@ -213,12 +218,12 @@ module internal LrTableGenState =
                 (targetState : ParserStateId)
                 (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
         //
-        let tableKey = sourceState, Symbol.Terminal transitionSymbol
+        let tableKey = sourceState, transitionSymbol
 
         //
         let entry =
             let action = LrParserAction.Shift targetState
-            match Map.tryFind tableKey tableGenState.Table with
+            match Map.tryFind tableKey tableGenState.ActionTable with
             | None ->
                 Set.singleton action
             | Some entry ->
@@ -227,7 +232,7 @@ module internal LrTableGenState =
         // Update the table with the new entry.
         (),
         { tableGenState with
-            Table = Map.add tableKey entry tableGenState.Table; }
+            ActionTable = Map.add tableKey entry tableGenState.ActionTable; }
 
     /// Add a 'goto' action to the parser table.
     let goto (sourceState : ParserStateId)
@@ -235,30 +240,28 @@ module internal LrTableGenState =
                 (targetState : ParserStateId)
                 (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
         //
-        let tableKey = sourceState, Symbol.Nonterminal transitionSymbol
+        let tableKey = sourceState, transitionSymbol
 
         //
-        let entry =
-            let action = Goto targetState
-            match Map.tryFind tableKey tableGenState.Table with
-            | None ->
-                Set.singleton action
-            | Some entry ->
-                Set.add action entry
+        match Map.tryFind tableKey tableGenState.GotoTable with
+        | None ->
+            // Update the table with the new entry.
+            (),
+            { tableGenState with
+                GotoTable = Map.add tableKey targetState tableGenState.GotoTable; }
 
-        // Update the table with the new entry.
-        (),
-        { tableGenState with
-            Table = Map.add tableKey entry tableGenState.Table; }
+        | Some entry ->
+            let msg = sprintf "The GOTO table already contains an entry (g%i) for the key %A." (int entry) tableKey
+            raise <| exn msg        
 
     /// Add an 'accept' action to the parser table.
     let accept (sourceState : ParserStateId) (tableGenState : LrTableGenState<'Nonterminal, AugmentedTerminal<'Terminal>, 'Lookahead>) =
         //
-        let tableKey = sourceState, Symbol.Terminal EndOfFile
+        let tableKey = sourceState, EndOfFile
 
         //
         let entry =
-            match Map.tryFind tableKey tableGenState.Table with
+            match Map.tryFind tableKey tableGenState.ActionTable with
             | None ->
                 // Create a new 'accept' action for this table entry.
                 Set.singleton LrParserAction.Accept
@@ -269,7 +272,7 @@ module internal LrTableGenState =
         // Update the table with the new entry.
         (),
         { tableGenState with
-            Table = Map.add tableKey entry tableGenState.Table; }
+            ActionTable = Map.add tableKey entry tableGenState.ActionTable; }
 
 
 /// An LR(0) item.
@@ -391,10 +394,10 @@ module internal Lr0 =
                     (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
             // Fold over the set of terminals (tokens) in the grammar.
             let table =
-                (tableGenState.Table, terminals)
+                (tableGenState.ActionTable, terminals)
                 ||> Set.fold (fun table token ->
                     //
-                    let tableKey = sourceState, Symbol.Terminal token
+                    let tableKey = sourceState, token
 
                     //
                     let entry =
@@ -411,7 +414,7 @@ module internal Lr0 =
             // Return the updated table-gen state.
             (),
             { tableGenState with
-                Table = table; }
+                ActionTable = table; }
 
 
     //
@@ -481,7 +484,8 @@ module internal Lr0 =
         // If any states or transition-edges have been added, we need to recurse
         // and continue until we reach a fixpoint; otherwise, return the completed table.
         if tableGenState.ParserStates <> tableGenState'.ParserStates ||
-            tableGenState.Table <> tableGenState'.Table then
+            tableGenState.ActionTable <> tableGenState'.ActionTable ||
+            tableGenState.GotoTable <> tableGenState'.GotoTable then
             createTableImpl grammar tableGenState'
         else
             tableGenState
@@ -512,7 +516,8 @@ module internal Lr0 =
             createTableImpl grammar initialTableGenState
 
         // Create the parser table from the table-gen state.
-        { Table = finalTableGenState.Table;
+        {   ActionTable = finalTableGenState.ActionTable;
+            GotoTable = finalTableGenState.GotoTable;
             ParserStateCount = uint32 finalTableGenState.ParserStates.Count;
             ReductionRulesById = finalTableGenState.ReductionRulesById; }
 
@@ -520,6 +525,12 @@ module internal Lr0 =
 //
 [<RequireQualifiedAccess>]
 module internal FreePositions =
+    //
+    let private dominators (pspg : ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>)
+        : Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead>> =
+        // TODO
+        raise <| System.NotImplementedException "FreePositions.dominators"
+
     /// Computes the Parser State Position Graph of an LR(0) parser state.
     let private positionGraph (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) (parserState : Lr0ParserState<'Nonterminal, 'Terminal>)
         : ParserStatePositionGraph<_,_,_> =
@@ -603,23 +614,33 @@ module internal FreePositions =
             let pspg = positionGraph grammar.Productions parserState
             Map.add parserStateId pspg parserStatePositionGraphs)
 
-    //
-    let private dominators (pspg : ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>)
-        : Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead>> =
-        // TODO
-        raise <| System.NotImplementedException "FreePositions.dominators"
+    /// Computes the exclusive disjunction (XOR) of two sets.
+    let private exclusiveDisjunction (set1 : Set<'T>, set2 : Set<'T>) =
+        // Remove the items in set2 from set1
+        let set1' = Set.difference set1 set2
+        
+        // Remove any items in set1 from set2
+        let set2' = Set.difference set2 set1
+
+        // Union the results together to get the XOR of the original sets.
+        Set.union set1' set2'
 
     //
     let ofAugmentedGrammar (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
+        (* TODO :   IMPORTANT!
+                    Both papers which discuss algorithms for computing free positions
+                    neglect to mention if it is possible for a position to be a dominator
+                    in one PSG and not in another (that is, when the positions are in
+                    different (complete/non-partial) states), and if so, how to handle
+                    that case.
+                    The code below is conservative and assumes a position is free iff
+                    it is a dominator in every PSG it appears in; if it later turns out
+                    that this is too conservative, we can simply compute the union
+                    (instead of XOR) of the dominator sets instead. *)
+
         // Compute the parser state position graphs of the LR(0) parser states of the augmented grammar.
         let positionGraphs = positionGraphs grammar
 
-        raise <| System.NotImplementedException "FreePositions.ofAugmentedGrammar"
-
-        // Compute the dominators for each position graph; these represent free positions.
-        // However, positions are only free if they are free in every PSPG they appear in,
-        // so we compute the intersection of all the dominator sets to determine the free
-        // positions for the entire grammar.
         (Set.empty, positionGraphs)
         ||> Map.fold (fun freePositions _ pspg ->
             /// The dominator set for this state's PSPG.
@@ -628,10 +649,9 @@ module internal FreePositions =
                 // TODO : Remove any self-deriving positions -- these are always forbidden.
                 //|> Set.filter (fun dominator ->
 
-            // Intersect the dominator set with the current free position set
-            // to remove any positions which are NOT free.
-            // TODO
-            freePositions)
+            // Combine this state's dominators with the existing set of
+            // free positions using the exclusive disjunction (XOR) relation.
+            exclusiveDisjunction (freePositions, dominators))
 
 
 // Simple LR (SLR) parser tables.
@@ -711,11 +731,13 @@ module internal Slr =
         // If any states or transition-edges have been added, we need to recurse
         // and continue until we reach a fixpoint; otherwise, return the completed table.
         if tableGenState.ParserStates <> tableGenState'.ParserStates ||
-            tableGenState.Table <> tableGenState'.Table then
+            tableGenState.ActionTable <> tableGenState'.ActionTable ||
+            tableGenState.GotoTable <> tableGenState'.GotoTable then
             createTableImpl grammar analysis tableGenState'
         else
             // Create the parser table from the table-gen state.
-            { Table = tableGenState.Table;
+            {   ActionTable = tableGenState.ActionTable;
+                GotoTable = tableGenState.GotoTable;
                 ParserStateCount = uint32 tableGenState.ParserStates.Count;
                 ReductionRulesById = tableGenState.ReductionRulesById; }
 
@@ -917,12 +939,12 @@ module internal Lr1 =
                     (lookaheadToken : AugmentedTerminal<'Terminal>)
                     (tableGenState : Lr1TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
             //
-            let tableKey = sourceState, Symbol.Terminal lookaheadToken
+            let tableKey = sourceState, lookaheadToken
 
             //
             let entry =
                 let action = LrParserAction.Reduce reductionRuleId
-                match Map.tryFind tableKey tableGenState.Table with
+                match Map.tryFind tableKey tableGenState.ActionTable with
                 | None ->
                     Set.singleton action
                 | Some entry ->
@@ -931,7 +953,7 @@ module internal Lr1 =
             // Update the table with the new entry.
             (),
             { tableGenState with
-                Table = Map.add tableKey entry tableGenState.Table; }
+                ActionTable = Map.add tableKey entry tableGenState.ActionTable; }
 
 
     //
@@ -1001,7 +1023,8 @@ module internal Lr1 =
         // If any states or transition-edges have been added, we need to recurse
         // and continue until we reach a fixpoint; otherwise, return the completed table.
         if tableGenState.ParserStates <> tableGenState'.ParserStates ||
-            tableGenState.Table <> tableGenState'.Table then
+            tableGenState.ActionTable <> tableGenState'.ActionTable ||
+            tableGenState.GotoTable <> tableGenState'.GotoTable then
             createTableImpl grammar predictiveSets tableGenState'
         else
             // Return the table-gen state itself -- the consuming method
@@ -1044,7 +1067,8 @@ module internal Lr1 =
         let tableGenState = createTableGenState grammar
 
         // Create the LR(1) parser table from the table-gen state.
-        {   Table = tableGenState.Table;
+        {   ActionTable = tableGenState.ActionTable;
+            GotoTable = tableGenState.GotoTable;
             ParserStateCount = uint32 tableGenState.ParserStates.Count;
             ReductionRulesById = tableGenState.ReductionRulesById; }
             
@@ -1065,8 +1089,8 @@ module Lalr1 =
         | LrParserAction.Shift lrParserStateId ->
             Map.find lrParserStateId lrToLalrIdMap
             |> LrParserAction.Shift
-        | Goto lrParserStateId ->
-            Goto <| Map.find lrParserStateId lrToLalrIdMap
+//        | Goto lrParserStateId ->
+//            Goto <| Map.find lrParserStateId lrToLalrIdMap
         // These actions don't change
         | LrParserAction.Reduce _
         | LrParserAction.Accept as action ->
@@ -1135,9 +1159,9 @@ module Lalr1 =
 
         // Using the LR(1) to LALR(1) state-id map, create a
         // LALR(1) parser table from the LR(1) parser table.
-        let lalrTable =
-            (Map.empty, tableGenState.Table)
-            ||> Map.fold (fun lalrTable (lrParserStateId, lookaheadToken) lrActions ->
+        let lalrActionTable =
+            (Map.empty, tableGenState.ActionTable)
+            ||> Map.fold (fun lalrActionTable (lrParserStateId, lookaheadToken) lrActions ->
                 /// The LALR(1) state identifier for this LR(1) state.
                 let lalrParserStateId = Map.find lrParserStateId lrToLalrIdMap
 
@@ -1149,17 +1173,35 @@ module Lalr1 =
                     // If the LALR(1) table already contains an entry for this LALR(1)
                     // state and lookahead token, merge the actions of this LR(1) state
                     // with the existing LALR(1) actions.
-                    match Map.tryFind (lalrParserStateId, lookaheadToken) lalrTable with
+                    match Map.tryFind (lalrParserStateId, lookaheadToken) lalrActionTable with
                     | None ->
                         lalrActions
                     | Some entry ->
                         Set.union entry lalrActions
 
-                // Add/update this entry in the LALR(1) table.
-                Map.add (lalrParserStateId, lookaheadToken) entry lalrTable)
+                // Add/update this entry in the LALR(1) ACTION table.
+                Map.add (lalrParserStateId, lookaheadToken) entry lalrActionTable)
+
+        //
+        let lalrGotoTable =
+            (Map.empty, tableGenState.GotoTable)
+            ||> Map.fold (fun lalrGotoTable (lrParserStateId, lookaheadToken) lrTargetState ->
+                /// The LALR(1) state identifier for this LR(1) state.
+                let lalrParserStateId = Map.find lrParserStateId lrToLalrIdMap
+
+                // The GOTO map shouldn't ever have overlapping entries,
+                // but check (DEBUG only) to be sure.
+                assert (not <| Map.containsKey (lalrParserStateId, lookaheadToken) lalrGotoTable)
+
+                // The LALR(1) state identifer for the target state.
+                let lalrTargetStateId = Map.find lrTargetState lrToLalrIdMap
+
+                // Add this entry to the LALR(1) GOTO table.
+                Map.add (lalrParserStateId, lookaheadToken) lalrTargetStateId lalrGotoTable)
 
         // Create and return the LALR(1) parser table.
-        {   Table = lalrTable;
+        {   ActionTable = lalrActionTable;
+            GotoTable = lalrGotoTable;
             ParserStateCount = lalrParserStateCount;
             ReductionRulesById = tableGenState.ReductionRulesById; }
 
