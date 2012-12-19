@@ -18,8 +18,6 @@ open FSharpYacc.Analysis
 type LeftCornerParserAction =
     /// Shift into a state.
     | Shift of ParserStateId
-    /// Goto a state.
-    | Goto of ParserStateId
     /// Announce that the free position ("recognition point")
     /// has been reached for the specified rule.
     | Announce of ReductionRuleId
@@ -31,24 +29,12 @@ type LeftCornerParserAction =
         match this with
         | Shift stateId ->
             "s" + stateId.ToString ()
-        | Goto stateId ->
-            "g" + stateId.ToString ()
+//        | Goto stateId ->
+//            "g" + stateId.ToString ()
         | Announce ruleId ->
             "n" + ruleId.ToString ()
         | Accept ->
             "a"
-
-//
-type LeftCornerParserTable<'Nonterminal, 'Terminal
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison> = {
-    //
-    Table : Map<ParserStateId * Symbol<'Nonterminal, 'Terminal>, Set<LeftCornerParserAction>>;
-    //
-    ParserStateCount : uint32;
-    //
-    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
-}
 
 //// Utility functions for generating left-corner parsers.
 //module internal Utilities =
@@ -88,87 +74,32 @@ type internal LeftCornerItem<'Nonterminal, 'Terminal
 
         sb.ToString ()
 
-/// Functions for manipulating Left-Corner parser items.
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module internal LeftCornerItem =
-    /// Computes the closure of a set of Left-Corner items.
-    // TODO : Modify this to use a worklist-style algorithm to avoid
-    // reprocessing items which already exist in the set (i.e., when iterating,
-    // we only process items added to the set in the previous iteration).
-    let closure (productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>) items =
-        /// Implementation of the LR(0) closure algorithm.
-        let rec closure items =
-            let items' =
-                (items, items)
-                ||> Set.fold (fun items item ->
-                    // If the position is at the end of the production,
-                    // there's nothing that needs to be done for this item.
-                    if int item.Position = Array.length item.Production then
-                        items
-                    else
-                        // Determine what to do based on the next symbol to be parsed.
-                        match item.Production.[int item.Position] with
-                        | Symbol.Terminal _ ->
-                            // Nothing to do for terminals
-                            items
-                        | Symbol.Nonterminal nontermId ->
-                            /// The productions of this nonterminal.
-                            let nontermProductions = Map.find nontermId productions
-
-                            // For all productions of this nonterminal, create a new item
-                            // with the parser position at the beginning of the production.
-                            // Add these new items into the set of items.
-                            (items, nontermProductions)
-                            ||> Set.fold (fun items production ->
-                                let newItem = {
-                                    Nonterminal = nontermId;
-                                    Production = production;
-                                    Position = 0<_>; }
-
-                                Set.add newItem items))
-
-            // If the items set has changed, recurse for another iteration.
-            // If not, we're done processing and the set is returned.
-            if items' = items then
-                items
-            else
-                closure items'
-
-        // Compute the closure, starting with the specified initial item.
-        closure items
-
-    /// Moves the 'dot' (the current parser position) past the
-    /// specified symbol for each item in a set of items.
-    let goto symbol items (productions : Map<'Nonterminal, Set<Symbol<'Nonterminal, 'Terminal>[]>>) =
-        /// The updated 'items' set.
-        let items =
-            (Set.empty, items)
-            ||> Set.fold (fun updatedItems item ->
-                // If the position is at the end of the production, we know
-                // this item can't be a match, so continue to to the next item.
-                if int item.Position = Array.length item.Production then
-                    updatedItems
-                else
-                    // If the next symbol to be parsed in the production is the
-                    // specified symbol, create a new item with the position advanced
-                    // to the right of the symbol and add it to the updated items set.
-                    if item.Production.[int item.Position] = symbol then
-                        let updatedItem =
-                            { item with
-                                Position = item.Position + 1<_>; }
-                        Set.add updatedItem updatedItems
-                    else
-                        // The symbol did not match, so this item won't be added to
-                        // the updated items set.
-                        updatedItems)
-
-        // Return the closure of the item set.
-        closure productions items
-
-
 /// A Left-Corner parser state -- i.e., a set of Left-Corner items.
 type internal LeftCornerParserState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     Set<LeftCornerItem<'Nonterminal, 'Terminal>>
+
+//
+type LeftCornerParserTable<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> = {
+    //
+    ActionTable : Map<ParserStateId * 'Terminal, Set<LeftCornerParserAction>>;
+    //
+    GotoTable : Map<ParserStateId * 'Nonterminal, ParserStateId>;
+    //
+    ParserStates : Map<ParserStateId, LeftCornerParserState<'Nonterminal, 'Terminal>>;
+    //
+    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
+}
+
+/// Parser-generators for left-corner grammars.
+[<RequireQualifiedAccess>]
+module internal LeftCorner =
+    open FSharpYacc.LR
+
+    /// Adapts a LALR(1) parser table into an LC(1) parser table.
+    let ofLalr1 (lalr1Table : LrParsingTable<'Nonterminal, 'Terminal, 'Terminal>) =
+        raise <| System.NotImplementedException "LeftCorner.ofLalr1"
 
