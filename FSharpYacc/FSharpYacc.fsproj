@@ -23,6 +23,8 @@
     <WarningLevel>3</WarningLevel>
     <DocumentationFile>bin\Debug\FSharpYacc.XML</DocumentationFile>
     <PlatformTarget>AnyCPU</PlatformTarget>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsAsErrors>25</WarningsAsErrors>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -33,6 +35,8 @@
     <WarningLevel>3</WarningLevel>
     <DocumentationFile>bin\Release\FSharpYacc.XML</DocumentationFile>
     <PlatformTarget>AnyCPU</PlatformTarget>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <WarningsAsErrors>25</WarningsAsErrors>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
