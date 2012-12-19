@@ -130,13 +130,18 @@ and AugmentedGrammar<'Nonterminal, 'Terminal
     and 'Terminal : comparison> =
     Grammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
 
+//
+[<Measure>] type ProductionIdx
 /// <summary>The 0-based index of a production of a nonterminal.</summary>
 /// <remarks>Within the list or array containing a nonterminal's productions,
 /// greater precedence is assigned to productions with lower indices --
 /// unless a production has been explicitly assigned a precedence value.</remarks>
-[<Measure>] type ProductionIndex
+type ProductionIndex = int<ProductionIdx>
+
 //
-type ProductionId = int<ProductionIndex>
+type ProductionKey<'Nonterminal
+    when 'Nonterminal : comparison> =
+    'Nonterminal * ProductionIndex
 
 ////
 //type Production<'Nonterminal, 'Terminal
