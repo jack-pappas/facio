@@ -493,6 +493,163 @@ module internal Lr0 =
             ReductionRulesById = finalTableGenState.ReductionRulesById; }
 
 
+/// An immutable implementation of a vertex- and edge-labeled sparse digraph.
+type private LabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex, [<EqualityConditionalOn; ComparisonConditionalOn>]'Edge when 'Vertex : comparison>
+        private (vertices : Set<'Vertex>, edges : Map<'Vertex * 'Vertex, 'Edge>) =
+    //
+    static member internal Empty
+        with get () = LabeledSparseDigraph<'Vertex, 'Edge> (Set.empty, Map.empty)
+
+    //
+    member __.IsEmpty
+        with get () = Set.isEmpty vertices
+
+    //
+    member __.Edges
+        with get () = edges
+    
+    //
+    member __.Vertices
+        with get () = vertices
+
+    //
+    member __.ContainsVertex (vertex : 'Vertex) =
+        Set.contains vertex vertices
+
+    //
+    member __.ContainsEdge (source : 'Vertex, target : 'Vertex) =
+        // Preconditions
+        if not <| Set.contains source vertices then
+            invalidArg "source" "The vertex is not in the graph's vertex-set."
+        elif not <| Set.contains target vertices then
+            invalidArg "target" "The vertex is not in the graph's vertex-set."
+
+        Map.containsKey (source, target) edges
+
+    //
+    member __.GetEdge (source : 'Vertex, target : 'Vertex) =
+        // Preconditions
+        if not <| Set.contains source vertices then
+            invalidArg "source" "The vertex is not in the graph's vertex-set."
+        elif not <| Set.contains target vertices then
+            invalidArg "target" "The vertex is not in the graph's vertex-set."
+
+        Map.find (source, target) edges
+
+    //
+    member __.TryGetEdge (source : 'Vertex, target : 'Vertex) =
+        // Preconditions
+        if not <| Set.contains source vertices then
+            invalidArg "source" "The vertex is not in the graph's vertex-set."
+        elif not <| Set.contains target vertices then
+            invalidArg "target" "The vertex is not in the graph's vertex-set."
+
+        Map.tryFind (source, target) edges
+
+    //
+    member __.AddVertex (vertex : 'Vertex) =
+        LabeledSparseDigraph (
+            Set.add vertex vertices,
+            edges)
+
+    //
+    member __.AddEdge (source : 'Vertex, target : 'Vertex, edge : 'Edge) =
+        // Preconditions
+        if not <| Set.contains source vertices then
+            invalidArg "source" "The vertex is not in the graph's vertex-set."
+        elif not <| Set.contains target vertices then
+            invalidArg "target" "The vertex is not in the graph's vertex-set."
+
+        LabeledSparseDigraph (
+            vertices,
+            Map.add (source, target) edge edges)
+
+    //
+    member __.RemoveVertex (vertex : 'Vertex) =
+        // Preconditions
+        if not <| Set.contains vertex vertices then
+            invalidArg "vertex" "The vertex is not in the graph's vertex-set."
+
+        // Remove in- and out-edges of the vertex.
+        let edges =
+            edges
+            |> Map.filter (fun (source, target) _ ->
+                source <> vertex
+                && target <> vertex)
+
+        LabeledSparseDigraph (
+            Set.remove vertex vertices,
+            edges)
+
+    //
+    member __.RemoveEdge (source : 'Vertex, target : 'Vertex) =
+        // Preconditions
+        if not <| Set.contains source vertices then
+            invalidArg "source" "The vertex is not in the graph's vertex-set."
+        elif not <| Set.contains target vertices then
+            invalidArg "target" "The vertex is not in the graph's vertex-set."
+
+        LabeledSparseDigraph (
+            vertices,
+            Map.remove (source, target) edges)
+
+/// Functions on LabeledSparseDigraphs.
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module private LabeledSparseDigraph =
+    /// The empty graph.
+    [<GeneralizableValue>]
+    let empty<'Vertex, 'Edge when 'Vertex : comparison> =
+        LabeledSparseDigraph<'Vertex,'Edge>.Empty
+
+    /// Determines if the graph is empty -- i.e., if it's vertex set is empty.
+    let inline isEmpty (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+        graph.IsEmpty
+
+    //
+    let inline addVertex (vertex : 'Vertex) (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+        graph.AddVertex vertex
+
+    //
+    let inline addEdge source target edge (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+        graph.AddEdge (source, target, edge)
+
+    //
+    let inline removeVertex (vertex : 'Vertex) (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+        graph.RemoveVertex vertex
+
+    //
+    let inline removeEdge source target (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+        graph.RemoveEdge (source, target)
+
+    //
+    let inline containsVertex (vertex : 'Vertex) (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+        graph.ContainsVertex vertex
+
+    //
+    let inline containsEdge source target (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+        graph.ContainsEdge (source, target)
+
+    //
+    let inline getEdge source target (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+        graph.GetEdge (source, target)
+
+    //
+    let inline tryGetEdge source target (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+        graph.TryGetEdge (source, target)
+
+    //
+    let dominators (graph : LabeledSparseDigraph<'Vertex, 'Edge>)
+        : Map<'Vertex, Set<'Vertex>> =
+        // TODO
+        raise <| System.NotImplementedException "LabeledSparseDigraph.dominators"
+
+    //
+    let reachable (graph : LabeledSparseDigraph<'Vertex, 'Edge>)
+        : Map<'Vertex, Set<'Vertex>> =
+        // TODO
+        raise <| System.NotImplementedException "LabeledSparseDigraph.reachable"
+
+
 //
 type internal ParserStatePositionGraphAction<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
@@ -526,29 +683,27 @@ type internal ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
     and 'Lookahead : comparison> =
-    Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead> *
-        ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>>
+    LabeledSparseDigraph<ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>, unit>
 
 //
 [<RequireQualifiedAccess>]
 module internal FreePositions =
-    //
-    let private dominators (pspg : ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>)
-        : Map<LrItem<'Nonterminal, 'Terminal, 'Lookahead>, Set<ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>>> =
-        // TODO
-        raise <| System.NotImplementedException "FreePositions.dominators"
-
-    //
-    let private reachable (pspg : ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>)
-        : Map<LrItem<'Nonterminal, 'Terminal, 'Lookahead>, Set<ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>>> =
-        // TODO
-        raise <| System.NotImplementedException "FreePositions.reachable"
+    module Graph = LabeledSparseDigraph
 
     /// Computes the Parser State Position Graph of an LR(0) parser state.
     let private positionGraph (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) (parserState : Lr0ParserState<'Nonterminal, 'Terminal>)
         : ParserStatePositionGraph<_,_,_> =
-        // OPTIMIZE : The code below can be improved slightly (for correctness and speed)
-        // by using our Set.mapPartition function.
+        // The initial parser state graph.
+        // Contains all items in the LR(0) state as vertices,
+        // but it is an _empty_ graph (i.e., a graph with an empty edge-set).
+        let positionGraph =
+            (LabeledSparseDigraph.empty, parserState)
+            ||> Set.fold (fun positionGraph item ->
+                // Add the item to the graph.
+                Graph.addVertex (Item item) positionGraph)
+
+        (* OPTIMIZE :   The code below can be improved slightly (for correctness
+                        and speed) by using our Set.mapPartition function. *)
 
         //
         let transitionItems, actionItems =
@@ -562,23 +717,35 @@ module internal FreePositions =
                     | Symbol.Terminal _ -> false    // Shift
                     | Symbol.Nonterminal _ -> true)
 
-        /// Edges which representing parser actions.
-        let actionEdges =
-            (Set.empty, actionItems)
-            ||> Set.fold (fun actionEdges item ->
+        // Add edges representing parser actions to the graph.
+        let positionGraph =
+            (positionGraph, actionItems)
+            ||> Set.fold (fun positionGraph item ->
                 if int item.Position = Array.length item.Production then
-                    Set.add (item, Action <| Reduce item.Nonterminal) actionEdges
+                    let action = Action <| Reduce item.Nonterminal
+
+                    // Add the action to the graph in case it hasn't been added yet.
+                    positionGraph
+                    |> Graph.addVertex action
+                    // Add an edge from this item to the action.
+                    |> Graph.addEdge (Item item) action ()
                 else
                     match item.Production.[int item.Position] with
                     | Symbol.Nonterminal _ ->
                         invalidOp "A transition item was found where an action item was expected."
                     | Symbol.Terminal terminal ->
-                        Set.add (item, Action <| Shift terminal) actionEdges)
+                        let action = Action <| Shift terminal
+
+                        // Add the action to the graph in case it hasn't been added yet.
+                        positionGraph
+                        |> Graph.addVertex action
+                        // Add an edge from this item to the action.
+                        |> Graph.addEdge (Item item) action ())
 
         // Find edges representing derivations of non-terminals and add them to
         // the existing set of graph edges (which may already contain some shift edges).
-        (actionEdges, transitionItems)
-        ||> Set.fold (fun pspgEdges nonterminalDerivingItem ->
+        (positionGraph, transitionItems)
+        ||> Set.fold (fun positionGraph nonterminalDerivingItem ->
             /// The nonterminal being derived by this item.
             let derivingNonterminal =
                 match nonterminalDerivingItem.Production.[int nonterminalDerivingItem.Position] with
@@ -586,15 +753,15 @@ module internal FreePositions =
                 | Symbol.Terminal _ ->
                     invalidOp "A terminal was found where a nonterminal was expected."
 
-            (pspgEdges, parserState)
-            ||> Set.fold (fun pspgEdges item ->
+            (positionGraph, parserState)
+            ||> Set.fold (fun positionGraph item ->
                 // A derivation edge exists iff the nonterminal produced by this item
                 // is the one we're trying to derive AND the parser position of this
                 // item is the initial position.
                 if item.Nonterminal = derivingNonterminal && item.Position = 0<_> then
-                    Set.add (nonterminalDerivingItem, Item item) pspgEdges
+                    Graph.addEdge (Item nonterminalDerivingItem) (Item item) () positionGraph
                 else
-                    pspgEdges))
+                    positionGraph))
 
     //
     let private positionGraphs (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
@@ -659,59 +826,53 @@ module internal FreePositions =
 
     //
     let private nonfreeItems (graph : ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>) =
+        /// For each item in the graph, contains the set of items/actions reachable from it.
+        let reachableFrom = LabeledSparseDigraph.reachable graph
+
+        /// For each item in the graph, contains the set of items/actions it dominates.
+        let dominated = LabeledSparseDigraph.dominators graph
+
         // Positions are not free if they can derive themselves
         // (i.e., if they have a self-loop in the graph).
         let nonfreeItems =
-            (Set.empty, graph)
-            ||> Set.fold (fun nonfreePositions (source, target) ->
-                match target with
-                | Item target when source = target ->
-                    Set.add source nonfreePositions
+            (Set.empty, reachableFrom)
+            ||> Map.fold (fun nonfreeItems itemOrAction reachable ->
+                // We only care about items, not actions.
+                match itemOrAction with
+                | Item item when Set.contains itemOrAction reachable ->
+                    Set.add item nonfreeItems
                 | _ ->
-                    nonfreePositions)
-
-        /// For each item in the graph, contains the set of items/actions reachable from it.
-        let reachableFrom = reachable graph
-
-        /// For each item in the graph, contains the set of items/actions it dominates.
-        let dominated = dominators graph
-
-        // TEMP : This is just needed to get the unique set of items/positions in the graph.
-        // Once we change over to a more efficient graph representation, this won't be needed.
-        let graphItems =
-            (Set.empty, graph)
-            ||> Set.fold (fun graphItems (source, target) ->
-                match target with
-                | Item target ->
-                    graphItems
-                    |> Set.add source
-                    |> Set.add target
-                | Action _ ->
-                    Set.add source graphItems)
+                    nonfreeItems)
 
         // For a position to be free, it must be a dominator
         // of every action reachable from it.
-        (nonfreeItems, graphItems)
-        ||> Set.fold (fun nonfreeItems item ->
-            /// The items/actions dominated by this item.
-            let dominatedItemsAndActions = Map.find item dominated
-
-            /// The items/actions reachable from this item.
-            let reachableItemsAndActions = Map.find item reachableFrom
-
-            // Does this item dominate all of the actions reachable from it?
-            let dominatesAllReachableActions =
-                reachableItemsAndActions
-                |> Set.forall (function
-                    | Item _ -> true
-                    | (Action _) as action ->
-                        Set.contains action dominatedItemsAndActions)                    
-            
-            // If not, add this item to the set of non-free items.
-            if dominatesAllReachableActions then
+        (nonfreeItems, graph.Vertices)
+        ||> Set.fold (fun nonfreeItems itemOrAction ->
+            match itemOrAction with
+            | Action _ ->
+                // We only care about items/positions so just ignore actions.
                 nonfreeItems
-            else
-                Set.add item nonfreeItems)
+            | Item item ->
+                /// The items/actions dominated by this item.
+                let dominatedItemsAndActions = Map.find itemOrAction dominated
+
+                /// The items/actions reachable from this item.
+                let reachableItemsAndActions = Map.find itemOrAction reachableFrom
+
+                // Does this item dominate all of the actions reachable from it?
+                let dominatesAllReachableActions =
+                    reachableItemsAndActions
+                    |> Set.forall (function
+                        | Item _ ->
+                            true    // Ignore items here, we only care about actions.
+                        | (Action _) as action ->
+                            Set.contains action dominatedItemsAndActions)                    
+            
+                // If not, add this item to the set of non-free items.
+                if dominatesAllReachableActions then
+                    nonfreeItems
+                else
+                    Set.add item nonfreeItems)
 
     //
     let ofAugmentedGrammar (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
