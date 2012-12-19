@@ -493,12 +493,12 @@ module internal Lr0 =
             ReductionRulesById = finalTableGenState.ReductionRulesById; }
 
 
-/// An immutable implementation of a vertex- and edge-labeled sparse digraph.
-type private LabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex, [<EqualityConditionalOn; ComparisonConditionalOn>]'Edge when 'Vertex : comparison>
-        private (vertices : Set<'Vertex>, edges : Map<'Vertex * 'Vertex, 'Edge>) =
+/// An immutable implementation of a vertex-labeled sparse digraph.
+type private VertexLabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex when 'Vertex : comparison>
+        private (vertices : Set<'Vertex>, edges : Set<'Vertex * 'Vertex>) =
     //
     static member internal Empty
-        with get () = LabeledSparseDigraph<'Vertex, 'Edge> (Set.empty, Map.empty)
+        with get () = VertexLabeledSparseDigraph<'Vertex> (Set.empty, Set.empty)
 
     //
     member __.IsEmpty
@@ -524,45 +524,25 @@ type private LabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex, [<EqualityCo
         elif not <| Set.contains target vertices then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        Map.containsKey (source, target) edges
-
-    //
-    member __.GetEdge (source : 'Vertex, target : 'Vertex) =
-        // Preconditions
-        if not <| Set.contains source vertices then
-            invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertices then
-            invalidArg "target" "The vertex is not in the graph's vertex-set."
-
-        Map.find (source, target) edges
-
-    //
-    member __.TryGetEdge (source : 'Vertex, target : 'Vertex) =
-        // Preconditions
-        if not <| Set.contains source vertices then
-            invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertices then
-            invalidArg "target" "The vertex is not in the graph's vertex-set."
-
-        Map.tryFind (source, target) edges
+        Set.contains (source, target) edges
 
     //
     member __.AddVertex (vertex : 'Vertex) =
-        LabeledSparseDigraph (
+        VertexLabeledSparseDigraph (
             Set.add vertex vertices,
             edges)
 
     //
-    member __.AddEdge (source : 'Vertex, target : 'Vertex, edge : 'Edge) =
+    member __.AddEdge (source : 'Vertex, target : 'Vertex) =
         // Preconditions
         if not <| Set.contains source vertices then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
         elif not <| Set.contains target vertices then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        LabeledSparseDigraph (
+        VertexLabeledSparseDigraph (
             vertices,
-            Map.add (source, target) edge edges)
+            Set.add (source, target) edges)
 
     //
     member __.RemoveVertex (vertex : 'Vertex) =
@@ -573,11 +553,11 @@ type private LabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex, [<EqualityCo
         // Remove in- and out-edges of the vertex.
         let edges =
             edges
-            |> Map.filter (fun (source, target) _ ->
+            |> Set.filter (fun (source, target) ->
                 source <> vertex
                 && target <> vertex)
 
-        LabeledSparseDigraph (
+        VertexLabeledSparseDigraph (
             Set.remove vertex vertices,
             edges)
 
@@ -589,62 +569,54 @@ type private LabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex, [<EqualityCo
         elif not <| Set.contains target vertices then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        LabeledSparseDigraph (
+        VertexLabeledSparseDigraph (
             vertices,
-            Map.remove (source, target) edges)
+            Set.remove (source, target) edges)
 
-/// Functions on LabeledSparseDigraphs.
+/// Functions on VertexLabeledSparseDigraphs.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module private LabeledSparseDigraph =
+module private VertexLabeledSparseDigraph =
     /// The empty graph.
     [<GeneralizableValue>]
-    let empty<'Vertex, 'Edge when 'Vertex : comparison> =
-        LabeledSparseDigraph<'Vertex,'Edge>.Empty
+    let empty<'Vertex when 'Vertex : comparison> =
+        VertexLabeledSparseDigraph<'Vertex>.Empty
 
     /// Determines if the graph is empty -- i.e., if it's vertex set is empty.
-    let inline isEmpty (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+    let inline isEmpty (graph : VertexLabeledSparseDigraph<'Vertex>) =
         graph.IsEmpty
 
     //
-    let inline addVertex (vertex : 'Vertex) (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+    let inline addVertex (vertex : 'Vertex) (graph : VertexLabeledSparseDigraph<'Vertex>) =
         graph.AddVertex vertex
 
     //
-    let inline addEdge source target edge (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
-        graph.AddEdge (source, target, edge)
+    let inline addEdge source target (graph : VertexLabeledSparseDigraph<'Vertex>) =
+        graph.AddEdge (source, target)
 
     //
-    let inline removeVertex (vertex : 'Vertex) (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+    let inline removeVertex (vertex : 'Vertex) (graph : VertexLabeledSparseDigraph<'Vertex>) =
         graph.RemoveVertex vertex
 
     //
-    let inline removeEdge source target (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+    let inline removeEdge source target (graph : VertexLabeledSparseDigraph<'Vertex>) =
         graph.RemoveEdge (source, target)
 
     //
-    let inline containsVertex (vertex : 'Vertex) (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+    let inline containsVertex (vertex : 'Vertex) (graph : VertexLabeledSparseDigraph<'Vertex>) =
         graph.ContainsVertex vertex
 
     //
-    let inline containsEdge source target (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
+    let inline containsEdge source target (graph : VertexLabeledSparseDigraph<'Vertex>) =
         graph.ContainsEdge (source, target)
 
     //
-    let inline getEdge source target (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
-        graph.GetEdge (source, target)
-
-    //
-    let inline tryGetEdge source target (graph : LabeledSparseDigraph<'Vertex, 'Edge>) =
-        graph.TryGetEdge (source, target)
-
-    //
-    let dominators (graph : LabeledSparseDigraph<'Vertex, 'Edge>)
+    let dominators (graph : VertexLabeledSparseDigraph<'Vertex>)
         : Map<'Vertex, Set<'Vertex>> =
         // TODO
         raise <| System.NotImplementedException "LabeledSparseDigraph.dominators"
 
     //
-    let reachable (graph : LabeledSparseDigraph<'Vertex, 'Edge>)
+    let reachable (graph : VertexLabeledSparseDigraph<'Vertex>)
         : Map<'Vertex, Set<'Vertex>> =
         // TODO
         raise <| System.NotImplementedException "LabeledSparseDigraph.reachable"
@@ -683,12 +655,12 @@ type internal ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
     and 'Lookahead : comparison> =
-    LabeledSparseDigraph<ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>, unit>
+    VertexLabeledSparseDigraph<ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>>
 
 //
 [<RequireQualifiedAccess>]
 module internal FreePositions =
-    module Graph = LabeledSparseDigraph
+    module Graph = VertexLabeledSparseDigraph
 
     /// Computes the Parser State Position Graph of an LR(0) parser state.
     let private positionGraph (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) (parserState : Lr0ParserState<'Nonterminal, 'Terminal>)
@@ -697,7 +669,7 @@ module internal FreePositions =
         // Contains all items in the LR(0) state as vertices,
         // but it is an _empty_ graph (i.e., a graph with an empty edge-set).
         let positionGraph =
-            (LabeledSparseDigraph.empty, parserState)
+            (Graph.empty, parserState)
             ||> Set.fold (fun positionGraph item ->
                 // Add the item to the graph.
                 Graph.addVertex (Item item) positionGraph)
@@ -728,7 +700,7 @@ module internal FreePositions =
                     positionGraph
                     |> Graph.addVertex action
                     // Add an edge from this item to the action.
-                    |> Graph.addEdge (Item item) action ()
+                    |> Graph.addEdge (Item item) action
                 else
                     match item.Production.[int item.Position] with
                     | Symbol.Nonterminal _ ->
@@ -740,7 +712,7 @@ module internal FreePositions =
                         positionGraph
                         |> Graph.addVertex action
                         // Add an edge from this item to the action.
-                        |> Graph.addEdge (Item item) action ())
+                        |> Graph.addEdge (Item item) action)
 
         // Find edges representing derivations of non-terminals and add them to
         // the existing set of graph edges (which may already contain some shift edges).
@@ -759,7 +731,7 @@ module internal FreePositions =
                 // is the one we're trying to derive AND the parser position of this
                 // item is the initial position.
                 if item.Nonterminal = derivingNonterminal && item.Position = 0<_> then
-                    Graph.addEdge (Item nonterminalDerivingItem) (Item item) () positionGraph
+                    Graph.addEdge (Item nonterminalDerivingItem) (Item item) positionGraph
                 else
                     positionGraph))
 
@@ -827,10 +799,10 @@ module internal FreePositions =
     //
     let private nonfreeItems (graph : ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>) =
         /// For each item in the graph, contains the set of items/actions reachable from it.
-        let reachableFrom = LabeledSparseDigraph.reachable graph
+        let reachableFrom = Graph.reachable graph
 
         /// For each item in the graph, contains the set of items/actions it dominates.
-        let dominated = LabeledSparseDigraph.dominators graph
+        let dominated = Graph.dominators graph
 
         // Positions are not free if they can derive themselves
         // (i.e., if they have a self-loop in the graph).
