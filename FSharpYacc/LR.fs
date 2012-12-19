@@ -212,8 +212,15 @@ module internal LrTableGenState =
                 GotoTable = Map.add tableKey targetState tableGenState.GotoTable; }
 
         | Some entry ->
-            let msg = sprintf "The GOTO table already contains an entry (g%i) for the key %A." (int entry) tableKey
-            raise <| exn msg        
+            // If the existing entry is the same as the target state,
+            // there's nothing to do -- just return the existing 'tableGenState'.
+            if entry = targetState then
+                (), tableGenState
+            else
+                let msg = sprintf "Cannot add the entry (g%i) to the GOTO table; \
+                                    it already contains an entry (g%i) for the key %A."
+                                    (int targetState) (int entry) tableKey
+                raise <| exn msg        
 
     /// Add an 'accept' action to the parser table.
     let accept (sourceState : ParserStateId) (tableGenState : LrTableGenState<'Nonterminal, AugmentedTerminal<'Terminal>, 'Lookahead>) =
@@ -527,9 +534,15 @@ type internal ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead
 module internal FreePositions =
     //
     let private dominators (pspg : ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>)
-        : Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead>> =
+        : Map<LrItem<'Nonterminal, 'Terminal, 'Lookahead>, Set<ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>>> =
         // TODO
         raise <| System.NotImplementedException "FreePositions.dominators"
+
+    //
+    let private reachable (pspg : ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>)
+        : Map<LrItem<'Nonterminal, 'Terminal, 'Lookahead>, Set<ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>>> =
+        // TODO
+        raise <| System.NotImplementedException "FreePositions.reachable"
 
     /// Computes the Parser State Position Graph of an LR(0) parser state.
     let private positionGraph (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) (parserState : Lr0ParserState<'Nonterminal, 'Terminal>)
@@ -614,44 +627,124 @@ module internal FreePositions =
             let pspg = positionGraph grammar.Productions parserState
             Map.add parserStateId pspg parserStatePositionGraphs)
 
-    /// Computes the exclusive disjunction (XOR) of two sets.
-    let private exclusiveDisjunction (set1 : Set<'T>, set2 : Set<'T>) =
-        // Remove the items in set2 from set1
-        let set1' = Set.difference set1 set2
-        
-        // Remove any items in set1 from set2
-        let set2' = Set.difference set2 set1
+    //
+    let allPositions (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
+        // OPTIMIZE : This function should be rewritten for better performance.
+        (Set.empty, grammar.Productions)
+        ||> Map.fold (fun positions nonterminal productions ->
+            // Handle the start production specially
+            match nonterminal with
+            | Start ->
+                // The EndOfFile token is never shifted by the parser,
+                // so the production of the start symbol only has
+                // two (2) positions, not three (3).
+                positions
+                |> Set.add (Start, 0<_>, 0<_>)
+                |> Set.add (Start, 0<_>, 1<_>)
+            | Nonterminal _ ->
+                // Fold over the productions for this nonterminal
+                ((positions, (0<_> : ProductionIndex)), productions)
+                ||> Array.fold (fun (positions, productionIndex) production ->
+                    // Create the positions for this production, then add them to the set of all positions.
+                    let productionPositions =
+                        let len = Array.length production
+                        [| for i in 0 .. len ->
+                            nonterminal, productionIndex, ((Int32WithMeasure i) : int<ParserPosition>) |]
+                        |> Set.ofArray
 
-        // Union the results together to get the XOR of the original sets.
-        Set.union set1' set2'
+                    Set.union positions productionPositions,
+                    productionIndex + 1<_>)
+                // Discard the production index
+                |> fst)
+
+    //
+    let private nonfreeItems (graph : ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>) =
+        // Positions are not free if they can derive themselves
+        // (i.e., if they have a self-loop in the graph).
+        let nonfreeItems =
+            (Set.empty, graph)
+            ||> Set.fold (fun nonfreePositions (source, target) ->
+                match target with
+                | Item target when source = target ->
+                    Set.add source nonfreePositions
+                | _ ->
+                    nonfreePositions)
+
+        /// For each item in the graph, contains the set of items/actions reachable from it.
+        let reachableFrom = reachable graph
+
+        /// For each item in the graph, contains the set of items/actions it dominates.
+        let dominated = dominators graph
+
+        // TEMP : This is just needed to get the unique set of items/positions in the graph.
+        // Once we change over to a more efficient graph representation, this won't be needed.
+        let graphItems =
+            (Set.empty, graph)
+            ||> Set.fold (fun graphItems (source, target) ->
+                match target with
+                | Item target ->
+                    graphItems
+                    |> Set.add source
+                    |> Set.add target
+                | Action _ ->
+                    Set.add source graphItems)
+
+        // For a position to be free, it must be a dominator
+        // of every action reachable from it.
+        (nonfreeItems, graphItems)
+        ||> Set.fold (fun nonfreeItems item ->
+            /// The items/actions dominated by this item.
+            let dominatedItemsAndActions = Map.find item dominated
+
+            /// The items/actions reachable from this item.
+            let reachableItemsAndActions = Map.find item reachableFrom
+
+            // Does this item dominate all of the actions reachable from it?
+            let dominatesAllReachableActions =
+                reachableItemsAndActions
+                |> Set.forall (function
+                    | Item _ -> true
+                    | (Action _) as action ->
+                        Set.contains action dominatedItemsAndActions)                    
+            
+            // If not, add this item to the set of non-free items.
+            if dominatesAllReachableActions then
+                nonfreeItems
+            else
+                Set.add item nonfreeItems)
 
     //
     let ofAugmentedGrammar (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
-        (* TODO :   IMPORTANT!
-                    Both papers which discuss algorithms for computing free positions
-                    neglect to mention if it is possible for a position to be a dominator
-                    in one PSG and not in another (that is, when the positions are in
-                    different (complete/non-partial) states), and if so, how to handle
-                    that case.
-                    The code below is conservative and assumes a position is free iff
-                    it is a dominator in every PSG it appears in; if it later turns out
-                    that this is too conservative, we can simply compute the union
-                    (instead of XOR) of the dominator sets instead. *)
-
         // Compute the parser state position graphs of the LR(0) parser states of the augmented grammar.
         let positionGraphs = positionGraphs grammar
 
+        // Compute the set of non-free (forbidden or contingent) positions in the entire grammar.
         (Set.empty, positionGraphs)
-        ||> Map.fold (fun freePositions _ pspg ->
-            /// The dominator set for this state's PSPG.
-            let dominators =
-                dominators pspg
-                // TODO : Remove any self-deriving positions -- these are always forbidden.
-                //|> Set.filter (fun dominator ->
+        ||> Map.fold (fun allNonfreeItems _ pspg ->
+            // The set of non-free positions in each position graph.
+            nonfreeItems pspg
+            // Combine the result with the non-free positions
+            // of the other states we've already processed.
+            |> Set.union allNonfreeItems)
+        // TEMP : Convert the non-free items to non-free positions.
+        // Eventually, we'll modify the LR table-generating code to use
+        // this representation -- then this conversion can be removed.
+        |> Set.map (fun nonfreeItem ->
+            // Find the index of this production rule.
+            let productionIndex : ProductionIndex =
+                grammar.Productions
+                |> Map.find nonfreeItem.Nonterminal
+                |> Array.findIndex ((=) nonfreeItem.Production)
+                |> Int32WithMeasure
 
-            // Combine this state's dominators with the existing set of
-            // free positions using the exclusive disjunction (XOR) relation.
-            exclusiveDisjunction (freePositions, dominators))
+            // Return a tuple representing this position.
+            nonfreeItem.Nonterminal,
+            productionIndex,
+            nonfreeItem.Position)
+        // Compute the set of all positions in the grammar;
+        // remove the non-free positions from it to produce
+        // a set containing only the free positions of the grammar.
+        |> Set.difference (allPositions grammar)
 
 
 // Simple LR (SLR) parser tables.
@@ -1095,8 +1188,6 @@ module Lalr1 =
         | LrParserAction.Shift lrParserStateId ->
             Map.find lrParserStateId lrToLalrIdMap
             |> LrParserAction.Shift
-//        | Goto lrParserStateId ->
-//            Goto <| Map.find lrParserStateId lrToLalrIdMap
         // These actions don't change
         | LrParserAction.Reduce _
         | LrParserAction.Accept as action ->
