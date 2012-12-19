@@ -618,9 +618,29 @@ module private VertexLabeledSparseDigraph =
     //
     let reachable (graph : VertexLabeledSparseDigraph<'Vertex>)
         : Map<'Vertex, Set<'Vertex>> =
-        // TODO
-        raise <| System.NotImplementedException "LabeledSparseDigraph.reachable"
-
+        // This is a simplified version of the Floyd-Warshall algorithm
+        // which checks only for reachability (Warshall's algorithm).
+        let vertices = graph.Vertices
+        (Map.empty, vertices)
+        ||> Set.fold (fun reachableFrom k ->
+            (reachableFrom, vertices)
+            ||> Set.fold (fun reachableFrom i ->
+                (reachableFrom, vertices)
+                ||> Set.fold (fun reachableFrom j ->
+                    // If there's an edge i->k and k->j, then add the edge i->j.
+                    if containsEdge i k graph && containsEdge k j graph then
+                        match Map.tryFind i reachableFrom with
+                        | Some ``reachable from i`` ->
+                            // Add 'j' to the set of vertices reachable from 'i'
+                            let ``reachable from i`` = Set.add j ``reachable from i``
+                            // Update the map entry for 'i' with the result.
+                            Map.add i ``reachable from i`` reachableFrom
+                        | None ->
+                            // Create a new entry for 'i' in the map.
+                            Map.add i (Set.singleton j) reachableFrom
+                    else
+                        // Keep looping without modifying the set.
+                        reachableFrom)))
 
 //
 type internal ParserStatePositionGraphAction<'Nonterminal, 'Terminal
