@@ -132,7 +132,7 @@ module private VertexLabeledSparseDigraph =
         graph.ContainsEdge (source, target)
 
     //
-    let dominators (graph : VertexLabeledSparseDigraph<'Vertex>) : Map<'Vertex, Set<'Vertex>> =
+    let dominators (graph : VertexLabeledSparseDigraph<'Vertex>) =
         // Find the root vertex.
         let root =
             let roots =
@@ -144,72 +144,78 @@ module private VertexLabeledSparseDigraph =
             // The set should have only one root vertex.
             match Set.count roots with
             | 0 ->
-                invalidArg "graph" "The graph is empty, or otherwise contains no root vertices."
+                Choice2Of2 "The graph is empty, or otherwise contains no root vertices."
             | 1 ->
-                Set.minElement roots
+                Choice1Of2 <| Set.minElement roots
             | n ->
-                invalidArg "graph" "The graph contains multiple components (i.e., the graph is not connected)."
+                Choice2Of2 "The graph contains multiple components (i.e., the graph is not connected)."
 
-        /// The predecessors of each vertex.
-        let predecessorsOf =
-            let initialPreds =
-                (Map.empty, graph.Vertices)
-                ||> Set.fold (fun initialMap vertex ->
-                    Map.add vertex Set.empty initialMap)
+        // TODO : Clean this up using the Either workflow.
+        match root with
+        | Choice2Of2 errorMsg ->
+            Choice2Of2 errorMsg
+        | Choice1Of2 root ->
+            /// The predecessors of each vertex.
+            let predecessorsOf =
+                let initialPreds =
+                    (Map.empty, graph.Vertices)
+                    ||> Set.fold (fun initialMap vertex ->
+                        Map.add vertex Set.empty initialMap)
 
-            (initialPreds, graph.Edges)
-            ||> Set.fold (fun predecessorsOf (source, target) ->
-                let predsOfTarget =
-                    Map.find target predecessorsOf
-                    // Add the source vertex to the predecessor set of target.
-                    |> Set.add source
+                (initialPreds, graph.Edges)
+                ||> Set.fold (fun predecessorsOf (source, target) ->
+                    let predsOfTarget =
+                        Map.find target predecessorsOf
+                        // Add the source vertex to the predecessor set of target.
+                        |> Set.add source
 
-                // Add the updated set to the map.
-                Map.add target predsOfTarget predecessorsOf)
+                    // Add the updated set to the map.
+                    Map.add target predsOfTarget predecessorsOf)
 
-        /// The graph vertices, excluding the root vertex.
-        let vertices = Set.remove root graph.Vertices
+            /// The graph vertices, excluding the root vertex.
+            let vertices = Set.remove root graph.Vertices
             
-        /// Uses a worklist-style algorithm to iteratively remove non-dominators
-        /// from the dominator sets of the vertices until a fixpoint is reached.
-        let rec domFix dominatedBy =
-            let modified, dominatedBy =
-                ((false, dominatedBy), vertices)
-                ||> Set.fold (fun (modified, dominatedBy) vertex ->
-                    //
-                    let vertexDominators' =                    
-                        // Intersect the dominator sets of the predecessors of this vertex.
-                        (graph.Vertices, Map.find vertex predecessorsOf)
-                        ||> Set.fold (fun predDoms predVertex ->
-                            Map.find predVertex dominatedBy
-                            |> Set.intersect predDoms)
-                        // Add the vertex itself to the result.
-                        |> Set.add vertex
+            /// Uses a worklist-style algorithm to iteratively remove non-dominators
+            /// from the dominator sets of the vertices until a fixpoint is reached.
+            let rec domFix dominatedBy =
+                let modified, dominatedBy =
+                    ((false, dominatedBy), vertices)
+                    ||> Set.fold (fun (modified, dominatedBy) vertex ->
+                        //
+                        let vertexDominators' =                    
+                            // Intersect the dominator sets of the predecessors of this vertex.
+                            (graph.Vertices, Map.find vertex predecessorsOf)
+                            ||> Set.fold (fun predDoms predVertex ->
+                                Map.find predVertex dominatedBy
+                                |> Set.intersect predDoms)
+                            // Add the vertex itself to the result.
+                            |> Set.add vertex
 
-                    // If the new set of dominators for this vertex is different
-                    // than the existing set, set the modified flag and update this
-                    // vertex's entry in the map.
-                    let vertexDominators = Map.find vertex dominatedBy
-                    if vertexDominators <> vertexDominators' then
-                        true, Map.add vertex vertexDominators' dominatedBy
-                    else
-                        modified, dominatedBy)
+                        // If the new set of dominators for this vertex is different
+                        // than the existing set, set the modified flag and update this
+                        // vertex's entry in the map.
+                        let vertexDominators = Map.find vertex dominatedBy
+                        if vertexDominators <> vertexDominators' then
+                            true, Map.add vertex vertexDominators' dominatedBy
+                        else
+                            modified, dominatedBy)
 
-            // If any of the sets were modified, keep iterating.
-            if modified then
-                domFix dominatedBy
-            else
-                dominatedBy
+                // If any of the sets were modified, keep iterating.
+                if modified then
+                    domFix dominatedBy
+                else
+                    dominatedBy
 
-        // For vertices other than the root, initialize their
-        // dominator sets to the graph's vertex-set.
-        (Map.empty, vertices)
-        ||> Set.fold (fun dominatedBy vertex ->
-            Map.add vertex graph.Vertices dominatedBy)
-        // The root vertex is it's own dominator.
-        |> Map.add root (Set.singleton root)
-        // Find the dominator sets by finding a fixpoint of the set equations.
-        |> domFix
+            // For vertices other than the root, initialize their
+            // dominator sets to the graph's vertex-set.
+            (Map.empty, vertices)
+            ||> Set.fold (fun dominatedBy vertex ->
+                Map.add vertex graph.Vertices dominatedBy)
+            // The root vertex is it's own dominator.
+            |> Map.add root (Set.singleton root)
+            // Find the dominator sets by finding a fixpoint of the set equations.
+            |> domFix
+            |> Choice1Of2
 
     /// Computes the set of vertices reachable from each vertex in a graph.
     let reachable (graph : VertexLabeledSparseDigraph<'Vertex>) =
@@ -359,12 +365,9 @@ module internal FreePositions =
                     positionGraph))
 
     //
-    let private positionGraphs (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
-        //
-        let lr0ParserTable = Lr0.createTable grammar
-
+    let private positionGraphs (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) (parserTable : LrParsingTable<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>, unit>) =
         // Compute the Parser State Position Graph for each parser state.
-        (Map.empty, lr0ParserTable.ParserStates)
+        (Map.empty, parserTable.ParserStates)
         ||> Map.fold (fun parserStatePositionGraphs parserStateId parserState ->
             let pspg = positionGraph grammar.Productions parserState
             Map.add parserStateId pspg parserStatePositionGraphs)
@@ -405,7 +408,14 @@ module internal FreePositions =
         let reachableFrom = Graph.reachable graph
 
         /// For each item in the graph, contains the set of items/actions it dominates.
-        let dominated = Graph.dominators graph
+        let dominated =
+            match Graph.dominators graph with
+            | Choice1Of2 x -> x
+            | Choice2Of2 errorMsg ->
+                exn ("This item contains a conflict (S/R or R/R). \
+                      Free positions can not be computed until all conflicts are resolved.",
+                      exn errorMsg)
+                |> raise
 
         // Positions are not free if they can derive themselves
         // (i.e., if they have a self-loop in the graph).
@@ -451,8 +461,11 @@ module internal FreePositions =
 
     //
     let ofAugmentedGrammar (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
+        //
+        let lr0ParserTable = Lr0.createTable grammar
+
         // Compute the parser state position graphs of the LR(0) parser states of the augmented grammar.
-        let positionGraphs = positionGraphs grammar
+        let positionGraphs = positionGraphs grammar lr0ParserTable
 
         // Compute the set of non-free (forbidden or contingent) positions in the entire grammar.
         (Set.empty, positionGraphs)
