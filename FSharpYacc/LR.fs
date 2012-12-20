@@ -610,18 +610,100 @@ module private VertexLabeledSparseDigraph =
         graph.ContainsEdge (source, target)
 
     //
-    let dominators (graph : VertexLabeledSparseDigraph<'Vertex>)
-        : Map<'Vertex, Set<'Vertex>> =
-        // TODO
-        raise <| System.NotImplementedException "LabeledSparseDigraph.dominators"
+    let dominators (graph : VertexLabeledSparseDigraph<'Vertex>) : Map<'Vertex, Set<'Vertex>> =
+        // Find the root vertex.
+        let root =
+            let roots =
+                // Determine which vertices have no incoming edges.
+                (graph.Vertices, graph.Edges)
+                ||> Set.fold (fun possibleRoots (_, target) ->
+                    Set.remove target possibleRoots)
 
-    //
-    let reachable (graph : VertexLabeledSparseDigraph<'Vertex>)
-        : Map<'Vertex, Set<'Vertex>> =
+            // The set should have only one root vertex.
+            match Set.count roots with
+            | 0 ->
+                invalidArg "graph" "The graph is empty, or otherwise contains no root vertices."
+            | 1 ->
+                Set.minElement roots
+            | n ->
+                invalidArg "graph" "The graph contains multiple components (i.e., the graph is not connected)."
+
+        /// The predecessors of each vertex.
+        let predecessorsOf =
+            let initialPreds =
+                (Map.empty, graph.Vertices)
+                ||> Set.fold (fun initialMap vertex ->
+                    Map.add vertex Set.empty initialMap)
+
+            (initialPreds, graph.Edges)
+            ||> Set.fold (fun predecessorsOf (source, target) ->
+                let predsOfTarget =
+                    Map.find target predecessorsOf
+                    // Add the source vertex to the predecessor set of target.
+                    |> Set.add source
+
+                // Add the updated set to the map.
+                Map.add target predsOfTarget predecessorsOf)
+
+        /// The graph vertices, excluding the root vertex.
+        let vertices = Set.remove root graph.Vertices
+            
+        /// Uses a worklist-style algorithm to iteratively remove non-dominators
+        /// from the dominator sets of the vertices until a fixpoint is reached.
+        let rec domFix dominatedBy =
+            let modified, dominatedBy =
+                ((false, dominatedBy), vertices)
+                ||> Set.fold (fun (modified, dominatedBy) vertex ->
+                    //
+                    let vertexDominators' =                    
+                        // Intersect the dominator sets of the predecessors of this vertex.
+                        (graph.Vertices, Map.find vertex predecessorsOf)
+                        ||> Set.fold (fun predDoms predVertex ->
+                            Map.find predVertex dominatedBy
+                            |> Set.intersect predDoms)
+                        // Add the vertex itself to the result.
+                        |> Set.add vertex
+
+                    // If the new set of dominators for this vertex is different
+                    // than the existing set, set the modified flag and update this
+                    // vertex's entry in the map.
+                    let vertexDominators = Map.find vertex dominatedBy
+                    if vertexDominators <> vertexDominators' then
+                        true, Map.add vertex vertexDominators' dominatedBy
+                    else
+                        modified, dominatedBy)
+
+            // If any of the sets were modified, keep iterating.
+            if modified then
+                domFix dominatedBy
+            else
+                dominatedBy
+
+        // For vertices other than the root, initialize their
+        // dominator sets to the graph's vertex-set.
+        (Map.empty, vertices)
+        ||> Set.fold (fun dominatedBy vertex ->
+            Map.add vertex graph.Vertices dominatedBy)
+        // The root vertex is it's own dominator.
+        |> Map.add root (Set.singleton root)
+        // Find the dominator sets by finding a fixpoint of the set equations.
+        |> domFix
+
+    /// Computes the set of vertices reachable from each vertex in a graph.
+    let reachable (graph : VertexLabeledSparseDigraph<'Vertex>) =
         // This is a simplified version of the Floyd-Warshall algorithm
         // which checks only for reachability (Warshall's algorithm).
         let vertices = graph.Vertices
-        (Map.empty, vertices)
+
+        /// The initial map, containing an empty reachable-set for each vertex.
+        // NOTE : This is primarily to ensure that the map contains an entry
+        // for each vertex; it also avoids a branch in the innermost loop.
+        let initialMap =
+            (Map.empty, vertices)
+            ||> Set.fold (fun initialMap vertex ->
+                Map.add vertex Set.empty initialMap)
+
+        (initialMap, vertices)
         ||> Set.fold (fun reachableFrom k ->
             (reachableFrom, vertices)
             ||> Set.fold (fun reachableFrom i ->
@@ -629,15 +711,14 @@ module private VertexLabeledSparseDigraph =
                 ||> Set.fold (fun reachableFrom j ->
                     // If there's an edge i->k and k->j, then add the edge i->j.
                     if containsEdge i k graph && containsEdge k j graph then
-                        match Map.tryFind i reachableFrom with
-                        | Some ``reachable from i`` ->
+                        /// The set of vertices reachable from 'i'.
+                        let ``reachable from i`` =
+                            Map.find i reachableFrom
                             // Add 'j' to the set of vertices reachable from 'i'
-                            let ``reachable from i`` = Set.add j ``reachable from i``
-                            // Update the map entry for 'i' with the result.
-                            Map.add i ``reachable from i`` reachableFrom
-                        | None ->
-                            // Create a new entry for 'i' in the map.
-                            Map.add i (Set.singleton j) reachableFrom
+                            |> Set.add j
+
+                        // Update the map entry for 'i' with the result.
+                        Map.add i ``reachable from i`` reachableFrom
                     else
                         // Keep looping without modifying the set.
                         reachableFrom)))
