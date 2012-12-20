@@ -298,7 +298,10 @@ let figure4 =
 // The free positions of the grammar
 let internal freePositions =
     figure4
-    |> LR.FreePositions.ofAugmentedGrammar
+    // Conflicts must be resolved before finding
+    // free positions of the grammar.
+
+    |> Analysis.FreePositions.ofAugmentedGrammar
     // TEMP
     |> ignore
 
