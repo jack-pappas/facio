@@ -51,6 +51,7 @@
       <Link>CommonAssemblyInfo.fs</Link>
     </Compile>
     <Compile Include="Grammar.fs" />
+    <Compile Include="Graph.fs" />
     <Compile Include="Analysis.fs" />
     <Compile Include="LR.fs" />
     <Compile Include="FreePositions.fs" />
