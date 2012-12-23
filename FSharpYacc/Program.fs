@@ -296,7 +296,11 @@ let figure4 =
 
 //
 let lr0 =
-    FSharpYacc.LR.Lr0.createTable figure4
+    FSharpYacc.LR.Lr0.Lr0.createTable figure4
+
+////
+//let lalr1 =
+//    FSharpYacc.LR.Lalr1.Lalr1.ofLr0Table lr0
 
 
 //// The free positions of the grammar

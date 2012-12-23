@@ -54,6 +54,10 @@
     <Compile Include="Graph.fs" />
     <Compile Include="Analysis.fs" />
     <Compile Include="LR.fs" />
+    <Compile Include="Lr0.fs" />
+    <Compile Include="Slr1.fs" />
+    <Compile Include="Lr1.fs" />
+    <Compile Include="Lalr1.fs" />
     <Compile Include="FreePositions.fs" />
     <Compile Include="LeftCorner.fs" />
     <Compile Include="Options.fs" />

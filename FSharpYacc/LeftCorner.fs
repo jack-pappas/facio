@@ -100,6 +100,6 @@ module internal LeftCorner =
     open FSharpYacc.LR
 
     /// Adapts a LALR(1) parser table into an LC(1) parser table.
-    let ofLalr1 (lalr1Table : LrParsingTable<'Nonterminal, 'Terminal, 'Terminal>) =
+    let ofLalr1 (lalr1Table : LrParserTable<'Nonterminal, 'Terminal, 'Terminal>) =
         raise <| System.NotImplementedException "LeftCorner.ofLalr1"
 

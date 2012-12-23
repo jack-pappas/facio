@@ -14,6 +14,7 @@ open FSharpYacc.Grammar
 open AugmentedPatterns
 open FSharpYacc.Graph
 open FSharpYacc.LR
+open FSharpYacc.LR.Lr0
 
 
 //
@@ -130,7 +131,7 @@ module internal FreePositions =
                     positionGraph))
 
     //
-    let private positionGraphs (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) (parserTable : LrParsingTable<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>, unit>) =
+    let private positionGraphs (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) (parserTable : LrParserTable<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>, unit>) =
         // Compute the Parser State Position Graph for each parser state.
         (Map.empty, parserTable.ParserStates)
         ||> Map.fold (fun parserStatePositionGraphs parserStateId parserState ->
