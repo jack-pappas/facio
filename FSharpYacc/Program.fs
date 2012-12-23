@@ -294,16 +294,20 @@ let figure4 =
     // Augment the grammar.
     Grammar.Augment (figure4, 'A')
 
+//
+let lr0 =
+    FSharpYacc.LR.Lr0.createTable figure4
 
-// The free positions of the grammar
-let internal freePositions =
-    figure4
-    // Conflicts must be resolved before finding
-    // free positions of the grammar.
 
-    |> Analysis.FreePositions.ofAugmentedGrammar
-    // TEMP
-    |> ignore
+//// The free positions of the grammar
+//let internal freePositions =
+//    figure4
+//    // Conflicts must be resolved before finding
+//    // free positions of the grammar.
+//
+//    |> Analysis.FreePositions.ofAugmentedGrammar
+//    // TEMP
+//    |> ignore
 
 
 printfn "Press any key to exit..."
