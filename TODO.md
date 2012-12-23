@@ -10,6 +10,13 @@
   to implement a worklist-based loop which uses some instance of this interface to
   create the parser states from the grammar. (NOTE : Instead of implementing this from
   scratch, we'll just modify one of the existing worklist loops.)
+- Use our earlier, "naive" implementation of the LALR(1) table generator (which computed
+  the entire LR(1) table then merged states together) to implement some unit tests for
+  the the new, faster LALR(1) implementation based on DeRemer and Penello's algorithm.
+  Just copy the old code out of the Git history (prior to the 'fast-lalr' branch being
+  merged into 'master') and put it into the FSharpYacc.Tests project. Then, choose some
+  test grammars and create the LALR(1) tables for them using both methods -- the results
+  should be identical.
 
 
 ---
