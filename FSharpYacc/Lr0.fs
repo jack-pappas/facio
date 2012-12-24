@@ -76,16 +76,13 @@ module internal Lr0 =
         /// Determines if all symbols following the next symbol to be parsed
         /// are nullable; in other words, after the next symbol is parsed, the
         /// remainder of the production could be empty (epsilon).
-        let nullableTail (item : Lr0Item<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>) =
+        let nullableTail (item : Lr0Item<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>) : bool =
             // Preconditions
             if int item.Position >= Array.length item.Production - 1 then
                 invalidArg "item" "The parser position must leave at least two (2) symbols to be parsed in the production."
 
+            raise <| System.NotImplementedException "Lr0.Item.nullableTail"
 
-
-
-
-            ()
 
         /// Computes the LR(0) closure of a set of items.
         // TODO : Modify this to use a worklist-style algorithm to avoid

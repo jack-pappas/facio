@@ -24,6 +24,11 @@ open FSharpYacc.Graph
 /// of the grammar's nonterminals to resolve some conflicts automatically.</remarks>
 [<RequireQualifiedAccess>]
 module internal Slr1 =
+    (* TODO :   This code could be greatly simplified -- we could just construct the LR(0)
+                parser table, then go back through it and remove any Reduce actions which
+                would NOT have been added by SLR(1). This would also serve as a nice way to
+                show how SLR(1) is like LR(0) but "upgraded" with a simple conflict-resolving strategy. *)
+
     //
     let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) predictiveSets (tableGenState : Lr0TableGenState<_,_>) : Lr0ParserTable<_,_> =
         // Preconditions

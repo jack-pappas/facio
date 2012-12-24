@@ -20,7 +20,7 @@
 
 
 ---
-### Implement modules for generating other types of parsers
+### Other Interesting Parsing Algorithms to Implement
 
 - Deterministic
   - IELR(1) -- Inadequacy Elimination LR(1)
@@ -41,3 +41,8 @@
   - GLR -- Generalized LR (perhaps as Scannerless GLR (SGLR))
   - GLC -- Generalized Left-Corner (see Nederhof, "Generalized Left-Corner Parsing")
 
+- Miscellaneous
+  - GPLR -- Generalized Piecewise LR
+  - Incremental LR(1) -- "Celentano's Algorithm". This allows a file to be parsed incrementally,
+    so instead of re-parsing the entire file when changes are made, only the changed portion needs
+    to be parsed.

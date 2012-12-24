@@ -28,37 +28,6 @@ open FSharpYacc.Graph
 module Lalr1 =
     module Graph = VertexLabeledSparseDigraph
 
-    //
-    type PropagationGraph<'Nonterminal, 'Terminal
-        when 'Nonterminal : comparison
-        and 'Terminal : comparison> =
-        VertexLabeledSparseDigraph<ParserStateId * Lr0Item<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>>
-
-    //
-    let internal propagationGraph (lr0ParsingTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
-        : PropagationGraph<'Nonterminal, 'Terminal> =
-        /// The initial propagation graph, containing all of the vertices but no edges.
-        let (propagationGraph : PropagationGraph<_,_>), itemFollow =
-            ((Graph.empty, Map.empty), lr0ParsingTable.ParserStates)
-            ||> Map.fold (fun propagationGraph_itemFollow stateId items ->
-                (propagationGraph_itemFollow, items)
-                ||> Set.fold (fun (propagationGraph, itemFollow) item ->
-                    Graph.addVertex (stateId, item) propagationGraph,
-                    Map.add (stateId, item) Set.empty itemFollow))
-
-        // Build the propagation graph
-        (propagationGraph, lr0ParsingTable.ParserStates)
-        ||> Map.fold (fun propagationGraph stateId items ->
-            
-
-
-
-            propagationGraph)
-
-//
-//        //
-//        raise <| System.NotImplementedException "Lalr1.propagationGraph"
-
 
     //
     let ofLr0Table (lr0ParsingTable : Lr0ParserTable<'Nonterminal, 'Terminal>)

@@ -83,6 +83,13 @@ type LrParserAction =
         | Accept ->
             "a"
 
+//
+type internal PropagationGraph<'Nonterminal, 'Terminal, 'Lookahead
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison
+    and 'Lookahead : comparison> =
+    VertexLabeledSparseDigraph<ParserStateId * LrItem<'Nonterminal, 'Terminal, 'Lookahead>>
+
 /// LR(k) parser table.
 type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison

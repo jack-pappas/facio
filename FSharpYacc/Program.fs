@@ -298,10 +298,6 @@ let figure4 =
 let lr0 =
     FSharpYacc.LR.Lr0.createTable figure4
 
-//
-let internal lalr1_propagationGraph =
-    FSharpYacc.LR.Lalr1.propagationGraph lr0
-
 ////
 //let lalr1 =
 //    FSharpYacc.LR.Lalr1.ofLr0Table lr0
