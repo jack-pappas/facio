@@ -7,14 +7,13 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-namespace FSharpYacc.LR.Lr1
+namespace FSharpYacc.LR
 
 open LanguagePrimitives
 open FSharpYacc.Grammar
 open AugmentedPatterns
 open FSharpYacc.Analysis
 open FSharpYacc.Graph
-open FSharpYacc.LR
 
 
 /// An LR(1) item.

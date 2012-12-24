@@ -14,7 +14,6 @@ open FSharpYacc.Grammar
 open AugmentedPatterns
 open FSharpYacc.Graph
 open FSharpYacc.LR
-open FSharpYacc.LR.Lr0
 
 
 //

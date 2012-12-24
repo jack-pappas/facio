@@ -7,20 +7,23 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-namespace FSharpYacc.LR.Slr1
+namespace FSharpYacc.LR
 
 open LanguagePrimitives
 open FSharpYacc.Grammar
 open AugmentedPatterns
 open FSharpYacc.Analysis
 open FSharpYacc.Graph
-open FSharpYacc.LR
-open FSharpYacc.LR.Lr0
 
 
-// Simple LR (SLR) parser tables.
+/// <summary>SLR(1) parser table generator.</summary>
+/// <remarks>Simple LR (SLR) is more powerful than LR(0), but less powerful
+/// than either LR(1) or LALR(1). An SLR(1) parser table will have the same
+/// number of parser states (table rows) as an LR(0) parser table for a
+/// given grammar; the only difference is that SLR(1) uses the FOLLOW sets
+/// of the grammar's nonterminals to resolve some conflicts automatically.</remarks>
 [<RequireQualifiedAccess>]
-module internal Slr =
+module internal Slr1 =
     //
     let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) predictiveSets (tableGenState : Lr0TableGenState<_,_>) : Lr0ParserTable<_,_> =
         // Preconditions

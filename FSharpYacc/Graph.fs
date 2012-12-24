@@ -9,8 +9,13 @@ See LICENSE.TXT for licensing details.
 //
 namespace FSharpYacc.Graph
 
+open System.Diagnostics
+
 
 /// An immutable implementation of a vertex-labeled sparse digraph.
+[<DebuggerDisplay(
+    "Vertices = {VertexCount}, \
+     Edges = {EdgeCount}")>]
 type internal VertexLabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex when 'Vertex : comparison>
         private (vertices : Set<'Vertex>, edges : Set<'Vertex * 'Vertex>) =
     //
@@ -28,6 +33,16 @@ type internal VertexLabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex when '
     //
     member __.Vertices
         with get () = vertices
+
+    //
+    member private __.VertexCount
+        with get () =
+            Set.count vertices
+
+    //
+    member private __.EdgeCount
+        with get () =
+            Set.count edges
 
     //
     member __.ContainsVertex (vertex : 'Vertex) =
@@ -376,23 +391,36 @@ module internal VertexLabeledSparseDigraph =
 
 
 /// An immutable implementation of a vertex- and edge-labeled sparse digraph.
+[<DebuggerDisplay(
+    "Vertices = {VertexCount}, \
+     Edges = {EdgeCount}")>]
 type LabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex, [<EqualityConditionalOn; ComparisonConditionalOn>]'Edge when 'Vertex : comparison>
-        private (vertexSet : Set<'Vertex>, edgeSet : Map<'Vertex * 'Vertex, 'Edge>) =
+        private (vertices : Set<'Vertex>, edges : Map<'Vertex * 'Vertex, 'Edge>) =
     //
     static member internal Empty
         with get () = LabeledSparseDigraph<'Vertex, 'Edge> (Set.empty, Map.empty)
 
     //
     member __.IsEmpty
-        with get () = Set.isEmpty vertexSet
+        with get () = Set.isEmpty vertices
 
     //
     member __.Edges
-        with get () = edgeSet
+        with get () = edges
     
     //
     member __.Vertices
-        with get () = vertexSet
+        with get () = vertices
+
+    //
+    member private __.VertexCount
+        with get () =
+            Set.count vertices
+
+    //
+    member private __.EdgeCount
+        with get () =
+            edges.Count
 
     //
     static member Create (vertices : Set<'Vertex>) =
@@ -402,90 +430,90 @@ type LabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex, [<EqualityConditiona
 
     //
     member __.ContainsVertex (vertex : 'Vertex) =
-        Set.contains vertex vertexSet
+        Set.contains vertex vertices
 
     //
     member __.ContainsEdge (source : 'Vertex, target : 'Vertex) =
         // Preconditions
-        if not <| Set.contains source vertexSet then
+        if not <| Set.contains source vertices then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
+        elif not <| Set.contains target vertices then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        Map.containsKey (source, target) edgeSet
+        Map.containsKey (source, target) edges
 
     //
     member __.GetEdge (source : 'Vertex, target : 'Vertex) =
         // Preconditions
-        if not <| Set.contains source vertexSet then
+        if not <| Set.contains source vertices then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
+        elif not <| Set.contains target vertices then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        Map.find (source, target) edgeSet
+        Map.find (source, target) edges
 
     //
     member __.TryGetEdge (source : 'Vertex, target : 'Vertex) =
         // Preconditions
-        if not <| Set.contains source vertexSet then
+        if not <| Set.contains source vertices then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
+        elif not <| Set.contains target vertices then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        Map.tryFind (source, target) edgeSet
+        Map.tryFind (source, target) edges
 
     //
     member __.AddVertex (vertex : 'Vertex) =
         LabeledSparseDigraph (
-            Set.add vertex vertexSet,
-            edgeSet)
+            Set.add vertex vertices,
+            edges)
 
     //
     member __.AddVertices (vertices : Set<'Vertex>) =
         LabeledSparseDigraph (
-            Set.union vertexSet vertices,
-            edgeSet)
+            Set.union vertices vertices,
+            edges)
 
     //
     member __.AddEdge (source : 'Vertex, target : 'Vertex, edge : 'Edge) =
         // Preconditions
-        if not <| Set.contains source vertexSet then
+        if not <| Set.contains source vertices then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
+        elif not <| Set.contains target vertices then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
         LabeledSparseDigraph (
-            vertexSet,
-            Map.add (source, target) edge edgeSet)
+            vertices,
+            Map.add (source, target) edge edges)
 
     //
     member __.RemoveVertex (vertex : 'Vertex) =
         // Preconditions
-        if not <| Set.contains vertex vertexSet then
+        if not <| Set.contains vertex vertices then
             invalidArg "vertex" "The vertex is not in the graph's vertex-set."
 
         // Remove in- and out-edgeSet of the vertex.
-        let edgeSet =
-            edgeSet
+        let edges =
+            edges
             |> Map.filter (fun (source, target) _ ->
                 source <> vertex
                 && target <> vertex)
 
         LabeledSparseDigraph (
-            Set.remove vertex vertexSet,
-            edgeSet)
+            Set.remove vertex vertices,
+            edges)
 
     //
     member __.RemoveEdge (source : 'Vertex, target : 'Vertex) =
         // Preconditions
-        if not <| Set.contains source vertexSet then
+        if not <| Set.contains source vertices then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif not <| Set.contains target vertexSet then
+        elif not <| Set.contains target vertices then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
         LabeledSparseDigraph (
-            vertexSet,
-            Map.remove (source, target) edgeSet)
+            vertices,
+            Map.remove (source, target) edges)
     
 
 /// Functions on LabeledSparseDigraphs.

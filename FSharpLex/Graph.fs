@@ -62,12 +62,12 @@ type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdge
         with get () = adjacencyMap
     
     //
-    member __.VertexCount
-        with get () = vertexCount
-
-    //
     member __.EofTransition
         with get () = eofTransition
+
+    //
+    member __.VertexCount
+        with get () = vertexCount
 
     //
     member internal __.EdgeSetCount

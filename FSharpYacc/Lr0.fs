@@ -7,14 +7,13 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-namespace FSharpYacc.LR.Lr0
+namespace FSharpYacc.LR
 
 open LanguagePrimitives
 open FSharpYacc.Grammar
 open AugmentedPatterns
 open FSharpYacc.Analysis
 open FSharpYacc.Graph
-open FSharpYacc.LR
 
 
 /// An LR(0) item.
@@ -62,6 +61,32 @@ module internal Lr0 =
     /// Functions for manipulating LR(0) parser items.
     [<RequireQualifiedAccess>]
     module Item =
+        /// Determines if an LR(0) item is a 'kernel' item.
+        let isKernelItem (item : Lr0Item<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>) =
+            // An LR(0) item is a kernel item iff it is the initial item or
+            // the dot (representing the parser position) is NOT in the leftmost
+            // (zeroth) position of the production.
+            if item.Position > 0<_> then true
+            else
+                // Is this the initial item?
+                match item.Nonterminal with
+                | Start -> true
+                | Nonterminal _ -> false
+
+        /// Determines if all symbols following the next symbol to be parsed
+        /// are nullable; in other words, after the next symbol is parsed, the
+        /// remainder of the production could be empty (epsilon).
+        let nullableTail (item : Lr0Item<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>) =
+            // Preconditions
+            if int item.Position >= Array.length item.Production - 1 then
+                invalidArg "item" "The parser position must leave at least two (2) symbols to be parsed in the production."
+
+
+
+
+
+            ()
+
         /// Computes the LR(0) closure of a set of items.
         // TODO : Modify this to use a worklist-style algorithm to avoid
         // reprocessing items which already exist in the set (i.e., when iterating,
@@ -133,18 +158,6 @@ module internal Lr0 =
                         updatedItems)
             // Return the closure of the item set.
             |> closure productions
-
-        /// Determines if an LR(0) item is a 'kernel' item.
-        let isKernelItem (item : LrItem<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>, unit>) =
-            // An LR(0) item is a kernel item iff it is the initial item or
-            // the dot (representing the parser position) is NOT in the leftmost
-            // (zeroth) position of the production.
-            if item.Position > 0<_> then true
-            else
-                // Is this the initial item?
-                match item.Nonterminal with
-                | Start -> true
-                | Nonterminal _ -> false
 
 
     /// Functions which use the State monad to manipulate an LR(0) table-generation state.
