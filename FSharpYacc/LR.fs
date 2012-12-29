@@ -83,32 +83,6 @@ type LrParserAction =
         | Accept ->
             "a"
 
-//
-type internal PropagationGraph<'Nonterminal, 'Terminal, 'Lookahead
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison
-    and 'Lookahead : comparison> =
-    VertexLabeledSparseDigraph<ParserStateId * LrItem<'Nonterminal, 'Terminal, 'Lookahead>>
-
-/// LR(k) parser table.
-type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison
-    and 'Lookahead : comparison> = {
-    //
-    ParserStates : Map<ParserStateId, LrParserState<'Nonterminal, 'Terminal, 'Lookahead>>;
-    //
-    ParserTransitions : LabeledSparseDigraph<ParserStateId, Symbol<'Nonterminal, 'Terminal>>;
-    //
-    ActionTable : Map<ParserStateId * 'Terminal, Set<LrParserAction>>;
-    //
-    GotoTable : Map<ParserStateId * 'Nonterminal, ParserStateId>;
-
-    (* TODO :   Remove this in favor of using ProductionKey in the LrParserAction.Reduce case. *)
-    //
-    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
-}
-
 /// LR(k) parser table generation state.
 type internal LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
@@ -270,4 +244,34 @@ module internal LrTableGenState =
         (),
         { tableGenState with
             ActionTable = Map.add tableKey entry tableGenState.ActionTable; }
+
+
+//
+type NonterminalTransition<'Nonterminal
+    when 'Nonterminal : comparison> =
+    ParserStateId * 'Nonterminal
+
+//
+type TerminalTransition<'Terminal
+    when 'Terminal : comparison> =
+    ParserStateId * 'Terminal
+
+/// LR(k) parser table.
+type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison
+    and 'Lookahead : comparison> = {
+    //
+    ParserStates : Map<ParserStateId, LrParserState<'Nonterminal, 'Terminal, 'Lookahead>>;
+    //
+    ParserTransitions : LabeledSparseDigraph<ParserStateId, Symbol<'Nonterminal, 'Terminal>>;
+    //
+    ActionTable : Map<TerminalTransition<'Terminal>, Set<LrParserAction>>;
+    //
+    GotoTable : Map<NonterminalTransition<'Nonterminal>, ParserStateId>;
+
+    (* TODO :   Remove this in favor of using ProductionKey in the LrParserAction.Reduce case. *)
+    //
+    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
+}
 
