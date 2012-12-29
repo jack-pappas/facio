@@ -77,6 +77,20 @@ type internal VertexLabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex when '
             Set.add (source, target) edges)
 
     //
+    member __.AddEdgeAndVertices (source : 'Vertex, target : 'Vertex) =
+        // Preconditions
+        // (None)
+
+        let vertices =
+            vertices
+            |> Set.add source
+            |> Set.add target
+
+        VertexLabeledSparseDigraph (
+            vertices,
+            Set.add (source, target) edges)
+
+    //
     member __.RemoveVertex (vertex : 'Vertex) =
         // Preconditions
         if not <| Set.contains vertex vertices then
@@ -117,6 +131,16 @@ type internal VertexLabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex when '
             vertices,
             reversedEdges)
 
+    /// Creates a VertexLabeledSparseDigraph from a list of edges.
+    static member OfEdgeList (edgeList : ('Vertex * 'Vertex) list) =
+        (VertexLabeledSparseDigraph.Empty, edgeList)
+        ||> List.fold (fun graph (source, target) ->
+            graph.AddEdgeAndVertices (source, target))
+
+    /// Creates a VertexLabeledSparseDigraph from a set of vertices.
+    static member OfVertexSet (vertexSet : Set<'Vertex>) =
+        VertexLabeledSparseDigraph (vertexSet, Set.empty)
+
 
 /// Functions on VertexLabeledSparseDigraphs.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -142,6 +166,10 @@ module internal VertexLabeledSparseDigraph =
         graph.AddEdge (source, target)
 
     //
+    let inline addEdgeAndVertices source target (graph : VertexLabeledSparseDigraph<'Vertex>) =
+        graph.AddEdgeAndVertices (source, target)
+
+    //
     let inline removeVertex (vertex : 'Vertex) (graph : VertexLabeledSparseDigraph<'Vertex>) =
         graph.RemoveVertex vertex
 
@@ -158,13 +186,8 @@ module internal VertexLabeledSparseDigraph =
         graph.ContainsEdge (source, target)
 
     /// Creates a VertexLabeledSparseDigraph from a list of edges.
-    let ofEdgeList (edgeList : ('Vertex * 'Vertex) list) =
-        (VertexLabeledSparseDigraph.Empty, edgeList)
-        ||> List.fold (fun graph (source, target) ->
-            graph
-            |> addVertex source
-            |> addVertex target
-            |> addEdge source target)            
+    let inline ofEdgeList (edgeList : ('Vertex * 'Vertex) list) =
+        VertexLabeledSparseDigraph.OfEdgeList edgeList
 
     //
     let predecessors (graph : VertexLabeledSparseDigraph<'Vertex>) =
