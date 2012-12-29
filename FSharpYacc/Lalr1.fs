@@ -115,70 +115,7 @@ module Lalr1 =
                 |> Set.union read))
 
     //
-    let private includes (grammar, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>, nonterminalTransitions, nullable) =
-        (Graph.empty, nonterminalTransitions)
-        ||> Set.fold (fun includes ((p, A) as source) ->
-            (includes, nonterminalTransitions)
-            ||> Set.fold (fun includes ((p', B) as target) ->
-                // Don't allow self-loops in the 'includes' graph.
-                if source = target then
-                    includes
-                else
-                    // In the production rules for 'B', search for any instances of 'A' where
-                    // the right context is empty or nullable. (The 'right context' is suffix
-                    // of 'A' in the production, i.e., the symbols following 'A'.)
-                    let prefixes =
-                        // OPTIMIZE : Rewrite this to fold over the productions, using a Set to hold
-                        // the prefixes; this just allows the computation to complete a little faster
-                        // in the case where a prefix is added multiple times.
-                        Map.find B grammar.Productions
-                        |> Array.collect (fun production ->
-                            let prefixes = ResizeArray<_> (Array.length production)
-
-                            let len = Array.length production
-                            for i = 0 to len - 1 do
-                                if production.[i] = (Nonterminal A) &&
-                                    PredictiveSets.allNullableInSlice (production, i + 1, len - 1, nullable) then
-                                    prefixes.Add production.[0 .. i - 1]
-
-                            prefixes.ToArray ())
-
-                    // For each prefix, try to find a path from p' to p which is labelled with
-                    // the symbols of the prefix.
-                    let prefixPathExists =
-                        prefixes
-                        |> Array.exists (fun prefix ->
-                            (Some p', prefix)
-                            ||> Array.fold (fun stateId symbol ->
-                                stateId
-                                |> Option.bind (fun stateId ->
-                                    match symbol with
-                                    | Symbol.Nonterminal nonterminal ->
-                                        lr0ParserTable.GotoTable
-                                        |> Map.tryFind (stateId, nonterminal)
-                                    | Symbol.Terminal terminal ->
-                                        lr0ParserTable.ActionTable
-                                        |> Map.tryFind (stateId, terminal)
-                                        |> Option.bind (fun actions ->
-                                            // There can be at most one (1) shift action; if there is one,
-                                            // transition to the parser state it specifies (this is a nonterminal transition).
-                                            (None, actions)
-                                            ||> Set.fold (fun shiftAction action ->
-                                                match action with
-                                                | Shift stateId ->
-                                                    Some stateId
-                                                | _ ->
-                                                    shiftAction)
-                                            )))
-                            |> Option.isSome)
-
-                    // If a path was found, then (p, A) includes (p', B) so add an edge to the 'includes' graph.
-                    if prefixPathExists then
-                        Graph.addEdgeAndVertices source target includes
-                    else includes))
-
-    //
-    let private includes' (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>, nonterminalTransitions, nullable) =
+    let private includes (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>, nonterminalTransitions, nullable) =
         ((Graph.empty, Graph.empty), nonterminalTransitions)
         ||> Set.fold (fun lookback_includes (stateId, nonterminal) ->
             //
@@ -233,10 +170,8 @@ module Lalr1 =
 
                             let j = defaultArg j -1<_>
                             includes, j)
-
                 
                     lookback, includes))
-
 
     //
     let ofLr0Table (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
@@ -260,7 +195,7 @@ module Lalr1 =
         // nonterminal transition and reduction, respectively, by inspection of each nonterminal
         // transition and the associated production right parts, and by considering
         // nullable nonterminals appropriately.
-        let includes = includes' (grammar, lr0ParserTable, nonterminalTransitions, nullable)
+        let includes = includes (grammar, lr0ParserTable, nonterminalTransitions, nullable)
 
         // F. Compute the transitive closure of the 'includes' relation (via the SCC algorithm)
         // to compute 'Follow'. Use the same sets as initialized in part B and completed in part D,
