@@ -76,7 +76,7 @@ module PredictiveSets =
         |> computeNullable
 
     /// Determines if all symbols within the specified slice of a production are nullable.
-    let inline private allNullableInSlice (production : Symbol<'Nonterminal, 'Terminal>[], startInclusive, endInclusive, nullable : Map<'Nonterminal, bool>) =
+    let inline internal allNullableInSlice (production : Symbol<'Nonterminal, 'Terminal>[], startInclusive, endInclusive, nullable : Map<'Nonterminal, bool>) =
         let mutable result = true
         let mutable index = startInclusive
         while result && index <= endInclusive do
