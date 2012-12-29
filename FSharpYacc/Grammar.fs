@@ -12,18 +12,18 @@ namespace FSharpYacc.Grammar
 
 /// A nonterminal or the start symbol.
 type AugmentedNonterminal<'Nonterminal when 'Nonterminal : comparison> =
-    /// A nonterminal symbol specified by a grammar.
-    | Nonterminal of 'Nonterminal
     /// The start symbol.
     | Start
+    /// A nonterminal symbol specified by a grammar.
+    | Nonterminal of 'Nonterminal    
 
     /// <inherit />
     override this.ToString () =
         match this with
-        | Nonterminal nonterm ->
-            nonterm.ToString ()
         | Start ->
             "\xabStart\xbb"
+        | Nonterminal nonterm ->
+            nonterm.ToString ()        
 
 /// A terminal (token) or the end-of-file marker.
 type AugmentedTerminal<'Terminal when 'Terminal : comparison> =
