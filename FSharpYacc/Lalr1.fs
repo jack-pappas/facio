@@ -9,6 +9,7 @@ See LICENSE.TXT for licensing details.
 //
 namespace FSharpYacc.LR
 
+open System.Diagnostics
 open LanguagePrimitives
 open FSharpYacc.Grammar
 open AugmentedPatterns
@@ -54,6 +55,105 @@ type Lalr1ParserTable<'Nonterminal, 'Terminal
 [<RequireQualifiedAccess>]
 module Lalr1 =
     module Graph = VertexLabeledSparseDigraph
+    module BiGraph = VertexLabeledSparseBipartiteDigraph
+
+    //
+    type private TraversalStatus =
+        //
+        | Untraversed
+        //
+        | Traversing of int // depth
+        //
+        | Traversed
+
+    //
+    let rec private traverse (x, N, stack, F, X : Set<'T>, R, F' : Map<'T, Set<'U>>)
+        : Map<_,_> * Map<_,_> * _ list =
+        let stack = x :: stack
+        let d = List.length stack
+        let N = Map.add x (Traversing d) N
+        let F =
+            let ``F'(x)`` = Map.find x F'
+            Map.add x ``F'(x)`` F
+
+        // Find the 'y' values related to 'x' and compute xRy
+        // by recursively traversing them.
+        let F, N, stack =
+            ((F, N, stack), Map.find x R)
+            ||> Set.fold (fun (F, N, stack) y ->
+                let F, N, stack =
+                    if Map.containsKey y N then
+                        F, N, stack
+                    else
+                        traverse (y, N, stack, F, X, R, F')
+
+                let N =
+                    let ``N(x)`` = Map.find x N
+                    let ``N(y)`` = Map.find y N
+                    Map.add x (min ``N(x)`` ``N(y)``) N
+
+                let F =
+                    match Map.tryFind y F with
+                    | None -> F
+                    | Some ``F(y)`` ->
+                        let ``F(x)`` = Map.find x F
+                        Map.add x (Set.union ``F(x)`` ``F(y)``) F
+
+                F, N, stack)
+
+        // Walk back up the stack, if necessary.
+        match Map.find x N with
+        | Traversing depth when depth = d ->
+            let ``F(x)`` = Map.find x F
+            let rec unwind (F, N, stack) =
+                match stack with
+                | [] ->
+                    failwith "Unexpectedly empty stack."
+                | element :: stack ->
+                    let N = Map.add element Traversed N
+                    let F = Map.add element ``F(x)`` F
+
+                    if element = x then
+                        F, N, stack
+                    else
+                        unwind (F, N, stack)
+
+            unwind (F, N, stack)
+
+        | _ ->
+            F, N, stack
+
+    /// <summary>The 'digraph' algorithm from DeRemer and Pennello's paper.</summary>
+    /// <remarks>This algorithm quickly computes set relations by 'condensing'
+    /// a relation graph's strongly-connected components (SCCs), then performing
+    /// a bottom-up traversal of the resulting DAG.</remarks>
+    /// <param name="X">The set on which the relation is defined.</param>
+    /// <param name="R">A relation on <paramref name="X"/>.</param>
+    /// <param name="F'">A function from <paramref name="X"/> to sets.</param>
+    /// <returns><c>F</c>, a function from X to sets, such that <c>F x</c> satisfies
+    /// equation 4.1 in DeRemer and Pennello's paper.</returns>
+    let private digraph (X : Set<'T>) (R : Map<'T, Set<'T>>) (F' : Map<'T, Set<'U>>) =
+        //
+        let N =
+            (Map.empty, X)
+            ||> Set.fold (fun N x ->
+                Map.add x Untraversed N)
+
+        ((Map.empty, N, []), X)
+        ||> Set.fold (fun (F, N, stack) x ->
+            if Map.containsKey x N then
+                F, N, stack
+            else
+                traverse (x, N, stack, F, X, R, F'))
+        // Discard the intermediate variables
+        |> fun (F, N, _) ->
+            // DEBUG : Make sure all set elements have been completely traversed.
+            Debug.Assert (
+                Set.forall (fun x -> match Map.find x N with Traversed -> true | _ -> false) X,
+                "Some elements of X have not been completely traversed.")
+
+            // Return the computed relation.
+            F
 
     /// Computes the "direct read symbols" for each nonterminal transition; that is, it computes the set
     /// of terminals which label the out-edges of the state targeted by a nonterminal transition.
@@ -64,8 +164,9 @@ module Lalr1 =
             // so this can be made into a simple lookup instead of having to traverse the ACTION table repeatedly.
             let directReadSymbols =
                 (Set.empty, lr0ParserTable.ActionTable)
-                ||> Map.fold (fun directReadSymbols (stateId, terminal) _ ->
-                    if stateId = succStateId then
+                ||> Map.fold (fun directReadSymbols (stateId, terminal) actions ->
+                    if stateId = succStateId &&
+                        actions |> Set.exists (function Shift _ | Accept -> true | _ -> false) then
                         Set.add terminal directReadSymbols
                     else
                         directReadSymbols)
@@ -115,7 +216,7 @@ module Lalr1 =
                 |> Set.union read))
 
     //
-    let private includes (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>, nonterminalTransitions, nullable) =
+    let private lookbackAndIncludes (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>, nonterminalTransitions, nullable) =
         ((Graph.empty, Graph.empty), nonterminalTransitions)
         ||> Set.fold (fun lookback_includes (stateId, nonterminal) ->
             //
@@ -128,6 +229,7 @@ module Lalr1 =
                 if item.Nonterminal <> nonterminal then
                     lookback, includes
                 else
+                    // Add edges to the 'includes' relation graph.
                     let includes, j =
                         let rhsPositions = seq {
                             int item.Position .. Array.length item.Production - 1 }
@@ -168,9 +270,28 @@ module Lalr1 =
                                     lr0ParserTable.GotoTable
                                     |> Map.tryFind (j, t)
 
+                            // TODO : For safety and clarity, change this fold to use an F# option
+                            // instead of representing the 'invalid' state as -1.
                             let j = defaultArg j -1<_>
                             includes, j)
-                
+
+                    // Add edges to the 'lookback' relation graph.
+                    let lookback : VertexLabeledSparseBipartiteDigraph<_,_> =
+                        if j = -1<_> then
+                            lookback
+                        else
+                            // 'j' represents the final/last state of the path through the parser transition graph
+                            // which describes the derivation of a rule (thereby producing a nonterminal).
+                            (lookback, Map.find j lr0ParserTable.ParserStates)
+                            ||> Set.fold (fun lookback item' ->
+                                if item.Nonterminal = item'.Nonterminal
+                                    && item.Production = item'.Production then
+                                    let rule = item.Nonterminal, item.Production
+                                    BiGraph.addEdgeAndVertices (stateId, nonterminal) (j, rule) lookback
+                                else
+                                    lookback)
+
+                    // Pass 'lookback' and 'includes' through to the next iteration.
                     lookback, includes))
 
     //
@@ -179,7 +300,7 @@ module Lalr1 =
         (* DeRemer and Penello's algorithm for computing LALR look-ahead sets. *)
 
         /// Denotes which nonterminals are nullable.
-        let nullable = FSharpYacc.Analysis.PredictiveSets.computeNullable grammar.Productions
+        let nullable = PredictiveSets.computeNullable grammar.Productions
 
         /// The set of nonterminal transitions in the LR(0) parser table (i.e., the GOTO table).
         let nonterminalTransitions =
@@ -189,26 +310,81 @@ module Lalr1 =
 
         // D. Compute 'Read' using the SCC-based transitive closure algorithm.
         // If a cycle is detected, announce that the grammar is not LR(k) for any 'k'.
+        // TODO : Implement cycle detection.
         let Read = read (lr0ParserTable, nonterminalTransitions, nullable)
 
         // E. Compute 'includes' and 'lookback': one set of nonterminal transitions per
         // nonterminal transition and reduction, respectively, by inspection of each nonterminal
         // transition and the associated production right parts, and by considering
         // nullable nonterminals appropriately.
-        let includes = includes (grammar, lr0ParserTable, nonterminalTransitions, nullable)
+        let lookback, (includes : VertexLabeledSparseDigraph<NonterminalTransition<_>>) =
+            lookbackAndIncludes (grammar, lr0ParserTable, nonterminalTransitions, nullable)
 
         // F. Compute the transitive closure of the 'includes' relation (via the SCC algorithm)
         // to compute 'Follow'. Use the same sets as initialized in part B and completed in part D,
         // both as initial values and as workspace. If a cycle is detected in which a Read set
         // is non-empty, announce that the grammar is not LR(k) for any 'k'.
-        // TODO
+        let Follow =
+            /// A DAG whose vertices are the strongly-connected components (SCCs) of the 'includes' graph.
+            let includesCondensation =
+                Graph.condense includes
+
+            // Compute the Read set for each SCC.
+            // TODO
+
+            // Are any of the SCCs non-trivial? If so, it is allowed iff it's Read set is empty.
+            let nontrivialSCCs =
+                includesCondensation.Vertices
+                |> Set.filter (fun scc ->
+                    Set.count scc > 1)
+
+            // TODO : Check that any non-trivial SCCs have an empty Read set.
+            //
+
+            // Determine which SCCs are reachable from each SCC.
+            let reachableSCCs =
+                Graph.reachable includesCondensation
+
+            //
+
+
+
+            // TODO : Optimize this using the Graph.condense function (which condenses the SCCs
+            // of the graph into individual vertices).
+            // TODO : Fix this so it returns an error if the grammar is not LR(k).
+            includes
+            //
+            |> Graph.reachable
+            //
+            |> Map.map (fun transition reachableTransitions ->
+                /// The Read set for this transition.
+                let transitionDirectRead = Map.find transition Read
+
+                // Union the Read set for this transition with the Read sets
+                // of any other transitions reachable via the 'includes' relation.
+                (transitionDirectRead, reachableTransitions)
+                ||> Set.fold (fun read reachableTransition ->
+                    Map.find reachableTransition Read
+                    |> Set.union read))
 
         // G. Union the Follow sets to form the LA sets according
         // to the 'lookback' links computed in part F.
-        // TODO
+        let lookahead =
+            (Map.empty, lookback.Edges)
+            ||> Set.fold (fun lookahead edge ->
+                match edge with
+                | Choice1Of2 source, Choice2Of2 target ->
+                    let targetLookahead =
+                        let sourceFollow = Map.find source Follow
+                        match Map.tryFind target lookahead with
+                        | None ->
+                            sourceFollow
+                        | Some targetLookahead ->
+                            Set.union targetLookahead sourceFollow
 
-        // H. Check for conflicts; if there are none, the grammar is LALR(1).
-        // TODO
+                    Map.add target targetLookahead lookahead
+                | _ ->
+                    failwith "Invalid edge in the lookback graph.")
 
 //        /// Reduce-state/reduce-rule pairs.
 //        // OPTIMIZE : Filter this set so it only includes state/rule pairs which are actually causing conflicts.
@@ -220,12 +396,15 @@ module Lalr1 =
 //                (reduceStateRulePairs, items)
 //                ||> Set.fold (fun reduceStateRulePairs item ->
 //                    let productionLength = Array.length item.Production
-//                    if int item.Position = productionLength ||                        
+//                    if int item.Position = productionLength ||
 //                        (int item.Position = productionLength - 1 &&
 //                            item.Production.[productionLength - 1] = (Terminal EndOfFile)) then
 //                        Set.add (stateId, (item.Nonterminal, item.Production)) reduceStateRulePairs
 //                    else
 //                        reduceStateRulePairs))
+
+        // H. Check for conflicts; if there are none, the grammar is LALR(1).
+        // TODO
 
         //
         raise <| System.NotImplementedException "Lalr1.ofLr0Table"

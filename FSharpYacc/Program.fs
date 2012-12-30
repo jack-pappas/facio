@@ -356,6 +356,35 @@ let testGrammar =
     Grammar.Augment (testGrammar, 'G')
 
 //
+let testGrammar' =
+    let testGrammar' =
+        let e =
+            [|  [|  Nonterminal 'l'; Terminal "="; Nonterminal 'r' |];
+                [|  Nonterminal 'r' |]; |]
+
+        let l =
+            [|  [|  Terminal "*"; Nonterminal 'r' |];
+                [|  Terminal "n" |]; |]
+
+        let r =
+            [|  [|  Nonterminal 'l' |]; |]
+
+        {
+        Nonterminals =
+            Set.ofArray [| 'e'; 'l'; 'r' |];
+        Terminals =
+            Set.ofArray [| "="; "*"; "n" |];
+        Productions =
+            Map.empty
+            |> Map.add 'e' e
+            |> Map.add 'l' l
+            |> Map.add 'r' r;
+        }
+
+    // Augment the grammar.
+    Grammar.Augment (testGrammar', 'e')
+
+//
 let lr0 =
     FSharpYacc.LR.Lr0.createTable testGrammar
 
