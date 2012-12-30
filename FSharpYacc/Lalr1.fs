@@ -396,7 +396,7 @@ module Lalr1 =
                 |> Set.union lookaheadTokens))
         |> Choice1Of2
 
-    /// Creates an LALR(1) parser table from a grammar and it's LR(0) parser table.
+    /// Creates an LALR(1) parser table from a grammar and it's LR(0) or SLR(1) parser table.
     let ofLr0Table (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
         : Choice<Lr0ParserTable<'Nonterminal, 'Terminal>, string> =
         // Compute the lookahead sets.
