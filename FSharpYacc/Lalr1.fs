@@ -57,21 +57,32 @@ module Lalr1 =
     module Graph = VertexLabeledSparseDigraph
     module BiGraph = VertexLabeledSparseBipartiteDigraph
 
-    //
+    /// A binary relation over a set of elements.
+    // For each 'x', contains the 'y' values such that xRy (given a relation 'R').
+    type Relation<'T when 'T : comparison> =
+        Map<'T, Set<'T>>
+
+    /// Partial function.
+    type PartialFunction<'T, 'U
+        when 'T : comparison
+        and 'U : comparison> =
+        Map<'T, Set<'U>>
+
+    /// The traversal status of an element.
     type private TraversalStatus =
-        //
-        | Untraversed
-        //
-        | Traversing of int // depth
-        //
-        | Traversed
+        /// The element has not yet been traversed.
+        | NotStarted
+        /// Traversal of the element is in-progress.
+        | InProgress of int // depth
+        /// Traversal of the element has been completed.
+        | Completed
 
     //
-    let rec private traverse (x, N, stack, F, X : Set<'T>, R, F' : Map<'T, Set<'U>>)
+    let rec private traverse (x, N, stack, F, X : Set<'T>, R : Relation<'T>, F' : PartialFunction<'T, 'U>)
         : Map<_,_> * Map<_,_> * _ list =
         let stack = x :: stack
         let d = List.length stack
-        let N = Map.add x (Traversing d) N
+        let N = Map.add x (InProgress d) N
         let F =
             let ``F'(x)`` = Map.find x F'
             Map.add x ``F'(x)`` F
@@ -87,7 +98,7 @@ module Lalr1 =
                 ||> Set.fold (fun (F, N, stack) y ->
                     let F, N, stack =
                         match Map.find y N with
-                        | Untraversed ->
+                        | NotStarted ->
                             traverse (y, N, stack, F, X, R, F')
                         | _ ->
                             F, N, stack
@@ -108,14 +119,14 @@ module Lalr1 =
 
         // Walk back up the stack, if necessary.
         match Map.find x N with
-        | Traversing depth when depth = d ->
+        | InProgress depth when depth = d ->
             let ``F(x)`` = Map.find x F
             let rec unwind (F, N, stack) =
                 match stack with
                 | [] ->
                     failwith "Unexpectedly empty stack."
                 | element :: stack ->
-                    let N = Map.add element Traversed N
+                    let N = Map.add element Completed N
                     let F = Map.add element ``F(x)`` F
 
                     if element = x then
@@ -137,17 +148,17 @@ module Lalr1 =
     /// <param name="F'">A function from <paramref name="X"/> to sets.</param>
     /// <returns><c>F</c>, a function from X to sets, such that <c>F x</c> satisfies
     /// equation 4.1 in DeRemer and Pennello's paper.</returns>
-    let private digraph (X : Set<'T>) (R : Map<'T, Set<'T>>) (F' : Map<'T, Set<'U>>) =
+    let private digraph (X : Set<'T>, R : Relation<'T>, F' : PartialFunction<'T, 'U>) =
         //
         let N =
             (Map.empty, X)
             ||> Set.fold (fun N x ->
-                Map.add x Untraversed N)
+                Map.add x NotStarted N)
 
         ((Map.empty, N, []), X)
         ||> Set.fold (fun (F, N, stack) x ->
             match Map.find x N with
-            | Untraversed ->
+            | NotStarted ->
                 traverse (x, N, stack, F, X, R, F')
             | _ ->
                 F, N, stack)
@@ -157,7 +168,7 @@ module Lalr1 =
             #if DEBUG
             let untraversed =
                 X |> Set.filter (fun x ->
-                    match Map.find x N with Traversed -> false | _ -> true)
+                    match Map.find x N with Completed -> false | _ -> true)
             Debug.Assert (
                 Set.isEmpty untraversed,
                 sprintf "There are %i elements of X (Count = %i) which have not been completely traversed." (Set.count untraversed) (Set.count X))
@@ -216,9 +227,9 @@ module Lalr1 =
                         reads))
 
         //
-        digraph nonterminalTransitions reads directRead
+        digraph (nonterminalTransitions, reads, directRead)
 
-    //
+    /// Compute the 'includes' and 'lookback' relations needed to compute the look-ahead sets for a grammar.
     let private lookbackAndIncludes (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>, nonterminalTransitions, nullable) =
         ((Graph.empty, Graph.empty), nonterminalTransitions)
         ||> Set.fold (fun lookback_includes (stateId, nonterminal) ->
@@ -297,7 +308,16 @@ module Lalr1 =
                     // Pass 'lookback' and 'includes' through to the next iteration.
                     lookback, includes))
 
-    //
+    (*  TODO :  Modify the 'lookaheadSets' function to accept another parameter specifying the
+                ambiguous LR(0) states (i.e., the states which need the LA sets in order to
+                resolve their conflicts). By only computing the LA sets which are actually needed,
+                the number of set-union operations is greatly reduced -- leading to improved
+                average-case performance. This optimization can be further leveraged by upgrading
+                the LR(0) parser table to SLR(1) before upgrading to LALR(1); the upgrade to
+                SLR(1) will resolve many/most conflicts so we'll only need to compute LA sets
+                for the remaining states. *)
+
+    /// Computes the LALR(1) look-ahead (LA) sets given a grammar and its LR(0) parser table.
     let private lookaheadSets (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
         : Choice<Map<_,_>, string> =
         (* DeRemer and Penello's algorithm for computing LALR look-ahead sets. *)
@@ -322,27 +342,28 @@ module Lalr1 =
         // nullable nonterminals appropriately.
         let lookback, (includes : VertexLabeledSparseDigraph<NonterminalTransition<_>>) =
             lookbackAndIncludes (grammar, lr0ParserTable, nonterminalTransitions, nullable)
-            
-        // TEST
-        let includes =
-            (Map.empty, includes.Edges)
-            ||> Set.fold (fun includes (source, target) ->
-                let targetIncludes =
-                    match Map.tryFind target includes with
-                    | None ->
-                        Set.singleton source
-                    | Some targetIncludes ->
-                        Set.add source targetIncludes
-
-                Map.add target targetIncludes includes)
 
         // F. Compute the transitive closure of the 'includes' relation (via the SCC algorithm)
         // to compute 'Follow'. Use the same sets as initialized in part B and completed in part D,
         // both as initial values and as workspace. If a cycle is detected in which a Read set
         // is non-empty, announce that the grammar is not LR(k) for any 'k'.
         let Follow =
+            // TEMP : Adapt the 'includes' graph for use with 'digraph'.
+            // TODO : Modify the 'includesAndLookback' function to compute relation maps instead of relation graphs.
+            let includes =
+                (Map.empty, includes.Edges)
+                ||> Set.fold (fun includes (source, target) ->
+                    let targetIncludes =
+                        match Map.tryFind target includes with
+                        | None ->
+                            Set.singleton source
+                        | Some targetIncludes ->
+                            Set.add source targetIncludes
+
+                    Map.add target targetIncludes includes)
+
             // TODO : Fix this so it returns an error if the grammar is not LR(k).
-            digraph nonterminalTransitions includes Read
+            digraph (nonterminalTransitions, includes, Read)
 
         // TEMP : Create a map from the edges of the lookback graph
         // so it's easier to compute the LA sets.
@@ -375,7 +396,7 @@ module Lalr1 =
                 |> Set.union lookaheadTokens))
         |> Choice1Of2
 
-    //
+    /// Creates an LALR(1) parser table from a grammar and it's LR(0) parser table.
     let ofLr0Table (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
         : Choice<Lr0ParserTable<'Nonterminal, 'Terminal>, string> =
         // Compute the lookahead sets.
