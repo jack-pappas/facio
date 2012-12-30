@@ -79,27 +79,32 @@ module Lalr1 =
         // Find the 'y' values related to 'x' and compute xRy
         // by recursively traversing them.
         let F, N, stack =
-            ((F, N, stack), Map.find x R)
-            ||> Set.fold (fun (F, N, stack) y ->
-                let F, N, stack =
-                    if Map.containsKey y N then
-                        F, N, stack
-                    else
-                        traverse (y, N, stack, F, X, R, F')
+            match Map.tryFind x R with
+            | None ->
+                F, N, stack
+            | Some ``R(x)`` ->
+                ((F, N, stack), ``R(x)``)
+                ||> Set.fold (fun (F, N, stack) y ->
+                    let F, N, stack =
+                        match Map.find y N with
+                        | Untraversed ->
+                            traverse (y, N, stack, F, X, R, F')
+                        | _ ->
+                            F, N, stack
 
-                let N =
-                    let ``N(x)`` = Map.find x N
-                    let ``N(y)`` = Map.find y N
-                    Map.add x (min ``N(x)`` ``N(y)``) N
+                    let N =
+                        let ``N(x)`` = Map.find x N
+                        let ``N(y)`` = Map.find y N
+                        Map.add x (min ``N(x)`` ``N(y)``) N
 
-                let F =
-                    match Map.tryFind y F with
-                    | None -> F
-                    | Some ``F(y)`` ->
-                        let ``F(x)`` = Map.find x F
-                        Map.add x (Set.union ``F(x)`` ``F(y)``) F
+                    let F =
+                        match Map.tryFind y F with
+                        | None -> F
+                        | Some ``F(y)`` ->
+                            let ``F(x)`` = Map.find x F
+                            Map.add x (Set.union ``F(x)`` ``F(y)``) F
 
-                F, N, stack)
+                    F, N, stack)
 
         // Walk back up the stack, if necessary.
         match Map.find x N with
@@ -141,16 +146,22 @@ module Lalr1 =
 
         ((Map.empty, N, []), X)
         ||> Set.fold (fun (F, N, stack) x ->
-            if Map.containsKey x N then
-                F, N, stack
-            else
-                traverse (x, N, stack, F, X, R, F'))
+            match Map.find x N with
+            | Untraversed ->
+                traverse (x, N, stack, F, X, R, F')
+            | _ ->
+                F, N, stack)
         // Discard the intermediate variables
         |> fun (F, N, _) ->
             // DEBUG : Make sure all set elements have been completely traversed.
+            #if DEBUG
+            let untraversed =
+                X |> Set.filter (fun x ->
+                    match Map.find x N with Traversed -> false | _ -> true)
             Debug.Assert (
-                Set.forall (fun x -> match Map.find x N with Traversed -> true | _ -> false) X,
-                "Some elements of X have not been completely traversed.")
+                Set.isEmpty untraversed,
+                sprintf "There are %i elements of X (Count = %i) which have not been completely traversed." (Set.count untraversed) (Set.count X))
+            #endif
 
             // Return the computed relation.
             F
@@ -181,39 +192,31 @@ module Lalr1 =
         // by inspection of the transition's successor state.
         let directRead = directRead lr0ParserTable
 
-        // Add the nonterminal transitions to the graph.
-        let reads =
-            (Graph.empty, nonterminalTransitions)
-            ||> Set.fold (fun reads transition ->
-                Graph.addVertex transition reads)
-
         // C. Compute 'reads'. One set of nonterminal transitions per nonterminal transition,
         // by inspection of the successor state of the later transition.
-        (reads, lr0ParserTable.GotoTable)
-        ||> Map.fold (fun reads transition succStateId ->
-            (reads, lr0ParserTable.GotoTable)
-            ||> Map.fold (fun reads ((stateId, nonterminal) as succTransition) _ ->
-                // We only care about successors of the original transition;
-                // also, the nonterminal for this (successor) transition must be nullable.
-                if stateId = succStateId &&
-                    Map.find nonterminal nullable then
-                    // Add the edge to the 'reads' graph.
-                    Graph.addEdge transition succTransition reads
-                else
-                    reads))
-        //
-        |> Graph.reachable
-        //
-        |> Map.map (fun transition reachableTransitions ->
-            /// The direct-read (DR) set for this transition.
-            let transitionDirectRead = Map.find transition directRead
+        let reads =
+            (Map.empty, lr0ParserTable.GotoTable)
+            ||> Map.fold (fun reads transition succStateId ->
+                (reads, lr0ParserTable.GotoTable)
+                ||> Map.fold (fun reads ((stateId, nonterminal) as succTransition) _ ->
+                    // We only care about successors of the original transition;
+                    // also, the nonterminal for this (successor) transition must be nullable.
+                    if stateId = succStateId &&
+                        Map.find nonterminal nullable then
+                        // Add the edge to the adjacency map representing the induced 'reads' graph.
+                        let readsTransition =
+                            match Map.tryFind transition reads with
+                            | None ->
+                                Set.singleton succTransition
+                            | Some readsTransition ->
+                                Set.add succTransition readsTransition
 
-            // Union the DR set for this transition with the DR sets
-            // of any other transitions reachable via the 'reads' relation.
-            (transitionDirectRead, reachableTransitions)
-            ||> Set.fold (fun read reachableTransition ->
-                Map.find reachableTransition directRead
-                |> Set.union read))
+                        Map.add transition readsTransition reads
+                    else
+                        reads))
+
+        //
+        digraph nonterminalTransitions reads directRead
 
     //
     let private lookbackAndIncludes (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>, nonterminalTransitions, nullable) =
@@ -295,8 +298,8 @@ module Lalr1 =
                     lookback, includes))
 
     //
-    let ofLr0Table (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
-        : Choice<Lr0ParserTable<'Nonterminal, 'Terminal>, string> =
+    let private lookaheadSets (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
+        : Choice<Map<_,_>, string> =
         (* DeRemer and Penello's algorithm for computing LALR look-ahead sets. *)
 
         /// Denotes which nonterminals are nullable.
@@ -319,94 +322,75 @@ module Lalr1 =
         // nullable nonterminals appropriately.
         let lookback, (includes : VertexLabeledSparseDigraph<NonterminalTransition<_>>) =
             lookbackAndIncludes (grammar, lr0ParserTable, nonterminalTransitions, nullable)
+            
+        // TEST
+        let includes =
+            (Map.empty, includes.Edges)
+            ||> Set.fold (fun includes (source, target) ->
+                let targetIncludes =
+                    match Map.tryFind target includes with
+                    | None ->
+                        Set.singleton source
+                    | Some targetIncludes ->
+                        Set.add source targetIncludes
+
+                Map.add target targetIncludes includes)
 
         // F. Compute the transitive closure of the 'includes' relation (via the SCC algorithm)
         // to compute 'Follow'. Use the same sets as initialized in part B and completed in part D,
         // both as initial values and as workspace. If a cycle is detected in which a Read set
         // is non-empty, announce that the grammar is not LR(k) for any 'k'.
         let Follow =
-            /// A DAG whose vertices are the strongly-connected components (SCCs) of the 'includes' graph.
-            let includesCondensation =
-                Graph.condense includes
-
-            // Compute the Read set for each SCC.
-            // TODO
-
-            // Are any of the SCCs non-trivial? If so, it is allowed iff it's Read set is empty.
-            let nontrivialSCCs =
-                includesCondensation.Vertices
-                |> Set.filter (fun scc ->
-                    Set.count scc > 1)
-
-            // TODO : Check that any non-trivial SCCs have an empty Read set.
-            //
-
-            // Determine which SCCs are reachable from each SCC.
-            let reachableSCCs =
-                Graph.reachable includesCondensation
-
-            //
-
-
-
-            // TODO : Optimize this using the Graph.condense function (which condenses the SCCs
-            // of the graph into individual vertices).
             // TODO : Fix this so it returns an error if the grammar is not LR(k).
-            includes
-            //
-            |> Graph.reachable
-            //
-            |> Map.map (fun transition reachableTransitions ->
-                /// The Read set for this transition.
-                let transitionDirectRead = Map.find transition Read
+            digraph nonterminalTransitions includes Read
 
-                // Union the Read set for this transition with the Read sets
-                // of any other transitions reachable via the 'includes' relation.
-                (transitionDirectRead, reachableTransitions)
-                ||> Set.fold (fun read reachableTransition ->
-                    Map.find reachableTransition Read
-                    |> Set.union read))
+        // TEMP : Create a map from the edges of the lookback graph
+        // so it's easier to compute the LA sets.
+        // TODO : Modify the 'includesAndLookback' function to
+        // create relation maps instead of graphs.
+        let lookback =
+            (Map.empty, lookback.Edges)
+            ||> Set.fold (fun lookback edge ->
+                match edge with
+                | Choice1Of2 (source : NonterminalTransition<_>), Choice2Of2 target ->
+                    let targetSources =
+                        match Map.tryFind target lookback with
+                        | None ->
+                            Set.singleton source
+                        | Some targetSources ->
+                            Set.add source targetSources
+
+                    Map.add target targetSources lookback
+                    
+                | _ ->
+                    failwith "Invalid edge.")
 
         // G. Union the Follow sets to form the LA sets according
         // to the 'lookback' links computed in part F.
-        let lookahead =
-            (Map.empty, lookback.Edges)
-            ||> Set.fold (fun lookahead edge ->
-                match edge with
-                | Choice1Of2 source, Choice2Of2 target ->
-                    let targetLookahead =
-                        let sourceFollow = Map.find source Follow
-                        match Map.tryFind target lookahead with
-                        | None ->
-                            sourceFollow
-                        | Some targetLookahead ->
-                            Set.union targetLookahead sourceFollow
+        lookback
+        |> Map.map (fun _ transitions ->
+            (Set.empty, transitions)
+            ||> Set.fold (fun lookaheadTokens transition ->
+                Map.find transition Follow
+                |> Set.union lookaheadTokens))
+        |> Choice1Of2
 
-                    Map.add target targetLookahead lookahead
-                | _ ->
-                    failwith "Invalid edge in the lookback graph.")
+    //
+    let ofLr0Table (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
+        : Choice<Lr0ParserTable<'Nonterminal, 'Terminal>, string> =
+        // Compute the lookahead sets.
+        // TODO : Simplify this by using the Either/Choice workflow.
+        match lookaheadSets (grammar, lr0ParserTable) with
+        | Choice2Of2 error ->
+            Choice2Of2 error
+        | Choice1Of2 lookaheadSets ->
+            // Use the LALR(1) lookahead sets to resolve conflicts in the LR(0) parser table.
+            // TODO
 
-//        /// Reduce-state/reduce-rule pairs.
-//        // OPTIMIZE : Filter this set so it only includes state/rule pairs which are actually causing conflicts.
-//        // Most of the pairs in the LR(0) automata should NOT need to be computed, so filtering the set will
-//        // greatly reduce the number of calculations which need to be performed.
-//        let reduceStateRulePairs =
-//            (Set.empty, lr0ParserTable.ParserStates)
-//            ||> Map.fold (fun reduceStateRulePairs stateId items ->
-//                (reduceStateRulePairs, items)
-//                ||> Set.fold (fun reduceStateRulePairs item ->
-//                    let productionLength = Array.length item.Production
-//                    if int item.Position = productionLength ||
-//                        (int item.Position = productionLength - 1 &&
-//                            item.Production.[productionLength - 1] = (Terminal EndOfFile)) then
-//                        Set.add (stateId, (item.Nonterminal, item.Production)) reduceStateRulePairs
-//                    else
-//                        reduceStateRulePairs))
+            // H. Check for conflicts; if there are none, the grammar is LALR(1).
+            // TODO
 
-        // H. Check for conflicts; if there are none, the grammar is LALR(1).
-        // TODO
-
-        //
-        raise <| System.NotImplementedException "Lalr1.ofLr0Table"
+            //
+            raise <| System.NotImplementedException "Lalr1.ofLr0Table"
 
 
