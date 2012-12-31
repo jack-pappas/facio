@@ -24,11 +24,7 @@ open FSharpYacc.Graph
 /// of the grammar's nonterminals to resolve some conflicts automatically.</remarks>
 [<RequireQualifiedAccess>]
 module internal Slr1 =
-    (* TODO :   This code could be greatly simplified -- we could just construct the LR(0)
-                parser table, then go back through it and remove any Reduce actions which
-                would NOT have been added by SLR(1). This would also serve as a nice way to
-                show how SLR(1) is like LR(0) but "upgraded" with a simple conflict-resolving strategy. *)
-
+    (*
     //
     let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) predictiveSets (tableGenState : Lr0TableGenState<_,_>) : Lr0ParserTable<_,_> =
         // Preconditions
@@ -52,7 +48,7 @@ module internal Slr1 =
                             in the grammar, we only create them for the tokens in the FOLLOW set
                             of this item's nonterminal. *)
 
-                        let tokens = Map.find item.Nonterminal predictiveSets.Follow                            
+                        let tokens = Map.find item.Nonterminal predictiveSets.Follow
 
                         // Add 'reduce' actions to the parser table.
                         Lr0.TableGenState.reduce stateId reductionRuleId tokens tableGenState
@@ -142,5 +138,66 @@ module internal Slr1 =
 
         // Create the parser table.
         createTableImpl grammar predictiveSets initialTableGenState
+        *)
+
+    /// Given a grammar and it's LR(0) parser table, upgrades the table to SLR(1).
+    let upgrade (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
+        /// Predictive sets of the augmented grammar.
+        let predictiveSets = PredictiveSets.ofGrammar grammar
+
+        // Upgrade the LR(0) parser table to SLR(1).
+        // If the table has already been upgraded to SLR(1) (or something
+        // more powerful, like LALR(1)), this has no effect.
+        (lr0ParserTable, lr0ParserTable.ParserStates)
+        ||> Map.fold (fun parserTable stateId items ->
+            (parserTable, items)
+            ||> Set.fold (fun parserTable item ->
+                // If the parser position is at the end of this item's production,
+                // remove the Reduce actions from the ACTION table for any tokens
+                // which aren't in this nonterminal's FOLLOW set.
+                if int item.Position = Array.length item.Production then
+                    /// The rule nonterminal's FOLLOW set.
+                    let nonterminalFollow =
+                        Map.find item.Nonterminal predictiveSets.Follow
+
+                    // Remove the unnecessary Reduce actions, thereby resolving some conflicts.
+                    let actionTable =
+                        let action =
+                            parserTable.ReductionRulesById
+                            // OPTIMIZE : This lookup is slow (O(n)) -- we should use a Bimap instead.
+                            |> Map.pick (fun ruleId key ->
+                                if key = (item.Nonterminal, item.Production) then
+                                    Some ruleId
+                                else None)
+                            |> LrParserAction.Reduce
+                        (parserTable.ActionTable, grammar.Terminals)
+                        ||> Set.fold (fun actionTable terminal ->
+                            // Is this terminal in the nonterminal's FOLLOW set?
+                            if Set.contains terminal nonterminalFollow then
+                                actionTable
+                            else
+                                //
+                                let tableKey = stateId, terminal
+
+                                // Don't need to do anything if there's no entry for this key;
+                                // it may mean that the table has already been upgraded to SLR(1).
+                                match Map.tryFind tableKey actionTable with
+                                | None ->
+                                    actionTable
+                                | Some entry ->
+                                    // Remove the Reduce action from the action set.
+                                    let entry = Set.remove action entry
+
+                                    // If the entry is now empty, remove it from the ACTION table;
+                                    // otherwise, update the entry in the ACTION table.
+                                    if Set.isEmpty entry then
+                                        Map.remove tableKey actionTable
+                                    else
+                                        Map.add tableKey entry actionTable)
+
+                    // Pass the modified parser table to the next iteration.
+                    { parserTable with ActionTable = actionTable; }
+                else
+                    parserTable))
 
 
