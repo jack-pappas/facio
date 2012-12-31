@@ -265,143 +265,51 @@ open FSharpYacc.Ast
 //
 
 
-//(* TEST : PSPG generation *)
-//let figure4 =
-//    let figure4 =
-//        let A =
-//            [|  [| Symbol.Nonterminal 'B' |];
-//                [| Symbol.Nonterminal 'C' |]; |]
-//
-//        let B =
-//            [| [| Symbol.Terminal "t1" |] |]
-//
-//        let C =
-//            [|  [| Symbol.Nonterminal 'B'; Symbol.Terminal "t2" |];
-//                [| Symbol.Terminal "t3" |]; |]
-//
-//        {
-//        Nonterminals =
-//            Set.ofArray [| 'A'; 'B'; 'C' |];
-//        Terminals =
-//            Set.ofArray [| "t1"; "t2"; "t3" |];
-//        Productions =
-//            Map.empty
-//            |> Map.add 'A' A
-//            |> Map.add 'B' B
-//            |> Map.add 'C' C;
-//        }
-//
-//    // Augment the grammar.
-//    Grammar.Augment (figure4, 'A')
+(* TEST : PSPG generation *)
+/// Figure 4, from "Locating Free Positions in LR(k) Grammars"
+let figure4 =
+    let figure4 =
+        let A =
+            [|  [| Symbol.Nonterminal 'B' |];
+                [| Symbol.Nonterminal 'C' |]; |]
 
+        let B =
+            [| [| Symbol.Terminal "t1" |] |]
 
-(* TEST :   LALR Look-ahead Sets *)
-//
-let G2 =
-    let G2 =
-        let S =
-            [|  [| Nonterminal 'L'; Terminal "="; Nonterminal 'R' |];
-                [| Nonterminal 'R' |]; |]
-
-        let L =
-            [|  [| Terminal "*"; Nonterminal 'R' |];
-                [| Terminal "id" |]; |]
-            
-        let R =
-            [|  [| Nonterminal 'L' |]; |]
+        let C =
+            [|  [| Symbol.Nonterminal 'B'; Symbol.Terminal "t2" |];
+                [| Symbol.Terminal "t3" |]; |]
 
         {
         Nonterminals =
-            Set.ofArray [| 'S'; 'L'; 'R' |];
+            Set.ofArray [| 'A'; 'B'; 'C' |];
         Terminals =
-            Set.ofArray [| "="; "*"; "id" |];
+            Set.ofArray [| "t1"; "t2"; "t3" |];
         Productions =
             Map.empty
-            |> Map.add 'S' S
-            |> Map.add 'L' L
-            |> Map.add 'R' R;
+            |> Map.add 'A' A
+            |> Map.add 'B' B
+            |> Map.add 'C' C;
         }
 
     // Augment the grammar.
-    Grammar.Augment (G2, 'S')
-
-//
-let testGrammar =
-    let testGrammar =
-        let G =
-            [|  [| Nonterminal 'E'; Terminal "="; Nonterminal 'E' |];
-                [| Terminal "f" |]; |]
-
-        let E =
-            [|  [| Nonterminal 'T' |];
-                [| Nonterminal 'E'; Terminal "+"; Nonterminal 'T' |]; |]
-            
-        let T =
-            [|  [| Terminal "f" |];
-                [| Nonterminal 'T'; Terminal "*"; Terminal "f" |]; |]
-
-        {
-        Nonterminals =
-            Set.ofArray [| 'G'; 'E'; 'T' |];
-        Terminals =
-            Set.ofArray [| "f"; "+"; "*"; "=" |];
-        Productions =
-            Map.empty
-            |> Map.add 'G' G
-            |> Map.add 'E' E
-            |> Map.add 'T' T;
-        }
-
-    // Augment the grammar.
-    Grammar.Augment (testGrammar, 'G')
-
-//
-let testGrammar' =
-    let testGrammar' =
-        let e =
-            [|  [|  Nonterminal 'l'; Terminal "="; Nonterminal 'r' |];
-                [|  Nonterminal 'r' |]; |]
-
-        let l =
-            [|  [|  Terminal "*"; Nonterminal 'r' |];
-                [|  Terminal "n" |]; |]
-
-        let r =
-            [|  [|  Nonterminal 'l' |]; |]
-
-        {
-        Nonterminals =
-            Set.ofArray [| 'e'; 'l'; 'r' |];
-        Terminals =
-            Set.ofArray [| "="; "*"; "n" |];
-        Productions =
-            Map.empty
-            |> Map.add 'e' e
-            |> Map.add 'l' l
-            |> Map.add 'r' r;
-        }
-
-    // Augment the grammar.
-    Grammar.Augment (testGrammar', 'e')
+    Grammar.Augment (figure4, 'A')
 
 //
 let lr0 =
-    Graham.LR.Lr0.createTable testGrammar
+    Graham.LR.Lr0.createTable figure4
 
 //
-let lalr1 =
-    Graham.LR.Lalr1.upgrade (testGrammar, lr0)
+match Graham.LR.Lalr1.upgrade (figure4, lr0) with
+| Choice2Of2 errMsg ->
+    printfn "Error: %s" errMsg
+| Choice1Of2 lalr1 ->
+    // The free positions of the grammar
+    let freePositions =
+        Graham.Analysis.FreePositions.ofGrammar (figure4, lalr1)
 
+    ()
 
-//// The free positions of the grammar
-//let internal freePositions =
-//    figure4
-//    // Conflicts must be resolved before finding
-//    // free positions of the grammar.
-//
-//    |> Analysis.FreePositions.ofAugmentedGrammar
-//    // TEMP
-//    |> ignore
 
 
 printfn "Press any key to exit..."
