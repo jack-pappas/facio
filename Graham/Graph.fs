@@ -307,15 +307,23 @@ module VertexLabeledSparseDigraph =
         // which checks only for reachability (Warshall's algorithm).
         let vertices = graph.Vertices
 
-        /// The initial map, containing an empty reachable-set for each vertex.
-        // NOTE : This is primarily to ensure that the map contains an entry
-        // for each vertex; it also avoids a branch in the innermost loop.
-        let initialMap =
-            (Map.empty, vertices)
-            ||> Set.fold (fun initialMap vertex ->
-                Map.add vertex Set.empty initialMap)
+        // The initial map representing the "reachable from" relation.
+        let reachableFrom =
+            let reachableFrom =
+                (Map.empty, vertices)
+                ||> Set.fold (fun reachableFrom vertex ->
+                    Map.add vertex Set.empty reachableFrom)
 
-        (initialMap, vertices)
+            (reachableFrom, graph.Edges)
+            ||> Set.fold (fun reachableFrom (source, target) ->
+                let targets =
+                    Map.find source reachableFrom
+                    |> Set.add target
+
+                Map.add source targets reachableFrom)
+
+        //
+        (reachableFrom, vertices)
         ||> Set.fold (fun reachableFrom k ->
             (reachableFrom, vertices)
             ||> Set.fold (fun reachableFrom i ->
