@@ -13,15 +13,14 @@ open Grammars
 open NUnit.Framework
 open FsUnit
 
-open Graham
-open Ast
-open Predictive
-open LR
+open Graham.Grammar
+open Graham.Analysis
+open Graham.LR
 
 
 [<TestCase>]
 let ``LR(0) table for Grammar 3.20`` () =
-    let table = LR.Lr0.createTable Appel.``Grammar 3.20``
+    let table = Lr0.createTable Appel.``Grammar 3.20``
     
     let expectedTable =
         Map.empty

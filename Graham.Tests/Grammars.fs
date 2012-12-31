@@ -9,8 +9,7 @@ See LICENSE.TXT for licensing details.
 /// Test grammars.
 module Graham.Tests.Grammars
 
-open Graham
-open Ast
+open Graham.Grammar
 
 
 //

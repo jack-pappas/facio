@@ -13,9 +13,8 @@ open Grammars
 open NUnit.Framework
 open FsUnit
 
-open Graham
-open Ast
-open Predictive
+open Graham.Grammar
+open Graham.Analysis
 
 
 [<TestCase>]

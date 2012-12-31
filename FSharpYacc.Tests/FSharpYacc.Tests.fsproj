@@ -51,8 +51,6 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Numerics" />
     <ProjectReference Include="..\FSharpYacc\FSharpYacc.fsproj">
       <Name>FSharpYacc</Name>
       <Project>{1a562247-7b57-45df-9bab-cdfa6202a6b4}</Project>
