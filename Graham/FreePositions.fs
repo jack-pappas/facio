@@ -27,6 +27,14 @@ type internal ParserStatePositionGraphAction<'Nonterminal, 'Terminal
     // note that (Reduce Start) is the "Accept" action.
     | Reduce of 'Nonterminal
 
+    /// <inherit />
+    override this.ToString () =
+        match this with
+        | Shift terminal ->
+            "Shift " + terminal.ToString ()
+        | Reduce nonterminal ->
+            "Reduce " + nonterminal.ToString ()
+
 /// A node in a Parser State Position Graph (PSPG).
 type internal ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
@@ -36,6 +44,14 @@ type internal ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead
     | Item of LrItem<'Nonterminal, 'Terminal, 'Lookahead>
     /// A parser action.
     | Action of ParserStatePositionGraphAction<'Nonterminal, 'Terminal>
+
+    /// <inherit />
+    override this.ToString () =
+        match this with
+        | Item item ->
+            item.ToString ()
+        | Action action ->
+            action.ToString ()
 
 /// <summary>A Parser State Position Graph (PSPG).</summary>
 /// <remarks>
@@ -225,10 +241,7 @@ module FreePositions =
                     Set.add item nonfreeItems)
 
     //
-    let ofAugmentedGrammar (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
-        //
-        let lr0ParserTable = Lr0.createTable grammar
-
+    let ofGrammar (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
         // Compute the parser state position graphs of the LR(0) parser states of the augmented grammar.
         let positionGraphs = positionGraphs grammar lr0ParserTable
 
