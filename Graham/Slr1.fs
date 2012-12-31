@@ -7,13 +7,13 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-namespace FSharpYacc.LR
+namespace Graham.LR
 
 open LanguagePrimitives
-open FSharpYacc.Grammar
+open Graham.Grammar
 open AugmentedPatterns
-open FSharpYacc.Analysis
-open FSharpYacc.Graph
+open Graham.Analysis
+open Graham.Graph
 
 
 /// <summary>SLR(1) parser table generator.</summary>
@@ -23,7 +23,7 @@ open FSharpYacc.Graph
 /// given grammar; the only difference is that SLR(1) uses the FOLLOW sets
 /// of the grammar's nonterminals to resolve some conflicts automatically.</remarks>
 [<RequireQualifiedAccess>]
-module internal Slr1 =
+module Slr1 =
     (*
     //
     let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) predictiveSets (tableGenState : Lr0TableGenState<_,_>) : Lr0ParserTable<_,_> =

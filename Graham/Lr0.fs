@@ -7,29 +7,29 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-namespace FSharpYacc.LR
+namespace Graham.LR
 
 open LanguagePrimitives
-open FSharpYacc.Grammar
+open Graham.Grammar
 open AugmentedPatterns
-open FSharpYacc.Analysis
-open FSharpYacc.Graph
+open Graham.Analysis
+open Graham.Graph
 
 
 /// An LR(0) item.
-type internal Lr0Item<'Nonterminal, 'Terminal
+type Lr0Item<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     LrItem<'Nonterminal, 'Terminal, unit>
 
 /// An LR(0) parser state -- i.e., a set of LR(0) items.
-type internal Lr0ParserState<'Nonterminal, 'Terminal
+type Lr0ParserState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     LrParserState<'Nonterminal, 'Terminal, unit>
 
 /// LR(0) parser table generation state.
-type internal Lr0TableGenState<'Nonterminal, 'Terminal
+type Lr0TableGenState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     LrTableGenState<'Nonterminal, 'Terminal, unit>
@@ -45,7 +45,7 @@ type Lr0ParserTable<'Nonterminal, 'Terminal
 
 /// LR(0) parser tables.
 [<RequireQualifiedAccess>]
-module internal Lr0 =
+module Lr0 =
     //
     [<RequireQualifiedAccess>]
     module ParserState =

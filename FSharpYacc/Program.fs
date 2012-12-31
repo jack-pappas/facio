@@ -39,7 +39,7 @@ module private AssemblyInfo =
 
 
 // TEMP : Remove these 'open' declarations once the test specification is compiled correctly.
-open FSharpYacc.Grammar
+open Graham.Grammar
 open FSharpYacc.Ast
 
 
@@ -386,11 +386,11 @@ let testGrammar' =
 
 //
 let lr0 =
-    FSharpYacc.LR.Lr0.createTable testGrammar
+    Graham.LR.Lr0.createTable testGrammar
 
 //
 let lalr1 =
-    FSharpYacc.LR.Lalr1.upgrade (testGrammar, lr0)
+    Graham.LR.Lalr1.upgrade (testGrammar, lr0)
 
 
 //// The free positions of the grammar

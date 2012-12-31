@@ -7,7 +7,7 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-namespace FSharpYacc.Grammar
+namespace Graham.Grammar
 
 
 /// A nonterminal or the start symbol.

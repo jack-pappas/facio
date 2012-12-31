@@ -7,7 +7,7 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-namespace FSharpYacc.Graph
+namespace Graham.Graph
 
 open System.Diagnostics
 
@@ -16,7 +16,7 @@ open System.Diagnostics
 [<DebuggerDisplay(
     "Vertices = {VertexCount}, \
      Edges = {EdgeCount}")>]
-type internal VertexLabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex when 'Vertex : comparison>
+type VertexLabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex when 'Vertex : comparison>
         private (vertices : Set<'Vertex>, edges : Set<'Vertex * 'Vertex>) =
     //
     static member internal Empty
@@ -144,7 +144,7 @@ type internal VertexLabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex when '
 
 /// Functions on VertexLabeledSparseDigraphs.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module internal VertexLabeledSparseDigraph =
+module VertexLabeledSparseDigraph =
     /// The empty graph.
     [<GeneralizableValue>]
     let empty<'Vertex when 'Vertex : comparison> =
@@ -605,7 +605,7 @@ type VertexLabeledSparseBipartiteDigraph<'SourceVertex, 'TargetVertex
 
 /// Functions on VertexLabeledSparseBipartiteDigraph.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module internal VertexLabeledSparseBipartiteDigraph =
+module VertexLabeledSparseBipartiteDigraph =
     /// The empty graph.
     [<GeneralizableValue>]
     let empty<'SourceVertex, 'TargetVertex when 'SourceVertex : comparison and 'TargetVertex : comparison> =

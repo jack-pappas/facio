@@ -7,14 +7,14 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-namespace FSharpYacc.LR
+namespace Graham.LR
 
 open System.Diagnostics
 open LanguagePrimitives
-open FSharpYacc.Grammar
+open Graham.Grammar
 open AugmentedPatterns
-open FSharpYacc.Analysis
-open FSharpYacc.Graph
+open Graham.Analysis
+open Graham.Graph
 
 
 /// <summary>LALR(1) parser table generator.</summary>

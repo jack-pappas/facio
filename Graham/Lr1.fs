@@ -7,29 +7,29 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-namespace FSharpYacc.LR
+namespace Graham.LR
 
 open LanguagePrimitives
-open FSharpYacc.Grammar
+open Graham.Grammar
 open AugmentedPatterns
-open FSharpYacc.Analysis
-open FSharpYacc.Graph
+open Graham.Analysis
+open Graham.Graph
 
 
 /// An LR(1) item.
-type internal Lr1Item<'Nonterminal, 'Terminal
+type Lr1Item<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     LrItem<'Nonterminal, 'Terminal, 'Terminal>
 
 /// An LR(1) parser state -- i.e., a set of LR(1) items.
-type internal Lr1ParserState<'Nonterminal, 'Terminal
+type Lr1ParserState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     LrParserState<'Nonterminal, 'Terminal, 'Terminal>
 
 /// LR(1) parser table generation state.
-type internal Lr1TableGenState<'Nonterminal, 'Terminal
+type Lr1TableGenState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     LrTableGenState<'Nonterminal, 'Terminal, 'Terminal>
@@ -45,7 +45,7 @@ type Lr1ParserTable<'Nonterminal, 'Terminal
 
 /// LR(1) parser tables.
 [<RequireQualifiedAccess>]
-module internal Lr1 =
+module Lr1 =
     /// Functions for manipulating LR(1) parser items.
     [<RequireQualifiedAccess>]
     module Item =

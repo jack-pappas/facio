@@ -7,13 +7,13 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-namespace FSharpYacc.Analysis
+namespace Graham.Analysis
 
 open LanguagePrimitives
-open FSharpYacc.Grammar
+open Graham.Grammar
 open AugmentedPatterns
-open FSharpYacc.Graph
-open FSharpYacc.LR
+open Graham.Graph
+open Graham.LR
 
 
 //
@@ -53,7 +53,7 @@ type internal ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead
 
 //
 [<RequireQualifiedAccess>]
-module internal FreePositions =
+module FreePositions =
     module Graph = VertexLabeledSparseDigraph
 
     /// Computes the Parser State Position Graph of an LR(0) parser state.

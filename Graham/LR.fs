@@ -7,17 +7,17 @@ See LICENSE.TXT for licensing details.
 *)
 
 /// Parser table generators for LR(k) grammars.
-namespace FSharpYacc.LR
+namespace Graham.LR
 
 open LanguagePrimitives
-open FSharpYacc.Grammar
+open Graham.Grammar
 open AugmentedPatterns
-open FSharpYacc.Analysis
-open FSharpYacc.Graph
+open Graham.Analysis
+open Graham.Graph
 
 
 /// An LR(k) item.
-type internal LrItem<'Nonterminal, 'Terminal, 'Lookahead
+type LrItem<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
     and 'Lookahead : comparison> = {
@@ -57,7 +57,7 @@ type internal LrItem<'Nonterminal, 'Terminal, 'Lookahead
         sb.ToString ()
 
 /// An LR(k) parser state -- i.e., a set of LR(k) items.
-type internal LrParserState<'Nonterminal, 'Terminal, 'Lookahead
+type LrParserState<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
     and 'Lookahead : comparison> =
@@ -84,7 +84,7 @@ type LrParserAction =
             "a"
 
 /// LR(k) parser table generation state.
-type internal LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
+type LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
     and 'Lookahead : comparison> = {
@@ -106,7 +106,7 @@ type internal LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
 
 /// Functions which use the State monad to manipulate an LR(k) table-generation state.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module internal LrTableGenState =
+module LrTableGenState =
     module Graph = LabeledSparseDigraph
 
     /// Returns an empty Lr0TableGenState with the given

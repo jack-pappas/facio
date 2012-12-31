@@ -9,7 +9,7 @@ See LICENSE.TXT for licensing details.
 /// The types representing the fsharpyacc abstract syntax tree (AST).
 namespace FSharpYacc.Ast
 
-open FSharpYacc.Grammar
+open Graham.Grammar
 
 
 /// A fragment of F# code.

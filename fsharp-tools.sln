@@ -23,6 +23,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{0F12E0
 		Common\CommonAssemblyInfo.fs = Common\CommonAssemblyInfo.fs
 	EndProjectSection
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Graham", "Graham\Graham.fsproj", "{AB802CFD-4EA9-4F11-ADE3-F2F5518BFD52}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,6 +47,10 @@ Global
 		{64594E06-1750-4472-BBB0-299C4D39CD10}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{64594E06-1750-4472-BBB0-299C4D39CD10}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{64594E06-1750-4472-BBB0-299C4D39CD10}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AB802CFD-4EA9-4F11-ADE3-F2F5518BFD52}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AB802CFD-4EA9-4F11-ADE3-F2F5518BFD52}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AB802CFD-4EA9-4F11-ADE3-F2F5518BFD52}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AB802CFD-4EA9-4F11-ADE3-F2F5518BFD52}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

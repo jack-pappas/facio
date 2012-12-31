@@ -7,10 +7,10 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-namespace FSharpYacc.LeftCorner
+namespace Graham.LeftCorner
 
-open FSharpYacc.Grammar
-open FSharpYacc.Analysis
+open Graham.Grammar
+open Graham.Analysis
 
 
 /// An action which manipulates the state of the
@@ -43,7 +43,7 @@ type LeftCornerParserAction =
 //    let [<Literal>] rev_turnstile = '\u22a3'
 
 /// A Left-Corner parser item.
-type internal LeftCornerItem<'Nonterminal, 'Terminal
+type LeftCornerItem<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> = {
     //
@@ -75,7 +75,7 @@ type internal LeftCornerItem<'Nonterminal, 'Terminal
         sb.ToString ()
 
 /// A Left-Corner parser state -- i.e., a set of Left-Corner items.
-type internal LeftCornerParserState<'Nonterminal, 'Terminal
+type LeftCornerParserState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     Set<LeftCornerItem<'Nonterminal, 'Terminal>>
@@ -97,7 +97,7 @@ type LeftCornerParserTable<'Nonterminal, 'Terminal
 /// Parser-generators for left-corner grammars.
 [<RequireQualifiedAccess>]
 module internal LeftCorner =
-    open FSharpYacc.LR
+    open Graham.LR
 
     /// Adapts a LALR(1) parser table into an LC(1) parser table.
     let ofLalr1 (lalr1Table : LrParserTable<'Nonterminal, 'Terminal, 'Terminal>) =

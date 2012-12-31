@@ -7,9 +7,9 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-namespace FSharpYacc.Analysis
+namespace Graham.Analysis
 
-open FSharpYacc.Grammar
+open Graham.Grammar
 
 
 //
@@ -35,7 +35,7 @@ module PredictiveSets =
                     avoid re-processing values which haven't changed. *)
 
     //
-    let internal computeNullable (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) =
+    let computeNullable (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) =
         /// Implementation of the nullable-map-computing algorithm.
         let rec computeNullable (nullable : Map<'Nonterminal, bool>) =
             let nullable, updated =
@@ -94,7 +94,7 @@ module PredictiveSets =
         result
 
     //
-    let internal computeFirst (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>, nullable : Map<'Nonterminal, bool>) =
+    let computeFirst (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>, nullable : Map<'Nonterminal, bool>) =
         /// Implementation of the algorithm for computing the FIRST sets of the nonterminals.
         let rec computeFirst (firstSets : Map<'Nonterminal, Set<'Terminal>>) =
             let firstSets, updated =
@@ -147,7 +147,7 @@ module PredictiveSets =
         |> computeFirst
 
     //
-    let internal computeFollow (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>,
+    let computeFollow (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>,
                                 nullable : Map<AugmentedNonterminal<'Nonterminal>, bool>,
                                 firstSets : Map<AugmentedNonterminal<'Nonterminal>, Set<AugmentedTerminal<'Terminal>>>) =
         /// Implementation of the algorithm for computing the FOLLOW sets of the nonterminals.
