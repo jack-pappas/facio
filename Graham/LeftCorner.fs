@@ -29,8 +29,6 @@ type LeftCornerParserAction =
         match this with
         | Shift stateId ->
             "s" + stateId.ToString ()
-//        | Goto stateId ->
-//            "g" + stateId.ToString ()
         | Announce ruleId ->
             "n" + ruleId.ToString ()
         | Accept ->

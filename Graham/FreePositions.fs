@@ -130,7 +130,7 @@ module FreePositions =
                     positionGraph))
 
     //
-    let private positionGraphs (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) (parserTable : LrParserTable<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>, unit>) =
+    let private positionGraphs (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) (parserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
         // Compute the Parser State Position Graph for each parser state.
         (Map.empty, parserTable.ParserStates)
         ||> Map.fold (fun parserStatePositionGraphs parserStateId parserState ->
