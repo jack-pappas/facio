@@ -20,7 +20,7 @@ module private AssemblyInfo =
     [<assembly: AssemblyTitle("Graham")>]
     [<assembly: AssemblyDescription("A library for creating, manipulating, analyzing, and implementing parser-generators for context-free grammars.")>]
     [<assembly: NeutralResourcesLanguage("en-US")>]
-    [<assembly: Guid("fc309105-ce95-46d1-8cb4-568fc6bea85c")>]
+    [<assembly: Guid("cc95fbb8-a6cf-4282-aab9-f7565d924e56")>]
 
     (*  Makes internal modules, types, and functions visible
         to the test project so they can be unit-tested. *)
