@@ -17,7 +17,7 @@ open Graham.LR
 
 
 //
-type internal ParserStatePositionGraphAction<'Nonterminal, 'Terminal
+type internal StatePositionGraphAction<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     /// Shift the specified terminal (token) onto the parser stack.
@@ -35,47 +35,54 @@ type internal ParserStatePositionGraphAction<'Nonterminal, 'Terminal
         | Reduce nonterminal ->
             "Reduce " + nonterminal.ToString ()
 
-/// A node in a Parser State Position Graph (PSPG).
-type internal ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead
+/// A node in a State Position Graph (PSPG).
+type internal StatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
     and 'Lookahead : comparison> =
+    /// <summary>The initial (root) node of the graph.</summary>
+    /// <remarks>The Initial node is a pseudo-node, but is important because
+    /// it ensures the graph is always connected (a necessary condition for
+    /// some calculations we perform on the graph).
+    | Initial
     /// An LR(k) item.
     | Item of LrItem<'Nonterminal, 'Terminal, 'Lookahead>
     /// A parser action.
-    | Action of ParserStatePositionGraphAction<'Nonterminal, 'Terminal>
+    | Action of StatePositionGraphAction<'Nonterminal, 'Terminal>
 
     /// <inherit />
     override this.ToString () =
         match this with
+        | Initial ->
+            "Initial"
         | Item item ->
             item.ToString ()
         | Action action ->
             action.ToString ()
 
-/// <summary>A Parser State Position Graph (PSPG).</summary>
+/// <summary>A State Position Graph (SPG).</summary>
 /// <remarks>
-/// <para>A Parser State Position Graph represents the possible epsilon-moves
+/// <para>A State Position Graph represents the possible epsilon-moves
 /// between the items of a parser state. These graphs are used to classify
 /// parser positions as 'free' or 'forbidden'; semantic actions can be
 /// safely inserted at a position iff the position is 'free'.</para>
 /// <para>The graph is represented as a set of directed edges.</para>
 /// </remarks>
-type internal ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead
+type internal StatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
     and 'Lookahead : comparison> =
-    VertexLabeledSparseDigraph<ParserStatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>>
+    VertexLabeledSparseDigraph<StatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>>
 
 //
 [<RequireQualifiedAccess>]
 module FreePositions =
     module Graph = VertexLabeledSparseDigraph
 
-    /// Computes the Parser State Position Graph of an LR(0) parser state.
-    let private positionGraph (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) (parserState : Lr0ParserState<'Nonterminal, 'Terminal>)
-        : ParserStatePositionGraph<_,_,_> =
-        // The initial parser state graph.
+    /// Computes the State Position Graph of an LR(0) parser state.
+    let private statePositionGraph (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) (parserState : Lr0ParserState<'Nonterminal, 'Terminal>)
+        : StatePositionGraph<_,_,_> =
+        // The initial state position graph.
         // Contains all items in the LR(0) state as vertices,
         // but it is an _empty_ graph (i.e., a graph with an empty edge-set).
         let positionGraph =
@@ -126,32 +133,41 @@ module FreePositions =
 
         // Find edges representing derivations of non-terminals and add them to
         // the existing set of graph edges (which may already contain some shift edges).
-        (positionGraph, transitionItems)
-        ||> Set.fold (fun positionGraph nonterminalDerivingItem ->
-            /// The nonterminal being derived by this item.
-            let derivingNonterminal =
-                match nonterminalDerivingItem.Production.[int nonterminalDerivingItem.Position] with
-                | Symbol.Nonterminal nt -> nt
-                | Symbol.Terminal _ ->
-                    invalidOp "A terminal was found where a nonterminal was expected."
+        let positionGraph =
+            (positionGraph, transitionItems)
+            ||> Set.fold (fun positionGraph nonterminalDerivingItem ->
+                /// The nonterminal being derived by this item.
+                let derivingNonterminal =
+                    match nonterminalDerivingItem.Production.[int nonterminalDerivingItem.Position] with
+                    | Symbol.Nonterminal nt -> nt
+                    | Symbol.Terminal _ ->
+                        invalidOp "A terminal was found where a nonterminal was expected."
 
-            (positionGraph, parserState)
-            ||> Set.fold (fun positionGraph item ->
-                // A derivation edge exists iff the nonterminal produced by this item
-                // is the one we're trying to derive AND the parser position of this
-                // item is the initial position.
-                if item.Nonterminal = derivingNonterminal && item.Position = 0<_> then
-                    Graph.addEdge (Item nonterminalDerivingItem) (Item item) positionGraph
-                else
-                    positionGraph))
+                (positionGraph, parserState)
+                ||> Set.fold (fun positionGraph item ->
+                    // A derivation edge exists iff the nonterminal produced by this item
+                    // is the one we're trying to derive AND the parser position of this
+                    // item is the initial position.
+                    if item.Nonterminal = derivingNonterminal && item.Position = 0<_> then
+                        Graph.addEdge (Item nonterminalDerivingItem) (Item item) positionGraph
+                    else
+                        positionGraph))
+
+        // Add the Initial (root) node, and add edges from it to any existing root nodes.
+        let positionGraph' =
+            Graph.addVertex Initial positionGraph
+
+        (positionGraph', Graph.roots positionGraph)
+        ||> Set.fold (fun positionGraph root ->
+            Graph.addEdge Initial root positionGraph)
 
     //
-    let private positionGraphs (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) (parserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
-        // Compute the Parser State Position Graph for each parser state.
+    let private statePositionGraphs (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) (parserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
+        // Compute the State Position Graph for each parser state.
         (Map.empty, parserTable.ParserStates)
-        ||> Map.fold (fun parserStatePositionGraphs parserStateId parserState ->
-            let pspg = positionGraph grammar.Productions parserState
-            Map.add parserStateId pspg parserStatePositionGraphs)
+        ||> Map.fold (fun statePositionGraphs parserStateId parserState ->
+            let spg = statePositionGraph grammar.Productions parserState
+            Map.add parserStateId spg statePositionGraphs)
 
     //
     let allPositions (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
@@ -184,18 +200,18 @@ module FreePositions =
                 |> fst)
 
     //
-    let private nonfreeItems (graph : ParserStatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>) =
+    let private nonfreeItems (graph : StatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>) =
         /// For each item in the graph, contains the set of items/actions reachable from it.
         let reachableFrom = Graph.reachable graph
 
-        /// For each item in the graph, contains the set of items/actions it dominates.
-        let dominated =
+        /// For each item in the graph, contains the set of items/actions it's dominated _by_.
+        let dominatedBy =
             match Graph.dominators graph with
             | Choice1Of2 x -> x
             | Choice2Of2 errorMsg ->
                 exn ("This item contains a conflict (S/R or R/R). \
-                      Free positions can not be computed until all conflicts are resolved.",
-                      exn errorMsg)
+                        Free positions can not be computed until all conflicts are resolved.",
+                        exn errorMsg)
                 |> raise
 
         // Positions are not free if they can derive themselves
@@ -213,26 +229,26 @@ module FreePositions =
         // For a position to be free, it must be a dominator
         // of every action reachable from it.
         (nonfreeItems, graph.Vertices)
-        ||> Set.fold (fun nonfreeItems itemOrAction ->
-            match itemOrAction with
+        ||> Set.fold (fun nonfreeItems node ->
+            match node with
+            | Initial
             | Action _ ->
                 // We only care about items/positions so just ignore actions.
                 nonfreeItems
             | Item item ->
-                /// The items/actions dominated by this item.
-                let dominatedItemsAndActions = Map.find itemOrAction dominated
-
                 /// The items/actions reachable from this item.
-                let reachableItemsAndActions = Map.find itemOrAction reachableFrom
+                let reachableItemsAndActions = Map.find node reachableFrom
 
                 // Does this item dominate all of the actions reachable from it?
                 let dominatesAllReachableActions =
                     reachableItemsAndActions
                     |> Set.forall (function
+                        | Initial
                         | Item _ ->
                             true    // Ignore items here, we only care about actions.
                         | (Action _) as action ->
-                            Set.contains action dominatedItemsAndActions)                    
+                            Map.find action dominatedBy
+                            |> Set.contains node)                   
             
                 // If not, add this item to the set of non-free items.
                 if dominatesAllReachableActions then
@@ -242,14 +258,14 @@ module FreePositions =
 
     //
     let ofGrammar (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
-        // Compute the parser state position graphs of the LR(0) parser states of the augmented grammar.
-        let positionGraphs = positionGraphs grammar lr0ParserTable
+        // Compute the state position graphs of the LR(0) parser states of the augmented grammar.
+        let positionGraphs = statePositionGraphs grammar lr0ParserTable
 
         // Compute the set of non-free (forbidden or contingent) positions in the entire grammar.
         (Set.empty, positionGraphs)
-        ||> Map.fold (fun allNonfreeItems _ pspg ->
+        ||> Map.fold (fun allNonfreeItems _ spg ->
             // The set of non-free positions in each position graph.
-            nonfreeItems pspg
+            nonfreeItems spg
             // Combine the result with the non-free positions
             // of the other states we've already processed.
             |> Set.union allNonfreeItems)

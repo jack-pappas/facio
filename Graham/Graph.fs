@@ -224,6 +224,13 @@ module VertexLabeledSparseDigraph =
             Map.add source successorsOfSource successorsOf)
 
     //
+    let roots (graph : VertexLabeledSparseDigraph<'Vertex>) =
+        // Determine which vertices have no incoming edges.
+        (graph.Vertices, graph.Edges)
+        ||> Set.fold (fun possibleRoots (_, target) ->
+            Set.remove target possibleRoots)
+
+    //
     let dominators (graph : VertexLabeledSparseDigraph<'Vertex>) =
         // If the graph's vertex-set is empty, return an
         // empty map instead of raising an exception.
@@ -231,19 +238,18 @@ module VertexLabeledSparseDigraph =
             Choice1Of2 Map.empty
         else
         // Find the root vertex.
+        // If there is no root vertex, or multiple roots (i.e., the graph is
+        // not connected / has multiple components), return an error.
         let root =
-            let roots =
-                // Determine which vertices have no incoming edges.
-                (graph.Vertices, graph.Edges)
-                ||> Set.fold (fun possibleRoots (_, target) ->
-                    Set.remove target possibleRoots)
+            let roots = roots graph
 
             // The set should have only one root vertex.
             match Set.count roots with
             | 0 ->
                 Choice2Of2 "The graph's vertex set is empty; or the graph is not a DAG."
             | 1 ->
-                Choice1Of2 <| Set.minElement roots
+                Set.minElement roots
+                |> Choice1Of2
             | n ->
                 Choice2Of2 "The graph contains multiple components (i.e., the graph is not connected)."
 
