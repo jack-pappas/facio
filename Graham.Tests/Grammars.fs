@@ -7,9 +7,9 @@ See LICENSE.TXT for licensing details.
 *)
 
 /// Test grammars.
-module FSharpYacc.Tests.Grammars
+module Graham.Tests.Grammars
 
-open FSharpYacc
+open Graham
 open Ast
 
 

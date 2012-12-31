@@ -5,12 +5,12 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{f7e7c726-a9e3-4dce-bef7-6694310e4b21}</ProjectGuid>
+    <ProjectGuid>{abfdc4c4-6148-4e28-802c-98445fcd668b}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>FSharpLex.Tests</RootNamespace>
-    <AssemblyName>FSharpLex.Tests</AssemblyName>
+    <RootNamespace>Graham.Tests</RootNamespace>
+    <AssemblyName>Graham.Tests</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <Name>FSharpLex.Tests</Name>
+    <Name>Graham.Tests</Name>
     <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\</SolutionDir>
     <RestorePackages>true</RestorePackages>
   </PropertyGroup>
@@ -22,7 +22,7 @@
     <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Debug\FSharpLex.Tests.XML</DocumentationFile>
+    <DocumentationFile>bin\Debug\Graham.Tests.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -31,22 +31,18 @@
     <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Release\FSharpLex.Tests.XML</DocumentationFile>
+    <DocumentationFile>bin\Release\Graham.Tests.XML</DocumentationFile>
   </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath32)\FSharp\1.0\Microsoft.FSharp.Targets" Condition="!Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft F#\v4.0\Microsoft.FSharp.Targets" Condition=" Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <ItemGroup>
     <None Include="packages.config" />
-    <Compile Include="Patterns.fs" />
-    <Compile Include="Nfa.fs" />
-    <Compile Include="Dfa.fs" />
+    <Compile Include="Grammars.fs" />
+    <Compile Include="Predictive.fs" />
+    <Compile Include="Tables.fs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="FsUnit.NUnit">
-      <HintPath>..\packages\FsUnit.1.1.0.2\lib\Net40\FsUnit.NUnit.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core" />
     <Reference Include="nunit.framework">
@@ -54,13 +50,8 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\FSharpLex\FSharpLex.fsproj">
-      <Name>fsharplex</Name>
-      <Project>{f9f750fb-2817-4559-bd0a-be5402102d37}</Project>
-      <Private>True</Private>
-    </ProjectReference>
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
 	     Other similar extension points exist, see Microsoft.Common.targets.

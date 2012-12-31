@@ -25,6 +25,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{0F12E0
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Graham", "Graham\Graham.fsproj", "{AB802CFD-4EA9-4F11-ADE3-F2F5518BFD52}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Graham.Tests", "Graham.Tests\Graham.Tests.fsproj", "{ABFDC4C4-6148-4E28-802C-98445FCD668B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -51,6 +53,10 @@ Global
 		{AB802CFD-4EA9-4F11-ADE3-F2F5518BFD52}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AB802CFD-4EA9-4F11-ADE3-F2F5518BFD52}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AB802CFD-4EA9-4F11-ADE3-F2F5518BFD52}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ABFDC4C4-6148-4E28-802C-98445FCD668B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ABFDC4C4-6148-4E28-802C-98445FCD668B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ABFDC4C4-6148-4E28-802C-98445FCD668B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ABFDC4C4-6148-4E28-802C-98445FCD668B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -58,5 +64,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{F7E7C726-A9E3-4DCE-BEF7-6694310E4B21} = {43BEF91B-F138-4D87-8A38-5A448AC57A49}
 		{64594E06-1750-4472-BBB0-299C4D39CD10} = {43BEF91B-F138-4D87-8A38-5A448AC57A49}
+		{ABFDC4C4-6148-4E28-802C-98445FCD668B} = {43BEF91B-F138-4D87-8A38-5A448AC57A49}
 	EndGlobalSection
 EndGlobal

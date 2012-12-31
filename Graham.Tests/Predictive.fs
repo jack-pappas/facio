@@ -6,14 +6,14 @@ This code is provided under the terms of the 2-clause ("Simplified") BSD license
 See LICENSE.TXT for licensing details.
 *)
 
-module FSharpYacc.Tests.Predictive
+module Graham.Tests.Predictive
 
 open Grammars
 
 open NUnit.Framework
 open FsUnit
 
-open FSharpYacc
+open Graham
 open Ast
 open Predictive
 
