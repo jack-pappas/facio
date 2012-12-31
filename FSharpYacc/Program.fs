@@ -390,7 +390,7 @@ let lr0 =
 
 //
 let lalr1 =
-    FSharpYacc.LR.Lalr1.ofLr0Table (testGrammar, lr0)
+    FSharpYacc.LR.Lalr1.upgrade (testGrammar, lr0)
 
 
 //// The free positions of the grammar

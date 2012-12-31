@@ -17,33 +17,6 @@ open FSharpYacc.Analysis
 open FSharpYacc.Graph
 
 
-/// An LALR(1) item.
-type internal Lalr1Item<'Nonterminal, 'Terminal
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison> =
-    LrItem<'Nonterminal, 'Terminal, Set<'Terminal>>
-
-/// An LALR(1) parser state -- i.e., a set of LR(1) items.
-type internal Lalr1ParserState<'Nonterminal, 'Terminal
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison> =
-    LrParserState<'Nonterminal, 'Terminal, Set<'Terminal>>
-
-/// LALR(1) parser table generation state.
-type internal Lalr1TableGenState<'Nonterminal, 'Terminal
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison> =
-    LrTableGenState<'Nonterminal, 'Terminal, Set<'Terminal>>
-
-/// An LALR(1) parser table.
-type Lalr1ParserTable<'Nonterminal, 'Terminal
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison> =
-    LrParserTable<
-        AugmentedNonterminal<'Nonterminal>,
-        AugmentedTerminal<'Terminal>,
-        Set<AugmentedTerminal<'Terminal>>>
-
 /// <summary>LALR(1) parser table generator.</summary>
 /// <remarks>Look-Ahead LR(1) (LALR(1)) parsing is a simplified form of LR(1) parsing;
 /// it has "just enough" power to parse most languages while avoiding the huge
@@ -59,11 +32,11 @@ module Lalr1 =
 
     /// A binary relation over a set of elements.
     // For each 'x', contains the 'y' values such that xRy (given a relation 'R').
-    type Relation<'T when 'T : comparison> =
+    type private Relation<'T when 'T : comparison> =
         Map<'T, Set<'T>>
 
     /// Partial function.
-    type PartialFunction<'T, 'U
+    type private PartialFunction<'T, 'U
         when 'T : comparison
         and 'U : comparison> =
         Map<'T, Set<'U>>
@@ -397,7 +370,7 @@ module Lalr1 =
         |> Choice1Of2
 
     /// Creates an LALR(1) parser table from a grammar and it's LR(0) or SLR(1) parser table.
-    let ofLr0Table (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
+    let upgrade (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
         : Choice<Lr0ParserTable<'Nonterminal, 'Terminal>, string> =
         // Compute the lookahead sets.
         // TODO : Simplify this by using the Either/Choice workflow.
@@ -405,13 +378,63 @@ module Lalr1 =
         | Choice2Of2 error ->
             Choice2Of2 error
         | Choice1Of2 lookaheadSets ->
+            /// The predictive sets of the grammar.
+            // OPTIMIZE : Don't recompute these -- if they've already been computed for SLR(1),
+            // we should pass those in instead of recomputing them.
+            let predictiveSets = PredictiveSets.ofGrammar grammar
+
             // Use the LALR(1) lookahead sets to resolve conflicts in the LR(0) parser table.
-            // TODO
+            (lr0ParserTable, lr0ParserTable.ParserStates)
+            ||> Map.fold (fun parserTable stateId items ->
+                (parserTable, items)
+                ||> Set.fold (fun parserTable item ->
+                    // If the parser position is at the end of this item's production,
+                    // remove the Reduce actions from the ACTION table for any terminals
+                    // which aren't in this state/rule's lookahead set.
+                    if int item.Position = Array.length item.Production then
+                        /// This state/rule's look-ahead set.
+                        let lookahead =
+                            Map.find (stateId, (item.Nonterminal, item.Production)) lookaheadSets
 
-            // H. Check for conflicts; if there are none, the grammar is LALR(1).
-            // TODO
+                        // Remove the unnecessary Reduce actions, thereby resolving some conflicts.
+                        let actionTable =
+                            let action =
+                                parserTable.ReductionRulesById
+                                // OPTIMIZE : This lookup is slow (O(n)) -- we should use a Bimap instead.
+                                |> Map.pick (fun ruleId key ->
+                                    if key = (item.Nonterminal, item.Production) then
+                                        Some ruleId
+                                    else None)
+                                |> LrParserAction.Reduce
+                            (parserTable.ActionTable, grammar.Terminals)
+                            ||> Set.fold (fun actionTable terminal ->
+                                // Is this terminal in this state/rule's lookahead set?
+                                if Set.contains terminal lookahead then
+                                    actionTable
+                                else
+                                    //
+                                    let tableKey = stateId, terminal
 
+                                    // Don't need to do anything if there's no entry for this key;
+                                    // it may mean that the table has already been upgraded to SLR(1).
+                                    match Map.tryFind tableKey actionTable with
+                                    | None ->
+                                        actionTable
+                                    | Some entry ->
+                                        // Remove the Reduce action from the action set.
+                                        let entry = Set.remove action entry
+
+                                        // If the entry is now empty, remove it from the ACTION table;
+                                        // otherwise, update the entry in the ACTION table.
+                                        if Set.isEmpty entry then
+                                            Map.remove tableKey actionTable
+                                        else
+                                            Map.add tableKey entry actionTable)
+
+                        // Pass the modified parser table to the next iteration.
+                        { parserTable with ActionTable = actionTable; }
+                    else
+                        parserTable))
             //
-            raise <| System.NotImplementedException "Lalr1.ofLr0Table"
-
+            |> Choice1Of2
 
