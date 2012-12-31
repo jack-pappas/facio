@@ -264,54 +264,6 @@ open FSharpYacc.Ast
 //
 //
 
-
-(* TEST : PSPG generation *)
-/// Figure 4, from "Locating Free Positions in LR(k) Grammars"
-let figure4 =
-    let figure4 =
-        let A =
-            [|  [| Symbol.Nonterminal 'B' |];
-                [| Symbol.Nonterminal 'C' |]; |]
-
-        let B =
-            [| [| Symbol.Terminal "t1" |] |]
-
-        let C =
-            [|  [| Symbol.Nonterminal 'B'; Symbol.Terminal "t2" |];
-                [| Symbol.Terminal "t3" |]; |]
-
-        {
-        Nonterminals =
-            Set.ofArray [| 'A'; 'B'; 'C' |];
-        Terminals =
-            Set.ofArray [| "t1"; "t2"; "t3" |];
-        Productions =
-            Map.empty
-            |> Map.add 'A' A
-            |> Map.add 'B' B
-            |> Map.add 'C' C;
-        }
-
-    // Augment the grammar.
-    Grammar.Augment (figure4, 'A')
-
-//
-let lr0 =
-    Graham.LR.Lr0.createTable figure4
-
-//
-match Graham.LR.Lalr1.upgrade (figure4, lr0) with
-| Choice2Of2 errMsg ->
-    printfn "Error: %s" errMsg
-| Choice1Of2 lalr1 ->
-    // The free positions of the grammar
-    let freePositions =
-        Graham.Analysis.FreePositions.ofGrammar (figure4, lalr1)
-
-    ()
-
-
-
 printfn "Press any key to exit..."
 System.Console.ReadKey ()
 |> ignore
