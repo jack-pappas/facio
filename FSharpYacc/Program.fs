@@ -40,6 +40,7 @@ module private AssemblyInfo =
 
 // TEMP : Remove these 'open' declarations once the test specification is compiled correctly.
 open Graham.Grammar
+open Graham.Analysis
 open FSharpYacc.Ast
 
 
@@ -263,6 +264,62 @@ open FSharpYacc.Ast
 // TODO : Test compilation and code generation for the test specification.
 //
 //
+
+
+(* TEST : Recognition points *)
+/// Grammar G1 from "Recursive Ascent-Descent Parsing" by Horspool
+let G1 =
+    let G1 =
+        let A =
+            [|  [| Terminal 'a'; Nonterminal 'B'; Terminal 'b'; Nonterminal 'C' |]; |]
+
+        let B =
+            [|  [| Nonterminal 'B'; Terminal 'b' |];
+                [| Terminal 'b' |]; |]
+
+        let C =
+            [|  [| Nonterminal 'C'; Terminal 'c' |];
+                [| Terminal 'c' |]; |]
+
+        {
+        Terminals =
+            Set.ofArray [| 'a'; 'b'; 'c' |]
+        Nonterminals =
+            Set.ofArray [| 'A'; 'B'; 'C' |]
+        Productions =
+            Map.empty
+            |> Map.add 'A' A
+            |> Map.add 'B' B
+            |> Map.add 'C' C;
+        }
+
+    // Augment the grammar.
+    Grammar.Augment (G1, 'A')
+
+//
+let lr0 =
+    Graham.LR.Lr0.createTable G1
+
+//
+match Graham.LR.Lalr1.upgrade (G1, lr0) with
+| Choice2Of2 errMsg ->
+    printfn "Error: %s" errMsg
+| Choice1Of2 lalr1 ->
+    //
+    let freePositions =
+        FreePositions.ofGrammar (G1, lalr1)
+
+    //
+    let recognitionPoints =
+        RecognitionPoints.calculate freePositions
+
+    //
+    let earliestRecognitionPoints =
+        RecognitionPoints.earliest recognitionPoints
+
+    let wfowfe = "wofwoekf".Length + 10
+    ()
+
 
 printfn "Press any key to exit..."
 System.Console.ReadKey ()

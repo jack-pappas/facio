@@ -289,6 +289,19 @@ module FreePositions =
         // a set containing only the free positions of the grammar.
         |> Set.difference (allPositions grammar)
 
+    //
+    let earliest (freePositions : Set<'Nonterminal * ProductionIndex * int<ParserPosition>>) =
+        // NOTE : The calculation below relies on the specific behavior of Set.fold, which traverses
+        // elements from least to greatest. This allows us to simply add the first position we see for
+        // each (nonterminal, productionIndex) pair, instead of having to check if each position is the minimum.
+        (Map.empty, freePositions)
+        ||> Set.fold (fun recognitionPoints (nonterminal, productionIndex, parserPosition) ->
+            let key : ProductionKey<'Nonterminal> = nonterminal, productionIndex
+            if Map.containsKey key recognitionPoints then
+                recognitionPoints
+            else
+                Map.add key parserPosition recognitionPoints)
+
 
 //
 [<RequireQualifiedAccess>]
