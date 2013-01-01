@@ -28,12 +28,6 @@ open Graham.Graph
 [<RequireQualifiedAccess>]
 module Lalr1 =
     module Graph = VertexLabeledSparseDigraph
-    module BiGraph = VertexLabeledSparseBipartiteDigraph
-
-    /// A binary relation over a set of elements.
-    // For each 'x', contains the 'y' values such that xRy (given a relation 'R').
-    type private Relation<'T when 'T : comparison> =
-        Map<'T, Set<'T>>
 
     /// Partial function.
     type private PartialFunction<'T, 'U
@@ -41,6 +35,46 @@ module Lalr1 =
         and 'U : comparison> =
         Map<'T, Set<'U>>
 
+    //
+    [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    module private PartialFunction =
+        //
+        let empty : PartialFunction<'T, 'U> = Map.empty
+
+        //
+        let add source target (func : PartialFunction<'T,' U>) : PartialFunction<'T,' U> =
+            let targets =
+                match Map.tryFind source func with
+                | None ->
+                    Set.singleton target
+                | Some targets ->
+                    Set.add target targets
+
+            Map.add source targets func
+
+    /// A binary relation over a set of elements.
+    // For each 'x', contains the 'y' values such that xRy (given a relation 'R').
+    type private Relation<'T when 'T : comparison> =
+        Map<'T, Set<'T>>
+
+    //
+    [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+    module private Relation =
+        //
+        let empty : Relation<'T> = Map.empty
+
+        //
+        let add source target (relation : Relation<'T>) : Relation<'T> =
+            let targets =
+                match Map.tryFind source relation with
+                | None ->
+                    Set.singleton target
+                | Some targets ->
+                    Set.add target targets
+
+            Map.add source targets relation
+
+    
     /// The traversal status of an element.
     type private TraversalStatus =
         /// The element has not yet been traversed.
@@ -203,15 +237,15 @@ module Lalr1 =
         digraph (nonterminalTransitions, reads, directRead)
 
     /// Compute the 'includes' and 'lookback' relations needed to compute the look-ahead sets for a grammar.
-    let private lookbackAndIncludes (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>, nonterminalTransitions, nullable) =
-        ((Graph.empty, Graph.empty), nonterminalTransitions)
+    let private lookbackAndIncludes (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>, nonterminalTransitions : Set<NonterminalTransition<_>>, nullable) =
+        ((PartialFunction.empty, Relation.empty), nonterminalTransitions)
         ||> Set.fold (fun lookback_includes (stateId, nonterminal) ->
             //
             let parserState = Map.find stateId lr0ParserTable.ParserStates
 
             // Fold over the LR(0) items in this parser state.
             (lookback_includes, parserState)
-            ||> Set.fold (fun (lookback, includes) item ->
+            ||> Set.fold (fun (lookback : PartialFunction<_, NonterminalTransition<_>>, includes : Relation<_>) item ->
                 // Only consider items with rules which produce this nonterminal.
                 if item.Nonterminal <> nonterminal then
                     lookback, includes
@@ -234,7 +268,7 @@ module Lalr1 =
                                         // right context of the production is nullable; if so, then
                                         // we can add the edge to the 'includes' graph.
                                         PredictiveSets.allNullableInSlice (item.Production, position + 1, Array.length item.Production - 1, nullable) then
-                                            Graph.addEdgeAndVertices (stateId, nonterminal) (j, t) includes
+                                            Relation.add (j, t) (stateId, nonterminal) includes
                                     else
                                         includes
 
@@ -262,8 +296,8 @@ module Lalr1 =
                             let j = defaultArg j -1<_>
                             includes, j)
 
-                    // Add edges to the 'lookback' relation graph.
-                    let lookback : VertexLabeledSparseBipartiteDigraph<_,_> =
+                    // Add edges to the 'lookback' relation.
+                    let lookback : PartialFunction<_,_> =
                         if j = -1<_> then
                             lookback
                         else
@@ -274,7 +308,7 @@ module Lalr1 =
                                 if item.Nonterminal = item'.Nonterminal
                                     && item.Production = item'.Production then
                                     let rule = item.Nonterminal, item.Production
-                                    BiGraph.addEdgeAndVertices (stateId, nonterminal) (j, rule) lookback
+                                    PartialFunction.add (j, rule) (stateId, nonterminal) lookback
                                 else
                                     lookback)
 
@@ -313,7 +347,7 @@ module Lalr1 =
         // nonterminal transition and reduction, respectively, by inspection of each nonterminal
         // transition and the associated production right parts, and by considering
         // nullable nonterminals appropriately.
-        let lookback, (includes : VertexLabeledSparseDigraph<NonterminalTransition<_>>) =
+        let lookback, includes =
             lookbackAndIncludes (grammar, lr0ParserTable, nonterminalTransitions, nullable)
 
         // F. Compute the transitive closure of the 'includes' relation (via the SCC algorithm)
@@ -321,43 +355,8 @@ module Lalr1 =
         // both as initial values and as workspace. If a cycle is detected in which a Read set
         // is non-empty, announce that the grammar is not LR(k) for any 'k'.
         let Follow =
-            // TEMP : Adapt the 'includes' graph for use with 'digraph'.
-            // TODO : Modify the 'includesAndLookback' function to compute relation maps instead of relation graphs.
-            let includes =
-                (Map.empty, includes.Edges)
-                ||> Set.fold (fun includes (source, target) ->
-                    let targetIncludes =
-                        match Map.tryFind target includes with
-                        | None ->
-                            Set.singleton source
-                        | Some targetIncludes ->
-                            Set.add source targetIncludes
-
-                    Map.add target targetIncludes includes)
-
             // TODO : Fix this so it returns an error if the grammar is not LR(k).
             digraph (nonterminalTransitions, includes, Read)
-
-        // TEMP : Create a map from the edges of the lookback graph
-        // so it's easier to compute the LA sets.
-        // TODO : Modify the 'includesAndLookback' function to
-        // create relation maps instead of graphs.
-        let lookback =
-            (Map.empty, lookback.Edges)
-            ||> Set.fold (fun lookback edge ->
-                match edge with
-                | Choice1Of2 (source : NonterminalTransition<_>), Choice2Of2 target ->
-                    let targetSources =
-                        match Map.tryFind target lookback with
-                        | None ->
-                            Set.singleton source
-                        | Some targetSources ->
-                            Set.add source targetSources
-
-                    Map.add target targetSources lookback
-                    
-                | _ ->
-                    failwith "Invalid edge.")
 
         // G. Union the Follow sets to form the LA sets according
         // to the 'lookback' links computed in part F.
