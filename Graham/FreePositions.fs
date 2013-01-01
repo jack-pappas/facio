@@ -288,3 +288,43 @@ module FreePositions =
         // remove the non-free positions from it to produce
         // a set containing only the free positions of the grammar.
         |> Set.difference (allPositions grammar)
+
+
+//
+[<RequireQualifiedAccess>]
+module RecognitionPoints =
+    /// <summary>Calculates the recognition points for each production rule in a grammar.</summary>
+    /// <remarks>
+    /// <para>In "Recursive Ascent-Descent Parsing", Horspool defines a _recognition_point_ of a production rule
+    /// as a _free_position_ where all positions to the right of it are also free positions. Note that all production rules
+    /// have at least one (1) recognition point; in the worst case, the recognition point is simply the right-most
+    /// position in the rule (the right-most position is always a free position).</para>
+    /// </remarks>
+    let calculate (freePositions : Set<'Nonterminal * ProductionIndex * int<ParserPosition>>) =
+        (freePositions, Map.empty)
+        ||> Set.foldBack (fun (nonterminal, productionIndex, parserPosition) recognitionPoints ->
+            let key : ProductionKey<'Nonterminal> = nonterminal, productionIndex
+            
+            match Map.tryFind key recognitionPoints with
+            | None ->
+                // There must be at least one recognition point for each rule,
+                // so if the map doesn't already contain an entry for this key
+                // this position must be the right-most position (always a recognition point).
+                Map.add key (Set.singleton parserPosition) recognitionPoints
+            | Some points ->
+                // If this parser position is adjacent to the minimum element of
+                // the existing set of recognition points for this production rule,
+                // add it to the set and update the map.
+                if parserPosition = Set.minElement points - 1<_> then
+                    let points = Set.add parserPosition points
+                    Map.add key points recognitionPoints
+                else
+                    recognitionPoints)
+
+    /// Determines the earliest recognition point for each production rule, given a Map containing
+    /// the set of recognition points for each rule.
+    let inline earliest (recognitionPoints : Map<ProductionKey<'Nonterminal>, Set<int<ParserPosition>>>) =
+        recognitionPoints
+        |> Map.map (fun _ ->
+            Set.minElement)
+
