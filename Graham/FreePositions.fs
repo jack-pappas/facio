@@ -321,8 +321,8 @@ module RecognitionPoints =
                 else
                     recognitionPoints)
 
-    /// Determines the earliest recognition point for each production rule, given a Map containing
-    /// the set of recognition points for each rule.
+    /// Determines the earliest (leftmost) recognition point for each production rule,
+    /// given a Map containing the set of recognition points for each rule.
     let inline earliest (recognitionPoints : Map<ProductionKey<'Nonterminal>, Set<int<ParserPosition>>>) =
         recognitionPoints
         |> Map.map (fun _ ->
