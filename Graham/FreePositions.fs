@@ -17,67 +17,67 @@ open Graham.LR
 
 
 //
-type internal StatePositionGraphAction<'Nonterminal, 'Terminal
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison> =
-    /// Shift the specified terminal (token) onto the parser stack.
-    | Shift of 'Terminal
-    /// Reduce by a production rule.
-    // NOTE : When 'Nonterminal is instantiated as AugmentedNonterminal<'Nonterminal>,
-    // note that (Reduce Start) is the "Accept" action.
-    | Reduce of 'Nonterminal
-
-    /// <inherit />
-    override this.ToString () =
-        match this with
-        | Shift terminal ->
-            "Shift " + terminal.ToString ()
-        | Reduce nonterminal ->
-            "Reduce " + nonterminal.ToString ()
-
-/// A node in a State Position Graph (PSPG).
-type internal StatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison
-    and 'Lookahead : comparison> =
-    /// <summary>The initial (root) node of the graph.</summary>
-    /// <remarks>The Initial node is a pseudo-node, but is important because
-    /// it ensures the graph is always connected (a necessary condition for
-    /// some calculations we perform on the graph).
-    | Initial
-    /// An LR(k) item.
-    | Item of LrItem<'Nonterminal, 'Terminal, 'Lookahead>
-    /// A parser action.
-    | Action of StatePositionGraphAction<'Nonterminal, 'Terminal>
-
-    /// <inherit />
-    override this.ToString () =
-        match this with
-        | Initial ->
-            "Initial"
-        | Item item ->
-            item.ToString ()
-        | Action action ->
-            action.ToString ()
-
-/// <summary>A State Position Graph (SPG).</summary>
-/// <remarks>
-/// <para>A State Position Graph represents the possible epsilon-moves
-/// between the items of a parser state. These graphs are used to classify
-/// parser positions as 'free' or 'forbidden'; semantic actions can be
-/// safely inserted at a position iff the position is 'free'.</para>
-/// <para>The graph is represented as a set of directed edges.</para>
-/// </remarks>
-type internal StatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison
-    and 'Lookahead : comparison> =
-    VertexLabeledSparseDigraph<StatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>>
-
-//
 [<RequireQualifiedAccess>]
 module FreePositions =
     module Graph = VertexLabeledSparseDigraph
+
+    //
+    type private StatePositionGraphAction<'Nonterminal, 'Terminal
+        when 'Nonterminal : comparison
+        and 'Terminal : comparison> =
+        /// Shift the specified terminal (token) onto the parser stack.
+        | Shift of 'Terminal
+        /// Reduce by a production rule.
+        // NOTE : When 'Nonterminal is instantiated as AugmentedNonterminal<'Nonterminal>,
+        // note that (Reduce Start) is the "Accept" action.
+        | Reduce of 'Nonterminal
+
+        /// <inherit />
+        override this.ToString () =
+            match this with
+            | Shift terminal ->
+                "Shift " + terminal.ToString ()
+            | Reduce nonterminal ->
+                "Reduce " + nonterminal.ToString ()
+
+    /// A node in a State Position Graph (PSPG).
+    type private StatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead
+        when 'Nonterminal : comparison
+        and 'Terminal : comparison
+        and 'Lookahead : comparison> =
+        /// <summary>The initial (root) node of the graph.</summary>
+        /// <remarks>The Initial node is a pseudo-node, but is important because
+        /// it ensures the graph is always connected (a necessary condition for
+        /// some calculations we perform on the graph).
+        | Initial
+        /// An LR(k) item.
+        | Item of LrItem<'Nonterminal, 'Terminal, 'Lookahead>
+        /// A parser action.
+        | Action of StatePositionGraphAction<'Nonterminal, 'Terminal>
+
+        /// <inherit />
+        override this.ToString () =
+            match this with
+            | Initial ->
+                "Initial"
+            | Item item ->
+                item.ToString ()
+            | Action action ->
+                action.ToString ()
+
+    /// <summary>A State Position Graph (SPG).</summary>
+    /// <remarks>
+    /// <para>A State Position Graph represents the possible epsilon-moves
+    /// between the items of a parser state. These graphs are used to classify
+    /// parser positions as 'free' or 'forbidden'; semantic actions can be
+    /// safely inserted at a position iff the position is 'free'.</para>
+    /// <para>The graph is represented as a set of directed edges.</para>
+    /// </remarks>
+    type private StatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead
+        when 'Nonterminal : comparison
+        and 'Terminal : comparison
+        and 'Lookahead : comparison> =
+        VertexLabeledSparseDigraph<StatePositionGraphNode<'Nonterminal, 'Terminal, 'Lookahead>>
 
     /// Computes the State Position Graph of an LR(0) parser state.
     let private statePositionGraph (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) (parserState : Lr0ParserState<'Nonterminal, 'Terminal>)
