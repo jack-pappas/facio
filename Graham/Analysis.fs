@@ -165,15 +165,7 @@ module PredictiveSets =
                             // Only compute follow sets for non-terminals!
                             match production.[i] with
                             | Symbol.Terminal _ -> ()
-                            | Symbol.Nonterminal ithSymbolNontermId ->
-                                (* OPTIMIZE :   Both conditions here could be fused and simplified if we implemented a
-                                                function similar to Array.tryPick, but which worked over a segment or slice
-                                                of the array. (This function should be inlined.)
-                                                The 'picker' function passed to this new function would return Some for any
-                                                non-nullable symbol; then, if all the symbols were nullable (or the i-th symbol
-                                                is the last symbol in the production), we'd "fill" the value with the
-                                                FOLLOW set of the nonterminal producing this production. *)
-                            
+                            | Symbol.Nonterminal ithSymbolNontermId ->                            
                                 // If this nonterminal is the last symbol in the production, or all of the symbols
                                 // which follow it are nullable (i.e., they could all be empty), then the FOLLOW set
                                 // of this nonterminal must contain the FOLLOW set of the nonterminal producing this production.
