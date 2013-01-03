@@ -155,15 +155,15 @@ module Lr0 =
                     (terminals : Set<_>)
                     (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
             // Fold over the set of terminals (tokens) in the grammar.
-            let table =
+            let actionTable =
                 (tableGenState.ActionTable, terminals)
-                ||> Set.fold (fun table token ->
+                ||> Set.fold (fun actionTable terminal ->
                     //
-                    let tableKey = sourceState, token
+                    let tableKey = sourceState, terminal
 
                     //
                     let actionSet =
-                        match Map.tryFind tableKey table with
+                        match Map.tryFind tableKey actionTable with
                         | None ->
                             Action <| Reduce reductionRuleId
                         | Some actionSet ->
@@ -183,16 +183,16 @@ module Lr0 =
                                 // Adding this action to the existing action set would create
                                 // an impossible set of actions, so raise an exception.
                                 LrTableGenState.impossibleActionSetErrorMsg (
-                                    sourceState, token, actionSet, Reduce reductionRuleId)
+                                    sourceState, terminal, actionSet, Reduce reductionRuleId)
                                 |> invalidOp
 
-                    // Update the table with the action set.
-                    Map.add tableKey actionSet table)
+                    // Update the ACTION table with the action set.
+                    Map.add tableKey actionSet actionTable)
 
             // Return the updated table-gen state.
             (),
             { tableGenState with
-                ActionTable = table; }
+                ActionTable = actionTable; }
 
 
     //
