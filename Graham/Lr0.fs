@@ -48,7 +48,7 @@ type Lr0ParserTable<'Nonterminal, 'Terminal
 module Lr0 =
     //
     [<RequireQualifiedAccess>]
-    module ParserState =
+    module private ParserState =
         //
         let isReduceState (parserState : Lr0ParserState<'Nonterminal, 'Terminal>) =
             // A parser state is a 'reduce state' if any of its items
@@ -60,7 +60,7 @@ module Lr0 =
 
     /// Functions for manipulating LR(0) parser items.
     [<RequireQualifiedAccess>]
-    module Item =
+    module private Item =
         /// Determines if an LR(0) item is a 'kernel' item.
         let isKernelItem (item : Lr0Item<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>) =
             // An LR(0) item is a kernel item iff it is the initial item or
@@ -72,7 +72,6 @@ module Lr0 =
                 match item.Nonterminal with
                 | Start -> true
                 | Nonterminal _ -> false
-
 
         /// Computes the LR(0) closure of a set of items.
         // TODO : Modify this to use a worklist-style algorithm to avoid
@@ -149,7 +148,7 @@ module Lr0 =
 
     /// Functions which use the State monad to manipulate an LR(0) table-generation state.
     [<RequireQualifiedAccess>]
-    module TableGenState =
+    module private TableGenState =
         /// Add 'reduce' actions to the parser table for each terminal (token) in the grammar.
         let reduce (sourceState : ParserStateId)
                     (reductionRuleId : ReductionRuleId)
@@ -255,6 +254,9 @@ module Lr0 =
 
     /// Creates an LR(0) parser table from the specified grammar.
     let createTable (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) : Lr0ParserTable<'Nonterminal, 'Terminal> =
+        // Preconditions
+        // TODO
+
         /// The final table-gen state.
         let finalTableGenState =
             /// The initial state (set of items) passed to 'createTable'.
@@ -287,5 +289,35 @@ module Lr0 =
             ActionTable = finalTableGenState.ActionTable;
             GotoTable = finalTableGenState.GotoTable;
             ReductionRulesById = finalTableGenState.ReductionRulesById; }
+
+    //
+    let removeAction (sourceState : ParserStateId) (action : LrParserAction) (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) : Lr0ParserTable<'Nonterminal, 'Terminal> =
+        // TODO : If removing a 'Shift' action, also remove the corresponding edge from the ParserTransitions graph.
+        raise <| System.NotImplementedException "Lr0.removeAction"
+
+    //
+    let applyPrecedence (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,
+                            nonterminalPrecedence : PrecedenceTable<'Nonterminal>,
+                            terminalPrecedence : PrecedenceTable<'Terminal>,
+                            terminalAssociativities : Map<'Terminal, Associativity>) : Lr0ParserTable<'Nonterminal, 'Terminal> =
+        // Preconditions
+        // TODO
+
+        // Fold over the provided table, using the supplied precedence and
+        // associativity tables to resolve conflicts wherever possible.
+        let actionTable =
+            (lr0ParserTable.ActionTable, lr0ParserTable.ActionTable)
+            ||> Map.fold (fun actionTable (stateId, terminal) actions ->
+                // Does this state contain any conflicts?
+                if Set.count actions < 2 then
+                    actionTable
+                else
+                    
+
+
+                    actionTable)
+                    
+        //
+        raise <| System.NotImplementedException "Lr0.applyPrecedence"
 
 

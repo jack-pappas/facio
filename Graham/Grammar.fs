@@ -9,13 +9,15 @@ See LICENSE.TXT for licensing details.
 //
 namespace Graham.Grammar
 
+open System.Diagnostics
+
 
 /// A nonterminal or the start symbol.
 type AugmentedNonterminal<'Nonterminal when 'Nonterminal : comparison> =
     /// The start symbol.
     | Start
     /// A nonterminal symbol specified by a grammar.
-    | Nonterminal of 'Nonterminal    
+    | Nonterminal of 'Nonterminal
 
     /// <inherit />
     override this.ToString () =
@@ -66,17 +68,6 @@ type AugmentedSymbol<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     Symbol<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
-
-/// Associativity of a terminal (token).
-/// This can be explicitly specified to override the
-/// default behavior for resolving conflicts.
-type Associativity =
-    /// Non-associative.
-    | NonAssociative
-    /// Left-associative.
-    | Left
-    /// Right-associative.
-    | Right
 
 /// A context-free grammar (CFG).
 type Grammar<'Nonterminal, 'Terminal
@@ -208,4 +199,90 @@ module AugmentedPatterns =
             Terminal terminal
         | AugmentedTerminal.EndOfFile ->
             EndOfFile
+
+
+/// Associativity of a terminal (token).
+/// This can be explicitly specified to override the
+/// default behavior for resolving conflicts.
+type Associativity =
+    /// Non-associative.
+    | NonAssociative
+    /// Left-associative.
+    | Left
+    /// Right-associative.
+    | Right
+
+    /// <inherit />
+    override this.ToString () =
+        match this with
+        | NonAssociative ->
+            "NonAssociative"
+        | Left ->
+            "Left"
+        | Right ->
+            "Right"
+
+//
+[<DebuggerDisplay("{DebuggerDisplay,nq}")>]
+type RelativePrecedence =
+    //
+    | LessThan
+    //
+    | Equal
+    //
+    | GreaterThan
+
+    //
+    member private this.DebuggerDisplay
+        with get () =
+            match this with
+            | LessThan ->
+                "\u22d6"
+            | Equal ->
+                "\u2250"
+            | GreaterThan ->
+                "\u22d7"
+
+    /// <inherit />
+    override this.ToString () =
+        match this with
+        | LessThan ->
+            "LessThan"
+        | Equal ->
+            "Equal"
+        | GreaterThan ->
+            "GreaterThan"
+
+    //
+    static member Inverse prec =
+        match prec with
+        | LessThan ->
+            GreaterThan
+        | Equal ->
+            Equal
+        | GreaterThan ->
+            LessThan
+
+
+(* OPTIMIZE :   Replace PrecedenceTable by an implementation of the
+                more-efficient "precedence functions" algorithm. *)
+
+//
+type PrecedenceTable<'T when 'T : comparison> =
+    Map<'T * 'T, RelativePrecedence>
+
+//
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module PrecedenceTable =
+    //
+    let inline add x y precedence (table : PrecedenceTable<'T>) : PrecedenceTable<'T> =
+        Map.add (x, y) precedence table
+
+    //
+    let inline find x y (table : PrecedenceTable<'T>) =
+        Map.find (x, y) table
+
+    //
+    let inline tryFind x y (table : PrecedenceTable<'T>) =
+        Map.tryFind (x, y) table
 
