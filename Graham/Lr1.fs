@@ -189,18 +189,34 @@ module Lr1 =
             let tableKey = sourceState, lookaheadToken
 
             //
-            let entry =
-                let action = LrParserAction.Reduce reductionRuleId
+            let actionSet =
                 match Map.tryFind tableKey tableGenState.ActionTable with
                 | None ->
-                    Set.singleton action
-                | Some entry ->
-                    Set.add action entry
+                    Action <| Reduce reductionRuleId
+                | Some actionSet ->
+                    match actionSet with
+                    | Action (Shift shiftStateId) ->
+                        Conflict <| ShiftReduce (shiftStateId, reductionRuleId)
 
-            // Update the table with the new entry.
+                    | Action (Reduce reductionRuleId')
+                    | Conflict (ShiftReduce (_, reductionRuleId'))
+                    | Conflict (ReduceReduce (reductionRuleId', _))
+                    | Conflict (ReduceReduce (_, reductionRuleId'))
+                        when reductionRuleId = reductionRuleId' ->
+                        // Return the existing action set without modifying it.
+                        actionSet
+
+                    | actionSet ->
+                        // Adding this action to the existing action set would create
+                        // an impossible set of actions, so raise an exception.
+                        LrTableGenState.impossibleActionSetErrorMsg (
+                            sourceState, lookaheadToken, actionSet, Reduce reductionRuleId)
+                        |> invalidOp
+
+            // Update the table with the new action set.
             (),
             { tableGenState with
-                ActionTable = Map.add tableKey entry tableGenState.ActionTable; }
+                ActionTable = Map.add tableKey actionSet tableGenState.ActionTable; }
 
 
     //

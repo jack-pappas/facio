@@ -64,19 +64,19 @@ module Slr1 =
                                 let tableKey = stateId, terminal
 
                                 // Don't need to do anything if there's no entry for this key;
-                                // it may mean that the table has already been upgraded to SLR(1).
+                                // it may mean that the table has already been upgraded.
                                 match Map.tryFind tableKey actionTable with
                                 | None ->
                                     actionTable
                                 | Some entry ->
                                     // Remove the Reduce action from the action set.
-                                    let entry = Set.remove action entry
-
-                                    // If the entry is now empty, remove it from the ACTION table;
-                                    // otherwise, update the entry in the ACTION table.
-                                    if Set.isEmpty entry then
+                                    match LrParserActionSet.Remove action entry with
+                                    | None ->
+                                        // The remaining action set is empty -- so just
+                                        // remove the existing entry from the table.
                                         Map.remove tableKey actionTable
-                                    else
+                                    | Some entry ->
+                                        // Update the ACTION table with the modified action set.
                                         Map.add tableKey entry actionTable)
 
                     // Pass the modified parser table to the next iteration.

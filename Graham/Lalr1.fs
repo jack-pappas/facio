@@ -16,6 +16,12 @@ open AugmentedPatterns
 open Graham.Analysis
 open Graham.Graph
 
+(*  Turn off warning about uppercase variable identifiers;
+    some variables in the code below are named using the
+    F# backtick syntax so they can use names resembling
+    the formulas they implement. *)
+#nowarn "49"
+
 
 /// <summary>LALR(1) parser table generator.</summary>
 /// <remarks>Look-Ahead LR(1) (LALR(1)) parsing is a simplified form of LR(1) parsing;
@@ -193,9 +199,13 @@ module Lalr1 =
             // so this can be made into a simple lookup instead of having to traverse the ACTION table repeatedly.
             let directReadSymbols =
                 (Set.empty, lr0ParserTable.ActionTable)
-                ||> Map.fold (fun directReadSymbols (stateId, terminal) actions ->
+                ||> Map.fold (fun directReadSymbols (stateId, terminal) entry ->
                     if stateId = succStateId &&
-                        actions |> Set.exists (function Shift _ | Accept -> true | _ -> false) then
+                       (match entry with
+                        | Action Accept
+                        | Action (Shift _)
+                        | Conflict (ShiftReduce (_,_)) -> true
+                        | _ -> false) then
                         Set.add terminal directReadSymbols
                     else
                         directReadSymbols)
@@ -277,16 +287,14 @@ module Lalr1 =
                                 | Symbol.Terminal t ->
                                     lr0ParserTable.ActionTable
                                     |> Map.tryFind (j, t)
-                                    |> Option.bind (fun actions ->
-                                        // There can be at most one (1) Shift action in each set
-                                        // of actions; if this set contains a Shift action,
-                                        // get the 'target' state from it.
-                                        (None, actions)
-                                        ||> Set.fold (fun shift action ->
-                                            match action with
-                                            | Shift target ->
-                                                Some target
-                                            | _ -> shift))
+                                    |> Option.bind (function
+                                        // If this entry contains a Shift action,
+                                        // retrieve the target state from it.
+                                        | Action (Shift shiftTarget)
+                                        | Conflict (ShiftReduce (shiftTarget, _)) ->
+                                            Some shiftTarget
+                                        | _ ->
+                                            None)
                                 | Symbol.Nonterminal t ->
                                     lr0ParserTable.GotoTable
                                     |> Map.tryFind (j, t)
@@ -415,19 +423,19 @@ module Lalr1 =
                                     let tableKey = stateId, terminal
 
                                     // Don't need to do anything if there's no entry for this key;
-                                    // it may mean that the table has already been upgraded to SLR(1).
+                                    // it may mean that the table has already been upgraded.
                                     match Map.tryFind tableKey actionTable with
                                     | None ->
                                         actionTable
                                     | Some entry ->
                                         // Remove the Reduce action from the action set.
-                                        let entry = Set.remove action entry
-
-                                        // If the entry is now empty, remove it from the ACTION table;
-                                        // otherwise, update the entry in the ACTION table.
-                                        if Set.isEmpty entry then
+                                        match LrParserActionSet.Remove action entry with
+                                        | None ->
+                                            // The remaining action set is empty -- so just
+                                            // remove the existing entry from the table.
                                             Map.remove tableKey actionTable
-                                        else
+                                        | Some entry ->
+                                            // Update the ACTION table with the modified action set.
                                             Map.add tableKey entry actionTable)
 
                         // Pass the modified parser table to the next iteration.

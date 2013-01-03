@@ -162,16 +162,32 @@ module Lr0 =
                     let tableKey = sourceState, token
 
                     //
-                    let entry =
-                        let action = LrParserAction.Reduce reductionRuleId
+                    let actionSet =
                         match Map.tryFind tableKey table with
                         | None ->
-                            Set.singleton action
-                        | Some entry ->
-                            Set.add action entry
+                            Action <| Reduce reductionRuleId
+                        | Some actionSet ->
+                            match actionSet with
+                            | Action (Shift shiftStateId) ->
+                                Conflict <| ShiftReduce (shiftStateId, reductionRuleId)
 
-                    // Update the table with the entry.
-                    Map.add tableKey entry table)
+                            | Action (Reduce reductionRuleId')
+                            | Conflict (ShiftReduce (_, reductionRuleId'))
+                            | Conflict (ReduceReduce (reductionRuleId', _))
+                            | Conflict (ReduceReduce (_, reductionRuleId'))
+                                when reductionRuleId = reductionRuleId' ->
+                                // Return the existing action set without modifying it.
+                                actionSet
+
+                            | actionSet ->
+                                // Adding this action to the existing action set would create
+                                // an impossible set of actions, so raise an exception.
+                                LrTableGenState.impossibleActionSetErrorMsg (
+                                    sourceState, token, actionSet, Reduce reductionRuleId)
+                                |> invalidOp
+
+                    // Update the table with the action set.
+                    Map.add tableKey actionSet table)
 
             // Return the updated table-gen state.
             (),
@@ -307,14 +323,16 @@ module Lr0 =
         // associativity tables to resolve conflicts wherever possible.
         let actionTable =
             (lr0ParserTable.ActionTable, lr0ParserTable.ActionTable)
-            ||> Map.fold (fun actionTable (stateId, terminal) actions ->
-                // Does this state contain any conflicts?
-                if Set.count actions < 2 then
+            ||> Map.fold (fun actionTable (stateId, terminal) entry ->
+                // Does this state contain a conflict?
+                match entry with
+                | Action _ ->
                     actionTable
-                else
+                | Conflict conflict ->
                     
 
-
+                    
+                    failwith "TODO"
                     actionTable)
                     
         //
