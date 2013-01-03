@@ -177,47 +177,6 @@ module Lr1 =
             // Return the closure of the item set.
             closure grammar predictiveSets items
 
-    /// Functions which use the State monad to manipulate an LR(1) table-generation state.
-    [<RequireQualifiedAccess>]
-    module TableGenState =
-        /// Add a 'reduce' action to the parser table for the specified lookahead token.
-        let reduce (sourceState : ParserStateId)
-                    (reductionRuleId : ReductionRuleId)
-                    (lookaheadToken : AugmentedTerminal<'Terminal>)
-                    (tableGenState : Lr1TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
-            //
-            let tableKey = sourceState, lookaheadToken
-
-            //
-            let actionSet =
-                match Map.tryFind tableKey tableGenState.ActionTable with
-                | None ->
-                    Action <| Reduce reductionRuleId
-                | Some actionSet ->
-                    match actionSet with
-                    | Action (Shift shiftStateId) ->
-                        Conflict <| ShiftReduce (shiftStateId, reductionRuleId)
-
-                    | Action (Reduce reductionRuleId')
-                    | Conflict (ShiftReduce (_, reductionRuleId'))
-                    | Conflict (ReduceReduce (reductionRuleId', _))
-                    | Conflict (ReduceReduce (_, reductionRuleId'))
-                        when reductionRuleId = reductionRuleId' ->
-                        // Return the existing action set without modifying it.
-                        actionSet
-
-                    | actionSet ->
-                        // Adding this action to the existing action set would create
-                        // an impossible set of actions, so raise an exception.
-                        LrTableGenState.impossibleActionSetErrorMsg (
-                            sourceState, lookaheadToken, actionSet, Reduce reductionRuleId)
-                        |> invalidOp
-
-            // Update the table with the new action set.
-            (),
-            { tableGenState with
-                ActionTable = Map.add tableKey actionSet tableGenState.ActionTable; }
-
 
     //
     let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) predictiveSets (tableGenState : Lr1TableGenState<_,_>) =
@@ -238,7 +197,7 @@ module Lr1 =
                             LrTableGenState.reductionRuleId (item.Nonterminal, item.Production) tableGenState
 
                         // Add a 'reduce' action for the entry with this state and lookahead token.
-                        TableGenState.reduce stateId reductionRuleId item.Lookahead tableGenState
+                        LrTableGenState.reduce (stateId, item.Lookahead) reductionRuleId tableGenState
                         // TEMP : Discard the unit return value until we can use a monadic fold.
                         |> snd
                     else
@@ -263,7 +222,7 @@ module Lr1 =
 
                             // The next symbol to be parsed is a terminal (token),
                             // so add a 'shift' action to this entry of the table.
-                            LrTableGenState.shift stateId token targetStateId tableGenState
+                            LrTableGenState.shift (stateId, token) targetStateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
 
@@ -278,7 +237,7 @@ module Lr1 =
 
                             // The next symbol to be parsed is a nonterminal,
                             // so add a 'goto' action to this entry of the table.
-                            LrTableGenState.goto stateId nonterm targetStateId tableGenState
+                            LrTableGenState.goto (stateId, nonterm) targetStateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
                         ))

@@ -138,6 +138,16 @@ type LrParserActionSet =
             | _ ->
                 Some actionSet
 
+//
+type NonterminalTransition<'Nonterminal
+    when 'Nonterminal : comparison> =
+    ParserStateId * 'Nonterminal
+
+//
+type TerminalTransition<'Terminal
+    when 'Terminal : comparison> =
+    ParserStateId * 'Terminal
+
 /// LR(k) parser table generation state.
 type LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
@@ -148,9 +158,9 @@ type LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
     //
     ParserTransitions : LabeledSparseDigraph<ParserStateId, Symbol<'Nonterminal, 'Terminal>>;
     //
-    ActionTable : Map<ParserStateId * 'Terminal, LrParserActionSet>;
+    ActionTable : Map<TerminalTransition<'Terminal>, LrParserActionSet>;
     //
-    GotoTable : Map<ParserStateId * 'Nonterminal, ParserStateId>;
+    GotoTable : Map<NonterminalTransition<'Nonterminal>, ParserStateId>;
 
     (* TODO :   Remove these in favor of using ProductionKey in the LrParserAction.Reduce case. *)
     //
@@ -230,15 +240,15 @@ module LrTableGenState =
                 (int sourceState) transitionSymbol entry action
 
     /// Add a 'shift' action to the parser table.
-    let shift (sourceState : ParserStateId) (transitionSymbol : 'Terminal)
+    let shift (key : TerminalTransition<'Terminal>)
                 (targetState : ParserStateId)
                 (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
-        //
-        let tableKey = sourceState, transitionSymbol
+        // Destructure the key to get it's components.
+        let sourceState, transitionSymbol = key
 
         //
         let actionSet =
-            match Map.tryFind tableKey tableGenState.ActionTable with
+            match Map.tryFind key tableGenState.ActionTable with
             | None ->
                 Action <| Shift targetState
             | Some actionSet ->
@@ -256,33 +266,69 @@ module LrTableGenState =
                     // Adding this action to the existing action set would create
                     // an impossible set of actions, so raise an exception.
                     impossibleActionSetErrorMsg (
-                        sourceState, transitionSymbol, entry, LrParserAction.Shift targetState)
+                        sourceState, transitionSymbol, entry, Shift targetState)
                     |> invalidOp
 
         (),
         { tableGenState with
             // Update the table with the new action set.
-            ActionTable = Map.add tableKey actionSet tableGenState.ActionTable;
+            ActionTable = Map.add key actionSet tableGenState.ActionTable;
             // Add an edge labeled with this symbol to the transition graph.
             ParserTransitions =
                 tableGenState.ParserTransitions
                 |> Graph.addEdge sourceState targetState (Symbol.Terminal transitionSymbol); }
 
-    /// Add a 'goto' action to the parser table.
-    let goto (sourceState : ParserStateId)
-                (transitionSymbol : 'Nonterminal)
-                (targetState : ParserStateId)
+    /// Add a 'reduce' action to the ACTION table.
+    let reduce (key : TerminalTransition<'Terminal>)
+                (reductionRuleId : ReductionRuleId)
                 (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
-        //
-        let tableKey = sourceState, transitionSymbol
+        // Destructure the key to get it's components.
+        let sourceState, transitionSymbol = key
 
         //
-        match Map.tryFind tableKey tableGenState.GotoTable with
+        let actionSet =
+            match Map.tryFind key tableGenState.ActionTable with
+            | None ->
+                Action <| Reduce reductionRuleId
+            | Some actionSet ->
+                match actionSet with
+                | Action (Shift shiftStateId) ->
+                    Conflict <| ShiftReduce (shiftStateId, reductionRuleId)
+
+                | Action (Reduce reductionRuleId')
+                | Conflict (ShiftReduce (_, reductionRuleId'))
+                | Conflict (ReduceReduce (reductionRuleId', _))
+                | Conflict (ReduceReduce (_, reductionRuleId'))
+                    when reductionRuleId = reductionRuleId' ->
+                    // Return the existing action set without modifying it.
+                    actionSet
+
+                | actionSet ->
+                    // Adding this action to the existing action set would create
+                    // an impossible set of actions, so raise an exception.
+                    impossibleActionSetErrorMsg (
+                        sourceState, transitionSymbol, actionSet, Reduce reductionRuleId)
+                    |> invalidOp
+
+        // Update the table with the new action set.
+        (),
+        { tableGenState with
+            ActionTable = Map.add key actionSet tableGenState.ActionTable; }
+
+    /// Add an entry to the GOTO table.
+    let goto (key : NonterminalTransition<'Nonterminal>)
+                (targetState : ParserStateId)
+                (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+        // Destructure the key to get it's components.
+        let sourceState, transitionSymbol = key
+
+        //
+        match Map.tryFind key tableGenState.GotoTable with
         | None ->
             (),
             { tableGenState with
                 // Update the table with the new entry.
-                GotoTable = Map.add tableKey targetState tableGenState.GotoTable;
+                GotoTable = Map.add key targetState tableGenState.GotoTable;
                 // Add an edge labelled with this symbol to the transition graph.
                 ParserTransitions =
                     tableGenState.ParserTransitions
@@ -296,20 +342,20 @@ module LrTableGenState =
             else
                 let msg = sprintf "Cannot add the entry (g%i) to the GOTO table; \
                                     it already contains an entry (g%i) for the key %A."
-                                    (int targetState) (int entry) tableKey
-                raise <| exn msg
+                                    (int targetState) (int entry) key
+                invalidOp msg
 
     /// Add an 'accept' action to the parser table.
     let accept (sourceState : ParserStateId) (tableGenState : LrTableGenState<'Nonterminal, AugmentedTerminal<'Terminal>, 'Lookahead>) =
         //
-        let tableKey = sourceState, EndOfFile
+        let key = sourceState, EndOfFile
 
         //
         let actionSet =
-            match Map.tryFind tableKey tableGenState.ActionTable with
+            match Map.tryFind key tableGenState.ActionTable with
             | None ->
                 // Create a new 'accept' action for this action set.
-                Action LrParserAction.Accept
+                Action Accept
             | Some ((Action Accept) as actionSet) ->
                 // The action set doesn't need to be modified.
                 actionSet
@@ -317,24 +363,14 @@ module LrTableGenState =
                 // Adding an Accept action to the existing action set would create
                 // an impossible set of actions, so raise an exception.
                 impossibleActionSetErrorMsg (
-                    sourceState, EndOfFile, actionSet, LrParserAction.Accept)
+                    sourceState, EndOfFile, actionSet, Accept)
                 |> invalidOp
 
         // Update the table with the new entry.
         (),
         { tableGenState with
-            ActionTable = Map.add tableKey actionSet tableGenState.ActionTable; }
+            ActionTable = Map.add key actionSet tableGenState.ActionTable; }
 
-
-//
-type NonterminalTransition<'Nonterminal
-    when 'Nonterminal : comparison> =
-    ParserStateId * 'Nonterminal
-
-//
-type TerminalTransition<'Terminal
-    when 'Terminal : comparison> =
-    ParserStateId * 'Terminal
 
 /// LR(k) parser table.
 type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead

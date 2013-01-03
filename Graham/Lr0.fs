@@ -146,55 +146,6 @@ module Lr0 =
             |> closure productions
 
 
-    /// Functions which use the State monad to manipulate an LR(0) table-generation state.
-    [<RequireQualifiedAccess>]
-    module private TableGenState =
-        /// Add 'reduce' actions to the parser table for each terminal (token) in the grammar.
-        let reduce (sourceState : ParserStateId)
-                    (reductionRuleId : ReductionRuleId)
-                    (terminals : Set<_>)
-                    (tableGenState : Lr0TableGenState<'Nonterminal, AugmentedTerminal<'Terminal>>) =
-            // Fold over the set of terminals (tokens) in the grammar.
-            let actionTable =
-                (tableGenState.ActionTable, terminals)
-                ||> Set.fold (fun actionTable terminal ->
-                    //
-                    let tableKey = sourceState, terminal
-
-                    //
-                    let actionSet =
-                        match Map.tryFind tableKey actionTable with
-                        | None ->
-                            Action <| Reduce reductionRuleId
-                        | Some actionSet ->
-                            match actionSet with
-                            | Action (Shift shiftStateId) ->
-                                Conflict <| ShiftReduce (shiftStateId, reductionRuleId)
-
-                            | Action (Reduce reductionRuleId')
-                            | Conflict (ShiftReduce (_, reductionRuleId'))
-                            | Conflict (ReduceReduce (reductionRuleId', _))
-                            | Conflict (ReduceReduce (_, reductionRuleId'))
-                                when reductionRuleId = reductionRuleId' ->
-                                // Return the existing action set without modifying it.
-                                actionSet
-
-                            | actionSet ->
-                                // Adding this action to the existing action set would create
-                                // an impossible set of actions, so raise an exception.
-                                LrTableGenState.impossibleActionSetErrorMsg (
-                                    sourceState, terminal, actionSet, Reduce reductionRuleId)
-                                |> invalidOp
-
-                    // Update the ACTION table with the action set.
-                    Map.add tableKey actionSet actionTable)
-
-            // Return the updated table-gen state.
-            (),
-            { tableGenState with
-                ActionTable = actionTable; }
-
-
     //
     let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) (tableGenState : Lr0TableGenState<_,_>) =
         // Preconditions
@@ -213,10 +164,13 @@ module Lr0 =
                         let reductionRuleId, tableGenState =
                             LrTableGenState.reductionRuleId (item.Nonterminal, item.Production) tableGenState
 
-                        // Add 'reduce' actions to the parser table.
-                        TableGenState.reduce stateId reductionRuleId grammar.Terminals tableGenState
-                        // TEMP : Discard the unit return value until we can use a monadic fold.
-                        |> snd
+                        // Add a 'reduce' action to the ACTION table for each terminal (token) in the grammar.
+                        (tableGenState, grammar.Terminals)
+                        ||> Set.fold (fun tableGenState terminal ->
+                            let key = stateId, terminal
+                            LrTableGenState.reduce key reductionRuleId tableGenState
+                            // TEMP : Discard the unit return value until we can use a monadic fold.
+                            |> snd)
                     else
                         // Add actions to the table based on the next symbol to be parsed.
                         match item.Production.[int item.Position] with
@@ -239,7 +193,7 @@ module Lr0 =
 
                             // The next symbol to be parsed is a terminal (token),
                             // so add a 'shift' action to this entry of the table.
-                            LrTableGenState.shift stateId token targetStateId tableGenState
+                            LrTableGenState.shift (stateId, token) targetStateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
 
@@ -254,7 +208,7 @@ module Lr0 =
 
                             // The next symbol to be parsed is a nonterminal,
                             // so add a 'goto' action to this entry of the table.
-                            LrTableGenState.goto stateId nonterm targetStateId tableGenState
+                            LrTableGenState.goto (stateId, nonterm) targetStateId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
                         ))
