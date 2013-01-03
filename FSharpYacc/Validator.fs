@@ -7,7 +7,7 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-module FSharpYacc.Validator
+module internal FSharpYacc.Validator
 
 open Graham.Grammar
 open Graham.Analysis

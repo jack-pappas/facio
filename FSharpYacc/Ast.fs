@@ -9,6 +9,7 @@ See LICENSE.TXT for licensing details.
 /// The types representing the fsharpyacc abstract syntax tree (AST).
 namespace FSharpYacc.Ast
 
+open System.Diagnostics
 open Graham.Grammar
 
 
@@ -24,6 +25,7 @@ type SymbolIdentifier = string
 type DeclaredType = string
 
 //
+[<DebuggerDisplay("{DebuggerDisplay,nq}")>]
 type ProductionRule = {
     /// The symbols matched by this production rule.
     // NOTE : This list is in reverse order from the way the symbols appear in the parser
@@ -34,7 +36,13 @@ type ProductionRule = {
     /// When set, the default associativity and precedence of this rule is overridden
     /// and the associativity and precedence of the specified symbol used instead.
     ImpersonatedPrecedence : SymbolIdentifier option;
-}
+} with
+    member private this.DebuggerDisplay
+        with get () =
+            match this.Symbols with
+            | [] -> "(Empty)"
+            | symbols ->
+                System.String.Join (" ", List.toArray symbols)
 
 /// A complete parser specification of a grammar.
 type Specification = {

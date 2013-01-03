@@ -58,6 +58,7 @@
     <Compile Include="Emit.fs" />
     <Compile Include="CodeGen.fs" />
     <Compile Include="GraphGen.fs" />
+    <Compile Include="TestSpec.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
