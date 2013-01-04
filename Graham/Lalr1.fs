@@ -333,7 +333,7 @@ module Lalr1 =
                 for the remaining states. *)
 
     /// Computes the LALR(1) look-ahead (LA) sets given a grammar and its LR(0) parser table.
-    let private lookaheadSets (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
+    let lookaheadSets (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
         : Choice<Map<_,_>, string> =
         (* DeRemer and Penello's algorithm for computing LALR look-ahead sets. *)
 
@@ -376,55 +376,48 @@ module Lalr1 =
                 |> Set.union lookaheadTokens))
         |> Choice1Of2
 
-    /// Creates an LALR(1) parser table from a grammar and it's LR(0) or SLR(1) parser table.
-    let upgrade (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
-        : Choice<Lr0ParserTable<'Nonterminal, 'Terminal>, string> =
-        // Compute the lookahead sets.
-        // TODO : Simplify this by using the Either/Choice workflow.
-        match lookaheadSets (grammar, lr0ParserTable) with
-        | Choice2Of2 error ->
-            Choice2Of2 error
-        | Choice1Of2 lookaheadSets ->
-            /// The predictive sets of the grammar.
-            // OPTIMIZE : Don't recompute these -- if they've already been computed for SLR(1),
-            // we should pass those in instead of recomputing them.
-            let predictiveSets = PredictiveSets.ofGrammar grammar
+    /// Creates an LALR(1) parser table from a grammar, it's LR(0) or SLR(1) parser table,
+    /// and the LALR(1) look-ahead sets computed from the grammar and parser table.
+    let upgrade (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>, lookaheadSets)
+        : Lr0ParserTable<'Nonterminal, 'Terminal> =
+        /// The predictive sets of the grammar.
+        // OPTIMIZE : Don't recompute these -- if they've already been computed for SLR(1),
+        // we should pass those in instead of recomputing them.
+        let predictiveSets = PredictiveSets.ofGrammar grammar
 
-            // Use the LALR(1) lookahead sets to resolve conflicts in the LR(0) parser table.
-            (lr0ParserTable, lr0ParserTable.ParserStates)
-            ||> Map.fold (fun parserTable stateId items ->
-                (parserTable, items)
-                ||> Set.fold (fun parserTable item ->
-                    // If the parser position is at the end of this item's production,
-                    // remove the Reduce actions from the ACTION table for any terminals
-                    // which aren't in this state/rule's lookahead set.
-                    if int item.Position < Array.length item.Production then
-                        parserTable
-                    else
-                        /// This state/rule's look-ahead set.
-                        let lookahead =
-                            Map.find (stateId, (item.Nonterminal, item.Production)) lookaheadSets
+        // Use the LALR(1) lookahead sets to resolve conflicts in the LR(0) parser table.
+        (lr0ParserTable, lr0ParserTable.ParserStates)
+        ||> Map.fold (fun parserTable stateId items ->
+            (parserTable, items)
+            ||> Set.fold (fun parserTable item ->
+                // If the parser position is at the end of this item's production,
+                // remove the Reduce actions from the ACTION table for any terminals
+                // which aren't in this state/rule's lookahead set.
+                if int item.Position < Array.length item.Production then
+                    parserTable
+                else
+                    /// This state/rule's look-ahead set.
+                    let lookahead =
+                        Map.find (stateId, (item.Nonterminal, item.Production)) lookaheadSets
 
-                        // Remove the unnecessary Reduce actions, thereby resolving some conflicts.
-                        let action =
-                            parserTable.ReductionRulesById
-                            // OPTIMIZE : This lookup is slow (O(n)) -- we should use a Bimap instead.
-                            |> Map.pick (fun ruleId key ->
-                                if key = (item.Nonterminal, item.Production) then
-                                    Some ruleId
-                                else None)
-                            |> LrParserAction.Reduce
+                    // Remove the unnecessary Reduce actions, thereby resolving some conflicts.
+                    let action =
+                        parserTable.ReductionRulesById
+                        // OPTIMIZE : This lookup is slow (O(n)) -- we should use a Bimap instead.
+                        |> Map.pick (fun ruleId key ->
+                            if key = (item.Nonterminal, item.Production) then
+                                Some ruleId
+                            else None)
+                        |> LrParserAction.Reduce
 
-                        (parserTable, grammar.Terminals)
-                        ||> Set.fold (fun parserTable terminal ->
-                            // Is this terminal in this state/rule's lookahead set?
-                            if Set.contains terminal lookahead then
-                                parserTable
-                            else
-                                // Remove the unnecessary Reduce action for this terminal.
-                                let key = stateId, terminal
-                                LrParserTable.RemoveAction (parserTable, key, action))
-                            ))
-            //
-            |> Choice1Of2
+                    (parserTable, grammar.Terminals)
+                    ||> Set.fold (fun parserTable terminal ->
+                        // Is this terminal in this state/rule's lookahead set?
+                        if Set.contains terminal lookahead then
+                            parserTable
+                        else
+                            // Remove the unnecessary Reduce action for this terminal.
+                            let key = stateId, terminal
+                            LrParserTable.RemoveAction (parserTable, key, action))
+                        ))
 
