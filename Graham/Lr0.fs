@@ -261,11 +261,6 @@ module Lr0 =
             ReductionRulesById = finalTableGenState.ReductionRulesById; }
 
     //
-    let removeAction (sourceState : ParserStateId) (action : LrParserAction) (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) : Lr0ParserTable<'Nonterminal, 'Terminal> =
-        // TODO : If removing a 'Shift' action, also remove the corresponding edge from the ParserTransitions graph.
-        raise <| System.NotImplementedException "Lr0.removeAction"
-
-    //
     let applyPrecedence (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,
                             nonterminalPrecedence : PrecedenceTable<'Nonterminal>,
                             terminalPrecedence : PrecedenceTable<'Terminal>,
@@ -275,21 +270,24 @@ module Lr0 =
 
         // Fold over the provided table, using the supplied precedence and
         // associativity tables to resolve conflicts wherever possible.
-        let actionTable =
-            (lr0ParserTable.ActionTable, lr0ParserTable.ActionTable)
-            ||> Map.fold (fun actionTable (stateId, terminal) entry ->
-                // Does this state contain a conflict?
-                match entry with
-                | Action _ ->
-                    actionTable
-                | Conflict conflict ->
-                    
+        (lr0ParserTable, lr0ParserTable.ActionTable)
+        ||> Map.fold (fun lr0ParserTable (stateId, terminal) entry ->
+            // Does this state contain a conflict?
+            match entry with
+            | Action _ ->
+                lr0ParserTable
+            | Conflict conflict ->
+                // TODO : Use the precedence and associativity tables to resolve this conflict (if possible).
+                // If the conflict can be resolved, use the LrParserTable<_,_,_>.RemoveAction method
+                // to remove the action we're not using.
+                match conflict with
+                | ShiftReduce (targetStateId, reduceRuleId) ->
+                    //
+                    raise <| System.NotImplementedException "Lr0.applyPrecedence"
+                    lr0ParserTable
 
-                    
-                    failwith "TODO"
-                    actionTable)
-                    
-        //
-        raise <| System.NotImplementedException "Lr0.applyPrecedence"
-
+                | ReduceReduce (reduceRuleId1, reduceRuleId2) ->
+                    //
+                    raise <| System.NotImplementedException "Lr0.applyPrecedence"
+                    lr0ParserTable)
 

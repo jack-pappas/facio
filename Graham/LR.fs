@@ -388,5 +388,41 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
     (* TODO :   Remove this in favor of using ProductionKey in the LrParserAction.Reduce case. *)
     //
     ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
-}
+} with
+    /// Removes an action from the action set corresponding to a specified key.
+    static member RemoveAction (table : LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>, key, action) =
+        // Try to retrieve the existing action set; if no action set exists for the specified key,
+        // return without modifying the table.
+        match Map.tryFind key table.ActionTable with
+        | None ->
+            table
+        | Some actionSet ->
+            // Remove the action from the action set.
+            match LrParserActionSet.Remove action actionSet with
+            | Some actionSet' when actionSet = actionSet ->
+                // The action set wasn't modified, so there's no need to modify the parser table.
+                table
+            | actionSet' ->
+                /// The ACTION table updated with the modified action set.
+                let actionTable =
+                    match actionSet' with
+                    | None ->
+                        Map.remove key table.ActionTable
+                    | Some actionSet' ->
+                        Map.add key actionSet' table.ActionTable
+
+                // If the action to be removed is a Shift, then we must also remove
+                // the corresponding edge from the ParserTransitions graph.
+                let parserTransitions =
+                    match action with
+                    | Shift targetState ->
+                        let sourceState = fst key
+                        LabeledSparseDigraph.removeEdge sourceState targetState table.ParserTransitions
+                    | _ ->
+                        table.ParserTransitions
+
+                // Return the modified parser table.
+                { table with
+                    ActionTable = actionTable;
+                    ParserTransitions = parserTransitions; }
 
