@@ -399,7 +399,7 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
         | Some actionSet ->
             // Remove the action from the action set.
             match LrParserActionSet.Remove action actionSet with
-            | Some actionSet' when actionSet = actionSet ->
+            | Some actionSet' when actionSet = actionSet' ->
                 // The action set wasn't modified, so there's no need to modify the parser table.
                 table
             | actionSet' ->
