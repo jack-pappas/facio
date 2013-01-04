@@ -262,32 +262,100 @@ module Lr0 =
 
     //
     let applyPrecedence (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,
-                            nonterminalPrecedence : PrecedenceTable<'Nonterminal>,
-                            terminalPrecedence : PrecedenceTable<'Terminal>,
+                            rulePrecedence : Map<ReductionRuleId, PrecedenceLevel>,
+                            terminalPrecedence : Map<'Terminal, PrecedenceLevel>,
                             terminalAssociativities : Map<'Terminal, Associativity>) : Lr0ParserTable<'Nonterminal, 'Terminal> =
         // Preconditions
-        // TODO
+        // NOTE : We only use assertions here to avoid runtime overhead in production;
+        // however, if the performance penalty is minimal, these should be changed to
+        // normal 'if'/'elif' statements to enforce the preconditions at runtime.
+        // TODO : Assert that 'rulePrecedence' and 'terminalPrecedence' have entries for all possible rules/terminals.
 
         // Fold over the provided table, using the supplied precedence and
         // associativity tables to resolve conflicts wherever possible.
         (lr0ParserTable, lr0ParserTable.ActionTable)
-        ||> Map.fold (fun lr0ParserTable (stateId, terminal) entry ->
+        ||> Map.fold (fun lr0ParserTable ((stateId, terminal) as key) actionSet ->
             // Does this state contain a conflict?
-            match entry with
+            match actionSet with
             | Action _ ->
                 lr0ParserTable
             | Conflict conflict ->
-                // TODO : Use the precedence and associativity tables to resolve this conflict (if possible).
-                // If the conflict can be resolved, use the LrParserTable<_,_,_>.RemoveAction method
+                //
+                let terminal =
+                    // The end-of-file marker is never shifted, so it can't possibly cause a conflict.
+                    match terminal with
+                    | EndOfFile ->
+                        // TODO : Create a better error message here.
+                        raise <| exn "Found a conflict involving the end-of-file marker."
+                    | Terminal terminal ->
+                        terminal
+
+                // Use the precedence and associativity tables to resolve this conflict (if possible).
+                // If the conflict can be resolved, use the LrParserTable.RemoveAction method
                 // to remove the action we're not using.
                 match conflict with
-                | ShiftReduce (targetStateId, reduceRuleId) ->
-                    //
-                    raise <| System.NotImplementedException "Lr0.applyPrecedence"
+                | ReduceReduce (_,_) ->
+                    (*  Reduce-reduce conflicts aren't solved with precedence/associativity --
+                        instead, they must be resolved by the 'resolveConflicts' function. *)
                     lr0ParserTable
 
-                | ReduceReduce (reduceRuleId1, reduceRuleId2) ->
+                | ShiftReduce (targetStateId, reduceRuleId) ->
                     //
-                    raise <| System.NotImplementedException "Lr0.applyPrecedence"
-                    lr0ParserTable)
+                    let shiftPrecedence = Map.find terminal terminalPrecedence
+                    //
+                    let reducePrecedence = Map.find reduceRuleId rulePrecedence
+
+                    // The conflict can be resolved if the precedences are different --
+                    // we remove the action with lower precedence from this action set. 
+                    if shiftPrecedence < reducePrecedence then
+                        LrParserTable.RemoveAction (lr0ParserTable, key, Shift targetStateId)
+                    elif shiftPrecedence > reducePrecedence then
+                        LrParserTable.RemoveAction (lr0ParserTable, key, Reduce reduceRuleId)
+                    else
+                        // The precedences are the same, so we use the terminal's associativity
+                        // (if provided) to resolve the conflict.
+                        match Map.tryFind terminal terminalAssociativities with
+                        | None ->
+                            // Leave the conflict unresolved.
+                            lr0ParserTable
+                        | Some Left ->
+                            // For left-associative tokens, reduce (remove the Shift action).
+                            LrParserTable.RemoveAction (lr0ParserTable, key, Shift targetStateId)
+                        | Some Right ->
+                            // For right-associative tokens, shift (remove the Reduce action).
+                            LrParserTable.RemoveAction (lr0ParserTable, key, Reduce reduceRuleId)
+                        | Some NonAssociative ->
+                            // For non-associative tokens, remove *both* actions.
+                            { lr0ParserTable with
+                                ActionTable = Map.remove key lr0ParserTable.ActionTable; })
+
+    //
+    let resolveConflicts (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
+        //
+        (lr0ParserTable, lr0ParserTable.ActionTable)
+        ||> Map.fold (fun lr0ParserTable ((stateId, terminal) as key) actionSet ->
+            // Does this state contain a conflict?
+            match actionSet with
+            | Action _ ->
+                lr0ParserTable
+            | Conflict conflict ->
+                // Use the precedence and associativity tables to resolve this conflict (if possible).
+                // If the conflict can be resolved, use the LrParserTable.RemoveAction method
+                // to remove the action we're not using.
+                match conflict with
+                | ReduceReduce (reduceRuleId1, reduceRuleId2) ->
+                    // Resolve in favor of the lower-numbered rule (i.e., the rule declared first in the grammar).
+                    if reduceRuleId1 < reduceRuleId2 then
+                        LrParserTable.RemoveAction (lr0ParserTable, key, Reduce reduceRuleId2)
+                    elif reduceRuleId1 > reduceRuleId2 then
+                        LrParserTable.RemoveAction (lr0ParserTable, key, Reduce reduceRuleId1)
+                    else
+                        // This shouldn't ever happen, unless someone goes
+                        // out of their way to create such an entry.
+                        lr0ParserTable
+
+                | ShiftReduce (targetStateId, reduceRuleId) ->
+                    // Resolve in favor of shifting; this is similar to the
+                    // "longest match rule" used in lexical analyzers.
+                    LrParserTable.RemoveAction (lr0ParserTable, key, Reduce reduceRuleId))
 

@@ -223,6 +223,14 @@ type Associativity =
             "Right"
 
 //
+[<Measure>] type AbsolutePrecedence
+//
+type PrecedenceLevel = int<AbsolutePrecedence>
+
+(* TODO :   Un-comment the RelativePrecedence type whenever we get around to
+            implementing the algorithm for creating operator-precedence parsers. *)
+(*
+//
 [<DebuggerDisplay("{DebuggerDisplay,nq}")>]
 type RelativePrecedence =
     //
@@ -262,27 +270,5 @@ type RelativePrecedence =
             Equal
         | GreaterThan ->
             LessThan
-
-
-(* OPTIMIZE :   Replace PrecedenceTable by an implementation of the
-                more-efficient "precedence functions" algorithm. *)
-
-//
-type PrecedenceTable<'T when 'T : comparison> =
-    Map<'T * 'T, RelativePrecedence>
-
-//
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module PrecedenceTable =
-    //
-    let inline add x y precedence (table : PrecedenceTable<'T>) : PrecedenceTable<'T> =
-        Map.add (x, y) precedence table
-
-    //
-    let inline find x y (table : PrecedenceTable<'T>) =
-        Map.find (x, y) table
-
-    //
-    let inline tryFind x y (table : PrecedenceTable<'T>) =
-        Map.tryFind (x, y) table
+*)
 
