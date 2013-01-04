@@ -398,50 +398,33 @@ module Lalr1 =
                     // If the parser position is at the end of this item's production,
                     // remove the Reduce actions from the ACTION table for any terminals
                     // which aren't in this state/rule's lookahead set.
-                    if int item.Position = Array.length item.Production then
+                    if int item.Position < Array.length item.Production then
+                        parserTable
+                    else
                         /// This state/rule's look-ahead set.
                         let lookahead =
                             Map.find (stateId, (item.Nonterminal, item.Production)) lookaheadSets
 
                         // Remove the unnecessary Reduce actions, thereby resolving some conflicts.
-                        let actionTable =
-                            let action =
-                                parserTable.ReductionRulesById
-                                // OPTIMIZE : This lookup is slow (O(n)) -- we should use a Bimap instead.
-                                |> Map.pick (fun ruleId key ->
-                                    if key = (item.Nonterminal, item.Production) then
-                                        Some ruleId
-                                    else None)
-                                |> LrParserAction.Reduce
-                            (parserTable.ActionTable, grammar.Terminals)
-                            ||> Set.fold (fun actionTable terminal ->
-                                // Is this terminal in this state/rule's lookahead set?
-                                if Set.contains terminal lookahead then
-                                    actionTable
-                                else
-                                    //
-                                    let tableKey = stateId, terminal
+                        let action =
+                            parserTable.ReductionRulesById
+                            // OPTIMIZE : This lookup is slow (O(n)) -- we should use a Bimap instead.
+                            |> Map.pick (fun ruleId key ->
+                                if key = (item.Nonterminal, item.Production) then
+                                    Some ruleId
+                                else None)
+                            |> LrParserAction.Reduce
 
-                                    // Don't need to do anything if there's no entry for this key;
-                                    // it may mean that the table has already been upgraded.
-                                    match Map.tryFind tableKey actionTable with
-                                    | None ->
-                                        actionTable
-                                    | Some entry ->
-                                        // Remove the Reduce action from the action set.
-                                        match LrParserActionSet.Remove action entry with
-                                        | None ->
-                                            // The remaining action set is empty -- so just
-                                            // remove the existing entry from the table.
-                                            Map.remove tableKey actionTable
-                                        | Some entry ->
-                                            // Update the ACTION table with the modified action set.
-                                            Map.add tableKey entry actionTable)
-
-                        // Pass the modified parser table to the next iteration.
-                        { parserTable with ActionTable = actionTable; }
-                    else
-                        parserTable))
+                        (parserTable, grammar.Terminals)
+                        ||> Set.fold (fun parserTable terminal ->
+                            // Is this terminal in this state/rule's lookahead set?
+                            if Set.contains terminal lookahead then
+                                parserTable
+                            else
+                                // Remove the unnecessary Reduce action for this terminal.
+                                let key = stateId, terminal
+                                LrParserTable.RemoveAction (parserTable, key, action))
+                            ))
             //
             |> Choice1Of2
 
