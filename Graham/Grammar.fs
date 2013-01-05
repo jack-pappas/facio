@@ -136,69 +136,6 @@ and AugmentedGrammar<'Nonterminal, 'Terminal
     and 'Terminal : comparison> =
     Grammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
 
-//
-[<Measure>] type ProductionIdx
-/// <summary>The 0-based index of a production of a nonterminal.</summary>
-/// <remarks>Within the list or array containing a nonterminal's productions,
-/// greater precedence is assigned to productions with lower indices --
-/// unless a production has been explicitly assigned a precedence value.</remarks>
-type ProductionIndex = int<ProductionIdx>
-
-//
-type ProductionKey<'Nonterminal
-    when 'Nonterminal : comparison> =
-    'Nonterminal * ProductionIndex
-
-////
-//type Production<'Nonterminal, 'Terminal
-//        when 'Nonterminal : comparison
-//        and 'Terminal : comparison> = {
-//    //
-//    Nonterminal : 'Nonterminal;
-//    //
-//    Symbols : Symbol<'Nonterminal, 'Terminal>[];
-//} with
-//    override this.ToString () =
-//        let sb = System.Text.StringBuilder ()
-//
-//        // Add the nonterminal text and arrow to the StringBuilder.
-//        sprintf "%O \u2192 " this.Nonterminal
-//        |> sb.Append |> ignore
-//
-//        // Append the symbols
-//        this.Symbols
-//        |> Array.iter (fun symbol ->
-//            symbol.ToString ()
-//            |> sb.Append |> ignore)
-//
-//        sb.ToString ()
-
-/// <summary>The position of a parser in a production.</summary>
-/// <remarks>
-/// The position corresponds to the 0-based index of the next symbol
-/// to be parsed, so position values must always be within the range
-/// [0, production.Length].
-/// </remarks>
-[<Measure>] type ParserPosition
-
-/// Identifier for a parser state.
-[<Measure>] type ParserStateIdentifier
-/// Unique identifier for a parser state, e.g., when creating an LR parser table.
-type ParserStateId = int<ParserStateIdentifier>
-
-(* TODO :   Create a ProductionIndex -> ReductionRuleId map
-            so we only emit code for production rules which are actually used
-            to reduce items from the stack, but for Reduce actions we can still
-            identify the original production rule (for diagnostic purposes). *)
-(* NOTE :   We should probably just get rid of this and use ProductionIndex instead.
-            Just emit code for all productions; when the user compiles the emitted
-            code into a larger program, that compiler can perform dead-code elimination
-            to get rid of any unused code. *)
-//
-[<Measure>] type ReductionRuleIdentifier
-//
-type ReductionRuleId = int<ReductionRuleIdentifier>
-
 /// Active patterns which simplify pattern matching on augmented grammars.
 module AugmentedPatterns =
     let inline internal (|Nonterminal|Start|) (augmentedNonterminal : AugmentedNonterminal<'Nonterminal>) =
@@ -215,6 +152,24 @@ module AugmentedPatterns =
         | AugmentedTerminal.EndOfFile ->
             EndOfFile
 
+
+//
+[<Measure>] type ProductionRuleIdentifier
+//
+type ProductionRuleId = int<ProductionRuleIdentifier>
+
+/// <summary>The position of a parser in the right-hand-side (RHS) of a production rule.</summary>
+/// <remarks>
+/// The position corresponds to the 0-based index of the next symbol
+/// to be parsed, so position values must always be within the range
+/// [0, production.Length].
+/// </remarks>
+[<Measure>] type ParserPosition
+
+/// Identifier for a parser state.
+[<Measure>] type ParserStateIdentifier
+/// Unique identifier for a parser state, e.g., when creating an LR parser table.
+type ParserStateId = int<ParserStateIdentifier>
 
 /// Associativity of a terminal (token).
 /// This can be explicitly specified to override the
@@ -247,7 +202,7 @@ type PrecedenceLevel = int<AbsolutePrecedence>
 type PrecedenceSettings<'Terminal
     when 'Terminal : comparison> = {
     //
-    RulePrecedence : Map<ReductionRuleId, PrecedenceLevel>;
+    RulePrecedence : Map<ProductionRuleId, PrecedenceLevel>;
     //
     TerminalPrecedence : Map<'Terminal, PrecedenceLevel>;
     //

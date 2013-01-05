@@ -20,7 +20,7 @@ type LeftCornerParserAction =
     | Shift of ParserStateId
     /// Announce that the free position ("recognition point")
     /// has been reached for the specified rule.
-    | Announce of ReductionRuleId
+    | Announce of ProductionRuleId
     /// Accept.
     | Accept
 
@@ -83,13 +83,11 @@ type LeftCornerParserTable<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> = {
     //
-    ActionTable : Map<ParserStateId * 'Terminal, Set<LeftCornerParserAction>>;
-    //
-    GotoTable : Map<ParserStateId * 'Nonterminal, ParserStateId>;
-    //
     ParserStates : Map<ParserStateId, LeftCornerParserState<'Nonterminal, 'Terminal>>;
     //
-    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
+    ActionTable : Map<ParserStateId * 'Terminal, Set<LeftCornerParserAction>>;
+    //
+    GotoTable : Map<ParserStateId * 'Nonterminal, ParserStateId>;    
 }
 
 /// Parser-generators for left-corner grammars.

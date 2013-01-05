@@ -378,7 +378,10 @@ module Lalr1 =
 
     /// Creates an LALR(1) parser table from a grammar, it's LR(0) or SLR(1) parser table,
     /// and the LALR(1) look-ahead sets computed from the grammar and parser table.
-    let upgrade (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>, lookaheadSets)
+    let upgrade (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>,
+                 lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,
+                 productionRuleIds : Map<(AugmentedNonterminal<'Nonterminal> * AugmentedSymbol<'Nonterminal, 'Terminal>[]), ProductionRuleId>,
+                 lookaheadSets)
         : Lr0ParserTable<'Nonterminal, 'Terminal> =
         /// The predictive sets of the grammar.
         // OPTIMIZE : Don't recompute these -- if they've already been computed for SLR(1),
@@ -402,12 +405,8 @@ module Lalr1 =
 
                     // Remove the unnecessary Reduce actions, thereby resolving some conflicts.
                     let action =
-                        parserTable.ReductionRulesById
-                        // OPTIMIZE : This lookup is slow (O(n)) -- we should use a Bimap instead.
-                        |> Map.pick (fun ruleId key ->
-                            if key = (item.Nonterminal, item.Production) then
-                                Some ruleId
-                            else None)
+                        productionRuleIds
+                        |> Map.find (item.Nonterminal, item.Production)
                         |> LrParserAction.Reduce
 
                     (parserTable, grammar.Terminals)

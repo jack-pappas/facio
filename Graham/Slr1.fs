@@ -25,7 +25,9 @@ open Graham.Graph
 [<RequireQualifiedAccess>]
 module Slr1 =
     /// Given a grammar and it's LR(0) parser table, upgrades the table to SLR(1).
-    let upgrade (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
+    let upgrade (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>,
+                 lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,
+                 productionRuleIds : Map<(AugmentedNonterminal<'Nonterminal> * AugmentedSymbol<'Nonterminal, 'Terminal>[]), ProductionRuleId>) =
         /// Predictive sets of the augmented grammar.
         let predictiveSets = PredictiveSets.ofGrammar grammar
 
@@ -48,12 +50,8 @@ module Slr1 =
 
                     // Remove the unnecessary Reduce actions, thereby resolving some conflicts.
                     let action =
-                        parserTable.ReductionRulesById
-                        // OPTIMIZE : This lookup is slow (O(n)) -- we should use a Bimap instead.
-                        |> Map.pick (fun ruleId key ->
-                            if key = (item.Nonterminal, item.Production) then
-                                Some ruleId
-                            else None)
+                        productionRuleIds
+                        |> Map.find (item.Nonterminal, item.Production)
                         |> LrParserAction.Reduce
 
                     (parserTable, grammar.Terminals)

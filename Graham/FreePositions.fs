@@ -170,34 +170,34 @@ module FreePositions =
             Map.add parserStateId spg statePositionGraphs)
 
     //
-    let allPositions (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
+    let allPositions (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) : Set<_> =
         // OPTIMIZE : This function should be rewritten for better performance.
-        (Set.empty, grammar.Productions)
-        ||> Map.fold (fun positions nonterminal productions ->
+        (((1<_> : ProductionRuleId), Set.empty), grammar.Productions)
+        ||> Map.fold (fun (productionRuleId, positions) nonterminal productions ->
             // Handle the start production specially
             match nonterminal with
             | Start ->
                 // The EndOfFile token is never shifted by the parser,
                 // so the production of the start symbol only has
                 // two (2) positions, not three (3).
+                productionRuleId + 1<_>,
                 positions
-                |> Set.add (Start, 0<_>, 0<_>)
-                |> Set.add (Start, 0<_>, 1<_>)
+                |> Set.add (productionRuleId, 0<_>)
+                |> Set.add (productionRuleId, 1<_>)
             | Nonterminal _ ->
                 // Fold over the productions for this nonterminal
-                ((positions, (0<_> : ProductionIndex)), productions)
-                ||> Array.fold (fun (positions, productionIndex) production ->
-                    // Create the positions for this production, then add them to the set of all positions.
-                    let productionPositions =
-                        let len = Array.length production
-                        [| for i in 0 .. len ->
-                            nonterminal, productionIndex, ((Int32WithMeasure i) : int<ParserPosition>) |]
-                        |> Set.ofArray
-
-                    Set.union positions productionPositions,
-                    productionIndex + 1<_>)
-                // Discard the production index
-                |> fst)
+                productionRuleId + 1<_>,
+                (positions, productions)
+                ||> Array.fold (fun positions production ->
+                    // Create the positions for this production...
+                    let len = Array.length production
+                    [| for i in 0 .. len ->
+                        productionRuleId, ((Int32WithMeasure i) : int<ParserPosition>) |]
+                    |> Set.ofArray
+                    //  ...then add them to the set of all positions.
+                    |> Set.union positions))
+        // Discard the production rule counter
+        |> snd
 
     //
     let private nonfreeItems (graph : StatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>) =
@@ -261,6 +261,22 @@ module FreePositions =
         // Compute the state position graphs of the LR(0) parser states of the augmented grammar.
         let positionGraphs = statePositionGraphs grammar lr0ParserTable
 
+        // TEMP : Only needed until we convert LrItem into a more efficient form (i.e., one that
+        // uses the ProductionRuleId instead of the nonterminal, production symbols, etc.)
+        /// The production-rule-id lookup table.
+        let productionRuleIds =
+            (Map.empty, grammar.Productions)
+            ||> Map.fold (fun productionRuleIds nonterminal rules ->
+                (productionRuleIds, rules)
+                ||> Array.fold (fun productionRuleIds ruleRhs ->
+                    /// The identifier for this production rule.
+                    let productionRuleId : ProductionRuleId =
+                        productionRuleIds.Count + 1
+                        |> Int32WithMeasure
+
+                    // Add this identifier to the map.
+                    Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
+
         // Compute the set of non-free (forbidden or contingent) positions in the entire grammar.
         (Set.empty, positionGraphs)
         ||> Map.fold (fun allNonfreeItems _ spg ->
@@ -273,16 +289,12 @@ module FreePositions =
         // Eventually, we'll modify the LR table-generating code to use
         // this representation -- then this conversion can be removed.
         |> Set.map (fun nonfreeItem ->
-            // Find the index of this production rule.
-            let productionIndex : ProductionIndex =
-                grammar.Productions
-                |> Map.find nonfreeItem.Nonterminal
-                |> Array.findIndex ((=) nonfreeItem.Production)
-                |> Int32WithMeasure
+            /// The identifier for this production rule.
+            let productionRuleId =
+                Map.find (nonfreeItem.Nonterminal, nonfreeItem.Production) productionRuleIds
 
             // Return a tuple representing this position.
-            nonfreeItem.Nonterminal,
-            productionIndex,
+            productionRuleId,
             nonfreeItem.Position)
         // Compute the set of all positions in the grammar;
         // remove the non-free positions from it to produce
@@ -290,17 +302,16 @@ module FreePositions =
         |> Set.difference (allPositions grammar)
 
     //
-    let earliest (freePositions : Set<'Nonterminal * ProductionIndex * int<ParserPosition>>) =
+    let earliest (freePositions : Set<ProductionRuleId * int<ParserPosition>>) =
         // NOTE : The calculation below relies on the specific behavior of Set.fold, which traverses
         // elements from least to greatest. This allows us to simply add the first position we see for
         // each (nonterminal, productionIndex) pair, instead of having to check if each position is the minimum.
         (Map.empty, freePositions)
-        ||> Set.fold (fun recognitionPoints (nonterminal, productionIndex, parserPosition) ->
-            let key : ProductionKey<'Nonterminal> = nonterminal, productionIndex
-            if Map.containsKey key recognitionPoints then
+        ||> Set.fold (fun recognitionPoints (productionRuleId, parserPosition) ->
+            if Map.containsKey productionRuleId recognitionPoints then
                 recognitionPoints
             else
-                Map.add key parserPosition recognitionPoints)
+                Map.add productionRuleId parserPosition recognitionPoints)
 
 
 //
@@ -313,30 +324,28 @@ module RecognitionPoints =
     /// have at least one (1) recognition point; in the worst case, the recognition point is simply the right-most
     /// position in the rule (the right-most position is always a free position).</para>
     /// </remarks>
-    let calculate (freePositions : Set<'Nonterminal * ProductionIndex * int<ParserPosition>>) =
+    let calculate (freePositions : Set<ProductionRuleId * int<ParserPosition>>) =
         (freePositions, Map.empty)
-        ||> Set.foldBack (fun (nonterminal, productionIndex, parserPosition) recognitionPoints ->
-            let key : ProductionKey<'Nonterminal> = nonterminal, productionIndex
-            
-            match Map.tryFind key recognitionPoints with
+        ||> Set.foldBack (fun (productionRuleId, parserPosition) recognitionPoints ->            
+            match Map.tryFind productionRuleId recognitionPoints with
             | None ->
                 // There must be at least one recognition point for each rule,
                 // so if the map doesn't already contain an entry for this key
                 // this position must be the right-most position (always a recognition point).
-                Map.add key (Set.singleton parserPosition) recognitionPoints
+                Map.add productionRuleId (Set.singleton parserPosition) recognitionPoints
             | Some points ->
                 // If this parser position is adjacent to the minimum element of
                 // the existing set of recognition points for this production rule,
                 // add it to the set and update the map.
                 if parserPosition = Set.minElement points - 1<_> then
                     let points = Set.add parserPosition points
-                    Map.add key points recognitionPoints
+                    Map.add productionRuleId points recognitionPoints
                 else
                     recognitionPoints)
 
     /// Determines the earliest (leftmost) recognition point for each production rule,
     /// given a Map containing the set of recognition points for each rule.
-    let inline earliest (recognitionPoints : Map<ProductionKey<'Nonterminal>, Set<int<ParserPosition>>>) =
+    let inline earliest (recognitionPoints : Map<ProductionRuleId, Set<int<ParserPosition>>>) =
         recognitionPoints
         |> Map.map (fun _ ->
             Set.minElement)

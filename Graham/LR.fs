@@ -9,6 +9,7 @@ See LICENSE.TXT for licensing details.
 /// Parser table generators for LR(k) grammars.
 namespace Graham.LR
 
+open System.Diagnostics
 open LanguagePrimitives
 open Graham.Grammar
 open AugmentedPatterns
@@ -17,6 +18,7 @@ open Graham.Graph
 
 
 /// An LR(k) item.
+[<DebuggerDisplay("{DebuggerDisplay,nq}")>]
 type LrItem<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
@@ -30,8 +32,14 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
     //
     Lookahead : 'Lookahead;
 } with
-    /// <inherit />
-    override this.ToString () =
+    /// Private. Only for use with DebuggerDisplayAttribute.
+    member private this.DebuggerDisplay
+        with get () =
+            this.ToString '\u2022'
+
+    /// <summary>Private ToString implementation which allows the 'dot' character to be specified.</summary>
+    /// <param name="dotChar">The character to use to represent the 'dot' (parser position).</param>
+    member private this.ToString (dotChar : char) =
         let sb = System.Text.StringBuilder ()
 
         // Add the nonterminal text and arrow to the StringBuilder.
@@ -44,7 +52,7 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
                 |> sb.Append |> ignore
             elif i = int this.Position then
                 // Append the dot character representing the parser position.
-                sb.Append "\u2022" |> ignore
+                sb.Append dotChar |> ignore
             else
                 this.Production.[i - 1].ToString ()
                 |> sb.Append |> ignore
@@ -56,6 +64,10 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
 
         sb.ToString ()
 
+    /// <inherit />
+    override this.ToString () =
+        this.ToString '.'
+
 /// An LR(k) parser state -- i.e., a set of LR(k) items.
 type LrParserState<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
@@ -63,13 +75,12 @@ type LrParserState<'Nonterminal, 'Terminal, 'Lookahead
     and 'Lookahead : comparison> =
     Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead>>
 
-/// An action which manipulates the state of the
-/// parser automaton for an LR(k) parser.
+/// An action which manipulates the state of an LR(k) parser automaton.
 type LrParserAction =
     /// Shift into a state.
     | Shift of ParserStateId
     /// Reduce by a production rule.
-    | Reduce of ReductionRuleId
+    | Reduce of ProductionRuleId
     /// Accept.
     | Accept
 
@@ -83,26 +94,29 @@ type LrParserAction =
         | Accept ->
             "a"
 
-//
+/// A conflict between two LrParserActions.
+/// A deterministic parser cannot be created until all
+/// conflicts in its parser table have been resolved.
 type LrParserConflict =
-    //
-    | ShiftReduce of ParserStateId * ReductionRuleId
-    //
-    | ReduceReduce of ReductionRuleId * ReductionRuleId
+    /// A conflict between a Shift action and a Reduce action.
+    | ShiftReduce of ParserStateId * ProductionRuleId
+    /// <summary>A conflict between two Reduce actions.</summary>
+    | ReduceReduce of ProductionRuleId * ProductionRuleId
 
     /// <inherit />
     override this.ToString () =
         match this with
-        | ShiftReduce (shiftStateId, reduceRuleId) ->
-            sprintf "s%i/r%i" (int shiftStateId) (int reduceRuleId)
-        | ReduceReduce (reduceRuleId1, reduceRuleId2) ->
-            sprintf "r%i/r%i" (int reduceRuleId1) (int reduceRuleId2)
+        | ShiftReduce (shiftStateId, productionRuleId) ->
+            sprintf "s%i/r%i" (int shiftStateId) (int productionRuleId)
+        | ReduceReduce (productionRuleId1, productionRuleId2) ->
+            sprintf "r%i/r%i" (int productionRuleId1) (int productionRuleId2)
 
-//
+/// A non-empty set of LrParserActions representing the
+/// action(s) to take for a specific parser state.
 type LrParserActionSet =
-    //
+    /// A single LrParserAction.
     | Action of LrParserAction
-    //
+    /// Two (2) conflicting LrParserActions.
     | Conflict of LrParserConflict
 
     /// <inherit />
@@ -148,229 +162,6 @@ type TerminalTransition<'Terminal
     when 'Terminal : comparison> =
     ParserStateId * 'Terminal
 
-/// LR(k) parser table generation state.
-type LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison
-    and 'Lookahead : comparison> = {
-    //
-    ParserStateIds : Map<LrParserState<'Nonterminal, 'Terminal, 'Lookahead>, ParserStateId>;
-    //
-    ParserTransitions : LabeledSparseDigraph<ParserStateId, Symbol<'Nonterminal, 'Terminal>>;
-    //
-    ActionTable : Map<TerminalTransition<'Terminal>, LrParserActionSet>;
-    //
-    GotoTable : Map<NonterminalTransition<'Nonterminal>, ParserStateId>;
-
-    (* TODO :   Remove these in favor of using ProductionKey in the LrParserAction.Reduce case. *)
-    //
-    ReductionRules : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], ReductionRuleId>;
-    //
-    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
-}
-
-/// Functions which use the State monad to manipulate an LR(k) table-generation state.
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module LrTableGenState =
-    module Graph = LabeledSparseDigraph
-
-    /// Returns an empty Lr0TableGenState with the given
-    /// nonterminal and terminal types.
-    let empty : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> = {
-        ParserStateIds = Map.empty;
-        ParserTransitions = Graph.empty;
-        ActionTable = Map.empty;
-        GotoTable = Map.empty;
-        ReductionRules = Map.empty;
-        ReductionRulesById = Map.empty; }
-
-    /// Retrives the identifier for a given parser state (set of items).
-    /// If the state has not been assigned an identifier, one is created
-    /// and added to the table-generation state before returning.
-    let stateId
-        (parserState : LrParserState<'Nonterminal, 'Terminal, 'Lookahead>)
-        (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
-        // Try to retrieve an existing id for this state.
-        match Map.tryFind parserState tableGenState.ParserStateIds with
-        | Some parserStateId ->
-            parserStateId, tableGenState
-
-        | None ->
-            // Create a new ID for this state.
-            let parserStateId =
-                tableGenState.ParserStateIds.Count + 1
-                |> Int32WithMeasure
-
-            // Return the id, along with the updated table-gen state.
-            parserStateId,
-            { tableGenState with
-                ParserStateIds =
-                    Map.add parserState parserStateId tableGenState.ParserStateIds;
-                // Add this state to the transition graph's vertex-set.
-                ParserTransitions = Graph.addVertex parserStateId tableGenState.ParserTransitions; }
-
-    //
-    let reductionRuleId
-        (reductionRule : 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[])
-        (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
-        // Reduction rules should only be added, but for safety we'll check to
-        // see if the rule has already been assigned an identifier.
-        match Map.tryFind reductionRule tableGenState.ReductionRules with
-        | Some reductionRuleId ->
-            reductionRuleId, tableGenState
-
-        | None ->
-            // Create a new ID for this reduction rule.
-            let reductionRuleId =
-                tableGenState.ReductionRules.Count + 1
-                |> Int32WithMeasure
-
-            // Return the id, along with the updated table-gen state.
-            reductionRuleId,
-            { tableGenState with
-                ReductionRules =
-                    Map.add reductionRule reductionRuleId tableGenState.ReductionRules;
-                ReductionRulesById =
-                    Map.add reductionRuleId reductionRule tableGenState.ReductionRulesById; }
-
-    //
-    let private impossibleActionSetErrorMsg<'Terminal when 'Terminal : comparison> (sourceState : ParserStateId, transitionSymbol : 'Terminal, entry : LrParserActionSet, action : LrParserAction) =
-        sprintf "Cannot add this action because it would create an impossible set of LR(k) parser actions. \
-                 (State = %i, Terminal = %A, Existing Entry = %A, New Action = %A)"
-                (int sourceState) transitionSymbol entry action
-
-    /// Add a 'shift' action to the parser table.
-    let shift (key : TerminalTransition<'Terminal>) targetState
-        (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
-        // Destructure the key to get it's components.
-        let sourceState, transitionSymbol = key
-
-        //
-        let actionSet =
-            match Map.tryFind key tableGenState.ActionTable with
-            | None ->
-                Action <| Shift targetState
-            | Some actionSet ->
-                match actionSet with
-                | Action (Reduce ruleId) ->
-                    Conflict <| ShiftReduce (targetState, ruleId)
-
-                | Action (Shift targetState')
-                | Conflict (ShiftReduce (targetState', _))
-                    when targetState = targetState' ->
-                    // Return the existing action set without modifying it.
-                    actionSet
-
-                | entry ->
-                    // Adding this action to the existing action set would create
-                    // an impossible set of actions, so raise an exception.
-                    impossibleActionSetErrorMsg (
-                        sourceState, transitionSymbol, entry, Shift targetState)
-                    |> invalidOp
-
-        (),
-        { tableGenState with
-            // Update the table with the new action set.
-            ActionTable = Map.add key actionSet tableGenState.ActionTable;
-            // Add an edge labeled with this symbol to the transition graph.
-            ParserTransitions =
-                tableGenState.ParserTransitions
-                |> Graph.addEdge sourceState targetState (Symbol.Terminal transitionSymbol); }
-
-    /// Add a 'reduce' action to the ACTION table.
-    let reduce (key : TerminalTransition<'Terminal>)
-                (reductionRuleId : ReductionRuleId)
-                (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
-        // Destructure the key to get it's components.
-        let sourceState, transitionSymbol = key
-
-        //
-        let actionSet =
-            match Map.tryFind key tableGenState.ActionTable with
-            | None ->
-                Action <| Reduce reductionRuleId
-            | Some actionSet ->
-                match actionSet with
-                | Action (Shift shiftStateId) ->
-                    Conflict <| ShiftReduce (shiftStateId, reductionRuleId)
-
-                | Action (Reduce reductionRuleId')
-                | Conflict (ShiftReduce (_, reductionRuleId'))
-                | Conflict (ReduceReduce (reductionRuleId', _))
-                | Conflict (ReduceReduce (_, reductionRuleId'))
-                    when reductionRuleId = reductionRuleId' ->
-                    // Return the existing action set without modifying it.
-                    actionSet
-
-                | actionSet ->
-                    // Adding this action to the existing action set would create
-                    // an impossible set of actions, so raise an exception.
-                    impossibleActionSetErrorMsg (
-                        sourceState, transitionSymbol, actionSet, Reduce reductionRuleId)
-                    |> invalidOp
-
-        // Update the table with the new action set.
-        (),
-        { tableGenState with
-            ActionTable = Map.add key actionSet tableGenState.ActionTable; }
-
-    /// Add an entry to the GOTO table.
-    let goto (key : NonterminalTransition<'Nonterminal>)
-                (targetState : ParserStateId)
-                (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
-        // Destructure the key to get it's components.
-        let sourceState, transitionSymbol = key
-
-        //
-        match Map.tryFind key tableGenState.GotoTable with
-        | None ->
-            (),
-            { tableGenState with
-                // Update the table with the new entry.
-                GotoTable = Map.add key targetState tableGenState.GotoTable;
-                // Add an edge labelled with this symbol to the transition graph.
-                ParserTransitions =
-                    tableGenState.ParserTransitions
-                    |> Graph.addEdge sourceState targetState (Symbol.Nonterminal transitionSymbol); }
-
-        | Some entry ->
-            // If the existing entry is the same as the target state,
-            // there's nothing to do -- just return the existing 'tableGenState'.
-            if entry = targetState then
-                (), tableGenState
-            else
-                let msg = sprintf "Cannot add the entry (g%i) to the GOTO table; \
-                                    it already contains an entry (g%i) for the key %A."
-                                    (int targetState) (int entry) key
-                invalidOp msg
-
-    /// Add an 'accept' action to the parser table.
-    let accept (sourceState : ParserStateId) (tableGenState : LrTableGenState<'Nonterminal, AugmentedTerminal<'Terminal>, 'Lookahead>) =
-        //
-        let key = sourceState, EndOfFile
-
-        //
-        let actionSet =
-            match Map.tryFind key tableGenState.ActionTable with
-            | None ->
-                // Create a new 'accept' action for this action set.
-                Action Accept
-            | Some ((Action Accept) as actionSet) ->
-                // The action set doesn't need to be modified.
-                actionSet
-            | Some actionSet ->
-                // Adding an Accept action to the existing action set would create
-                // an impossible set of actions, so raise an exception.
-                impossibleActionSetErrorMsg (
-                    sourceState, EndOfFile, actionSet, Accept)
-                |> invalidOp
-
-        // Update the table with the new entry.
-        (),
-        { tableGenState with
-            ActionTable = Map.add key actionSet tableGenState.ActionTable; }
-
-
 /// LR(k) parser table.
 type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
@@ -384,10 +175,6 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
     ActionTable : Map<TerminalTransition<'Terminal>, LrParserActionSet>;
     //
     GotoTable : Map<NonterminalTransition<'Nonterminal>, ParserStateId>;
-
-    (* TODO :   Remove this in favor of using ProductionKey in the LrParserAction.Reduce case. *)
-    //
-    ReductionRulesById : Map<ReductionRuleId, 'Nonterminal * Symbol<'Nonterminal, 'Terminal>[]>;
 } with
     /// Removes an action from the action set corresponding to a specified key.
     static member RemoveAction (table : LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>, key, action) =
@@ -425,4 +212,279 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
                 { table with
                     ActionTable = actionTable;
                     ParserTransitions = parserTransitions; }
+
+//
+type LrTableGenEnvironment<'Nonterminal, 'Terminal, 'Lookahead
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison
+    and 'Lookahead : comparison> = {
+    //
+    ParserStateIds : Map<LrParserState<'Nonterminal, 'Terminal, 'Lookahead>, ParserStateId>;
+    //
+    ProductionRuleIds : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], ProductionRuleId>;
+}
+
+/// LR(k) parser table generation state.
+type LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison
+    and 'Lookahead : comparison> =
+    (*  The table generation state is the table itself plus an "environment" record
+        which holds lookup tables only needed while creating the table. *)
+    LrParserTable<'Nonterminal, 'Terminal, 'Lookahead> *
+    LrTableGenEnvironment<'Nonterminal, 'Terminal, 'Lookahead>
+
+/// Functions which use the State monad to manipulate an LR(k) table-generation state.
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module LrTableGenState =
+    module Graph = LabeledSparseDigraph
+
+    /// Returns an empty LrTableGenState with the given
+    /// nonterminal and terminal types.
+    let empty : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
+        // The empty parser table.
+        {   ParserStates = Map.empty;
+            ParserTransitions = Graph.empty;
+            ActionTable = Map.empty;
+            GotoTable = Map.empty; },
+        // The empty table-gen environment.
+        {   ParserStateIds = Map.empty;
+            ProductionRuleIds = Map.empty; }
+
+    /// Creates the production-rule-id lookup table from the production rules of a grammar,
+    /// then stores it in the environment component of the table-generation state.
+    let setProductionRules (productionRules : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>)
+                            (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+        // Destructure the table-generation state to get it's components.
+        let table, env = tableGenState
+
+        /// The production-rule-id lookup table.
+        let productionRuleIds =
+            (Map.empty, productionRules)
+            ||> Map.fold (fun productionRuleIds nonterminal rules ->
+                (productionRuleIds, rules)
+                ||> Array.fold (fun productionRuleIds ruleRhs ->
+                    /// The identifier for this production rule.
+                    let productionRuleId : ProductionRuleId =
+                        productionRuleIds.Count + 1
+                        |> Int32WithMeasure
+
+                    // Add this identifier to the map.
+                    Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
+
+        // Update the table-generation state.
+        let tableGenState =
+            table,
+            { env with
+                ProductionRuleIds = productionRuleIds; }
+
+        // Return the updated table-generation state.
+        (), tableGenState
+
+    /// <summary>Retrives the identifier for a given parser state (set of items).
+    /// If the state has not been assigned an identifier, one is created
+    /// and added to the table-generation state before returning.</summary>
+    /// <returns>
+    /// <component>
+    ///     <component>true if a new identifier was created for the parser state; otherwise, false.</component>
+    ///     <component>The identifier for the parser state.</component>
+    /// </component>
+    /// <component>The (possibly updated) table-generation state.</component>
+    /// </returns>
+    let stateId
+        (parserState : LrParserState<'Nonterminal, 'Terminal, 'Lookahead>)
+        (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+        // Destructure the table-generation state to get it's components.
+        let table, env = tableGenState
+
+        // Try to retrieve an existing id for this state.
+        match Map.tryFind parserState env.ParserStateIds with
+        | Some parserStateId ->
+            (false, parserStateId), tableGenState
+        | None ->
+            // Create a new ID for this state.
+            let parserStateId =
+                env.ParserStateIds.Count + 1
+                |> Int32WithMeasure
+
+            // Update the table-generation state.
+            let tableGenState =
+                { table with
+                    // Add this state to the transition graph's vertex-set.
+                    ParserTransitions = Graph.addVertex parserStateId table.ParserTransitions;
+                    // Add this state (by it's state-id) to the table.
+                    ParserStates =
+                        Map.add parserStateId parserState table.ParserStates; },
+                { env with
+                    // Add the new state-id into the table-gen environment.
+                    ParserStateIds =
+                        Map.add parserState parserStateId env.ParserStateIds; }
+
+            // Return the id, along with the updated table-generation state.
+            (true, parserStateId), tableGenState
+
+    //
+    let private impossibleActionSetErrorMsg<'Terminal when 'Terminal : comparison> (sourceState : ParserStateId, transitionSymbol : 'Terminal, entry : LrParserActionSet, action : LrParserAction) =
+        sprintf "Cannot add this action because it would create an impossible set of LR(k) parser actions. \
+                 (State = %i, Terminal = %A, Existing Entry = %A, New Action = %A)"
+                (int sourceState) transitionSymbol entry action
+
+    /// Add a 'shift' action to the parser table.
+    let shift (key : TerminalTransition<'Terminal>) targetState
+        (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+        // Destructure the key to get it's components.
+        let sourceState, transitionSymbol = key
+        // Destructure the table-generation state to get it's components.
+        let table, env = tableGenState
+
+        //
+        let actionSet =
+            match Map.tryFind key table.ActionTable with
+            | None ->
+                Action <| Shift targetState
+            | Some actionSet ->
+                match actionSet with
+                | Action (Reduce ruleId) ->
+                    Conflict <| ShiftReduce (targetState, ruleId)
+
+                | Action (Shift targetState')
+                | Conflict (ShiftReduce (targetState', _))
+                    when targetState = targetState' ->
+                    // Return the existing action set without modifying it.
+                    actionSet
+
+                | entry ->
+                    // Adding this action to the existing action set would create
+                    // an impossible set of actions, so raise an exception.
+                    impossibleActionSetErrorMsg (
+                        sourceState, transitionSymbol, entry, Shift targetState)
+                    |> invalidOp
+
+        // Update the table-generation state.
+        let tableGenState =
+            { table with
+                // Update the table with the new action set.
+                ActionTable = Map.add key actionSet table.ActionTable;
+                // Add an edge labeled with this symbol to the transition graph.
+                ParserTransitions =
+                    table.ParserTransitions
+                    |> Graph.addEdge sourceState targetState (Symbol.Terminal transitionSymbol);
+            }, env
+            
+        // Return the updated table-generation state.
+        (), tableGenState
+
+    /// Add a 'reduce' action to the ACTION table.
+    let reduce (key : TerminalTransition<'Terminal>)
+                (productionRuleId : ProductionRuleId)
+                (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+        // Destructure the key to get it's components.
+        let sourceState, transitionSymbol = key
+        // Destructure the table-generation state to get it's components.
+        let table, env = tableGenState
+
+        //
+        let actionSet =
+            match Map.tryFind key table.ActionTable with
+            | None ->
+                Action <| Reduce productionRuleId
+            | Some actionSet ->
+                match actionSet with
+                | Action (Shift shiftStateId) ->
+                    Conflict <| ShiftReduce (shiftStateId, productionRuleId)
+
+                | Action (Reduce productionRuleId')
+                | Conflict (ShiftReduce (_, productionRuleId'))
+                | Conflict (ReduceReduce (productionRuleId', _))
+                | Conflict (ReduceReduce (_, productionRuleId'))
+                    when productionRuleId = productionRuleId' ->
+                    // Return the existing action set without modifying it.
+                    actionSet
+
+                | actionSet ->
+                    // Adding this action to the existing action set would create
+                    // an impossible set of actions, so raise an exception.
+                    impossibleActionSetErrorMsg (
+                        sourceState, transitionSymbol, actionSet, Reduce productionRuleId)
+                    |> invalidOp
+
+        // Update the table-generation state.
+        let tableGenState =
+            { table with
+                // Update the table with the new action set.
+                ActionTable = Map.add key actionSet table.ActionTable;
+            }, env
+        
+        // Return the updated table-generation state.
+        (), tableGenState            
+
+    /// Add an entry to the GOTO table.
+    let goto (key : NonterminalTransition<'Nonterminal>)
+                (targetState : ParserStateId)
+                (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+        // Destructure the key to get it's components.
+        let sourceState, transitionSymbol = key
+        // Destructure the table-generation state to get it's components.
+        let table, env = tableGenState
+
+        //
+        match Map.tryFind key table.GotoTable with
+        | None ->
+            // Update the table-generation state.
+            let tableGenState =
+                { table with
+                    // Update the table with the new entry.
+                    GotoTable = Map.add key targetState table.GotoTable;
+                    // Add an edge labelled with this symbol to the transition graph.
+                    ParserTransitions =
+                        table.ParserTransitions
+                        |> Graph.addEdge sourceState targetState (Symbol.Nonterminal transitionSymbol);
+                }, env
+
+            // Return the updated table-generation state.
+            (), tableGenState                
+
+        | Some entry ->
+            // If the existing entry is the same as the target state,
+            // there's nothing to do -- just return the existing 'tableGenState'.
+            if entry = targetState then
+                (), tableGenState
+            else
+                let msg = sprintf "Cannot add the entry (g%i) to the GOTO table; \
+                                    it already contains an entry (g%i) for the key %A."
+                                    (int targetState) (int entry) key
+                invalidOp msg
+
+    /// Add an 'accept' action to the ACTION table.
+    let accept (sourceState : ParserStateId) (tableGenState : LrTableGenState<'Nonterminal, AugmentedTerminal<'Terminal>, 'Lookahead>) =
+        /// The transition key for the ACTION table.
+        let key = sourceState, EndOfFile
+        // Destructure the table-generation state to get it's components.
+        let table, env = tableGenState
+
+        //
+        let actionSet =
+            match Map.tryFind key table.ActionTable with
+            | None ->
+                // Create a new 'accept' action for this action set.
+                Action Accept
+            | Some ((Action Accept) as actionSet) ->
+                // The action set doesn't need to be modified.
+                actionSet
+            | Some actionSet ->
+                // Adding an Accept action to the existing action set would create
+                // an impossible set of actions, so raise an exception.
+                impossibleActionSetErrorMsg (
+                    sourceState, EndOfFile, actionSet, Accept)
+                |> invalidOp
+
+        // Update the table-generation state.
+        let tableGenState =
+            { table with
+                // Add the new action set into the table.
+                ActionTable = Map.add key actionSet table.ActionTable;
+            }, env
+
+        // Return the updated table-generation state.
+        (), tableGenState
 
