@@ -16,8 +16,14 @@ open Graham.Grammar
 /// A fragment of F# code.
 type CodeFragment = string
 
-/// Uniquely identifies a symbol (a terminal or nonterminal)
-/// within a parser specification.
+/// Uniquely identifies a nonterminal within a parser specification.
+type NonterminalIdentifier = string
+
+/// Uniquely identifies a terminal within a parser specification.
+type TerminalIdentifier = string
+
+/// Uniquely identifies a symbol (either a terminal
+/// or a nonterminal) within a parser specification.
 type SymbolIdentifier = string
 
 /// The declared type of a nonterminal.
@@ -55,15 +61,15 @@ type Specification = {
     /// a declaration for each production.</remarks>
     // NOTE : This list is in reverse order from the way the declarations appear in the parser
     // specification file. I.e., the last (bottom-most) declaration is the head of the list.
-    NonterminalDeclarations : (DeclaredType * SymbolIdentifier) list;
+    NonterminalDeclarations : (DeclaredType * NonterminalIdentifier) list;
     //
-    TerminalDeclarations : (DeclaredType option * SymbolIdentifier list) list;
+    TerminalDeclarations : (DeclaredType option * TerminalIdentifier list) list;
     /// The starting production(s) of the grammar.
     /// Only nonterminals can be specified, and all nonterminals specified as starting
     /// productions must also have explicit type declarations.
     /// At least one (1) nonterminal must be specified;
     /// a Specification is invalid if this field is empty.
-    StartingProductions : SymbolIdentifier list;
+    StartingProductions : Set<NonterminalIdentifier>;
     /// Explicitly declared associativities of symbols (terminals and nonterminals).
     /// The precedences of the symbols in the grammar are implied by their ordering
     /// in this list.
