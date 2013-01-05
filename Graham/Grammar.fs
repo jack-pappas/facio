@@ -82,16 +82,23 @@ type Grammar<'Nonterminal, 'Terminal
 } with
     /// <summary>Augments a Grammar with a unique "start" symbol and the end-of-file marker.</summary>
     /// <param name="grammar">The grammar to be augmented.</param>
-    /// <param name="startSymbol">The parser will begin parsing with this symbol.</param>
+    /// <param name="startSymbols">The parser will begin parsing with any one of these symbols.</param>
     /// <returns>A grammar augmented with the Start symbol and the EndOfFile marker.</returns>
-    static member Augment (grammar : Grammar<'Nonterminal, 'Terminal>, startSymbol : 'Nonterminal)
+    static member Augment (grammar : Grammar<'Nonterminal, 'Terminal>, startSymbols : Set<'Nonterminal>)
         : AugmentedGrammar<'Nonterminal, 'Terminal> =
+        // Preconditions
+        if Set.isEmpty startSymbols then
+            invalidArg "startSymbols" "The set of start symbols is empty."
+
         // Based on the input grammar, create a new grammar with an additional
-        // nonterminal and production for the start symbol and an additional token
-        // representing the end-of-file marker.
-        let startProduction = [|
-            Symbol.Nonterminal <| AugmentedNonterminal.Nonterminal startSymbol;
-            Symbol.Terminal EndOfFile; |]
+        // nonterminal and production rules for the start symbol and an additional
+        // terminal representing the end-of-file marker.
+        let startProductions =
+            startSymbols
+            |> Set.toArray
+            |> Array.map (fun startSymbol ->
+                [|  Nonterminal <| AugmentedNonterminal.Nonterminal startSymbol;
+                    Terminal EndOfFile; |])
 
         {   Terminals =
                 grammar.Terminals
@@ -113,7 +120,15 @@ type Grammar<'Nonterminal, 'Terminal
                                 Symbol.Terminal <| AugmentedTerminal.Terminal token))
                     Map.add (AugmentedNonterminal.Nonterminal nontermId) nontermProductions productionMap)
                 // Add the (only) production of the new start symbol.
-                |> Map.add Start ([| startProduction |]); }
+                |> Map.add Start startProductions; }
+
+    /// <summary>Augments a Grammar with a unique "start" symbol and the end-of-file marker.</summary>
+    /// <param name="grammar">The grammar to be augmented.</param>
+    /// <param name="startSymbol">The parser will begin parsing with this symbol.</param>
+    /// <returns>A grammar augmented with the Start symbol and the EndOfFile marker.</returns>
+    static member Augment (grammar : Grammar<'Nonterminal, 'Terminal>, startSymbol : 'Nonterminal)
+        : AugmentedGrammar<'Nonterminal, 'Terminal> =
+        Grammar.Augment (grammar, Set.singleton startSymbol)
 
 /// A grammar augmented with the "start" symbol and the end-of-file marker.
 and AugmentedGrammar<'Nonterminal, 'Terminal
@@ -226,6 +241,24 @@ type Associativity =
 [<Measure>] type AbsolutePrecedence
 //
 type PrecedenceLevel = int<AbsolutePrecedence>
+
+/// Contains precedence and associativity settings for a grammar,
+/// which can be used to resolve conflicts due to grammar ambiguities.
+type PrecedenceSettings<'Terminal
+    when 'Terminal : comparison> = {
+    //
+    RulePrecedence : Map<ReductionRuleId, PrecedenceLevel>;
+    //
+    TerminalPrecedence : Map<'Terminal, PrecedenceLevel>;
+    //
+    TerminalAssociativity : Map<'Terminal, Associativity>;
+} with
+    /// Returns an empty PrecedenceSettings instance.
+    static member Empty = {
+        RulePrecedence = Map.empty;
+        TerminalPrecedence = Map.empty;
+        TerminalAssociativity = Map.empty; }
+
 
 (* TODO :   Un-comment the RelativePrecedence type whenever we get around to
             implementing the algorithm for creating operator-precedence parsers. *)
