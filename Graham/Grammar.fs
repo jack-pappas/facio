@@ -12,6 +12,24 @@ namespace Graham.Grammar
 open System.Diagnostics
 
 
+//
+[<Measure>] type ProductionRuleIdentifier
+//
+type ProductionRuleId = int<ProductionRuleIdentifier>
+
+/// <summary>The position of a parser in the right-hand-side (RHS) of a production rule.</summary>
+/// <remarks>
+/// The position corresponds to the 0-based index of the next symbol
+/// to be parsed, so position values must always be within the range
+/// [0, production.Length].
+/// </remarks>
+[<Measure>] type ParserPosition
+
+/// Identifier for a parser state.
+[<Measure>] type ParserStateIdentifier
+/// Unique identifier for a parser state, e.g., when creating an LR parser table.
+type ParserStateId = int<ParserStateIdentifier>
+
 /// A nonterminal or the start symbol.
 type AugmentedNonterminal<'Nonterminal when 'Nonterminal : comparison> =
     /// The start symbol.
@@ -130,6 +148,20 @@ type Grammar<'Nonterminal, 'Terminal
         : AugmentedGrammar<'Nonterminal, 'Terminal> =
         Grammar.Augment (grammar, Set.singleton startSymbol)
 
+    //
+    static member ProductionRuleIds (grammar : Grammar<'Nonterminal, 'Terminal>) =
+        (Map.empty, grammar.Productions)
+        ||> Map.fold (fun productionRuleIds nonterminal rules ->
+            (productionRuleIds, rules)
+            ||> Array.fold (fun productionRuleIds ruleRhs ->
+                /// The identifier for this production rule.
+                let productionRuleId : ProductionRuleId =
+                    productionRuleIds.Count + 1
+                    |> LanguagePrimitives.Int32WithMeasure
+
+                // Add this identifier to the map.
+                Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
+
 /// A grammar augmented with the "start" symbol and the end-of-file marker.
 and AugmentedGrammar<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
@@ -152,24 +184,6 @@ module AugmentedPatterns =
         | AugmentedTerminal.EndOfFile ->
             EndOfFile
 
-
-//
-[<Measure>] type ProductionRuleIdentifier
-//
-type ProductionRuleId = int<ProductionRuleIdentifier>
-
-/// <summary>The position of a parser in the right-hand-side (RHS) of a production rule.</summary>
-/// <remarks>
-/// The position corresponds to the 0-based index of the next symbol
-/// to be parsed, so position values must always be within the range
-/// [0, production.Length].
-/// </remarks>
-[<Measure>] type ParserPosition
-
-/// Identifier for a parser state.
-[<Measure>] type ParserStateIdentifier
-/// Unique identifier for a parser state, e.g., when creating an LR parser table.
-type ParserStateId = int<ParserStateIdentifier>
 
 /// Associativity of a terminal (token).
 /// This can be explicitly specified to override the

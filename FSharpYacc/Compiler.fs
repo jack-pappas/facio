@@ -91,17 +91,7 @@ let compile (spec : Specification, options : CompilationOptions) : Choice<_,_> =
 
         /// The production-rule-id lookup table.
         let productionRuleIds =
-            (Map.empty, grammar.Productions)
-            ||> Map.fold (fun productionRuleIds nonterminal rules ->
-                (productionRuleIds, rules)
-                ||> Array.fold (fun productionRuleIds ruleRhs ->
-                    /// The identifier for this production rule.
-                    let productionRuleId : ProductionRuleId =
-                        productionRuleIds.Count + 1
-                        |> LanguagePrimitives.Int32WithMeasure
-
-                    // Add this identifier to the map.
-                    Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
+            Grammar.ProductionRuleIds grammar
 
         (*  Create the LR(0) automaton from the grammar; report the number of states and
             the number of S/R and R/R conflicts. If there are any conflicts, apply the
