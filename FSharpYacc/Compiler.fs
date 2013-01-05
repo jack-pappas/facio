@@ -89,6 +89,20 @@ let compile (spec : Specification, options : CompilationOptions) : Choice<_,_> =
             // Augment the grammar.
             Grammar.Augment (grammar, spec.StartingProductions)
 
+        /// The production-rule-id lookup table.
+        let productionRuleIds =
+            (Map.empty, grammar.Productions)
+            ||> Map.fold (fun productionRuleIds nonterminal rules ->
+                (productionRuleIds, rules)
+                ||> Array.fold (fun productionRuleIds ruleRhs ->
+                    /// The identifier for this production rule.
+                    let productionRuleId : ProductionRuleId =
+                        productionRuleIds.Count + 1
+                        |> LanguagePrimitives.Int32WithMeasure
+
+                    // Add this identifier to the map.
+                    Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
+
         (*  Create the LR(0) automaton from the grammar; report the number of states and
             the number of S/R and R/R conflicts. If there are any conflicts, apply the
             precedence table to the constructed parser table to (possibly) resolve some
@@ -106,7 +120,7 @@ let compile (spec : Specification, options : CompilationOptions) : Choice<_,_> =
             R/R conflicts. If there aren't any remaining conflicts, report that the grammar
             is SLR(1) and return. *)
         //
-        let slr1Table = Slr1.upgrade (grammar, lr0Table')        
+        let slr1Table = Slr1.upgrade (grammar, lr0Table', productionRuleIds)        
 
         (*  Upgrade the LR(0)/SLR(1) automaton to LALR(1); report the remaining number of
             S/R and R/R conflicts. If there aren't any remaining conflicts, report that the
@@ -122,7 +136,7 @@ let compile (spec : Specification, options : CompilationOptions) : Choice<_,_> =
         | Choice1Of2 lookaheadSets ->
             //
             let lalr1Table =
-                Lalr1.upgrade (grammar, slr1Table, lookaheadSets)
+                Lalr1.upgrade (grammar, slr1Table, productionRuleIds, lookaheadSets)
             
             (*  If we reach this point, the grammar is not LALR(1), but we can still create a
                 parser by taking certain actions to resolve any remaining conflicts.
