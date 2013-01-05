@@ -262,9 +262,7 @@ module Lr0 =
 
     //
     let applyPrecedence (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,
-                            rulePrecedence : Map<ReductionRuleId, PrecedenceLevel>,
-                            terminalPrecedence : Map<'Terminal, PrecedenceLevel>,
-                            terminalAssociativities : Map<'Terminal, Associativity>) : Lr0ParserTable<'Nonterminal, 'Terminal> =
+                         settings : PrecedenceSettings<'Terminal>) : Lr0ParserTable<'Nonterminal, 'Terminal> =
         // Preconditions
         // NOTE : We only use assertions here to avoid runtime overhead in production;
         // however, if the performance penalty is minimal, these should be changed to
@@ -301,9 +299,9 @@ module Lr0 =
 
                 | ShiftReduce (targetStateId, reduceRuleId) ->
                     //
-                    let shiftPrecedence = Map.find terminal terminalPrecedence
+                    let shiftPrecedence = Map.find terminal settings.TerminalPrecedence
                     //
-                    let reducePrecedence = Map.find reduceRuleId rulePrecedence
+                    let reducePrecedence = Map.find reduceRuleId settings.RulePrecedence
 
                     // The conflict can be resolved if the precedences are different --
                     // we remove the action with lower precedence from this action set. 
@@ -314,7 +312,7 @@ module Lr0 =
                     else
                         // The precedences are the same, so we use the terminal's associativity
                         // (if provided) to resolve the conflict.
-                        match Map.tryFind terminal terminalAssociativities with
+                        match Map.tryFind terminal settings.TerminalAssociativity with
                         | None ->
                             // Leave the conflict unresolved.
                             lr0ParserTable
