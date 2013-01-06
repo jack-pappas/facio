@@ -223,7 +223,7 @@ type PrecedenceSettings<'Terminal
     TerminalAssociativity : Map<'Terminal, Associativity>;
 } with
     /// Returns an empty PrecedenceSettings instance.
-    static member Empty = {
+    static member Empty : PrecedenceSettings<'Terminal> = {
         RulePrecedence = Map.empty;
         TerminalPrecedence = Map.empty;
         TerminalAssociativity = Map.empty; }

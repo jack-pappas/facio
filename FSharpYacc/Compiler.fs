@@ -15,79 +15,94 @@ open FSharpYacc.Ast
 
 
 //
-type ValidationState<'Nonterminal, 'Terminal
+type PrecompilationState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> = {
     /// The nonterminals declared by the specification.
     Nonterminals : Set<'Nonterminal>;
     /// The terminals declared by the specification.
     Terminals : Set<'Nonterminal>;
+    //
+    Productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>;
+    //
+    TerminalAssociativities : Map<'Terminal, Associativity>;
+    //
+    PrecedenceGroups : Set<Symbol<'Nonterminal, 'Terminal>> list;
     /// Validation error messages.
     ValidationErrors : string list;
 } with
-    /// The empty validation state.
+    /// The empty precompilation state.
     static member Empty = {
         Nonterminals = Set.empty;
         Terminals = Set.empty;
+        Productions = Map.empty;
+        TerminalAssociativities = Map.empty;
+        PrecedenceGroups = List.empty;
         ValidationErrors = List.empty; }
 
-/// Validates the given compiler specification.
+/// Validates the given parser specification, and compiles it into the
+/// data structures used by the Graham library.
 // TODO : The 'options' parameter may not actually be needed here, but we won't know until
 // we really implement this function; however, it may be possible (and useful) to augment
 // the "standard" validation checks with backend-specific checks, since some backends may not
 // support all features.
-let validate (spec : Specification, options : CompilationOptions) : ValidationState<_,_> =
+let precompile (spec : Specification, options : CompilationOptions) : PrecompilationState<_,_> =
     (* TODO :   This function must be modified/rewritten ASAP to use the State workflow, or it'll soon be unreadable! *)
 
-    /// The initial (empty) validation state.
-    let validationState = ValidationState<_,_>.Empty
+    /// The initial (empty) precompilation state.
+    let precompilationState = PrecompilationState<_,_>.Empty
 
     // The specification must declare at least one nonterminal as a starting nonterminal.
-    if Set.isEmpty spec.StartingProductions then
-        let msg = "The specification must declare at least one (1) nonterminal \
-                    as a starting nonterminal via the %start declaration."
-        { validationState with
-            ValidationErrors = msg :: validationState.ValidationErrors; }
-    else
-        validationState
+    let precompilationState =
+        if Set.isEmpty spec.StartingProductions then
+            let msg = "The specification must declare at least one (1) nonterminal \
+                        as a starting nonterminal via the %start declaration."
+            { precompilationState with
+                ValidationErrors = msg :: precompilationState.ValidationErrors; }
+        else
+            precompilationState
 
-/// <summary>Creates the precedence and associativity maps from the specification.</summary>
-/// <returns>On success, the rule precedence map, terminal precedence map, and terminal
-/// associativity map; on failure, a list of error messages.</returns>
-let private precedenceSettings (spec : Specification)
-    : PrecedenceSettings<TerminalIdentifier> =
-    (* TODO :   Rewrite this function once the ExtCore library is finished.
-                We'll be able to implement this function with greater accuracy
-                and less work using the workflows it provides. *)
-
-    raise <| System.NotImplementedException "Compiler.precedenceAndAssociativity"
-
-//
-let private grammar (spec : Specification) : Grammar<string, string> =
+    // TODO : Implement other validation/precompilation steps.
     //
-    raise <| System.NotImplementedException "Compiler.grammar"
+    //
+
+    // Return the final precompilation state.
+    precompilationState
+
+/// Creates a PrecedenceSettings record from the precompilation state.
+let private precedenceSettings (precompilationState : PrecompilationState<_,_>)
+    : PrecedenceSettings<TerminalIdentifier> =
+
+
+    raise <| System.NotImplementedException "Compiler.precedenceSettings"
+    //PrecedenceSettings.Empty    // TEST
 
 /// Compiles a parser specification into a deterministic pushdown automaton (DPDA),
 /// then invokes a specified backend to generate code implementing the parser automaton.
 let compile (spec : Specification, options : CompilationOptions) : Choice<_,_> =
-    // Validate the specification.
-    let validationResult = validate (spec, options)
+    // Validate/precompile the specification.
+    let precompilationResult = precompile (spec, options)
 
     // Return the list of error messages if it's non-empty.
-    match validationResult.ValidationErrors with
+    match precompilationResult.ValidationErrors with
     | (_ :: _ as errorMessages) ->
         Choice2Of2 errorMessages
     | [] ->
-        // Create the precedence settings (precedence and associativity maps) from the specification.
-        let precedenceSettings = precedenceSettings spec
+        // Create the precedence settings (precedence and associativity maps)
+        // from the precompilation result.
+        let precedenceSettings =
+            precedenceSettings precompilationResult
 
         /// The grammar created from the parser specification.
         let grammar =
-            // Create a Graham.Grammar from the specification.
-            let grammar = grammar spec
+            //
+            let rawGrammar : Grammar<string, string> = {
+                Terminals = precompilationResult.Terminals;
+                Nonterminals = precompilationResult.Nonterminals;
+                Productions = precompilationResult.Productions; }
 
             // Augment the grammar.
-            Grammar.Augment (grammar, spec.StartingProductions)
+            Grammar.Augment (rawGrammar, spec.StartingProductions)
 
         /// The production-rule-id lookup table.
         let productionRuleIds =
