@@ -6,7 +6,7 @@ This code is provided under the terms of the 2-clause ("Simplified") BSD license
 See LICENSE.TXT for licensing details.
 *)
 
-module Graham.Tests.Predictive
+module Graham.Tests.Analysis
 
 open Grammars
 
