@@ -19,7 +19,7 @@ open Graham.Analysis
 
 [<TestCase>]
 let ``Analysis of Grammar 3.26`` () =
-    let grammar = AugmentedGrammar.ofGrammar Appel.``Grammar 3.26``
+    let grammar = Appel.``Grammar 3.26``
     let predictiveSets = PredictiveSets.ofGrammar grammar
 
     (* Verify the nullable map. *)
@@ -74,17 +74,17 @@ let ``Analysis of Grammar 3.26`` () =
     |> should be True
 
     // Verify the entries are correct.
-    Map.find (Nonterminal 'E') predictiveSets.Follow
+    Map.find (AugmentedNonterminal.Nonterminal 'E') predictiveSets.Follow
     |> should equal <| Set.ofArray [|
-        Terminal "="; EndOfFile; |]
+        AugmentedTerminal.Terminal "="; EndOfFile; |]
 
-    Map.find (Nonterminal 'S') predictiveSets.Follow
+    Map.find (AugmentedNonterminal.Nonterminal 'S') predictiveSets.Follow
     |> should equal <| Set.ofArray (
         [| EndOfFile; |] : AugmentedTerminal<string>[])
 
-    Map.find (Nonterminal 'V') predictiveSets.Follow
+    Map.find (AugmentedNonterminal.Nonterminal 'V') predictiveSets.Follow
     |> should equal <| Set.ofArray [|
-        Terminal "="; EndOfFile; |]
+        AugmentedTerminal.Terminal "="; EndOfFile; |]
 
     Map.find Start predictiveSets.Follow
     |> should equal <| Set.ofArray (
