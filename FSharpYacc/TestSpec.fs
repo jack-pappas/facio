@@ -220,7 +220,7 @@ let ``fslex parser spec`` = {
             Some "string", ["IDENT"; "STRING"];
         ];
     StartingProductions =
-        Set.ofArray [| "spec" |];
+        [ "spec" ];
     Associativities =
         [   NonAssociative, ["regexp_plus"; "regexp_star"];
             NonAssociative, ["regexp_opt"];

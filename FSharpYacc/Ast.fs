@@ -69,7 +69,7 @@ type Specification = {
     /// productions must also have explicit type declarations.
     /// At least one (1) nonterminal must be specified;
     /// a Specification is invalid if this field is empty.
-    StartingProductions : Set<NonterminalIdentifier>;
+    StartingProductions : NonterminalIdentifier list;   // TODO : Add position information
     /// Explicitly declared associativities of symbols (terminals and nonterminals).
     /// The precedences of the symbols in the grammar are implied by their ordering
     /// in this list.
@@ -78,6 +78,6 @@ type Specification = {
     // Note that the last (bottom-most) declaration has the highest precedence.
     Associativities : (Associativity * SymbolIdentifier list) list;
     /// The production rules of the grammar.
-    Productions : (SymbolIdentifier * ProductionRule list) list;
+    Productions : (NonterminalIdentifier * ProductionRule list) list;
 }
 
