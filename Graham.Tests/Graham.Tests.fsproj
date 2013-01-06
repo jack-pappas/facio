@@ -38,6 +38,7 @@
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <ItemGroup>
     <None Include="packages.config" />
+    <Compile Include="TestHelpers.fs" />
     <Compile Include="Grammars.fs" />
     <Compile Include="Predictive.fs" />
     <Compile Include="Tables.fs" />
