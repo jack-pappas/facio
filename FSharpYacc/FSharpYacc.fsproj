@@ -53,7 +53,6 @@
     <Compile Include="Ast.fs" />
     <Compile Include="Lexer.fs" />
     <Compile Include="Parser.fs" />
-    <Compile Include="Validator.fs" />
     <Compile Include="Compiler.fs" />
     <Compile Include="Emit.fs" />
     <Compile Include="CodeGen.fs" />
