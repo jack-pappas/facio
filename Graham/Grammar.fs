@@ -162,6 +162,26 @@ type Grammar<'Nonterminal, 'Terminal
                 // Add this identifier to the map.
                 Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
 
+    /// Computes sets containing the nonterminals and terminals used with the productions of a grammar.
+    static member SymbolSets (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) =
+        ((Set.empty, Set.empty), productions)
+        ||> Map.fold (fun (nonterminals, terminals) nonterminal productions ->
+            // Add the nonterminal to the set of nonterminals
+            let nonterminals = Set.add nonterminal nonterminals
+
+            ((nonterminals, terminals), productions)
+            ||> Array.fold (Array.fold (fun (nonterminals, terminals) symbol ->
+                // Add the current symbol to the appropriate set.
+                match symbol with
+                | Terminal terminal ->
+                    nonterminals,
+                    Set.add terminal terminals
+                | Nonterminal nontermId ->
+                    Set.add nontermId nonterminals,
+                    terminals
+                    )))
+
+
 /// A grammar augmented with the "start" symbol and the end-of-file marker.
 and AugmentedGrammar<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison

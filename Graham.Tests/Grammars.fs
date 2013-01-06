@@ -12,29 +12,6 @@ module Graham.Tests.Grammars
 open Graham.Grammar
 
 
-//
-[<AutoOpen>]
-module private Helpers =
-    /// Computes sets containing the terminals and nonterminals
-    /// used within the productions of a grammar.
-    let terminalsAndNonterminals productions : Set<'Token> * Set<'NonterminalId> =
-        ((Set.empty, Set.empty), productions)
-        ||> Map.fold (fun (terminals, nonterminals) nonterminal productions ->
-            // Add the nonterminal to the set of nonterminals
-            let nonterminals = Set.add nonterminal nonterminals
-
-            ((terminals, nonterminals), productions)
-            ||> Array.fold (Array.fold (fun (terminals, nonterminals) symbol ->
-                // Add the current symbol to the appropriate set.
-                match symbol with
-                | Terminal terminal ->
-                    Set.add terminal terminals,
-                    nonterminals
-                | Nonterminal nontermId ->
-                    terminals,
-                    Set.add nontermId nonterminals)))
-
-
 /// Grammars from Andrew W. Appel's "Modern Compiler Implementation in ML".
 module Appel =
     /// Grammar 3.5 from "Modern Compiler Implementation in ML".
@@ -53,7 +30,8 @@ module Appel =
                 Map.empty
                 |> Map.add 'E' E
 
-            let terminals, nonterminals = terminalsAndNonterminals productions
+            let nonterminals, terminals =
+                Grammar.SymbolSets productions
 
             {   Terminals = terminals;
                 Nonterminals = nonterminals;
@@ -89,7 +67,8 @@ module Appel =
                 |> Map.add 'T' T
                 |> Map.add 'F' F
 
-            let terminals, nonterminals = terminalsAndNonterminals productions
+            let nonterminals, terminals =
+                Grammar.SymbolSets productions
 
             // Create the grammar from the productions.
             {   Terminals = terminals;
@@ -121,7 +100,8 @@ module Appel =
                 |> Map.add 'Y' Y
                 |> Map.add 'Z' Z
 
-            let terminals, nonterminals = terminalsAndNonterminals productions
+            let nonterminals, terminals =
+                Grammar.SymbolSets productions
 
             {   Terminals = terminals;
                 Nonterminals = nonterminals;
@@ -149,7 +129,8 @@ module Appel =
                 |> Map.add 'L' L
                 |> Map.add 'S' S
 
-            let terminals, nonterminals = terminalsAndNonterminals productions
+            let nonterminals, terminals =
+                Grammar.SymbolSets productions
 
             {   Terminals = terminals;
                 Nonterminals = nonterminals;
@@ -175,7 +156,8 @@ module Appel =
                 |> Map.add 'E' E
                 |> Map.add 'T' T
 
-            let terminals, nonterminals = terminalsAndNonterminals productions
+            let nonterminals, terminals =
+                Grammar.SymbolSets productions
 
             {   Terminals = terminals;
                 Nonterminals = nonterminals;
@@ -206,7 +188,8 @@ module Appel =
                 |> Map.add 'E' E
                 |> Map.add 'V' V
 
-            let terminals, nonterminals = terminalsAndNonterminals productions
+            let nonterminals, terminals =
+                Grammar.SymbolSets productions
 
             {   Terminals = terminals;
                 Nonterminals = nonterminals;
@@ -241,7 +224,8 @@ module Appel =
                 |> Map.add 'S' S
                 |> Map.add 'L' L
 
-            let terminals, nonterminals = terminalsAndNonterminals productions
+            let nonterminals, terminals =
+                Grammar.SymbolSets productions
 
             {   Terminals = terminals;
                 Nonterminals = nonterminals;
@@ -281,7 +265,8 @@ module Appel =
                 |> Map.add 'L' L
                 |> Map.add 'B' B
 
-            let terminals, nonterminals = terminalsAndNonterminals productions
+            let nonterminals, terminals =
+                Grammar.SymbolSets productions
 
             {   Terminals = terminals;
                 Nonterminals = nonterminals;
