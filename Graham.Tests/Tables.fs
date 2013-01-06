@@ -22,74 +22,45 @@ open Graham.LR
 let ``LR(0) table for Grammar 3.20`` () =
     let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.20``
     
-    let expectedActionTable =
+    let expectedActionTable : Map<TerminalTransition<AugmentedTerminal<string>>, LrParserActionSet> =
         Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "(") (
-            Set.ofArray [| Shift 3<_>; |])
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 2<_>; |])
+        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Shift 3<_>)
+        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 2<_>)
 
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "(") (
-            Set.ofArray [| Reduce 1<_>; |])
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal ")") (
-            Set.ofArray [| Reduce 1<_>; |])
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal ",") (
-            Set.ofArray [| Reduce 1<_>; |])
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Reduce 1<_>; |])
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 1<_>; |])
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Reduce 1<_>)
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal ")") (Action <| Reduce 1<_>)
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal ",") (Action <| Reduce 1<_>)
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 1<_>)
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
 
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "(") (
-            Set.ofArray [| Shift 3<_>; |])
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 2<_>; |])
+        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Shift 3<_>)
+        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 2<_>)
 
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Accept; |])
+        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action Accept)
 
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "(") (
-            Set.ofArray [| Reduce 2<_>; |])
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal ")") (
-            Set.ofArray [| Reduce 2<_>; |])
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal ",") (
-            Set.ofArray [| Reduce 2<_>; |])
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Reduce 2<_>; |])
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 2<_>; |])
+        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Reduce 2<_>)
+        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal ")") (Action <| Reduce 2<_>)
+        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal ",") (Action <| Reduce 2<_>)
+        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 2<_>)
+        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 2<_>)
 
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal ")") (
-            Set.ofArray [| Shift 8<_>; |])
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal ",") (
-            Set.ofArray [| Shift 7<_>; |])
+        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.Terminal ")") (Action <| Shift 8<_>)
+        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.Terminal ",") (Action <| Shift 7<_>)
 
-        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "(") (
-            Set.ofArray [| Shift 3<_>; |])
-        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 2<_>; |])
+        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Shift 3<_>)
+        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 2<_>)
 
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "(") (
-            Set.ofArray [| Reduce 3<_>; |])
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal ")") (
-            Set.ofArray [| Reduce 3<_>; |])
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal ",") (
-            Set.ofArray [| Reduce 3<_>; |])
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Reduce 3<_>; |])
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 3<_>; |])
+        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Reduce 3<_>)
+        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal ")") (Action <| Reduce 3<_>)
+        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal ",") (Action <| Reduce 3<_>)
+        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 3<_>)
+        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 3<_>)
 
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "(") (
-            Set.ofArray [| Reduce 4<_>; |])
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal ")") (
-            Set.ofArray [| Reduce 4<_>; |])
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal ",") (
-            Set.ofArray [| Reduce 4<_>; |])
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Reduce 4<_>; |])
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 4<_>; |])
+        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Reduce 4<_>)
+        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal ")") (Action <| Reduce 4<_>)
+        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal ",") (Action <| Reduce 4<_>)
+        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 4<_>)
+        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 4<_>)
 
     //
     let expectedGotoTable : Map<NonterminalTransition<AugmentedNonterminal<char>>, ParserStateId> =
@@ -114,35 +85,23 @@ let ``LR(0) table for Grammar 3.23`` () =
 
     let expectedActionTable =
         Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 3<_>; |])
+        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 3<_>)
 
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "+") (
-            Set.ofArray [| Shift 5<_>; Reduce 1<_>; |])
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Reduce 1<_>; |])
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 1<_>; |])
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "+") (Conflict <| ShiftReduce (5<_>, 1<_>))
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 1<_>)
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
 
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "+") (
-            Set.ofArray [| Reduce 2<_>; |])
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Reduce 2<_>; |])
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 2<_>; |])
+        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "+") (Action <| Reduce 2<_>)
+        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 2<_>)
+        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 2<_>)
 
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Accept; |])
+        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action Accept)
 
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 3<_>; |])
+        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 3<_>)
 
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "+") (
-            Set.ofArray [| Reduce 3<_>; |])
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Reduce 3<_>; |])
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 3<_>; |])
+        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.Terminal "+") (Action <| Reduce 3<_>)
+        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 3<_>)
+        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 3<_>)
 
     //
     let expectedGotoTable =
@@ -170,27 +129,19 @@ let ``SLR table for Grammar 3.23`` () =
 
     let expectedActionTable =
         Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 3<_>; |])
+        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 3<_>)
 
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "+") (
-            Set.ofArray [| Shift 5<_>; |])
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 1<_>; |])
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "+") (Action <| Shift 5<_>)
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
 
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "+") (
-            Set.ofArray [| Reduce 2<_>; |])
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 2<_>; |])
+        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "+") (Action <| Reduce 2<_>)
+        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 2<_>)
 
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Accept; |])
+        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action Accept)
 
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 3<_>; |])
+        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 3<_>)
 
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 3<_>; |])
+        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 3<_>)
 
     let expectedGotoTable =
         Map.empty
@@ -213,63 +164,41 @@ let ``LR(1) table for Grammar 3.26`` () =
 
     let expectedActionTable =
         Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "*") (
-            Set.ofArray [| Shift 5<_>; |])
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 4<_>; |])
+        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 5<_>)
+        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 4<_>)
 
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "=") (
-            Set.ofArray [| Shift 9<_>; |])
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 1<_>; |])
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Shift 9<_>)
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
 
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 2<_>; |])
+        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 2<_>)
 
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "=") (
-            Set.ofArray [| Reduce 3<_>; |])
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 3<_>; |])
+        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Reduce 3<_>)
+        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 3<_>)
 
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "*") (
-            Set.ofArray [| Shift 5<_>; |])
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 4<_>; |])
+        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 5<_>)
+        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 4<_>)
 
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Accept; |])
+        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action Accept)
 
-        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "=") (
-            Set.ofArray [| Reduce 1<_>; |])
-        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 1<_>; |])
+        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Reduce 1<_>)
+        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
 
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "=") (
-            Set.ofArray [| Reduce 4<_>; |])
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 4<_>; |])
+        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Reduce 4<_>)
+        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 4<_>)
 
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "*") (
-            Set.ofArray [| Shift 13<_>; |])
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 12<_>; |])
+        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 13<_>)
+        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 12<_>)
 
-        |> Map.add (10<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 1<_>; |])
+        |> Map.add (10<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
 
-        |> Map.add (11<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 5<_>; |])
+        |> Map.add (11<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 5<_>)
 
-        |> Map.add (12<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 3<_>; |])
+        |> Map.add (12<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 3<_>)
 
-        |> Map.add (13<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "*") (
-            Set.ofArray [| Shift 13<_>; |])
-        |> Map.add (13<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 12<_>; |])
+        |> Map.add (13<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 13<_>)
+        |> Map.add (13<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 12<_>)
         
-        |> Map.add (14<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 4<_>; |])
+        |> Map.add (14<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 4<_>)
 
     let expectedGotoTable =
         Map.empty
@@ -311,49 +240,32 @@ let ``LALR(1) table for Grammar 3.26`` () =
 
     let expectedActionTable =
         Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "*") (
-            Set.ofArray [| Shift 1<_>; |])
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 8<_>; |])
+        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 1<_>)
+        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 8<_>)
 
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "*") (
-            Set.ofArray [| Shift 1<_>; |])
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 8<_>; |])
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 1<_>)
+        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 8<_>)
 
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "*") (
-            Set.ofArray [| Shift 1<_>; |])
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "x") (
-            Set.ofArray [| Shift 8<_>; |])
+        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 1<_>)
+        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 8<_>)
 
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "=") (
-            Set.ofArray [| Reduce 1<_>; |])
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 1<_>; |])
+        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Reduce 1<_>)
+        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
 
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "=") (
-            Set.ofArray [| Shift 3<_>; |])
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 1<_>; |])
+        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Shift 3<_>)
+        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
 
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 2<_>; |])
+        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 2<_>)
 
-        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 5<_>; |])
+        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 5<_>)
 
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "=") (
-            Set.ofArray [| Reduce 3<_>; |])
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 3<_>; |])
+        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Reduce 3<_>)
+        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 3<_>)
 
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal <| Terminal "=") (
-            Set.ofArray [| Reduce 4<_>; |])
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Reduce 4<_>; |])
+        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Reduce 4<_>)
+        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 4<_>)
 
-        |> Map.add (10<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (
-            Set.ofArray [| Accept; |])
+        |> Map.add (10<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action Accept)
 
     let expectedGotoTable =
         Map.empty
