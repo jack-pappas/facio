@@ -33,6 +33,7 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
     Lookahead : 'Lookahead;
 } with
     /// Private. Only for use with DebuggerDisplayAttribute.
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member private this.DebuggerDisplay
         with get () =
             this.ToString '\u2022'
@@ -182,6 +183,7 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
 } with
     /// Private. For use with DebuggerDisplay only.
     /// Gets the number of conflicts in the ACTION table.
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member private this.ConflictCount
         with get () =
             (0, this.ActionTable)
@@ -191,6 +193,35 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
                     conflictCount
                 | Conflict _ ->
                     conflictCount + 1)
+
+    /// Private. For debugging purposes only -- this property can be browsed
+    /// in the VS debugger, but it can't be used from within our code.
+    member private this.ReduceStates
+        with get () =
+            (Map.empty, this.ParserStates)
+            ||> Map.fold (fun reduceStates stateId items ->
+                (reduceStates, items)
+                ||> Set.fold (fun reduceStates item ->
+                    if int item.Position = Array.length item.Production then
+                        let nonterms =
+                            match Map.tryFind stateId reduceStates with
+                            | None -> Set.singleton item.Nonterminal
+                            | Some nonterms ->
+                                Set.add item.Nonterminal nonterms
+                        Map.add stateId nonterms reduceStates
+                    else
+                        reduceStates))
+
+    /// Private. For debugging purposes only -- this property can be browsed
+    /// in the VS debugger, but it can't be used from within our code.
+    member private this.Conflicts
+        with get () =
+            (Map.empty, this.ActionTable)
+            ||> Map.fold (fun conflicts key actionSet ->
+                match actionSet with
+                | Action _ -> conflicts
+                | Conflict conflict ->
+                    Map.add key conflict conflicts)
 
     /// Removes an action from the action set corresponding to a specified key.
     static member RemoveAction (table : LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>, key, action) =

@@ -35,11 +35,13 @@ type VertexLabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex when 'Vertex : 
         with get () = vertices
 
     //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member private __.VertexCount
         with get () =
             Set.count vertices
 
     //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member private __.EdgeCount
         with get () =
             Set.count edges
@@ -450,11 +452,13 @@ type LabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex, [<EqualityConditiona
         with get () = vertices
 
     //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member private __.VertexCount
         with get () =
             Set.count vertices
 
     //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member private __.EdgeCount
         with get () =
             edges.Count

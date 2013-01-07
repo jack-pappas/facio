@@ -88,6 +88,9 @@ type AugmentedSymbol<'Nonterminal, 'Terminal
     Symbol<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
 
 /// A context-free grammar (CFG).
+[<DebuggerDisplay("Terminals = {Terminals.Count,nq}, \
+                   Nonterminals = {Nonterminals.Count,nq}, \
+                   Rules = {ProductionRuleCount,nq}")>]
 type Grammar<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> = {
@@ -98,6 +101,15 @@ type Grammar<'Nonterminal, 'Terminal
     //
     Productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>;
 } with
+    /// Private. Only for use with DebuggerDisplayAttribute.
+    /// Returns the number of production rules defined in the grammar.
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
+    member private this.ProductionRuleCount
+        with get () =
+            (0, this.Productions)
+            ||> Map.fold (fun ruleCount _ rules ->
+                ruleCount + Array.length rules)
+
     /// <summary>Augments a Grammar with a unique "start" symbol and the end-of-file marker.</summary>
     /// <param name="grammar">The grammar to be augmented.</param>
     /// <param name="startSymbols">The parser will begin parsing with any one of these symbols.</param>
