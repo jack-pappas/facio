@@ -234,7 +234,7 @@ let ``fslex parser spec`` = {
             Some "string", ["UNICODE_CATEGORY"];
             Some "char", ["CHAR"]
             Some "AST.Code", ["CODE"];
-            Some "string", List.rev ["IDENT"; "STRING"];
+            Some "string", ["IDENT"; "STRING"];
         ];
     StartingProductions =
         [ "spec" ];

@@ -45,6 +45,8 @@ type ProductionRule = {
     /// of conveying associativity and precedence.
     ImpersonatedPrecedence : TerminalIdentifier option;
 } with
+    /// Private. For use with DebuggerDisplayAttribute only.
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member private this.DebuggerDisplay
         with get () =
             match this.Symbols with

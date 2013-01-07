@@ -40,15 +40,73 @@ module private AssemblyInfo =
 //
 [<RequireQualifiedAccess>]
 module Program =
+    open System.IO
+    open Microsoft.FSharp.Text.Lexing
+    //------------------------------------------------------------------
+    // This code is duplicated from Microsoft.FSharp.Compiler.UnicodeLexing
+
+    type private Lexbuf =  LexBuffer<char>
+
+    /// Standard utility to create a Unicode LexBuffer
+    ///
+    /// One small annoyance is that LexBuffers and not IDisposable. This means
+    /// we can't just return the LexBuffer object, since the file it wraps wouldn't
+    /// get closed when we're finished with the LexBuffer. Hence we return the stream,
+    /// the reader and the LexBuffer. The caller should dispose the first two when done.
+    let private UnicodeFileAsLexbuf (filename, codePage : int option) : FileStream * StreamReader * Lexbuf =
+        // Use the .NET functionality to auto-detect the unicode encoding
+        // It also uses Lexing.from_text_reader to present the bytes read to the lexer in UTF8 decoded form
+        let stream = new FileStream (filename, FileMode.Open, FileAccess.Read, FileShare.Read)
+        let reader =
+            match codePage with
+            | None ->
+                new StreamReader (stream, true)
+            | Some n ->
+                new StreamReader (stream, System.Text.Encoding.GetEncoding n)
+        let lexbuf = LexBuffer.FromFunction reader.Read
+        lexbuf.EndPos <- Position.FirstLine filename
+        stream, reader, lexbuf
+
+
     /// Invokes FSharpYacc with the specified options.
     [<CompiledName("Invoke")>]
     let invoke (options : CompilationOptions) : int =
         (* TODO :   Validate the compilation options before proceeding further. *)
         //
 
-        // TEST : Test compilation and code generation using the test specification.
+        let parserSpec =
+            try
+                let stream, reader, lexbuf =
+                    UnicodeFileAsLexbuf (options.InputFile, None)
+                use stream = stream
+                use reader = reader
+                let parserSpec = Parser.spec Lexer.token lexbuf
+
+                // TEMP : Need to do a little massaging of the Specification for now to put some lists in the correct order.
+                { parserSpec with
+                    TerminalDeclarations =
+                        parserSpec.TerminalDeclarations
+                        |> List.map (fun (declaredType, terminals) ->
+                            declaredType, List.rev terminals);
+                    Productions =
+                        parserSpec.Productions
+                        |> List.map (fun (nonterminal, rules) ->
+                            nonterminal,
+                            rules
+                            |> List.map (fun rule ->
+                                { rule with
+                                    Symbols = List.rev rule.Symbols; })
+                            |> List.rev)
+                        |> List.rev; }
+
+            with ex ->
+                printfn "Error: %s" ex.Message
+                exit 1
+
+        // Compile the parsed specification.
         let exitCode =
-            match Compiler.compile (FSharpYacc.TestSpec.``fslex parser spec``, options) with
+            let testSpec = TestSpec.``fslex parser spec``
+            match Compiler.compile (parserSpec, options) with
             | Choice1Of2 result ->
                 // TODO : Pass the result to the selected backend.
 
@@ -81,9 +139,9 @@ module Program =
                     create an instance of the CompilationOptions record,
                     then call the 'invoke' function with it. *)
         
-        // TEST : Just use an empty CompilationOptions record for now.
+        // TEST : Just use an hard-coded CompilationOptions record for now.
         invoke {
-            InputFile = ""; }
+            InputFile = @"C:\Users\Jack\Desktop\fsyacc-test\fslexpars.fsy"; }
         
 
         
