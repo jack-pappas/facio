@@ -54,7 +54,7 @@ type PrecompilationState<'Nonterminal, 'Terminal
     /// Adds a warning message to the precompilation state.
     static member internal AddWarning message (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>) =
         { precompilationState with
-            ValidationErrors = message :: precompilationState.ValidationWarnings; }
+            ValidationWarnings = message :: precompilationState.ValidationWarnings; }
 
 /// Validates the given parser specification, and compiles it into the
 /// data structures used by the Graham library.
@@ -107,72 +107,104 @@ let precompile (spec : Specification, options : CompilationOptions)
                         // Add the error message into the precompilation state.
                         PrecompilationState.AddError msg precompilationState))
 
-    // Validate %type declarations of nonterminals.
+    // Validate the nonterminals "declared" via production rules.
+    // NOTE : Only the nonterminals themselves are validated here --
+    // the production rules themselves are validated later.
     let precompilationState =
-        (spec.NonterminalDeclarations, precompilationState)
-        ||> List.foldBack (fun (declaredType, nonterminalId) precompilationState ->
+        (spec.Productions, precompilationState)
+        ||> List.foldBack (fun (nonterminalId, _) precompilationState ->
             // Has this nonterminal been declared already?
-            match Map.tryFind nonterminalId precompilationState.Nonterminals with
-            | None ->
-                // Add the nonterminal and it's declared type to the table in the precompilation state.
-                { precompilationState with
-                    Nonterminals = Map.add nonterminalId (Some declaredType) precompilationState.Nonterminals; }
-            
-            | Some existingDeclaredType ->
-                (* TODO : Also make sure this 'nonterminalId' hasn't been declared as a terminal. *)
-
-                (*  This nonterminal has already been declared!
-                    If the previous declaration has the same declared type, emit a warning message;
-                    if it has a different declared type, emit an error message. *)
-                match existingDeclaredType with
-                | None ->
-                    let msg = sprintf "The nonterminal '%s' has already been declared." nonterminalId
-                    // Add the error message into the precompilation state.
-                    PrecompilationState.AddError msg precompilationState
-
-                | Some existingDeclaredType ->
-                    if existingDeclaredType = declaredType then
-                        // Add a warning message into the precompilation state.
-                        let msg = sprintf "Duplicate declaration of the nonterminal '%s'." nonterminalId
-                        PrecompilationState.AddWarning msg precompilationState
-                    else
-                        // Add an error message into the precompilation state.
-                        let msg =
-                            sprintf "The nonterminal '%s' has already been declared with the type '%s'."
-                                nonterminalId existingDeclaredType
-
-                        PrecompilationState.AddError msg precompilationState)
-
-    // Validate the nonterminals declared "implicitly" by production rules.
-    let precompilationState =
-        (spec.Productions, (Set.empty, precompilationState))
-        ||> List.foldBack (fun (nonterminalId, _) (productionNonterminalIds, precompilationState) ->
-            // Has this nonterminal already been implicitly declared?
-            if Set.contains nonterminalId productionNonterminalIds then
+            if Map.containsKey nonterminalId precompilationState.Nonterminals then
                 // Add an error message into the compilation state.
                 // TODO : Add a better error message.
                 let msg = "Production rules can only be declared once for each nonterminal."
-                productionNonterminalIds,
                 PrecompilationState.AddError msg precompilationState
+
             elif Map.containsKey nonterminalId precompilationState.Terminals then
                 // Can't have production rules for a terminal
                 // TODO : Add a better error message.
                 let msg = "Production rules cannot be declared for terminals."
-                productionNonterminalIds,
                 PrecompilationState.AddError msg precompilationState
+
             else
-                // Add this nonterminal to the set of "implicitly" declared nonterminals.
-                let productionNonterminalIds =
-                    Set.add nonterminalId productionNonterminalIds
-
                 // Add this nonterminal to the precompilation state.
-                let precompilationState =
-                    { precompilationState with
-                        Nonterminals = Map.add nonterminalId None precompilationState.Nonterminals; }
+                { precompilationState with
+                    Nonterminals = Map.add nonterminalId None precompilationState.Nonterminals; })
 
-                productionNonterminalIds, precompilationState)
-        // Discard the set of implicitly-declared nonterminal identifiers.
-        |> snd
+    // Validate %type declarations of nonterminals.
+    let precompilationState =
+        (spec.NonterminalDeclarations, precompilationState)
+        ||> List.foldBack (fun (declaredType, nonterminalId) precompilationState ->
+            // Has this nonterminal been declared?
+            match Map.tryFind nonterminalId precompilationState.Nonterminals with
+            | None ->
+                // To provide a better error message, check if this is a terminal identifier.
+                match Map.tryFind nonterminalId precompilationState.Terminals with
+                | None ->
+                    // Add an error message into the precompilation state.
+                    let msg = sprintf "Undeclared nonterminal '%s'. Type declarations can only be made for nonterminals declared via production rules."
+                                nonterminalId
+                    PrecompilationState.AddError msg precompilationState
+
+                | Some _ ->
+                    // Add an error message into the precompilation state.
+                    let msg = "Type declarations (%%type) cannot be applied to terminals. The %%token declaration should be used instead."
+                    PrecompilationState.AddError msg precompilationState
+
+            | Some None ->
+                // Add the nonterminal and it's declared type to the table in the precompilation state.
+                { precompilationState with
+                    Nonterminals = Map.add nonterminalId (Some declaredType) precompilationState.Nonterminals; }
+            
+            | Some (Some existingDeclaredType) ->
+                (*  If the previous declaration has the same declared type, emit a warning message;
+                    if it has a different declared type, emit an error message. *)
+                if existingDeclaredType = declaredType then
+                    // Add a warning message into the precompilation state.
+                    let msg = sprintf "Duplicate %%type declaration for the nonterminal '%s'." nonterminalId
+                    PrecompilationState.AddWarning msg precompilationState
+                else
+                    // Add an error message into the precompilation state.
+                    let msg =
+                        sprintf "The nonterminal '%s' has already been declared to have the type '%s'."
+                            nonterminalId existingDeclaredType
+
+                    PrecompilationState.AddError msg precompilationState)
+
+    // The specification must declare at least one nonterminal as a starting production.
+    // All nonterminals declared as starting productions must have type declarations.
+    let precompilationState =
+        match spec.StartingProductions with
+        | [] ->
+            let msg = "The specification must declare at least one (1) nonterminal as a starting nonterminal via the %start declaration."
+            PrecompilationState.AddError msg precompilationState
+        | startingProductions ->
+            (startingProductions, precompilationState)
+            ||> List.foldBack (fun nonterminalId precompilationState ->
+                // Has this nonterminal been declared?
+                match Map.tryFind nonterminalId precompilationState.Nonterminals with
+                | None ->
+                    // Add an error message into the precompilation state.
+                    let msg = sprintf "The nonterminal '%s' is not defined." nonterminalId
+                    PrecompilationState.AddError msg precompilationState
+
+                | Some None ->
+                    // Add an error message into the precompilation state.
+                    let msg = sprintf "The type of nonterminal '%s' has not been declared. \
+                                        Nonterminals used as starting productions must have their types declared with a %%type declaration."
+                                        nonterminalId
+                    PrecompilationState.AddError msg precompilationState
+
+                | Some (Some _) ->
+                    // Is this a duplicate %start declaration?
+                    if Set.contains nonterminalId precompilationState.StartSymbols then
+                        // Add a warning message to the precompilation state.
+                        let msg = sprintf "Duplicate %%start declaration for the nonterminal '%s'." nonterminalId
+                        PrecompilationState.AddWarning msg precompilationState
+                    else
+                        // Add this nonterminal to the set of start symbols in the precompilation state.
+                        { precompilationState with
+                            StartSymbols = Set.add nonterminalId precompilationState.StartSymbols; })
 
     // TODO : Implement validation/precompilation of the associativity declarations.
     // NOTE : Since we've processed all _other_ possible nonterminal declarations by this point,
@@ -181,31 +213,7 @@ let precompile (spec : Specification, options : CompilationOptions)
     //
     //
 
-    // The specification must declare at least one nonterminal as a starting nonterminal.
-    let precompilationState =
-        match spec.StartingProductions with
-        | [] ->
-            let msg = "The specification must declare at least one (1) nonterminal as a starting nonterminal via the %start declaration."
-            PrecompilationState.AddError msg precompilationState
-        | startingProductions ->
-            (startingProductions, (Set.empty, precompilationState))
-            ||> List.foldBack (fun nonterminalId (startingNonterminals, precompilationState) ->
-                // Starting nonterminals must be declared via production rules
-
-                // TODO
-                //
-                //
-
-                // Add this nonterminal to the set of start symbols in the precompilation state.
-                let precompilationState =
-                    { precompilationState with
-                        StartSymbols = Set.add nonterminalId precompilationState.StartSymbols; }
-
-                startingNonterminals, precompilationState)
-            // Discard the set of starting nonterminals.
-            |> snd
-
-    //
+    // Validate the production rules.
     let precompilationState =
         (spec.Productions, precompilationState)
         ||> List.foldBack (fun (nonterminalId, rules) precompilationState ->

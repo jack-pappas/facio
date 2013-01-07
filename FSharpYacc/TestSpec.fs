@@ -26,10 +26,11 @@ open FSharp.PowerPack.FsLex.AST\
 let private ``fslex productions`` =
     let spec =
         [   {   ImpersonatedPrecedence = None;
-                Symbols = ["codeopt"; "Macros"; "RULE"; "Rules"; "codeopt"];
+                Symbols =
+                    List.rev ["codeopt"; "Macros"; "RULE"; "Rules"; "codeopt"];
                 Action =
                     Some " { TopCode = $1; Macros = $2; Rules = $4; BottomCode = $5; } "; }
-        ]
+        ] |> List.rev
 
     let codeopt =
         [   {   ImpersonatedPrecedence = None;
@@ -40,7 +41,7 @@ let private ``fslex productions`` =
                 Symbols = [];
                 Action =
                     Some "\"\", (fst parseState.ResultRange)"; };
-        ]
+        ] |> List.rev
 
     let Macros =
         [   {   ImpersonatedPrecedence = None;
@@ -48,35 +49,38 @@ let private ``fslex productions`` =
                 Action =
                     Some "[]"; };
             {   ImpersonatedPrecedence = None;
-                Symbols = ["macro"; "Macros"];
+                Symbols =
+                    List.rev ["macro"; "Macros"];
                 Action =
                     Some "$1 :: $2"; };
-        ]
+        ] |> List.rev
 
     let macro =
         [   {   ImpersonatedPrecedence = None;
-                Symbols = ["LET"; "IDENT"; "EQUALS"; "regexp"];
+                Symbols =
+                    List.rev ["LET"; "IDENT"; "EQUALS"; "regexp"];
                 Action =
                     Some "($2, $4)"; };
-        ]
+        ] |> List.rev
 
     let Rules =
         [   {   ImpersonatedPrecedence = None;
-                Symbols = ["rule"; "AND"; "Rules"];
+                Symbols =
+                    List.rev ["rule"; "AND"; "Rules"];
                 Action =
                     Some "$1 :: $3"; };
             {   ImpersonatedPrecedence = None;
                 Symbols = ["rule"];
                 Action =
                     Some "[$1]"; };
-        ]
+        ] |> List.rev
 
     let rule =
         [   {   ImpersonatedPrecedence = None;
                 Symbols = [];
                 Action =
                     Some "($1, $2, $6)"; };
-        ]
+        ] |> List.rev
 
     let args =
         [   {   ImpersonatedPrecedence = None;
@@ -84,10 +88,10 @@ let private ``fslex productions`` =
                 Action =
                     Some "[]"; };
             {   ImpersonatedPrecedence = None;
-                Symbols = ["IDENT"; "args"];
+                Symbols = List.rev ["IDENT"; "args"];
                 Action =
                     Some "$1 :: $2"; };
-        ]
+        ] |> List.rev
 
     let optbar =
         [   {   ImpersonatedPrecedence = None;
@@ -98,25 +102,27 @@ let private ``fslex productions`` =
                 Symbols = ["BAR"];
                 Action =
                     None; };
-        ]
+        ] |> List.rev
 
     let clauses =
         [   {   ImpersonatedPrecedence = None;
-                Symbols = ["clause"; "BAR"; "clauses"];
+                Symbols =
+                    List.rev ["clause"; "BAR"; "clauses"];
                 Action =
                     Some "$1 :: $3"; };
             {   ImpersonatedPrecedence = None;
                 Symbols = ["clause"];
                 Action =
                     Some "[$1]"; };
-        ]
+        ] |> List.rev
 
     let clause =
         [   {   ImpersonatedPrecedence = None;
-                Symbols = ["regexp"; "CODE"];
+                Symbols =
+                    List.rev ["regexp"; "CODE"];
                 Action =
                     Some "$1, $2"; };
-        ]
+        ] |> List.rev
 
     let regexp =
         [   {   ImpersonatedPrecedence = None;
@@ -144,38 +150,46 @@ let private ``fslex productions`` =
                 Action =
                     Some "Macro $1"; };
             {   ImpersonatedPrecedence = Some "regexp_seq";
-                Symbols = ["regexp"; "regexp"];
+                Symbols =
+                    List.rev ["regexp"; "regexp"];
                 Action =
                     Some "Seq [$1; $2]"; };
             {   ImpersonatedPrecedence = Some "regexp_plus";
-                Symbols = ["regexp"; "PLUS"];
+                Symbols =
+                    List.rev ["regexp"; "PLUS"];
                 Action =
                     Some "Seq [$1; Star $1]"; };
             {   ImpersonatedPrecedence = Some "regexp_star";
-                Symbols = ["regexp"; "STAR"];
+                Symbols =
+                    List.rev ["regexp"; "STAR"];
                 Action =
                     Some "Star $1"; };
             {   ImpersonatedPrecedence = Some "regexp_opt";
-                Symbols = ["regexp"; "QMARK"];
+                Symbols =
+                    List.rev ["regexp"; "QMARK"];
                 Action =
                     Some "Alt [Seq []; $1]"; };
             {   ImpersonatedPrecedence = Some "regexp_alt";
-                Symbols = ["regexp"; "BAR"; "regexp"];
+                Symbols =
+                    List.rev ["regexp"; "BAR"; "regexp"];
                 Action =
                     Some "Alt [$1; $3]"; };
             {   ImpersonatedPrecedence = None;
-                Symbols = ["LPAREN"; "regexp"; "RPAREN"];
+                Symbols =
+                    List.rev ["LPAREN"; "regexp"; "RPAREN"];
                 Action =
                     Some "$2"; };
             {   ImpersonatedPrecedence = None;
-                Symbols = ["LBRACK"; "charset"; "RBRACK"];
+                Symbols =
+                    List.rev ["LBRACK"; "charset"; "RBRACK"];
                 Action =
                     Some "Alt [ for c in $2 -> Inp (Alphabet c) ]"; };
             {   ImpersonatedPrecedence = None;
-                Symbols = ["LBRACK"; "HAT"; "charset"; "RBRACK"];
+                Symbols =
+                    List.rev ["LBRACK"; "HAT"; "charset"; "RBRACK"];
                 Action =
                     Some "Inp (NotCharSet $3)"; };
-        ]
+        ] |> List.rev
 
     let charset =
         [   {   ImpersonatedPrecedence = None;
@@ -183,14 +197,16 @@ let private ``fslex productions`` =
                 Action =
                     Some "Set.singleton(EncodeChar $1)"; };
             {   ImpersonatedPrecedence = None;
-                Symbols = ["CHAR"; "DASH"; "CHAR"];
+                Symbols =
+                    List.rev ["CHAR"; "DASH"; "CHAR"];
                 Action =
                     Some "Set.ofSeq [ for c in $1 .. $3 -> EncodeChar c ]"; };
             {   ImpersonatedPrecedence = None;
-                Symbols = ["charset"; "charset"];
+                Symbols =
+                    List.rev ["charset"; "charset"];
                 Action =
                     Some "Set.union $1 $2"; };
-        ]
+        ] |> List.rev
 
     [   "spec", spec;
         "codeopt", codeopt;
@@ -204,20 +220,21 @@ let private ``fslex productions`` =
         "clause", clause;
         "regexp", regexp;
         "charset", charset;
-    ]
+    ] |> List.rev
 
 let ``fslex parser spec`` = {
     Header = Some ``fslex parser header``;
     Footer = None;
     NonterminalDeclarations =
-        [ "AST.Spec", "spec"; ];
+        [   "AST.Spec", "spec";
+        ];
     TerminalDeclarations =
-        [   None, ["EOF"; "BAR"; "DOT"; "PLUS"; "STAR"; "QMARK"; "EQUALS"; "UNDERSCORE"; "LBRACK"; "RBRACK"; "HAT"; "DASH"];
-            None, ["RULE"; "PARSE"; "LET"; "AND"; "LPAREN"; "RPAREN"];
+        [   None, List.rev ["EOF"; "BAR"; "DOT"; "PLUS"; "STAR"; "QMARK"; "EQUALS"; "UNDERSCORE"; "LBRACK"; "RBRACK"; "HAT"; "DASH"];
+            None, List.rev ["RULE"; "PARSE"; "LET"; "AND"; "LPAREN"; "RPAREN"];
             Some "string", ["UNICODE_CATEGORY"];
             Some "char", ["CHAR"]
             Some "AST.Code", ["CODE"];
-            Some "string", ["IDENT"; "STRING"];
+            Some "string", List.rev ["IDENT"; "STRING"];
         ];
     StartingProductions =
         [ "spec" ];
