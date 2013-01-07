@@ -25,9 +25,10 @@ type PrecompilationState<'Nonterminal, 'Terminal
     //
     ProductionRules : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>;
     //
-    TerminalAssociativities : Map<'Terminal, Associativity>;
-    //
-    PrecedenceGroups : Set<Symbol<'Nonterminal, 'Terminal>> list;
+    TerminalPrecedence : Map<'Terminal, Associativity * PrecedenceLevel>;
+    /// For production rules with a %prec declaration, maps the production rule
+    /// to the terminal specified in the declaration.
+    ProductionRulePrecedenceOverrides : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], 'Terminal>;
     //
     StartSymbols : Set<'Nonterminal>;
     /// Validation warning messages.
@@ -40,8 +41,8 @@ type PrecompilationState<'Nonterminal, 'Terminal
         Nonterminals = Map.empty;
         Terminals = Map.empty;
         ProductionRules = Map.empty;
-        TerminalAssociativities = Map.empty;
-        PrecedenceGroups = List.empty;
+        TerminalPrecedence = Map.empty;
+        ProductionRulePrecedenceOverrides = Map.empty;
         StartSymbols = Set.empty;
         ValidationWarnings = List.empty;
         ValidationErrors = List.empty; }
@@ -206,17 +207,11 @@ let precompile (spec : Specification, options : CompilationOptions)
                         { precompilationState with
                             StartSymbols = Set.add nonterminalId precompilationState.StartSymbols; })
 
-    // TODO : Implement validation/precompilation of the associativity declarations.
-    // NOTE : Since we've processed all _other_ possible nonterminal declarations by this point,
-    // when we validate the associativity declarations we can determine which (if any) nonterminals
-    // declared here are "dummy" nonterminals.
-    //
-    //
-
     // Validate the production rules.
-    let precompilationState =
-        (spec.Productions, precompilationState)
-        ||> List.foldBack (fun (nonterminalId, rules) precompilationState ->
+    // Determine which, if any, of the terminals used in the precedence-override declarations are "dummy" terminals.
+    let dummyTerminals, precompilationState =
+        (spec.Productions, (Set.empty, precompilationState))
+        ||> List.foldBack (fun (nonterminalId, rules) (dummyTerminals, precompilationState) ->
             // Make sure the symbols used in the production rules have all been declared.
             // OPTIMIZE : Both the validation and the conversion to Graham.Grammar.Symbol could be done in a single pass.
             let productionRulesValid, precompilationState =
@@ -240,8 +235,9 @@ let precompile (spec : Specification, options : CompilationOptions)
             // then add them into the precompilation state.
             if not productionRulesValid then
                 // An error was found when validating the production rules, so don't bother processing them.
-                precompilationState
+                dummyTerminals, precompilationState
             else
+                /// The production rules for this nonterminal.
                 let productionRules =
                     // OPTIMIZE : Use List.revMapIntoArray here to avoid unnecessary intermediate data structures.
                     rules
@@ -258,17 +254,175 @@ let precompile (spec : Specification, options : CompilationOptions)
                                 Symbol.Terminal symbolId))
 
                 // Add the converted production rules into the precompilation state.
-                { precompilationState with
-                    ProductionRules = Map.add nonterminalId productionRules precompilationState.ProductionRules; })
+                let precompilationState =
+                    { precompilationState with
+                        ProductionRules = Map.add nonterminalId productionRules precompilationState.ProductionRules; }
+
+                // Validate the %prec declarations (if present) for these rules.
+                // OPTIMIZE : Combine this with the rule conversion (above) to avoid re-converting the rules.
+                ((dummyTerminals, precompilationState), rules)
+                ||> List.fold (fun (dummyTerminals, precompilationState) rule ->
+                    // Does this rule have a %prec declaration?
+                    match rule.ImpersonatedPrecedence with
+                    | None ->
+                        dummyTerminals, precompilationState
+                    | Some impersonatedTerminal ->
+                        let ruleSymbols =
+                            rule.Symbols
+                            |> List.rev
+                            |> List.toArray
+                            |> Array.map (fun symbolId ->
+                                if Map.containsKey symbolId precompilationState.Nonterminals then
+                                    Symbol.Nonterminal symbolId
+                                else
+                                    Symbol.Terminal symbolId)
+
+                        // Make sure the impersonated identifier is not already declared as a nonterminal.
+                        if Map.containsKey impersonatedTerminal precompilationState.Nonterminals then
+                            // Nonterminals can't be impersonated -- add an error message to the precompilation state.
+                            let msg = "Nonterminals cannot be impersonated by %prec declarations."
+                            dummyTerminals,
+                            PrecompilationState.AddError msg precompilationState
+                        else
+                            // Is this a declared terminal? If not, it'll become a dummy terminal.
+                            let dummyTerminals =
+                                if Map.containsKey impersonatedTerminal precompilationState.Terminals then
+                                    dummyTerminals
+                                else
+                                    Set.add impersonatedTerminal dummyTerminals
+
+                            dummyTerminals,
+                            { precompilationState with
+                                ProductionRulePrecedenceOverrides =
+                                    precompilationState.ProductionRulePrecedenceOverrides
+                                    |> Map.add (nonterminalId, ruleSymbols) impersonatedTerminal; }))
+
+    // Validate the precedence/associativity declarations.
+    let dummyTerminalsWithoutPrecedence, precompilationState =
+        (* NOTE :   We REQUIRE the associativity/precedence to be specified for any dummy terminals
+                    defined by the %prec declaration of a production rule. *)
+        (spec.Associativities, (dummyTerminals, (1<_> : PrecedenceLevel), precompilationState))
+        ||> List.foldBack (fun (associativity, terminals) (dummyTerminalsWithoutPrecedence, precedenceLevel, precompilationState) ->
+            let terminalSet, precompilationState =
+                (terminals, (Set.empty, precompilationState))
+                ||> List.foldBack (fun terminal (terminalSet, precompilationState) ->
+                    // Has the associativity/precedence already been declared for this terminal?
+                    if Map.containsKey terminal precompilationState.TerminalPrecedence then
+                        // If the previous declaration was within this precedence "group",
+                        // then just emit a warning about the duplicate declaration.
+                        // Otherwise, emit an error because we don't know which precedence
+                        // the terminal is really supposed to belong to.
+                        if Set.contains terminal terminalSet then
+                            let msg = sprintf "Duplicate associativity declaration for '%s'." terminal
+                            terminalSet,
+                            PrecompilationState.AddWarning msg precompilationState
+                        else
+                            let msg = sprintf "Duplicate associativity declaration for '%s' which conflicts with an earlier declaration." terminal
+                            terminalSet,
+                            PrecompilationState.AddError msg precompilationState
+                    else
+                        // Add this terminal to the set of terminals in this precedence "group".
+                        let terminalSet = Set.add terminal terminalSet
+
+                        // Add the associativity and precedence for this terminal to the precompilation state.
+                        let precompilationState =
+                            { precompilationState with
+                                TerminalPrecedence =
+                                    precompilationState.TerminalPrecedence
+                                    |> Map.add terminal (associativity, precedenceLevel); }
+                        terminalSet,
+                        precompilationState)
+
+            // Remove any terminals in this set from the set of dummy terminals without precedences.
+            let dummyTerminalsWithoutPrecedence =
+                Set.difference dummyTerminalsWithoutPrecedence terminalSet
+            
+            dummyTerminalsWithoutPrecedence,
+            precedenceLevel + 1<_>,
+            precompilationState)
+        // Discard the precedence level counter
+        |> fun (a, _, c) -> a, c
+
+    // Add error messages to the precompilation state for any dummy terminals which
+    // don't have associativity declarations.
+    let precompilationState =
+        (precompilationState, dummyTerminalsWithoutPrecedence)
+        ||> Set.fold (fun precompilationState dummyTerminal ->
+            let msg = sprintf "The terminal '%s' does not have an associativity declaration. \
+                                'Dummy' terminals are required to have associativity declarations."
+                                dummyTerminal
+            PrecompilationState.AddError msg precompilationState)
 
     // Return the final precompilation state.
     precompilationState
 
 /// Creates a PrecedenceSettings record from the precompilation state.
-let private precedenceSettings (precompilationState : PrecompilationState<_,_>)
+let private precedenceSettings (precompilationState : PrecompilationState<NonterminalIdentifier, TerminalIdentifier>,
+                                productionRuleIds : Map<AugmentedNonterminal<_> * AugmentedSymbol<_,_>[], ProductionRuleId>)
     : PrecedenceSettings<TerminalIdentifier> =
-    // TODO
-    raise <| System.NotImplementedException "Compiler.precedenceSettings"
+    //
+    let rulePrecedence =
+        (Map.empty, precompilationState.ProductionRules)
+        ||> Map.fold (fun rulePrecedence nonterminal rules ->
+            (rulePrecedence, rules)
+            ||> Array.fold (fun rulePrecedence rule ->
+                /// The identifier for this production rule.
+                let productionRuleId =
+                    //
+                    let augmentedKey =
+                        AugmentedNonterminal.Nonterminal nonterminal,
+                        rule
+                        |> Array.map (function
+                            | Nonterminal nonterminal ->
+                                Nonterminal <| AugmentedNonterminal.Nonterminal nonterminal
+                            | Terminal terminal ->
+                                Terminal <| AugmentedTerminal.Terminal terminal)
+
+                    Map.find augmentedKey productionRuleIds
+
+                /// The terminal whose associativity and precedence is impersonated by this production rule.
+                let precedenceTerminal =
+                    // Does this rule have a precedence override declaration?
+                    match Map.tryFind (nonterminal, rule) precompilationState.ProductionRulePrecedenceOverrides with
+                    | Some impersonatedTerminal ->
+                        Some impersonatedTerminal
+                    | None ->
+                        // The precedence of a rule is the precedence of it's last (right-most) terminal.
+                        match System.Array.FindLastIndex (rule, (function Terminal _ -> true | Nonterminal _ -> false)) with
+                        | -1 ->
+                            // This rule does not contain any terminals, so it is not assigned a precedence.
+                            None
+                        | lastTerminalIndex ->
+                            match rule.[lastTerminalIndex] with
+                            | Terminal terminal ->
+                                Some terminal
+                            | Nonterminal _ ->
+                                failwith "Found a nonterminal where a terminal was expected."
+
+                // If this rule can be assigned a precedence, add it to the rule precedence map now.
+                match precedenceTerminal with
+                | None ->
+                    rulePrecedence
+                | Some precedenceTerminal ->
+                    // The associativity and precedence of the impersonated terminal.
+                    match Map.tryFind precedenceTerminal precompilationState.TerminalPrecedence with
+                    | None ->
+                        // The terminal has no precedence, so the rule has no precedence.
+                        rulePrecedence
+                    | Some impersonatedTerminalPrecedence ->
+                        // Add the precedence to the rule precedence map.
+                        Map.add productionRuleId impersonatedTerminalPrecedence rulePrecedence
+                    ))
+
+    // Filter any "dummy" terminals out of the terminal precedence map.
+    let terminalPrecedence =
+        precompilationState.TerminalPrecedence
+        |> Map.filter (fun terminal _ ->
+            Map.containsKey terminal precompilationState.Terminals)
+
+    // Create and return a PrecedenceSettings record from the constructed precedence maps.
+    {   TerminalPrecedence = terminalPrecedence;
+        RulePrecedence = rulePrecedence; }    
 
 /// Compiles a parser specification into a deterministic pushdown automaton (DPDA),
 /// then invokes a specified backend to generate code implementing the parser automaton.
@@ -281,11 +435,6 @@ let compile (spec : Specification, options : CompilationOptions) : Choice<_,_> =
     | (_ :: _ as errorMessages) ->
         Choice2Of2 errorMessages
     | [] ->
-        // Create the precedence settings (precedence and associativity maps)
-        // from the precompilation result.
-        let precedenceSettings =
-            precedenceSettings precompilationResult
-
         /// The grammar created from the parser specification.
         let grammar =
             //
@@ -306,6 +455,11 @@ let compile (spec : Specification, options : CompilationOptions) : Choice<_,_> =
         /// The production-rule-id lookup table.
         let productionRuleIds =
             Grammar.ProductionRuleIds grammar
+
+        // Create the precedence settings (precedence and associativity maps)
+        // from the precompilation result.
+        let precedenceSettings =
+            precedenceSettings (precompilationResult, productionRuleIds)
 
         (*  Create the LR(0) automaton from the grammar; report the number of states and
             the number of S/R and R/R conflicts. If there are any conflicts, apply the

@@ -40,8 +40,10 @@ type ProductionRule = {
     /// A semantic action to be executed when this rule is matched.
     Action : CodeFragment option;
     /// When set, the default associativity and precedence of this rule is overridden
-    /// and the associativity and precedence of the specified symbol used instead.
-    ImpersonatedPrecedence : SymbolIdentifier option;
+    /// and the associativity and precedence of the specified terminal used instead.
+    /// The specified terminal may be a "dummy" token which is used only for the purposes
+    /// of conveying associativity and precedence.
+    ImpersonatedPrecedence : TerminalIdentifier option;
 } with
     member private this.DebuggerDisplay
         with get () =
@@ -50,7 +52,9 @@ type ProductionRule = {
             | symbols ->
                 System.String.Join (" ", List.toArray symbols)
 
-/// A complete parser specification of a grammar.
+/// <summary>A complete parser specification of a grammar.</summary>
+/// <remarks>All lists used within this record are in reverse order compared to their
+/// order in the parser specification file.</remarks>
 type Specification = {
     //
     Header : CodeFragment option;
@@ -59,8 +63,6 @@ type Specification = {
     /// <summary>Explicit type declarations for grammar productions (nonterminals).</summary>
     /// <remarks>Type declarations (<c>%type</c>) are optional, so this list may not contain
     /// a declaration for each production.</remarks>
-    // NOTE : This list is in reverse order from the way the declarations appear in the parser
-    // specification file. I.e., the last (bottom-most) declaration is the head of the list.
     NonterminalDeclarations : (DeclaredType * NonterminalIdentifier) list;
     //
     TerminalDeclarations : (DeclaredType option * TerminalIdentifier list) list;
@@ -70,13 +72,16 @@ type Specification = {
     /// At least one (1) nonterminal must be specified;
     /// a Specification is invalid if this field is empty.
     StartingProductions : NonterminalIdentifier list;   // TODO : Add position information
-    /// Explicitly declared associativities of symbols (terminals and nonterminals).
-    /// The precedences of the symbols in the grammar are implied by their ordering
-    /// in this list.
-    // NOTE : This list is in reverse order from the way the declarations appear in the parser
-    // specification file. I.e., the last (bottom-most) declaration is the head of the list.
-    // Note that the last (bottom-most) declaration has the highest precedence.
-    Associativities : (Associativity * SymbolIdentifier list) list;
+    /// <summary>Explicitly declared associativities of terminals. This includes 'dummy'
+    /// terminals created by %prec declarations in production rules.</summary>
+    /// <remarks>
+    /// <para>Terminal precedences are implied from their ordering in this list. The list is given in
+    /// order of _decreasing_ precedence; that is, the head of the list has the highest precedence.</para>
+    /// <para>The precedence of production rules is defined as the precedence of the last (right-most)
+    /// terminal, or the precedence of the terminal specified by the %prec declaration (if present).
+    /// Note that not all production rules will be assigned a precedence value.</para>
+    /// </remarks>
+    Associativities : (Associativity * TerminalIdentifier list) list;
     /// The production rules of the grammar.
     Productions : (NonterminalIdentifier * ProductionRule list) list;
 }

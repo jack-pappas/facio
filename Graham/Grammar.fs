@@ -236,17 +236,14 @@ type PrecedenceLevel = int<AbsolutePrecedence>
 type PrecedenceSettings<'Terminal
     when 'Terminal : comparison> = {
     //
-    RulePrecedence : Map<ProductionRuleId, PrecedenceLevel>;
+    RulePrecedence : Map<ProductionRuleId, Associativity * PrecedenceLevel>;
     //
-    TerminalPrecedence : Map<'Terminal, PrecedenceLevel>;
-    //
-    TerminalAssociativity : Map<'Terminal, Associativity>;
+    TerminalPrecedence : Map<'Terminal, Associativity * PrecedenceLevel>;
 } with
     /// Returns an empty PrecedenceSettings instance.
     static member Empty : PrecedenceSettings<'Terminal> = {
         RulePrecedence = Map.empty;
-        TerminalPrecedence = Map.empty;
-        TerminalAssociativity = Map.empty; }
+        TerminalPrecedence = Map.empty; }
 
 
 (* TODO :   Un-comment the RelativePrecedence type whenever we get around to
