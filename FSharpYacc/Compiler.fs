@@ -389,6 +389,7 @@ let private precedenceSettings (precompilationState : PrecompilationState<Nonter
                     | None ->
                         // The precedence of a rule is the precedence of it's last (right-most) terminal.
                         match System.Array.FindLastIndex (rule, (function Terminal _ -> true | Nonterminal _ -> false)) with
+                        //match System.Array.FindIndex (rule, (function Terminal _ -> true | Nonterminal _ -> false)) with
                         | -1 ->
                             // This rule does not contain any terminals, so it is not assigned a precedence.
                             None
