@@ -14,6 +14,14 @@ open Graham.LR
 open FSharpYacc.Ast
 
 
+/// Reserved terminal identifiers.
+/// Defining a terminal with any of these identifiers will cause an error message
+/// to be emitted when the parser specification is compiled.
+let private reservedTerminalIdentifiers : Set<TerminalIdentifier> =
+    Set.ofArray [|
+        "error";
+    |]
+
 //
 type PrecompilationState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
@@ -82,13 +90,19 @@ let precompile (spec : Specification, options : CompilationOptions)
                 // Has this nonterminal been declared already?
                 match Map.tryFind terminalId precompilationState.Terminals with
                 | None ->
-                    // Add the terminal and it's declared type to the table in the precompilation state.
-                    { precompilationState with
-                        Terminals = Map.add terminalId declaredType precompilationState.Terminals; }
-                
-                | Some existingDeclaredType ->
                     (* TODO : Also make sure this 'terminalId' hasn't been declared as a nonterminal. *)
 
+                    // Is this a reserved terminal identifier?
+                    if Set.contains terminalId reservedTerminalIdentifiers then
+                        // Add an error message to the precompilation state.
+                        let msg = sprintf "The identifier '%s' is reserved and may not be used for user-defined tokens." terminalId
+                        PrecompilationState.AddError msg precompilationState
+                    else
+                        // Add the terminal and it's declared type to the table in the precompilation state.
+                        { precompilationState with
+                            Terminals = Map.add terminalId declaredType precompilationState.Terminals; }
+                
+                | Some existingDeclaredType ->
                     (*  This terminal has already been declared!
                         If the previous declaration has the same declared type, emit a warning message;
                         if it has a different declared type, emit an error message. *)
