@@ -74,7 +74,7 @@ module Lr0 =
                 | Nonterminal _ -> false
 
         /// Computes the LR(0) closure of a set of items.
-        // TODO : Modify this to use a worklist-style algorithm to avoid
+        // OPTIMIZE : Modify this to use a worklist-style algorithm to avoid
         // reprocessing items which already exist in the set (i.e., when iterating,
         // we only process items added to the set in the previous iteration).
         let closure (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) items =
@@ -275,10 +275,38 @@ module Lr0 =
     let applyPrecedence (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,
                          settings : PrecedenceSettings<'Terminal>) : Lr0ParserTable<'Nonterminal, 'Terminal> =
         // Preconditions
-        // NOTE : We only use assertions here to avoid runtime overhead in production;
-        // however, if the performance penalty is minimal, these should be changed to
-        // normal 'if'/'elif' statements to enforce the preconditions at runtime.
-        // TODO : Assert that 'rulePrecedence' and 'terminalPrecedence' have entries for all possible rules/terminals.
+        do
+            (*  Require the 'TerminalPrecedence' and 'RulePrecedence' maps in 'settings' to have entries
+                for any terminal used in an ACTION table key and any rule used in a reduce action. *)
+            let terminalOrRuleWithoutPrecedence =
+                lr0ParserTable.ActionTable
+                |> Map.tryPick (fun (_, terminal) actionSet ->
+                    // Check the terminal.
+                    match terminal with
+                    | EndOfFile ->
+                        None
+                    | Terminal terminal ->
+                        if not <| Map.containsKey terminal settings.TerminalPrecedence then
+                            Some <| Choice1Of2 terminal
+                        else
+                            // Check the action set to look for reduce actions.
+                            match actionSet with
+                            | Action (Reduce productionRuleId)
+                            | Conflict (ShiftReduce (_, productionRuleId))
+                            | Conflict (ReduceReduce (productionRuleId, _))
+                            | Conflict (ReduceReduce (_, productionRuleId))
+                                when not <| Map.containsKey productionRuleId settings.RulePrecedence ->
+                                Some <| Choice2Of2 productionRuleId
+                            | _ ->
+                                None)
+            match terminalOrRuleWithoutPrecedence with
+            | None -> ()
+            | Some (Choice1Of2 terminal) ->
+                let msg = sprintf "The TerminalPrecedence map does not contain an entry for the terminal '%O'." terminal
+                invalidArg "settings" msg
+            | Some (Choice2Of2 productionRuleId) ->
+                let msg = sprintf "The RulePrecedence map does not contain an entry for production rule %i." (int productionRuleId)
+                invalidArg "settings" msg
 
         // Fold over the provided table, using the supplied precedence and
         // associativity tables to resolve conflicts wherever possible.
