@@ -274,40 +274,6 @@ module Lr0 =
     //
     let applyPrecedence (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,
                          settings : PrecedenceSettings<'Terminal>) : Lr0ParserTable<'Nonterminal, 'Terminal> =
-        // Preconditions
-        do
-            (*  Require the 'TerminalPrecedence' and 'RulePrecedence' maps in 'settings' to have entries
-                for any terminal used in an ACTION table key and any rule used in a reduce action. *)
-            let terminalOrRuleWithoutPrecedence =
-                lr0ParserTable.ActionTable
-                |> Map.tryPick (fun (_, terminal) actionSet ->
-                    // Check the terminal.
-                    match terminal with
-                    | EndOfFile ->
-                        None
-                    | Terminal terminal ->
-                        if not <| Map.containsKey terminal settings.TerminalPrecedence then
-                            Some <| Choice1Of2 terminal
-                        else
-                            // Check the action set to look for reduce actions.
-                            match actionSet with
-                            | Action (Reduce productionRuleId)
-                            | Conflict (ShiftReduce (_, productionRuleId))
-                            | Conflict (ReduceReduce (productionRuleId, _))
-                            | Conflict (ReduceReduce (_, productionRuleId))
-                                when not <| Map.containsKey productionRuleId settings.RulePrecedence ->
-                                Some <| Choice2Of2 productionRuleId
-                            | _ ->
-                                None)
-            match terminalOrRuleWithoutPrecedence with
-            | None -> ()
-            | Some (Choice1Of2 terminal) ->
-                let msg = sprintf "The TerminalPrecedence map does not contain an entry for the terminal '%O'." terminal
-                invalidArg "settings" msg
-            | Some (Choice2Of2 productionRuleId) ->
-                let msg = sprintf "The RulePrecedence map does not contain an entry for production rule %i." (int productionRuleId)
-                invalidArg "settings" msg
-
         // Fold over the provided table, using the supplied precedence and
         // associativity tables to resolve conflicts wherever possible.
         (lr0ParserTable, lr0ParserTable.ActionTable)
@@ -337,34 +303,35 @@ module Lr0 =
                     lr0ParserTable
 
                 | ShiftReduce (targetStateId, reduceRuleId) ->
-                    //
-                    let shiftPrecedence = Map.find terminal settings.TerminalPrecedence
-                    //
-                    let reducePrecedence = Map.find reduceRuleId settings.RulePrecedence
-
-                    // The conflict can be resolved if the precedences are different --
-                    // we remove the action with lower precedence from this action set. 
-                    if shiftPrecedence < reducePrecedence then
-                        LrParserTable.RemoveAction (lr0ParserTable, key, Shift targetStateId)
-                    elif shiftPrecedence > reducePrecedence then
-                        LrParserTable.RemoveAction (lr0ParserTable, key, Reduce reduceRuleId)
-                    else
-                        // The precedences are the same, so we use the terminal's associativity
-                        // (if provided) to resolve the conflict.
-                        match Map.tryFind terminal settings.TerminalAssociativity with
-                        | None ->
-                            // Leave the conflict unresolved.
-                            lr0ParserTable
-                        | Some Left ->
-                            // For left-associative tokens, reduce (remove the Shift action).
+                    match Map.tryFind terminal settings.TerminalPrecedence,
+                          Map.tryFind reduceRuleId settings.RulePrecedence with
+                    | None, _
+                    | _, None ->
+                        // If the precedence/associativity isn't defined for either the terminal
+                        // or the production rule, we'll have to handle the conflict using the
+                        // default conflict-resolving rules.
+                        lr0ParserTable
+                    | Some (terminalAssociativity, terminalPrecedence), Some (_, rulePrecedence) ->
+                        // The conflict can be resolved if the precedences are different --
+                        // we remove the action with lower precedence from this action set. 
+                        if terminalPrecedence < rulePrecedence then
                             LrParserTable.RemoveAction (lr0ParserTable, key, Shift targetStateId)
-                        | Some Right ->
-                            // For right-associative tokens, shift (remove the Reduce action).
+                        elif terminalPrecedence > rulePrecedence then
                             LrParserTable.RemoveAction (lr0ParserTable, key, Reduce reduceRuleId)
-                        | Some NonAssociative ->
-                            // For non-associative tokens, remove *both* actions.
-                            { lr0ParserTable with
-                                ActionTable = Map.remove key lr0ParserTable.ActionTable; })
+                        else
+                            // The precedences are the same, so we use the terminal's
+                            // associativity to resolve the conflict.
+                            match terminalAssociativity with
+                            | Left ->
+                                // For left-associative tokens, reduce (remove the Shift action).
+                                LrParserTable.RemoveAction (lr0ParserTable, key, Shift targetStateId)
+                            | Right ->
+                                // For right-associative tokens, shift (remove the Reduce action).
+                                LrParserTable.RemoveAction (lr0ParserTable, key, Reduce reduceRuleId)
+                            | NonAssociative ->
+                                // For non-associative tokens, remove *both* actions.
+                                { lr0ParserTable with
+                                    ActionTable = Map.remove key lr0ParserTable.ActionTable; })
 
     //
     let resolveConflicts (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
