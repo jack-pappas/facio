@@ -163,6 +163,10 @@ type TerminalTransition<'Terminal
     ParserStateId * 'Terminal
 
 /// LR(k) parser table.
+[<DebuggerDisplay("States = {ParserStates.Count,nq}, \
+                   Gotos = {GotoTable.Count,nq}, \
+                   Actions = {ActionTable.Count,nq}, \
+                   Conflicts = {ConflictCount,nq}")>]
 type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
@@ -176,6 +180,18 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
     //
     GotoTable : Map<NonterminalTransition<'Nonterminal>, ParserStateId>;
 } with
+    /// Private. For use with DebuggerDisplay only.
+    /// Gets the number of conflicts in the ACTION table.
+    member private this.ConflictCount
+        with get () =
+            (0, this.ActionTable)
+            ||> Map.fold (fun conflictCount _ actionSet ->
+                match actionSet with
+                | Action _ ->
+                    conflictCount
+                | Conflict _ ->
+                    conflictCount + 1)
+
     /// Removes an action from the action set corresponding to a specified key.
     static member RemoveAction (table : LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>, key, action) =
         // Try to retrieve the existing action set; if no action set exists for the specified key,
