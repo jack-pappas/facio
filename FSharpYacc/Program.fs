@@ -107,7 +107,7 @@ module Program =
         let exitCode =
             let testSpec = TestSpec.``fslex parser spec``
             match Compiler.compile (parserSpec, options) with
-            | Choice1Of2 result ->
+            | Choice1Of2 (parserTable, warningMessages) ->
                 // TODO : Pass the result to the selected backend.
 
                 // BREAKPOINT

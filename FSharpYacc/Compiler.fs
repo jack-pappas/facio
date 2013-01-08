@@ -519,6 +519,7 @@ let compile (spec : Specification, options : CompilationOptions) : Choice<_,_> =
             let lalr1Table' =
                 Lr0.resolveConflicts lalr1Table
 
-            // Return the compiled parser table.
-            Choice1Of2 lalr1Table'
+            // Return the compiled parser table, along with any warning messages
+            // from the precompilation step.
+            Choice1Of2 (lalr1Table', precompilationResult.ValidationWarnings)
 
