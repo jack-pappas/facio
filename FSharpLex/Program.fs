@@ -40,6 +40,7 @@ module internal AssemblyInfo =
 //
 [<RequireQualifiedAccess>]
 module Program =
+    (* TEMP : This code is taken from the F# Powerpack, and is licensed under the Apache 2.0 license *)
     open System.IO
     open Microsoft.FSharp.Text.Lexing
     //------------------------------------------------------------------
@@ -66,10 +67,11 @@ module Program =
         let lexbuf = LexBuffer.FromFunction reader.Read
         lexbuf.EndPos <- Position.FirstLine filename
         stream, reader, lexbuf
+    (* End-TEMP *)
 
     /// Invokes FSharpLex with the specified options.
     [<CompiledName("Invoke")>]
-    let invoke (inputFile, options : Compile.CompilationOptions) : int =
+    let invoke (inputFile, options) : int =
         (* TODO :   Validate the compilation options before proceeding further. *)
 
         /// The parsed lexer specification.
@@ -97,36 +99,25 @@ module Program =
                 exit 1
 
         // Compile the parsed specification.
-        let exitCode =
-            let testSpec = FSharpLex.TestSpec.``fslex specification``
-            match Compile.lexerSpec lexerSpec options with
-            | Choice1Of2 compiledLexerSpec ->
-                // TODO : Pass the result to the selected backend.
+        match Compile.lexerSpec lexerSpec options with
+        | Choice2Of2 errorMessages ->
+            // Write the error messages to the console.
+            // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
+            errorMessages
+            |> Array.iter (printfn "Error: %s")
 
-                let generatedCode = CodeGen.generateString compiledLexerSpec options
-                //GraphGen.Dgml.emitSeparate compiledLexerSpec options
+            1   // Exit code: Error
 
-                // BREAKPOINT
-                let efowei = "weofkwokfwe".Length + 1
+        | Choice1Of2 compiledLexerSpec ->
+            // TODO : Pass the result to the selected backend.
 
-                0   // Success
-            | Choice2Of2 errorMessages ->
-                // Write the error messages to the console.
-                // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
-                errorMessages
-                |> Array.iter (printfn "Error: %s")
+            let generatedCode = CodeGen.generateString compiledLexerSpec options
+            //GraphGen.Dgml.emitSeparate compiledLexerSpec options
 
-                1   // Error
+            // BREAKPOINT
+            let efowei = "weofkwokfwe".Length + 1
 
-        // TEMP : Don't exit until pressing a key, so we can read any messages printed to the console.
-        // This MUST be removed before FSharpYacc can be called from MSBuild, VS, etc.
-        printfn ""
-        printfn "Press any key to exit..."
-        System.Console.ReadKey ()
-        |> ignore
-
-        // Return the exit code.
-        exitCode
+            0   // Exit code: Success
 
     /// The entry point for the application.
     [<EntryPoint; CompiledName("Main")>]

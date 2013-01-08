@@ -40,6 +40,7 @@ module private AssemblyInfo =
 //
 [<RequireQualifiedAccess>]
 module Program =
+    (* TEMP : This code is taken from the F# Powerpack, and is licensed under the Apache 2.0 license *)
     open System.IO
     open Microsoft.FSharp.Text.Lexing
     //------------------------------------------------------------------
@@ -66,7 +67,7 @@ module Program =
         let lexbuf = LexBuffer.FromFunction reader.Read
         lexbuf.EndPos <- Position.FirstLine filename
         stream, reader, lexbuf
-
+    (* End-TEMP *)
 
     /// Invokes FSharpYacc with the specified options.
     [<CompiledName("Invoke")>]
@@ -104,33 +105,22 @@ module Program =
                 exit 1
 
         // Compile the parsed specification.
-        let exitCode =
-            let testSpec = TestSpec.``fslex parser spec``
-            match Compiler.compile (parserSpec, options) with
-            | Choice1Of2 (parserTable, warningMessages) ->
-                // TODO : Pass the result to the selected backend.
+        match Compiler.compile (parserSpec, options) with
+        | Choice2Of2 errorMessages ->
+            // Write the error messages to the console.
+            // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
+            errorMessages
+            |> List.iter (printfn "Error: %s")
 
-                // BREAKPOINT
-                let efowei = "weofkwokfwe".Length + 1
+            1   // Exit code: Error
 
-                0   // Success
-            | Choice2Of2 errorMessages ->
-                // Write the error messages to the console.
-                // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
-                errorMessages
-                |> List.iter (printfn "Error: %s")
+        | Choice1Of2 (parserTable, warningMessages) ->
+            // TODO : Pass the result to the selected backend.
 
-                1   // Error
+            // BREAKPOINT
+            let efowei = "weofkwokfwe".Length + 1
 
-        // TEMP : Don't exit until pressing a key, so we can read any messages printed to the console.
-        // This MUST be removed before FSharpYacc can be called from MSBuild, VS, etc.
-        printfn ""
-        printfn "Press any key to exit..."
-        System.Console.ReadKey ()
-        |> ignore
-
-        // Return the exit code.
-        exitCode
+            0   // Exit code: Success
 
     /// The entry point for the application.
     [<EntryPoint; CompiledName("Main")>]
