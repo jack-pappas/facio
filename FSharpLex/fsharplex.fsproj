@@ -54,10 +54,9 @@
     <Compile Include="Lexer.fs" />
     <Compile Include="Graph.fs" />
     <Compile Include="Compile.fs" />
-    <Compile Include="Emit.fs" />
+    <Compile Include="Plugin.fs" />
     <Compile Include="CodeGen.fs" />
     <Compile Include="GraphGen.fs" />
-    <Compile Include="TestSpec.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
