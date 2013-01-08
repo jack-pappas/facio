@@ -7,10 +7,10 @@ See LICENSE.TXT for licensing details.
 *)
 
 //
-module FSharpLex.Emit
+namespace FSharpLex.Plugin
 
 open System.ComponentModel.Composition
-open Compile
+open FSharpLex.Compile
 
 (* TODO :   Determine how the user will select the backend they want to use,
             and also how we can allow backend-specific options to be specified. *)
