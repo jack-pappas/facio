@@ -72,7 +72,13 @@ module Program =
     /// Invokes FSharpLex with the specified options.
     [<CompiledName("Invoke")>]
     let invoke (inputFile, options) : int =
-        (* TODO :   Validate the compilation options before proceeding further. *)
+        // Preconditions
+        if inputFile = null then
+            nullArg "inputFile"
+        elif System.String.IsNullOrWhiteSpace inputFile then
+            invalidArg "inputFile" "The path to the lexer specification is empty."
+        elif not <| System.IO.File.Exists inputFile then
+            invalidArg "inputFile" "No lexer specification exists at the specified path."
 
         /// The parsed lexer specification.
         let lexerSpec =
@@ -109,13 +115,12 @@ module Program =
             1   // Exit code: Error
 
         | Choice1Of2 compiledLexerSpec ->
-            // TODO : Pass the result to the selected backend.
-
+            // TEST : Test the backends by invoking them directly.
             let generatedCode = CodeGen.generateString compiledLexerSpec options
             //GraphGen.Dgml.emitSeparate compiledLexerSpec options
 
-            // BREAKPOINT
-            let efowei = "weofkwokfwe".Length + 1
+            // TODO : Pass the result to the selected backend.
+            raise <| System.NotImplementedException "TODO : Implement backend-selection functionality."
 
             0   // Exit code: Success
 

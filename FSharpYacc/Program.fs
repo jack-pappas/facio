@@ -71,14 +71,20 @@ module Program =
 
     /// Invokes FSharpYacc with the specified options.
     [<CompiledName("Invoke")>]
-    let invoke (options : CompilationOptions) : int =
-        (* TODO :   Validate the compilation options before proceeding further. *)
-        //
+    let invoke (inputFile, options) : int =
+        // Preconditions
+        if inputFile = null then
+            nullArg "inputFile"
+        elif System.String.IsNullOrWhiteSpace inputFile then
+            invalidArg "inputFile" "The path to the parser specification is empty."
+        elif not <| System.IO.File.Exists inputFile then
+            invalidArg "inputFile" "No parser specification exists at the specified path."
 
+        /// The parsed parser specification.
         let parserSpec =
             try
                 let stream, reader, lexbuf =
-                    UnicodeFileAsLexbuf (options.InputFile, None)
+                    UnicodeFileAsLexbuf (inputFile, None)
                 use stream = stream
                 use reader = reader
                 let parserSpec = Parser.spec Lexer.token lexbuf
@@ -116,9 +122,7 @@ module Program =
 
         | Choice1Of2 (parserTable, warningMessages) ->
             // TODO : Pass the result to the selected backend.
-
-            // BREAKPOINT
-            let efowei = "weofkwokfwe".Length + 1
+            raise <| System.NotImplementedException "TODO : Implement code-generation backend."
 
             0   // Exit code: Success
 
@@ -129,9 +133,9 @@ module Program =
                     create an instance of the CompilationOptions record,
                     then call the 'invoke' function with it. *)
         
-        // TEST : Just use an hard-coded CompilationOptions record for now.
-        invoke {
-            InputFile = @"C:\Users\Jack\Desktop\fsyacc-test\fslexpars.fsy"; }
+        // TEST : Just use a hard-coded CompilationOptions record for now.
+        invoke (@"C:\Users\Jack\Desktop\fsyacc-test\fslexpars.fsy", {
+            ParserType = ParserType.Lalr1; })
         
 
         

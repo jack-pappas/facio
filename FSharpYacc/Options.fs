@@ -9,9 +9,13 @@ See LICENSE.TXT for licensing details.
 namespace FSharpYacc
 
 //
+type ParserType =
+    //
+    | Lalr1
+
+//
 type CompilationOptions = {
     //
-    InputFile : string;
-
+    ParserType : ParserType;
 }
 
