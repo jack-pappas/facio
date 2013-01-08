@@ -106,7 +106,8 @@ type SourcePosition =
 type MacroIdentifier = string
 
 //
-type MacroIdentifierWithPosition = SourcePosition option * MacroIdentifier
+type MacroIdentifierWithPosition =
+    (SourcePosition * SourcePosition) option * MacroIdentifier
 
 /// <summary>A regular-expression-based pattern used to define patterns within the lexer.</summary>
 /// <remarks>This is a regular expression extended with additional
@@ -255,6 +256,9 @@ type RuleClause = {
     Action : CodeFragment;
 }
 
+/// The name of a parameter of a lexer rule.
+type ParameterName = string
+
 //
 type Rule = {
     /// Parameters of the rule.
@@ -262,7 +266,7 @@ type Rule = {
     // in the generated lexer code.
     // NOTE : This list should be in reverse order; that is, the 'head'
     // of the list should be the last (right-most) parameter of the rule.
-    Parameters : string list;
+    Parameters : ParameterName list;
     //
     // NOTE : This list should be in reverse order; that is, the 'head'
     // of the list should be the last (bottom-most) clause of the rule.
@@ -273,7 +277,8 @@ type Rule = {
 type RuleIdentifier = string
 
 //
-type RuleIdentifierWithPosition = SourcePosition option * RuleIdentifier
+type RuleIdentifierWithPosition =
+    (SourcePosition * SourcePosition) option * RuleIdentifier
 
 /// A complete specification of a lexer.
 type Specification = {
@@ -295,8 +300,6 @@ type Specification = {
     // NOTE : This list should be in reverse order; that is, the 'head'
     // of the list should be the last (bottom-most) rule defined in the lexer definition.
     Rules : (RuleIdentifierWithPosition * Rule) list;
-    //
-    StartRule : RuleIdentifier;
 }
 
 //

@@ -329,7 +329,7 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
 
 
 //
-let private preprocessMacro ((macroIdPosition : SourcePosition option, macroId), pattern) (options : CompilationOptions) (macroEnv, badMacros) =
+let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition) option, macroId), pattern) (options : CompilationOptions) (macroEnv, badMacros) =
     //
     // OPTIMIZE : Modify this function to use a LazyList to hold the errors
     // instead of an F# list to avoid the list concatenation overhead.
@@ -871,6 +871,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
                 |> Array.map (fun clause ->
                     clause.Action); }
 
+
 /// A compiled lexer specification.
 type CompiledSpecification = {
     //
@@ -879,8 +880,8 @@ type CompiledSpecification = {
     Footer : CodeFragment option;
     //
     CompiledRules : Map<RuleIdentifier, CompiledRule>;
-    //
-    StartRule : RuleIdentifier;
+//    //
+//    StartRule : RuleIdentifier;
 }
 
 /// Creates pattern-matching DFAs from the lexer rules.
@@ -941,8 +942,7 @@ let lexerSpec (spec : Specification) options =
                 CompiledRules =
                     (Map.empty, ruleIdentifiers, compiledRules)
                     |||> Array.fold2 (fun map (_, ruleId) compiledRule ->
-                        Map.add ruleId compiledRule map);
-                StartRule = spec.StartRule; }
+                        Map.add ruleId compiledRule map); }
         else
             Choice2Of2 compilationErrors
 

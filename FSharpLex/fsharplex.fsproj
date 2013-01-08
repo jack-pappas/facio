@@ -44,26 +44,25 @@
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft F#\v4.0\Microsoft.FSharp.Targets" Condition=" Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <ItemGroup>
-    <None Include="packages.config" />
     <Compile Include="..\Common\CommonAssemblyInfo.fs">
       <Link>CommonAssemblyInfo.fs</Link>
     </Compile>
     <Compile Include="Collections.fs" />
     <Compile Include="Regex.fs" />
     <Compile Include="Ast.fs" />
-    <Compile Include="Lexer.fs" />
     <Compile Include="Parser.fs" />
+    <Compile Include="Lexer.fs" />
     <Compile Include="Graph.fs" />
     <Compile Include="Compile.fs" />
     <Compile Include="Emit.fs" />
     <Compile Include="CodeGen.fs" />
     <Compile Include="GraphGen.fs" />
+    <Compile Include="TestSpec.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FSharp.PowerPack">
-      <HintPath>..\packages\FSPowerPack.Core.Community.3.0.0.0\lib\Net40\FSharp.PowerPack.dll</HintPath>
-      <Private>True</Private>
+      <HintPath>bin\Debug\FSharp.PowerPack.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core" />
