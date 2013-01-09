@@ -55,8 +55,10 @@
     <Compile Include="Graph.fs" />
     <Compile Include="Compile.fs" />
     <Compile Include="Plugin.fs" />
-    <Compile Include="CodeGen.fs" />
+    <Compile Include="CodeGenHelpers.fs" />
+    <Compile Include="Backend.Fslex.fs" />
     <Compile Include="GraphGen.fs" />
+    <Compile Include="Backends.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

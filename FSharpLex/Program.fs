@@ -40,6 +40,10 @@ module internal AssemblyInfo =
 //
 [<RequireQualifiedAccess>]
 module Program =
+    open System.ComponentModel.Composition
+    open System.ComponentModel.Composition.Hosting
+    open FSharpLex.Plugin
+
     (* TEMP : This code is taken from the F# Powerpack, and is licensed under the Apache 2.0 license *)
     open System.IO
     open Microsoft.FSharp.Text.Lexing
@@ -69,6 +73,19 @@ module Program =
         stream, reader, lexbuf
     (* End-TEMP *)
 
+    //
+    let private loadBackends () =
+        //
+        use catalog = new AssemblyCatalog (typeof<Backends>.Assembly)
+
+        //
+        use container = new CompositionContainer (catalog)
+
+        //
+        let backends = Backends ()
+        container.ComposeParts (backends)
+        backends
+
     /// Invokes FSharpLex with the specified options.
     [<CompiledName("Invoke")>]
     let invoke (inputFile, options) : int =
@@ -79,6 +96,13 @@ module Program =
             invalidArg "inputFile" "The path to the lexer specification is empty."
         elif not <| System.IO.File.Exists inputFile then
             invalidArg "inputFile" "No lexer specification exists at the specified path."
+
+        // TEMP : This is hard-coded for now, but eventually we'll make it
+        // so the user can specify which backend(s) to use.
+        /// The fslex-compatible backend.
+        let fslexBackend =
+            let backends = loadBackends ()
+            backends.FslexBackend
 
         /// The parsed lexer specification.
         let lexerSpec =
@@ -115,12 +139,11 @@ module Program =
             1   // Exit code: Error
 
         | Choice1Of2 compiledLexerSpec ->
-            // TEST : Test the backends by invoking them directly.
-            let generatedCode = CodeGen.generateString compiledLexerSpec options
-            //GraphGen.Dgml.emitSeparate compiledLexerSpec options
-
-            // TODO : Pass the result to the selected backend.
-            raise <| System.NotImplementedException "TODO : Implement backend-selection functionality."
+            // TEMP : Generate code using the 'fslex'-compatible backend;
+            // eventually we'll modify this so the user can specify the backend to use.
+            fslexBackend.EmitCompiledSpecification (
+                compiledLexerSpec,
+                options)
 
             0   // Exit code: Success
 
@@ -133,5 +156,8 @@ module Program =
         
         // TEST : Just use an hard-coded CompilationOptions record for now.
         invoke (@"C:\Users\Jack\Desktop\fsyacc-test\fslexlex.fsl", {
-            Unicode = false; })
+            Unicode = false;
+            // TEMP
+            FslexOutputPath = Some @"C:\Users\Jack\Desktop\fsyacc-test\fslex_lexer.fs";            
+            })
 

@@ -18,11 +18,12 @@ open FSharpLex.Compile
 //
 [<Interface>]
 type IBackend =
-    //
-    abstract EmitCode :
+    /// <summary>Invokes this backend to (e.g., emit code) for the given <see cref="CompiledSpecification"/>.</summary>
+    /// <param name="compiledSpec">A compiled lexer specification.</param>
+    /// <param name="options">Options which control the behavior of the backend.</param>
+    abstract EmitCompiledSpecification :
         compiledSpec : CompiledSpecification
         * options : CompilationOptions
         // TODO : Add TextWriter for the backend to write the emitted code into.
         // TODO : Add parameter for logging interface?
         -> unit
-
