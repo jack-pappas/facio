@@ -25,6 +25,5 @@ type IBackend =
     abstract EmitCompiledSpecification :
         compiledSpec : CompiledSpecification
         * options : CompilationOptions
-        // TODO : Add TextWriter for the backend to write the emitted code into.
         // TODO : Add parameter for logging interface?
         -> unit

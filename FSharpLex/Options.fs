@@ -9,7 +9,7 @@ See LICENSE.TXT for licensing details.
 namespace FSharpLex
 
 (* TODO :   Once we support strongly-typed custom metadata from the backends,
-            this type should be moved into their respective backends since they
+            these types should be moved into their respective backends since they
             won't need to be visible outside of the backends themselves. *)
 
 /// Options to control the behavior of the fslex-compatible backend.
