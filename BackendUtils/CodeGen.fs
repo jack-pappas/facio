@@ -6,14 +6,16 @@ This code is provided under the terms of the 2-clause ("Simplified") BSD license
 See LICENSE.TXT for licensing details.
 *)
 
-/// Helper modules for code-generating backends.
-module internal FSharpLex.Plugin.CodeGenerationHelpers
+//
+module BackendUtils.CodeGen
+
+open System.CodeDom.Compiler
 
 
 /// Functional operators for working with instances of
 /// System.CodeDom.Compiler.IndentedTextWriter.
 [<RequireQualifiedAccess>]
-module internal IndentedTextWriter =
+module IndentedTextWriter =
     open System.CodeDom.Compiler
 
     //
@@ -62,45 +64,10 @@ let inline indent (itw : IndentedTextWriter) (f : IndentedTextWriter -> 'T) =
 
 ////
 //[<RequireQualifiedAccess>]
-//module private DocComment =
+//module DocComment =
 //    //
 //    let summary str (indentingWriter : IndentedTextWriter) =
 //
 //    //
 //    let remarks str (indentingWriter : IndentedTextWriter) =
-
-
-////
-//[<RequireQualifiedAccess>]
-//module private DirectlyEncoded =
-//    //
-//    let emit (compiledSpec : CompiledSpecification) (writer : #TextWriter) : unit =
-//        // Preconditions
-//        if writer = null then
-//            nullArg "writer"
-//
-//        /// Used to create properly-formatted code.
-//        use indentingWriter = new IndentedTextWriter (writer, "    ")
-//
-//        // Emit the header (if present).
-//        compiledSpec.Header
-//        |> Option.iter indentingWriter.WriteLine
-//
-//        // Emit the compiled rules
-//        IndentedTextWriter.indent indentingWriter
-//
-//        compiledSpec.CompiledRules
-//        |> Map.iter (fun ruleId compiledRule ->
-//
-//            // TODO
-//            raise <| System.NotImplementedException "generateCode"
-//            ())
-//
-//        IndentedTextWriter.unindent indentingWriter
-//
-//        // Emit the footer (if present).
-//        compiledSpec.Footer
-//        |> Option.iter indentingWriter.WriteLine
-
-
 

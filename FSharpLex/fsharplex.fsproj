@@ -56,7 +56,6 @@
     <Compile Include="Options.fs" />
     <Compile Include="Compile.fs" />
     <Compile Include="Plugin.fs" />
-    <Compile Include="CodeGenHelpers.fs" />
     <Compile Include="Backend.Fslex.fs" />
     <Compile Include="Backend.Graph.fs" />
     <Compile Include="Backends.fs" />
@@ -75,6 +74,13 @@
     <Reference Include="System.Numerics" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BackendUtils\BackendUtils.fsproj">
+      <Name>BackendUtils</Name>
+      <Project>{4841364d-cb0b-45cc-ac84-f8e3b86a1c11}</Project>
+      <Private>True</Private>
+    </ProjectReference>
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
 	     Other similar extension points exist, see Microsoft.Common.targets.

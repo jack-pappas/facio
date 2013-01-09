@@ -17,8 +17,11 @@ open FSharpYacc.Compiler
 open Graham
 open Graham.Graph
 
-// TODO : Move these into a separate assembly to avoid loading System.Xml.dll unless necessary.
-// TODO : Implement a backend for the dot (graphviz) format.
+(* TODO :   Move this backend into a separate assembly so the 'fsharplex' project
+            won't have a dependency on System.Xml.dll. *)
+(* TODO :   Implement a backend for the dot (graphviz) format. *)
+
+
 
 
 

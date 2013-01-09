@@ -67,6 +67,11 @@
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="System.Core" />
+    <ProjectReference Include="..\BackendUtils\BackendUtils.fsproj">
+      <Name>BackendUtils</Name>
+      <Project>{4841364d-cb0b-45cc-ac84-f8e3b86a1c11}</Project>
+      <Private>True</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Graham\Graham.fsproj">
       <Name>Graham</Name>
       <Project>{ab802cfd-4ea9-4f11-ade3-f2f5518bfd52}</Project>
