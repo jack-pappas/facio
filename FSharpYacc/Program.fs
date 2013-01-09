@@ -40,6 +40,10 @@ module private AssemblyInfo =
 //
 [<RequireQualifiedAccess>]
 module Program =
+    open System.ComponentModel.Composition
+    open System.ComponentModel.Composition.Hosting
+    open FSharpYacc.Plugin
+
     (* TEMP : This code is taken from the F# Powerpack, and is licensed under the Apache 2.0 license *)
     open System.IO
     open Microsoft.FSharp.Text.Lexing
@@ -68,6 +72,20 @@ module Program =
         lexbuf.EndPos <- Position.FirstLine filename
         stream, reader, lexbuf
     (* End-TEMP *)
+
+
+    //
+    let private loadBackends () =
+        //
+        use catalog = new AssemblyCatalog (typeof<Backends>.Assembly)
+
+        //
+        use container = new CompositionContainer (catalog)
+
+        //
+        let backends = Backends ()
+        container.ComposeParts (backends)
+        backends
 
     /// Invokes FSharpYacc with the specified options.
     [<CompiledName("Invoke")>]
@@ -110,19 +128,36 @@ module Program =
                 printfn "Error: %s" ex.Message
                 exit 1
 
+        // TEMP : This is hard-coded until we implement functionality to
+        // allow the user to select which backend to use.
+        let backends = loadBackends ()
+
         // Compile the parsed specification.
         match Compiler.compile (parserSpec, options) with
-        | Choice2Of2 errorMessages ->
+        | Choice2Of2 (errorMessages, warningMessages) ->
             // Write the error messages to the console.
             // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
             errorMessages
             |> List.iter (printfn "Error: %s")
 
+            // Write the warning messages to the console.
+            warningMessages
+            |> List.iter (printfn "Warning: %s")
+
             1   // Exit code: Error
 
         | Choice1Of2 (parserTable, warningMessages) ->
-            // TODO : Pass the result to the selected backend.
-            raise <| System.NotImplementedException "TODO : Implement code-generation backend."
+            // Write the warning messages to the console.
+            // TODO : Write the warning messages to NLog (or similar) instead, for flexibility.
+            warningMessages
+            |> List.iter (printfn "Warning: %s")
+
+            // TEMP : Invoke the fsyacc-compatible backend.
+            // Eventually we'll implement a way for the user to select the backend(s) to use.
+            backends.FsyaccBackend.EmitCompiledSpecification (
+                parserSpec,
+                parserTable,
+                options)
 
             0   // Exit code: Success
 
@@ -135,7 +170,11 @@ module Program =
         
         // TEST : Just use a hard-coded CompilationOptions record for now.
         invoke (@"C:\Users\Jack\Desktop\fsyacc-test\fslexpars.fsy", {
-            ParserType = ParserType.Lalr1; })
+            ParserType = ParserType.Lalr1;
+            // TEMP
+            FsyaccBackendOptions = Some {
+                OutputPath = @"C:\Users\Jack\Desktop\fsyacc-test\fslexpars_parser.fs"; };            
+            })
         
 
         

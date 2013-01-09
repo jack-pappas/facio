@@ -6,18 +6,19 @@ This code is provided under the terms of the 2-clause ("Simplified") BSD license
 See LICENSE.TXT for licensing details.
 *)
 
-//
-module FSharpYacc.CodeGen
+namespace FSharpYacc.Plugin
 
-open System.CodeDom.Compiler
 open System.ComponentModel.Composition
 open System.IO
 open System.Text
-open LanguagePrimitives
-//open SpecializedCollections
+open FSharpYacc
 open FSharpYacc.Ast
-//open Compile
+open FSharpYacc.Compiler
+open Graham
+open Graham.Graph
 
-(* TODO :   Move the code generator (and any other back-ends we want to create)
-            into plugins using the Managed Extensibility Framework (MEF). *)
+// TODO : Move these into a separate assembly to avoid loading System.Xml.dll unless necessary.
+// TODO : Implement a backend for the dot (graphviz) format.
+
+
 

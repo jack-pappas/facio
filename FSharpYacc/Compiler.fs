@@ -448,7 +448,7 @@ let compile (spec : Specification, options : CompilationOptions) : Choice<_,_> =
     // Return the list of error messages if it's non-empty.
     match precompilationResult.ValidationErrors with
     | (_ :: _ as errorMessages) ->
-        Choice2Of2 errorMessages
+        Choice2Of2 (errorMessages, precompilationResult.ValidationWarnings)
     | [] ->
         /// The grammar created from the parser specification.
         let grammar =
@@ -505,7 +505,7 @@ let compile (spec : Specification, options : CompilationOptions) : Choice<_,_> =
         // If we detected that the grammar is not LR(k), stop and return an error message.
         match Lalr1.lookaheadSets (grammar, slr1Table) with
         | Choice2Of2 errorMessage ->
-            Choice2Of2 [errorMessage]
+            Choice2Of2 ([errorMessage], [])
         | Choice1Of2 lookaheadSets ->
             //
             let lalr1Table =
