@@ -53,7 +53,7 @@ module private FsLex =
     //
     let [<Literal>] private lexerBufferVariableName = "lexbuf"
     //
-    let [<Literal>] private lexerBufferTypeName = "FSharpx.Text.Lexing.LexBuffer<_>"
+    let [<Literal>] private lexerBufferTypeName = "Microsoft.FSharp.Text.Lexing.LexBuffer<_>"
     //
     let [<Literal>] private lexingStateVariableName = "_fslex_state"
 
@@ -261,7 +261,7 @@ module private FsLex =
         "// Create the interpreter from the transition and action tables."
         |> indentingWriter.WriteLine
 
-        sprintf "FSharpx.Text.Lexing.%sTables.Create (%s, %s)"
+        sprintf "Microsoft.FSharp.Text.Lexing.%sTables.Create (%s, %s)"
             (if options.Unicode then "Unicode" else "Ascii")
             transitionTableVariableName
             actionTableVariableName
