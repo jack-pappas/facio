@@ -193,18 +193,6 @@ let rec private createDfa universe pending compilationState =
             // Continue processing recursively.
             createDfa universe pending compilationState
 
-/// Lexer compilation options.
-type CompilationOptions = {
-    // TODO : If possible, it would be better to let the backends specify
-    // their own options instead of having to put them all in here.
-    
-    (* General *)
-    /// Enable unicode support in the lexer.
-    Unicode : bool;
-
-    (* Fslex-compatible backend *)
-    FslexOutputPath : string option;
-}
 
 /// A deterministic finite automaton (DFA) implementing a lexer rule.
 [<DebuggerDisplay(

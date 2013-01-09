@@ -13,6 +13,7 @@ open System.ComponentModel.Composition
 open System.IO
 open System.Text
 open LanguagePrimitives
+open FSharpLex
 open FSharpLex.SpecializedCollections
 open FSharpLex.Ast
 open FSharpLex.Compile
@@ -420,13 +421,13 @@ module private FsLex =
 type FslexBackend () =
     interface IBackend with
         member this.EmitCompiledSpecification (compiledSpec, options) : unit =
-            //
-            let outputPath =
-                match options.FslexOutputPath with
+            /// Compilation options specific to this backend.
+            let fslexOptions =
+                match options.FslexBackendOptions with
                 | None ->
-                    raise <| exn "No output path specified."
-                | Some path ->
-                    path
+                    raise <| exn "No backend-specific options were provided."
+                | Some options ->
+                    options
 
             // Generate the code and write it to the specified file.
-            using (File.CreateText outputPath) (FsLex.emit compiledSpec options)
+            using (File.CreateText fslexOptions.OutputPath) (FsLex.emit compiledSpec options)

@@ -10,6 +10,7 @@ See LICENSE.TXT for licensing details.
 namespace FSharpLex.Plugin
 
 open System.ComponentModel.Composition
+open FSharpLex
 open FSharpLex.Compile
 
 (* TODO :   Determine how the user will select the backend they want to use,

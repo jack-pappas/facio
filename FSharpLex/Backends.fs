@@ -16,6 +16,7 @@ open System.ComponentModel.Composition
 [<Export>]
 type Backends () =
     let mutable fslexBackend = None
+    let mutable graphBackend = None
 
     /// The fslex-compatible backend.
     [<Import>]
@@ -24,8 +25,20 @@ type Backends () =
             match fslexBackend with
             | None ->
                 invalidOp "The fslex backend has not been set."
-            | Some fslexBackend ->
-                fslexBackend
+            | Some backend ->
+                backend
         and set value =
             fslexBackend <- Some value
+
+//    /// The graph-based backend.
+//    [<Import>]
+//    member __.GraphBackend
+//        with get () : IBackend =
+//            match graphBackend with
+//            | None ->
+//                invalidOp "The graph backend has not been set."
+//            | Some backend ->
+//                backend
+//        and set value =
+//            graphBackend <- Some value
 

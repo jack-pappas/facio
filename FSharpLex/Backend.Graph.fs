@@ -6,16 +6,16 @@ This code is provided under the terms of the 2-clause ("Simplified") BSD license
 See LICENSE.TXT for licensing details.
 *)
 
-//
-module FSharpLex.GraphGen
+namespace FSharpLex.Plugin
 
 open System.ComponentModel.Composition
 open System.IO
 open System.Text
-open SpecializedCollections
-open Graph
-open Ast
-open Compile
+open FSharpLex
+open FSharpLex.SpecializedCollections
+open FSharpLex.Graph
+open FSharpLex.Ast
+open FSharpLex.Compile
 
 // TODO : Move these into a separate assembly to avoid loading System.Xml.dll unless necessary.
 // TODO : Implement a backend for the dot (graphviz) format.
@@ -135,7 +135,7 @@ module Dgml =
 //        //logged.Save
 
     // Emits DGML where each DFA is a separate component of the graph.
-    let emitSeparate (compiledSpec : CompiledSpecification) (options : CompilationOptions) =
+    let emitSeparate (compiledSpec : CompiledSpecification, graphOptions : GraphBackendOptions) =
         //
         let dgmlDoc = XmlDocument ()
         let xmlDecl = dgmlDoc.CreateXmlDeclaration ("1.0", "utf-8", null)
@@ -345,13 +345,26 @@ module Dgml =
         |> ignore
 
         // Write the document to a file.
-        // TEMP : This is a hard-coded filename -- we should determine this from
-        // the compiler options. Perhaps take the specified output filename and
-        // change the extension to .dgml.
-        dgmlDoc.Save "CompiledLexerDfa.dgml"
+        dgmlDoc.Save graphOptions.OutputPath
 
-//        let sb = StringBuilder ()
-//        using (new StringWriter (sb)) dgmlDoc.Save
-//        sb.ToString ()
 
+/// A backend which serializes the pattern-matching automaton into a
+/// graph-based file format for use with a visualization tool.
+//[<Export(typeof<IBackend>)>]  // TEMP : This is only disabled to avoid a fatal exception until we modify our Backends class to support multiple backends.
+type GraphBackend () =
+    interface IBackend with
+        member this.EmitCompiledSpecification (compiledSpec, options) : unit =
+            /// Compilation options specific to this backend.
+            let graphOptions =
+                match options.GraphBackendOptions with
+                | None ->
+                    raise <| exn "No backend-specific options were provided."
+                | Some options ->
+                    options
+
+            // Serialize the automaton graph using the specified file format.
+            match graphOptions.Format with
+            | Dgml ->
+                // Emit DGML.
+                Dgml.emitSeparate (compiledSpec, graphOptions)
 

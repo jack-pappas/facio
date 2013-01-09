@@ -99,10 +99,8 @@ module Program =
 
         // TEMP : This is hard-coded for now, but eventually we'll make it
         // so the user can specify which backend(s) to use.
-        /// The fslex-compatible backend.
-        let fslexBackend =
-            let backends = loadBackends ()
-            backends.FslexBackend
+        /// Compiler backends.
+        let backends = loadBackends ()
 
         /// The parsed lexer specification.
         let lexerSpec =
@@ -139,11 +137,15 @@ module Program =
             1   // Exit code: Error
 
         | Choice1Of2 compiledLexerSpec ->
-            // TEMP : Generate code using the 'fslex'-compatible backend;
-            // eventually we'll modify this so the user can specify the backend to use.
-            fslexBackend.EmitCompiledSpecification (
+            // TEMP : Invoke the various backends "manually".
+            // Eventually we'll modify this so the user can specify the backend to use.
+            backends.FslexBackend.EmitCompiledSpecification (
                 compiledLexerSpec,
                 options)
+
+//            backends.GraphBackend.EmitCompiledSpecification (
+//                compiledLexerSpec,
+//                options)
 
             0   // Exit code: Success
 
@@ -158,6 +160,11 @@ module Program =
         invoke (@"C:\Users\Jack\Desktop\fsyacc-test\fslexlex.fsl", {
             Unicode = false;
             // TEMP
-            FslexOutputPath = Some @"C:\Users\Jack\Desktop\fsyacc-test\fslex_lexer.fs";            
+            FslexBackendOptions = Some {
+                OutputPath = @"C:\Users\Jack\Desktop\fsyacc-test\fslex_lexer.fs";
+                };
+            GraphBackendOptions = Some {
+                OutputPath = @"C:\Users\Jack\Desktop\fsyacc-test\CompiledLexerDfa.dgml";
+                Format = GraphFileFormat.Dgml; };
             })
 
