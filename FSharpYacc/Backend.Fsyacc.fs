@@ -48,7 +48,11 @@ module private FsYacc =
                 writer.WriteLine (line.Trim ())
                 ))
 
-    //
+    /// <summary>Emits the declaration of a discriminated union type into an IndentedTextWriter.</summary>
+    /// <param name="typeName">The name of the type.</param>
+    /// <param name="isPublic">When set, the type will be publicly-visible.</param>
+    /// <param name="cases">A map containing the names (and types, if applicable) of the cases.</param>
+    /// <param name="writer">The IndentedTextWriter into which to write the code.</param>
     let private unionTypeDecl (typeName : string, isPublic, cases : Map<string, string option>) (writer : IndentedTextWriter) =
         // Write the type declaration
         if isPublic then
@@ -72,11 +76,29 @@ module private FsYacc =
                     sprintf "| %s of (%s)" caseName caseType
                 |> writer.WriteLine)
 
-    //
-    let private valueMap (map : Map<'Key, 'T>) =
+    /// Emits code which declares a literal integer value into a TextWriter.
+    let private intLiteralDecl (name, isPublic, value : int) (writer : #TextWriter) =
+        // Preconditions
+        if System.String.IsNullOrWhiteSpace name then
+            invalidArg "name" "The variable name cannot be null/empty/whitespace."
+
+        if isPublic then
+            sprintf "let [<Literal>] %s = %i" name value
+        else
+            sprintf "let [<Literal>] private %s = %i" name value
+        |> writer.WriteLine
+
+    /// Creates a Map whose keys are the values of the given Map.
+    /// The value associated with each key is None.
+    let private valueMap (map : Map<'Key, 'T>) : Map<'T, 'U option> =
         (Map.empty, map)
         ||> Map.fold (fun valueMap _ value ->
             Map.add value None valueMap)
+
+    /// The name of the end-of-input terminal.
+    let [<Literal>] private endOfInputTerminal : TerminalIdentifier = "end_of_input"
+    /// The name of the error terminal.
+    let [<Literal>] private errorTerminal : TerminalIdentifier = "error"
 
     //
     let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
@@ -95,9 +117,12 @@ module private FsYacc =
         unionTypeDecl ("token", true, processedSpec.Terminals) writer
         writer.WriteLine ()
 
-        /// Maps terminal identifiers to symbolic token names.
+        /// Maps terminals (tokens) to symbolic token names.
         let symbolicTokenNames =
             processedSpec.Terminals
+            // Add the end-of-input and error terminals to the map.
+            |> Map.add endOfInputTerminal None
+            |> Map.add errorTerminal None
             |> Map.map (fun terminalName _ ->
                 "TOKEN_" + terminalName)
 
@@ -114,7 +139,18 @@ module private FsYacc =
 
         // Emit the symbolic nonterminal type declaration.
         quickSummary writer "This type is used to give symbolic names to token indexes, useful for error messages."
-        unionTypeDecl ("nonterminalId", false, valueMap symbolicNonterminalNames) writer
+        do
+            /// The symbolic nonterminals. All values in this map are None
+            /// since the cases don't carry values.
+            let symbolicNonterminals =
+                let symbolicNonterminals = valueMap symbolicNonterminalNames
+                // Add cases for the starting symbols.
+                (symbolicNonterminals, processedSpec.StartSymbols)
+                ||> Set.fold (fun symbolicNonterminals startSymbol ->
+                    Map.add ("NONTERM__start" + startSymbol) None symbolicNonterminals)
+
+                // Write the type declaration.
+            unionTypeDecl ("nonterminalId", false, symbolicNonterminals) writer
         writer.WriteLine ()
 
         /// Integer indices (tags) of terminals (tokens).
@@ -123,8 +159,11 @@ module private FsYacc =
             ||> Map.fold (fun (tokenTags, index) terminal _ ->
                 Map.add terminal index tokenTags,
                 index + 1)
-            // Discard the index value.
-            |> fst
+            // Add the end-of-input and error terminals and discard the index value.
+            |> fun (tokenTags, index) ->
+                tokenTags
+                |> Map.add errorTerminal index
+                |> Map.add endOfInputTerminal (index + 1)
          
         // Emit the token -> token-tag function.
         quickSummary writer "Maps tokens to integer indexes."
@@ -180,7 +219,11 @@ module private FsYacc =
         writer.WriteLine ()
 
         // Emit constants for "end-of-input" and "tag of error terminal"
-        // TODO
+        intLiteralDecl ("_fsyacc_endOfInputTag", false,
+            Map.find endOfInputTerminal tokenTags) writer
+        intLiteralDecl ("_fsyacc_tagOfErrorTerminal", false,
+            Map.find errorTerminal tokenTags) writer
+        writer.WriteLine ()
 
         // Emit the token -> token-name function.
         quickSummary writer "Gets the name of a token as a string."
@@ -245,6 +288,13 @@ type FsyaccBackend () =
                     raise <| exn "No backend-specific options were provided."
                 | Some options ->
                     options
+
+            (* TODO :   This backend places an additional restriction on the parser specification --
+                        all start symbols (nonterminals) must produce the same type.
+                        For now, we should implement a simple check for this and raise an exception
+                        if they have different types; in the future, we should find a way to pass this
+                        constraint into the Compiler.precompile function so it can provide a better
+                        error message for the user. *)
 
             // Generate the code and write it to the specified file.
             using (File.CreateText fsyaccOptions.OutputPath) <| fun streamWriter ->
