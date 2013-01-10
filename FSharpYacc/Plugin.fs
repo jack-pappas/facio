@@ -22,11 +22,11 @@ open FSharpYacc.Compiler
 [<Interface>]
 type IBackend =
     /// <summary>Invokes this backend to (e.g., emit code) for the compiled parser specification.</summary>
-    /// <param name="spec">The original parser specification.</param>
+    /// <param name="processedSpec">The processed parser specification.</param>
     /// <param name="parserTable">The LR(0)-based (i.e., SLR(1) or LALR(1)) parser table compiled from the parser specification.</param>
     /// <param name="options">Options which control the behavior of the backend.</param>
-    abstract EmitCompiledSpecification :
-        spec : Specification
+    abstract Invoke :
+        processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>
         * parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>
         * options : CompilationOptions
         // TODO : Add parameter for logging interface?

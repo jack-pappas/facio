@@ -15,6 +15,7 @@ open System.Text
 open LanguagePrimitives
 open FSharpYacc
 open FSharpYacc.Ast
+open FSharpYacc.Compiler
 
 
 /// Emit table-driven code which is compatible with the code generated
@@ -31,7 +32,7 @@ module private FsYacc =
     let [<Literal>] private ocamlParsingNamespace = "Microsoft.FSharp.Compatibility.OCaml.Parsing"
 
     //
-    let emit (parserSpec : Specification, parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : #TextWriter) : unit =
+    let emit (processedSpec : ProcessedSpecification<_,_>, parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : #TextWriter) : unit =
         //
 
 
@@ -44,7 +45,7 @@ module private FsYacc =
 [<Export(typeof<IBackend>)>]
 type FsyaccBackend () =
     interface IBackend with
-        member this.EmitCompiledSpecification (parserSpec, parserTable, options) : unit =
+        member this.Invoke (processedSpec, parserTable, options) : unit =
             /// Compilation options specific to this backend.
             let fsyaccOptions =
                 match options.FsyaccBackendOptions with
@@ -54,5 +55,5 @@ type FsyaccBackend () =
                     options
 
             // Generate the code and write it to the specified file.
-            using (File.CreateText fsyaccOptions.OutputPath) (FsYacc.emit (parserSpec, parserTable))
+            using (File.CreateText fsyaccOptions.OutputPath) (FsYacc.emit (processedSpec, parserTable))
 

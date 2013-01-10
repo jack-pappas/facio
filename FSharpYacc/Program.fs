@@ -133,15 +133,16 @@ module Program =
                 exit 1
 
         // Precompile the parsed specification to validate and process it.
-        let precompilationResult = Compiler.precompile (parserSpec, options)
+        let processedSpecification, validationMessages =
+            Compiler.precompile (parserSpec, options)
 
         // Display validation warning messages, if any.
         // TODO : Write the warning messages to NLog (or similar) instead, for flexibility.
-        precompilationResult.ValidationWarnings
+        validationMessages.Warnings
         |> List.iter (printfn "Warning: %s")
 
         // If there are any validation _errors_ display them and abort compilation.
-        match precompilationResult.ValidationErrors with
+        match validationMessages.Errors with
         | (_ :: _) as errorMessages ->
             // Write the error messages to the console.
             // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
@@ -151,7 +152,7 @@ module Program =
             1   // Exit code: Error
         | [] ->
             // Compile the processed specification.
-            match Compiler.compile (precompilationResult, options) with
+            match Compiler.compile (processedSpecification, options) with
             | Choice2Of2 errorMessages ->
                 // Write the error messages to the console.
                 // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
@@ -163,8 +164,8 @@ module Program =
             | Choice1Of2 parserTable ->
                 // TEMP : Invoke the fsyacc-compatible backend.
                 // Eventually we'll implement a way for the user to select the backend(s) to use.
-                backends.FsyaccBackend.EmitCompiledSpecification (
-                    parserSpec,
+                backends.FsyaccBackend.Invoke (
+                    processedSpecification,
                     parserTable,
                     options)
 
