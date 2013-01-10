@@ -98,6 +98,10 @@ module Program =
         elif not <| System.IO.File.Exists inputFile then
             invalidArg "inputFile" "No parser specification exists at the specified path."
 
+        // TEMP : This is hard-coded until we implement functionality to
+        // allow the user to select which backend to use.
+        let backends = loadBackends ()
+
         /// The parsed parser specification.
         let parserSpec =
             try
@@ -128,38 +132,43 @@ module Program =
                 printfn "Error: %s" ex.Message
                 exit 1
 
-        // TEMP : This is hard-coded until we implement functionality to
-        // allow the user to select which backend to use.
-        let backends = loadBackends ()
+        // Precompile the parsed specification to validate and process it.
+        let precompilationResult = Compiler.precompile (parserSpec, options)
 
-        // Compile the parsed specification.
-        match Compiler.compile (parserSpec, options) with
-        | Choice2Of2 (errorMessages, warningMessages) ->
+        // Display validation warning messages, if any.
+        // TODO : Write the warning messages to NLog (or similar) instead, for flexibility.
+        precompilationResult.ValidationWarnings
+        |> List.iter (printfn "Warning: %s")
+
+        // If there are any validation _errors_ display them and abort compilation.
+        match precompilationResult.ValidationErrors with
+        | (_ :: _) as errorMessages ->
             // Write the error messages to the console.
             // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
             errorMessages
             |> List.iter (printfn "Error: %s")
 
-            // Write the warning messages to the console.
-            warningMessages
-            |> List.iter (printfn "Warning: %s")
-
             1   // Exit code: Error
+        | [] ->
+            // Compile the processed specification.
+            match Compiler.compile (precompilationResult, options) with
+            | Choice2Of2 errorMessages ->
+                // Write the error messages to the console.
+                // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
+                errorMessages
+                |> List.iter (printfn "Error: %s")
 
-        | Choice1Of2 (parserTable, warningMessages) ->
-            // Write the warning messages to the console.
-            // TODO : Write the warning messages to NLog (or similar) instead, for flexibility.
-            warningMessages
-            |> List.iter (printfn "Warning: %s")
+                1   // Exit code: Error
 
-            // TEMP : Invoke the fsyacc-compatible backend.
-            // Eventually we'll implement a way for the user to select the backend(s) to use.
-            backends.FsyaccBackend.EmitCompiledSpecification (
-                parserSpec,
-                parserTable,
-                options)
+            | Choice1Of2 parserTable ->
+                // TEMP : Invoke the fsyacc-compatible backend.
+                // Eventually we'll implement a way for the user to select the backend(s) to use.
+                backends.FsyaccBackend.EmitCompiledSpecification (
+                    parserSpec,
+                    parserTable,
+                    options)
 
-            0   // Exit code: Success
+                0   // Exit code: Success
 
     /// The entry point for the application.
     [<EntryPoint; CompiledName("Main")>]
@@ -173,7 +182,9 @@ module Program =
             ParserType = ParserType.Lalr1;
             // TEMP
             FsyaccBackendOptions = Some {
-                OutputPath = @"C:\Users\Jack\Desktop\fsyacc-test\fslexpars_parser.fs"; };            
+                OutputPath = @"C:\Users\Jack\Desktop\fsyacc-test\fslexpars_parser.fs";
+                InternalModule = false;
+                ModuleName = None; };
             })
         
 

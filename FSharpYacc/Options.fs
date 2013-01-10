@@ -16,6 +16,11 @@ namespace FSharpYacc
 type FsyaccBackendOptions = {
     /// The output path. The generated code will be written to this file.
     OutputPath : string;
+    /// When set, the parser module will be generated with the 'internal' visibility modifier.
+    InternalModule : bool;
+    /// The name to use for the generated parser module.
+    /// If not set, a default value is used instead.
+    ModuleName : string option;
 }
 
 (* END: Backend-specific options *)
