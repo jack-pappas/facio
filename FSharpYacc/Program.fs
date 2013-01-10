@@ -179,11 +179,21 @@ module Program =
                     then call the 'invoke' function with it. *)
         
         // TEST : Just use a hard-coded CompilationOptions record for now.
-        invoke (@"C:\Users\Jack\Desktop\fsyacc-test\fslexpars.fsy", {
+        let inputFile = @"C:\Users\Jack\Desktop\fsyacc-test\fsyaccpars.fsy"
+        //let inputFile = @"C:\Users\Jack\Desktop\fsyacc-test\fslexpars.fsy"
+        //let inputFile = @"C:\Users\Jack\Desktop\fsyacc-test\fsharp-parser.fsy"
+        let outputFile =
+            System.IO.Path.Combine (
+                System.IO.Path.GetDirectoryName inputFile,
+                "output\\",
+                System.IO.Path.ChangeExtension (
+                    System.IO.Path.GetFileName inputFile,
+                    ".fs"))
+        invoke (inputFile, {
             ParserType = ParserType.Lalr1;
             // TEMP
             FsyaccBackendOptions = Some {
-                OutputPath = @"C:\Users\Jack\Desktop\fsyacc-test\fslexpars_parser.fs";
+                OutputPath = outputFile;
                 InternalModule = false;
                 ModuleName = None; };
             })
