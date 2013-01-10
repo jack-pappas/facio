@@ -382,7 +382,7 @@ module private FsLex =
         |> ignore
 
     //
-    let emit (compiledSpec : CompiledSpecification) (options : CompilationOptions) (writer : #TextWriter) : unit =
+    let emit (compiledSpec : CompiledSpecification, options : CompilationOptions) (writer : #TextWriter) : unit =
         // Preconditions
         if writer = null then
             nullArg "writer"
@@ -431,4 +431,4 @@ type FslexBackend () =
                     options
 
             // Generate the code and write it to the specified file.
-            using (File.CreateText fslexOptions.OutputPath) (FsLex.emit compiledSpec options)
+            using (File.CreateText fslexOptions.OutputPath) (FsLex.emit (compiledSpec, options))
