@@ -272,8 +272,10 @@ let precompile (spec : Specification, options : CompilationOptions)
                     ((productionRulesValid, precompilationState), rule.Symbols)
                     ||> List.fold (fun (productionRulesValid, precompilationState) symbolId ->
                     // Is this symbol a defined terminal or nonterminal?
-                    if Map.containsKey symbolId (result precompilationState).Nonterminals ||
-                        Map.containsKey symbolId (result precompilationState).Terminals then
+                    // Or a reserved (built-in) terminal?
+                    if Map.containsKey symbolId (result precompilationState).Nonterminals
+                        || Map.containsKey symbolId (result precompilationState).Terminals
+                        (*|| Set.contains symbolId reservedTerminalIdentifiers*) then
                         productionRulesValid,
                         precompilationState
                     else
