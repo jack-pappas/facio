@@ -88,6 +88,27 @@ module private FsYacc =
             sprintf "let [<Literal>] private %s = %i" name value
         |> writer.WriteLine
 
+    /// Emits code which creates an array of UInt16 constants into a TextWriter.
+    let private oneLineArrayUInt16 (name, isPublic, array : uint16[]) (writer : #TextWriter) =
+        // Preconditions
+        if System.String.IsNullOrWhiteSpace name then
+            invalidArg "name" "The variable name cannot be null/empty/whitespace."
+
+        // Emit the 'let' binding and opening bracket of the array.
+        if isPublic then
+            sprintf "let %s = [| " name
+        else
+            sprintf "let private %s = [| " name
+        |> writer.Write
+
+        // Emit the array values.
+        array
+        |> Array.iter (fun x ->
+            writer.Write (x.ToString() + "us; "))
+
+        // Emit the closing bracket of the array.
+        writer.WriteLine "|]"
+
     /// Creates a Map whose keys are the values of the given Map.
     /// The value associated with each key is None.
     let private valueMap (map : Map<'Key, 'T>) : Map<'T, 'U option> =
@@ -201,13 +222,44 @@ module private FsYacc =
                     "failwithf \"tokenTagToTokenId: Invalid token. (Tag = %i)\" " + catchAllVariableName)
         writer.WriteLine ()
 
+        /// Maps production indices to the symbolic name of the nonterminal produced by each production rule.
+        let productionIndices =
+            let productionIndices_productionIndex =
+                ((Map.empty, 0), processedSpec.StartSymbols)
+                ||> Set.fold (fun (productionIndices, productionIndex) startSymbol ->
+                    /// The symbolic name of the nonterminal produced by this start symbol.
+                    let nonterminalName = "NONTERM__start" + startSymbol
+                    
+                    // Increment the production index for the next iteration.
+                    Map.add productionIndex nonterminalName productionIndices,
+                    productionIndex + 1)
+
+            // Add the production rules.
+            (productionIndices_productionIndex, processedSpec.ProductionRules)
+            ||> Map.fold (fun productionIndices_productionIndex nonterminal rules ->
+                /// The symbolic name of this nonterminal.
+                let nonterminalSymbolicName = Map.find nonterminal symbolicNonterminalNames
+
+                // OPTIMIZE : There's no need to fold over the array of rules, since the
+                // only thing that matters is the _number_ of rules.
+                // Replace this with a call to Range.fold.
+                (productionIndices_productionIndex, rules)
+                ||> Array.fold (fun (productionIndices, productionIndex) _ ->
+                    Map.add productionIndex nonterminalSymbolicName productionIndices,
+                    productionIndex + 1))
+            // Discard the production index counter.
+            |> fst
+
         // Emit the production-index -> symbolic-nonterminal-name function.
         quickSummary writer "Maps production indexes returned in syntax errors to strings representing
                              the non-terminal that would be produced by that production."
         writer.WriteLine "let private prodIdxToNonTerminal = function"
         IndentedTextWriter.indented writer <| fun writer ->
-            // TODO : Emit a case for each production rule.
-            // (Make sure to include a case for the starting production!)
+            // Emit cases based on the production-index -> symbolic-nonterminal-name map.
+            productionIndices
+            |> Map.iter (fun productionIndex nonterminalSymbolicName ->
+                sprintf "| %i -> %s" productionIndex nonterminalSymbolicName
+                |> writer.WriteLine)
 
             // Emit a catch-all case to handle invalid values.
             let catchAllVariableName = "prodIdx"
@@ -255,18 +307,151 @@ module private FsYacc =
                 |> writer.WriteLine)
         writer.WriteLine ()
 
-        // TODO : Emit the parser tables
+        /// The source and target states of GOTO transitions over each nonterminal.
+        let gotoEdges =
+            (Map.empty, parserTable.GotoTable)
+            ||> Map.fold (fun gotoEdges (source, nonterminal) target ->
+                /// The GOTO edges labeled with this nonterminal.
+                let edges =
+                    match Map.tryFind nonterminal gotoEdges with
+                    | None ->
+                        Set.singleton (source, target)
+                    | Some edges ->
+                        Set.add (source, target) edges
+
+                // Update the map with the new set of edges for this nonterminal.
+                Map.add nonterminal edges gotoEdges)
+
         // _fsyacc_gotos
+        let _fsyacc_gotos =
+            let arr = Array.zeroCreate gotoEdges.Count
+            
+            //
+            ((0, 0), gotoEdges)
+            ||> Map.fold (fun (nonterminalIndex, startIndex) nonterminal edges ->
+                // Store the starting index (in the sparse GOTO table) for this nonterminal.
+                arr.[nonterminalIndex] <- uint16 startIndex
+
+                // Update the counters
+                nonterminalIndex + 1,
+                startIndex + Set.count edges)
+            // Discard the counters
+            |> ignore
+
+            // Return the constructed array.
+            arr
+
+        oneLineArrayUInt16 ("_fsyacc_gotos", false,
+            _fsyacc_gotos) writer
+
         // _fsyacc_sparseGotoTableRowOffsets
-        // _fsyacc_stateToProdIdxsTableElements
-        // _fsyacc_stateToProdIdxsTableRowOffsets
-        // _fsyacc_action_rows (constant value)
-        // _fsyacc_actionTableElements
-        // _fsyacc_actionTableRowOffsets
-        // _fsyacc_reductionSymbolCounts
-        // _fsyacc_productionToNonTerminalTable
-        // _fsyacc_immediateActions
+        let _fsyacc_sparseGotoTableRowOffsets =
+            [| |]
+
+        oneLineArrayUInt16 ("_fsyacc_sparseGotoTableRowOffsets", false,
+            _fsyacc_sparseGotoTableRowOffsets) writer
+
+
+        (* _fsyacc_stateToProdIdxsTableElements *)
+        let _fsyacc_stateToProdIdxsTableElements =
+            [| |]
+
+        oneLineArrayUInt16 ("_fsyacc_stateToProdIdxsTableElements", false,
+            _fsyacc_stateToProdIdxsTableElements) writer
+
+
+        (* _fsyacc_stateToProdIdxsTableRowOffsets *)
+        let _fsyacc_stateToProdIdxsTableRowOffsets =
+            [| |]
+
+        oneLineArrayUInt16 ("_fsyacc_stateToProdIdxsTableRowOffsets", false,
+            _fsyacc_stateToProdIdxsTableRowOffsets) writer
+
+
+        (* _fsyacc_action_rows *)
+        intLiteralDecl ("_fsyacc_action_rows", false,
+            -1) writer
+
+
+        (* _fsyacc_actionTableElements *)
+        let _fsyacc_actionTableElements =
+            [| |]
+
+        oneLineArrayUInt16 ("_fsyacc_actionTableElements", false,
+            _fsyacc_actionTableElements) writer
+
+
+        (* _fsyacc_actionTableRowOffsets *)
+        let _fsyacc_actionTableRowOffsets =
+            [| |]
+
+        oneLineArrayUInt16 ("_fsyacc_actionTableRowOffsets", false,
+            _fsyacc_actionTableRowOffsets) writer
+
+
+        (* _fsyacc_reductionSymbolCounts *)
+        let _fsyacc_reductionSymbolCounts =
+            let symbolCounts = ResizeArray (productionIndices.Count)
+
+            // The productions created by the start symbols reduce a single value --
+            // the start symbols (nonterminals) themselves.
+            for i = 0 to (Set.count processedSpec.StartSymbols) - 1 do
+                symbolCounts.Add 1us
+
+            // Add the number of symbols in each production rule.
+            processedSpec.ProductionRules
+            |> Map.iter (fun _ rules ->
+                rules |> Array.iter (Array.length >> uint16 >> symbolCounts.Add))
+
+            // Return the symbol count.
+            symbolCounts.ToArray ()
+
+        oneLineArrayUInt16 ("_fsyacc_reductionSymbolCounts", false,
+            _fsyacc_reductionSymbolCounts) writer
+
+        (* _fsyacc_productionToNonTerminalTable *)
+        let _fsyacc_productionToNonTerminalTable =
+            let productionToNonTerminalTable = Array.zeroCreate productionIndices.Count
+
+            // The augmented start symbol will always have nonterminal index 0
+            // so we don't actually have to write anything to the array for the
+            // elements corresponding to it's production rules (because those
+            // elements will already be zeroed-out).
+
+            // Add the nonterminal indices for each production rule.
+            ((1, Set.count processedSpec.StartSymbols), processedSpec.ProductionRules)
+            ||> Map.fold (fun (nonterminalIndex, prodRuleIndex) _ rules ->
+                /// The number of production rules for this nonterminal.
+                let ruleCount = Array.length rules
+
+                // Set the next 'ruleCount' elements in the array to this nonterminal's index.
+                for i = 0 to ruleCount - 1 do
+                    productionToNonTerminalTable.[prodRuleIndex + i] <-
+                        uint16 nonterminalIndex
+
+                // Update the counters before the next iteration.
+                nonterminalIndex + 1,
+                prodRuleIndex + ruleCount)
+            // Discard the counters.
+            |> ignore
+
+            // Return the array.
+            productionToNonTerminalTable
+
+        oneLineArrayUInt16 ("_fsyacc_productionToNonTerminalTable", false,
+            _fsyacc_productionToNonTerminalTable) writer
+
+
+        (* _fsyacc_immediateActions *)
+        let _fsyacc_immediateActions =
+            [| |]
+
+        oneLineArrayUInt16 ("_fsyacc_immediateActions", false,
+            _fsyacc_immediateActions) writer
+
         // _fsyacc_reductions
+        // TODO : When emitting the code, need to replace placeholder values (e.g., $2)
+        // with the corresponding variable value (e.g., _2).
 
         // TODO : Emit the parser "tables" record and parser functions
         //
