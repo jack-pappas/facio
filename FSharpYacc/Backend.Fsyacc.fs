@@ -21,7 +21,9 @@ open FSharpYacc.Compiler
 /// by the older 'fsyacc' tool from the F# PowerPack.
 [<RequireQualifiedAccess>]
 module private FsYacc =
+    open System
     open System.CodeDom.Compiler
+    open Graham.Grammar
     open Graham.LR
     open BackendUtils.CodeGen
 
@@ -31,6 +33,27 @@ module private FsYacc =
     let [<Literal>] private defaultParsingNamespace = "Microsoft.FSharp.Text.Parsing"
     /// The namespace where the OCaml-compatible parsers can be found.
     let [<Literal>] private ocamlParsingNamespace = "Microsoft.FSharp.Compatibility.OCaml.Parsing"
+
+    /// Values used in the ACTION tables created by fsyacc.
+    [<Flags>]
+    type private ActionValue =
+        | Shift = 0x0000us
+        | Reduce = 0x4000us
+        | Error = 0x8000us
+        | Accept = 0xc000us
+        | ActionMask = 0xc000us
+        | Any = 0xffffus
+
+    /// Converts a Graham.LR.LrParserAction into an ActionValue value (used by fsyacc).
+    let private actionValue = function
+        | Accept ->
+            ActionValue.Accept
+        | Reduce productionRuleId ->
+            ActionValue.Reduce |||
+            EnumOfValue (Checked.uint16 productionRuleId)
+        | Shift targetStateId ->
+            ActionValue.Shift |||
+            EnumOfValue (Checked.uint16 targetStateId)
 
     /// Emit a formatted string as a single-line F# comment into an IndentedTextWriter.
     let inline private comment (writer : IndentedTextWriter) fmt : ^T =
@@ -121,7 +144,7 @@ module private FsYacc =
     /// The name of the error terminal.
     let [<Literal>] private errorTerminal : TerminalIdentifier = "error"
 
-    //
+    /// Emits code for an fsyacc-compatible parser into an IndentedTextWriter.
     let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
                 parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) : unit =
         // TODO : Emit the module declaration
@@ -307,6 +330,9 @@ module private FsYacc =
                 |> writer.WriteLine)
         writer.WriteLine ()
 
+
+        (*** Emit parser tables ***)
+
         /// The source and target states of GOTO transitions over each nonterminal.
         let gotoEdges =
             (Map.empty, parserTable.GotoTable)
@@ -323,31 +349,45 @@ module private FsYacc =
                 Map.add nonterminal edges gotoEdges)
 
         // _fsyacc_gotos
-        let _fsyacc_gotos =
-            let arr = Array.zeroCreate gotoEdges.Count
-            
-            //
-            ((0, 0), gotoEdges)
-            ||> Map.fold (fun (nonterminalIndex, startIndex) nonterminal edges ->
-                // Store the starting index (in the sparse GOTO table) for this nonterminal.
-                arr.[nonterminalIndex] <- uint16 startIndex
+        // _fsyacc_sparseGotoTableRowOffsets
+        let _fsyacc_gotos, _fsyacc_sparseGotoTableRowOffsets =
+            let startSymbolCount = Set.count processedSpec.StartSymbols
+            let gotos = ResizeArray ()
+            let offsets = Array.zeroCreate (startSymbolCount + gotoEdges.Count)
 
-                // Update the counters
-                nonterminalIndex + 1,
-                startIndex + Set.count edges)
-            // Discard the counters
+            // Add entries for the "fake" starting nonterminals.
+            for i = 0 to startSymbolCount - 1 do
+                gotos.Add 0us
+                gotos.Add (EnumToValue ActionValue.Any)
+                offsets.[i] <- uint16 (2 * i)
+
+            // Add entries for the rest of the nonterminals.
+            (startSymbolCount, gotoEdges)
+            ||> Map.fold (fun nonterminalIndex nonterminal edges ->
+                // Store the starting index (in the sparse GOTO table) for this nonterminal.
+                offsets.[nonterminalIndex] <- Checked.uint16 gotos.Count
+
+                // Add the number of edges and the "any" action to the sparse GOTOs table.
+                gotos.Add (uint16 <| Set.count edges)
+                gotos.Add (EnumToValue ActionValue.Any)
+
+                // Add each of the GOTO edges to the sparse GOTO table.
+                edges
+                |> Set.iter (fun (source, target) ->
+                    gotos.Add <| Checked.uint16 source
+                    gotos.Add <| Checked.uint16 target)
+
+                // Update the nonterminal index for the next iteration.
+                nonterminalIndex + 1)
+            // Discard the counter
             |> ignore
 
-            // Return the constructed array.
-            arr
+            // Convert the ResizeArray to an array and return it.
+            gotos.ToArray (),
+            offsets
 
         oneLineArrayUInt16 ("_fsyacc_gotos", false,
             _fsyacc_gotos) writer
-
-        // _fsyacc_sparseGotoTableRowOffsets
-        let _fsyacc_sparseGotoTableRowOffsets =
-            [| |]
-
         oneLineArrayUInt16 ("_fsyacc_sparseGotoTableRowOffsets", false,
             _fsyacc_sparseGotoTableRowOffsets) writer
 
@@ -370,7 +410,7 @@ module private FsYacc =
 
         (* _fsyacc_action_rows *)
         intLiteralDecl ("_fsyacc_action_rows", false,
-            -1) writer
+            parserTable.ParserStates.Count) writer
 
 
         (* _fsyacc_actionTableElements *)
@@ -444,7 +484,77 @@ module private FsYacc =
 
         (* _fsyacc_immediateActions *)
         let _fsyacc_immediateActions =
-            [| |]
+            // When a state contains a single item whose parser position ("dot")
+            // is at the end of the production rule, a Reduce or Accept will be
+            // executed immediately upon entering the state.
+            // NOTE : The length of this array should be equal to the number of parser states.
+            let immediateActions = Array.zeroCreate parserTable.ParserStates.Count
+
+            // TEMP : Remove this once we rewrite the rest of this code to work with
+            // an augmented grammar instead of the "raw" grammar.
+            let productionRuleIndices =
+                let startSymbolCount = Set.count processedSpec.StartSymbols
+                ((Map.empty, startSymbolCount), processedSpec.ProductionRules)
+                ||> Map.fold (fun productionIndices_productionIndex nonterminal rules ->
+                    (productionIndices_productionIndex, rules)
+                    ||> Array.fold (fun (productionIndices, productionIndex) symbols ->
+                        Map.add (nonterminal, symbols) productionIndex productionIndices,
+                        productionIndex + 1))
+                // Discard the production index counter.
+                |> fst
+
+            parserTable.ParserStates
+            |> Map.iter (fun parserStateId items ->
+                // Set the array element corresponding to this parser state.
+                immediateActions.[int parserStateId - 1] <-
+                    // Does this state contain just one (1) item?
+                    if Set.count items <> 1 then
+                        // Return the value which indicates this parser state has no immediate action.
+                        EnumToValue ActionValue.Any
+                    else
+                        /// The single item in this parser state.
+                        let item = Set.minElement items
+
+                        // Is the parser position at the end of the production rule?
+                        // (Or, if it's one of the starting productions -- the next-to-last position).
+                        match item.Nonterminal with
+                        | Start when int item.Position = (Array.length item.Production - 1) ->
+                            // This state should have an immediate Accept action.
+                            EnumToValue ActionValue.Accept
+
+                        | AugmentedNonterminal.Nonterminal nonterminal
+                            when int item.Position = Array.length item.Production ->
+                            /// The (augmented) symbols in this production rule.
+                            let symbols =
+                                item.Production
+                                |> Array.map (function
+                                    | Nonterminal nonterminal ->
+                                        match nonterminal with
+                                        | Start ->
+                                            failwith "Start symbol in an item which is not part of the start production."
+                                        | AugmentedNonterminal.Nonterminal nonterminal ->
+                                            Nonterminal nonterminal
+                                    | Terminal terminal ->
+                                        match terminal with
+                                        | EndOfFile ->
+                                            failwith "Unexpected end-of-file symbol."
+                                        | AugmentedTerminal.Terminal terminal ->
+                                            Terminal terminal)
+
+                            // The index of the production rule to reduce by.
+                            Map.find (nonterminal, symbols) productionRuleIndices
+                            |> Int32WithMeasure
+                            // Return a value representing a Reduce action with this production rule.
+                            |> Reduce
+                            |> actionValue
+                            |> EnumToValue
+
+                        | _ ->
+                            // Return the value which indicates this parser state has no immediate action.
+                            EnumToValue ActionValue.Any)
+
+            // Return the constructed array.
+            immediateActions
 
         oneLineArrayUInt16 ("_fsyacc_immediateActions", false,
             _fsyacc_immediateActions) writer
