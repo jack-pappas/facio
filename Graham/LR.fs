@@ -173,6 +173,7 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
     and 'Terminal : comparison
     and 'Lookahead : comparison> = {
     //
+    // OPTIMIZE : Change this to an array 
     ParserStates : Map<ParserStateId, LrParserState<'Nonterminal, 'Terminal, 'Lookahead>>;
     //
     ParserTransitions : LabeledSparseDigraph<ParserStateId, Symbol<'Nonterminal, 'Terminal>>;
@@ -351,7 +352,7 @@ module LrTableGenState =
         | None ->
             // Create a new ID for this state.
             let parserStateId =
-                env.ParserStateIds.Count + 1
+                env.ParserStateIds.Count
                 |> Int32WithMeasure
 
             // Update the table-generation state.
