@@ -32,7 +32,7 @@ module private FsYacc =
     //
     let [<Literal>] private defaultParsingNamespace = "Microsoft.FSharp.Text.Parsing"
     /// The namespace where the OCaml-compatible parsers can be found.
-    let [<Literal>] private ocamlParsingNamespace = "Microsoft.FSharp.Compatibility.OCaml.Parsing"
+    let [<Literal>] private ocamlParsingNamespace = "FSharp.Compatibility.OCaml.Parsing"
 
     /// Values used in the ACTION tables created by fsyacc.
     [<Flags>]
@@ -54,6 +54,24 @@ module private FsYacc =
         | Shift targetStateId ->
             ActionValue.Shift |||
             EnumOfValue (Checked.uint16 targetStateId)
+
+    // TEMP : Only needed until we modify Graham.LR.LrParserTable to provide the
+    // production rules of the _augmented_ grammar.
+    let private deaugmentSymbols (symbols : AugmentedSymbol<'Nonterminal, 'Terminal>[]) =
+        symbols
+        |> Array.map (function
+            | Nonterminal nonterminal ->
+                match nonterminal with
+                | Start ->
+                    failwith "Start symbol in an item which is not part of the start production."
+                | AugmentedNonterminal.Nonterminal nonterminal ->
+                    Nonterminal nonterminal
+            | Terminal terminal ->
+                match terminal with
+                | EndOfFile ->
+                    failwith "Unexpected end-of-file symbol."
+                | AugmentedTerminal.Terminal terminal ->
+                    Terminal terminal)
 
     /// Emit a formatted string as a single-line F# comment into an IndentedTextWriter.
     let inline private comment (writer : IndentedTextWriter) fmt : ^T =
@@ -393,17 +411,37 @@ module private FsYacc =
 
 
         (* _fsyacc_stateToProdIdxsTableElements *)
-        let _fsyacc_stateToProdIdxsTableElements =
-            [| |]
+        (* _fsyacc_stateToProdIdxsTableRowOffsets *)
+        let _fsyacc_stateToProdIdxsTableElements, _fsyacc_stateToProdIdxsTableRowOffsets =
+            // TEST : Need to modify Graham.LR.LrParserTable to provide the production rules
+            // of the _augmented_ grammar before this can be correctly implemented.
+            let productionRuleIndices : Map<_, int> =
+                raise <| System.NotImplementedException ()
+                Map.empty
+
+            let parserStates =
+                Map.toArray parserTable.ParserStates
+
+            let stateToProdIdxsTableElements =
+                parserStates
+                |> Array.collect (fun (_, items) ->
+                    items
+                    |> Set.map (fun item ->
+                        productionRuleIndices
+                        |> Map.find (item.Nonterminal, item.Production)
+                        |> Checked.uint16)
+                    |> Set.toArray)
+
+            let stateToProdIdxsTableRowOffsets =
+                (0us, parserStates)
+                ||> Array.scan (fun elementCount (_, items) ->
+                    elementCount + (Checked.uint16 <| Set.count items))
+
+            // Return the constructed arrays.
+            stateToProdIdxsTableElements, stateToProdIdxsTableRowOffsets
 
         oneLineArrayUInt16 ("_fsyacc_stateToProdIdxsTableElements", false,
             _fsyacc_stateToProdIdxsTableElements) writer
-
-
-        (* _fsyacc_stateToProdIdxsTableRowOffsets *)
-        let _fsyacc_stateToProdIdxsTableRowOffsets =
-            [| |]
-
         oneLineArrayUInt16 ("_fsyacc_stateToProdIdxsTableRowOffsets", false,
             _fsyacc_stateToProdIdxsTableRowOffsets) writer
 
@@ -525,21 +563,7 @@ module private FsYacc =
                         | AugmentedNonterminal.Nonterminal nonterminal
                             when int item.Position = Array.length item.Production ->
                             /// The (augmented) symbols in this production rule.
-                            let symbols =
-                                item.Production
-                                |> Array.map (function
-                                    | Nonterminal nonterminal ->
-                                        match nonterminal with
-                                        | Start ->
-                                            failwith "Start symbol in an item which is not part of the start production."
-                                        | AugmentedNonterminal.Nonterminal nonterminal ->
-                                            Nonterminal nonterminal
-                                    | Terminal terminal ->
-                                        match terminal with
-                                        | EndOfFile ->
-                                            failwith "Unexpected end-of-file symbol."
-                                        | AugmentedTerminal.Terminal terminal ->
-                                            Terminal terminal)
+                            let symbols = deaugmentSymbols item.Production
 
                             // The index of the production rule to reduce by.
                             Map.find (nonterminal, symbols) productionRuleIndices
