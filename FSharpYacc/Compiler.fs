@@ -23,15 +23,27 @@ type ValidationMessages = {
 }
 
 //
+type ProcessedProductionRule<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> = {
+    //
+    Symbols : Symbol<'Nonterminal, 'Terminal>[];
+    /// A semantic action to be executed when this rule is matched.
+    Action : CodeFragment option;
+}
+
+//
 type ProcessedSpecification<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> = {
+    //
+    Header : CodeFragment option;
     /// The nonterminals declared by the specification, and their declared type (if provided).
     Nonterminals : Map<'Nonterminal, DeclaredType option>;
     /// The terminals declared by the specification, and their declared type (if provided).
     Terminals : Map<'Terminal, DeclaredType option>;
     //
-    ProductionRules : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>;
+    ProductionRules : Map<'Nonterminal, ProcessedProductionRule<'Nonterminal, 'Terminal>[]>;
     //
     TerminalPrecedence : Map<'Terminal, Associativity * PrecedenceLevel>;
     /// For production rules with a %prec declaration, maps the production rule
@@ -63,7 +75,8 @@ module private PrecompilationState =
     /// The empty precompilation state.
     let empty : PrecompilationState<'Nonterminal, 'Terminal> =
         // The 'result' component.
-        {   Nonterminals = Map.empty;
+        {   Header = None;
+            Nonterminals = Map.empty;
             Terminals = Map.empty;
             ProductionRules = Map.empty;
             TerminalPrecedence = Map.empty;
@@ -110,6 +123,13 @@ let precompile (spec : Specification, options : CompilationOptions)
 
     /// The initial (empty) precompilation state.
     let precompilationState = PrecompilationState.empty
+
+    // Copy some fields which don't need to be validated from the
+    // original specification to the precompilation state.
+    let precompilationState =
+        { fst precompilationState with
+            Header = spec.Header; },
+        snd precompilationState
 
     (* NOTE :   In the code below, we fold *backwards* over the lists of declarations because they are all provided
                 in reverse order (compared to the way they were ordered in the parser specification file). *)
@@ -291,20 +311,22 @@ let precompile (spec : Specification, options : CompilationOptions)
                 dummyTerminals, precompilationState
             else
                 /// The production rules for this nonterminal.
-                let productionRules =
+                let productionRules : ProcessedProductionRule<_,_>[] =
                     // OPTIMIZE : Use List.revMapIntoArray here to avoid unnecessary intermediate data structures.
                     rules
                     |> List.rev
                     |> List.toArray
                     |> Array.map (fun rule ->
-                        rule.Symbols
-                        |> List.rev
-                        |> List.toArray
-                        |> Array.map (fun symbolId ->
-                            if Map.containsKey symbolId (result precompilationState).Nonterminals then
-                                Symbol.Nonterminal symbolId
-                            else
-                                Symbol.Terminal symbolId))
+                        { Symbols =
+                            rule.Symbols
+                            |> List.rev
+                            |> List.toArray
+                            |> Array.map (fun symbolId ->
+                                if Map.containsKey symbolId (result precompilationState).Nonterminals then
+                                    Symbol.Nonterminal symbolId
+                                else
+                                    Symbol.Terminal symbolId);
+                          Action = rule.Action; })
 
                 // Add the converted production rules into the precompilation state.
                 let precompilationState =
@@ -427,7 +449,7 @@ let private precedenceSettings (processedSpec : ProcessedSpecification<Nontermin
                     //
                     let augmentedKey =
                         AugmentedNonterminal.Nonterminal nonterminal,
-                        rule
+                        rule.Symbols
                         |> Array.map (function
                             | Nonterminal nonterminal ->
                                 Nonterminal <| AugmentedNonterminal.Nonterminal nonterminal
@@ -439,18 +461,18 @@ let private precedenceSettings (processedSpec : ProcessedSpecification<Nontermin
                 /// The terminal whose associativity and precedence is impersonated by this production rule.
                 let precedenceTerminal =
                     // Does this rule have a precedence override declaration?
-                    match Map.tryFind (nonterminal, rule) processedSpec.ProductionRulePrecedenceOverrides with
+                    match Map.tryFind (nonterminal, rule.Symbols) processedSpec.ProductionRulePrecedenceOverrides with
                     | Some impersonatedTerminal ->
                         Some impersonatedTerminal
                     | None ->
                         // The precedence of a rule is the precedence of it's last (right-most) terminal.
-                        match System.Array.FindLastIndex (rule, (function Terminal _ -> true | Nonterminal _ -> false)) with
+                        match System.Array.FindLastIndex (rule.Symbols, (function Terminal _ -> true | Nonterminal _ -> false)) with
                         //match System.Array.FindIndex (rule, (function Terminal _ -> true | Nonterminal _ -> false)) with
                         | -1 ->
                             // This rule does not contain any terminals, so it is not assigned a precedence.
                             None
                         | lastTerminalIndex ->
-                            match rule.[lastTerminalIndex] with
+                            match rule.Symbols.[lastTerminalIndex] with
                             | Terminal terminal ->
                                 Some terminal
                             | Nonterminal _ ->
@@ -496,7 +518,10 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
                 (Set.empty, processedSpec.Nonterminals)
                 ||> Map.fold (fun nonterminals nonterminal _ ->
                     Set.add nonterminal nonterminals);
-            Productions = processedSpec.ProductionRules; }
+            Productions =
+                processedSpec.ProductionRules
+                |> Map.map (fun _ rules ->
+                    rules |> Array.map (fun rule -> rule.Symbols)); }
 
         // Augment the grammar.
         Grammar.Augment (rawGrammar, processedSpec.StartSymbols)

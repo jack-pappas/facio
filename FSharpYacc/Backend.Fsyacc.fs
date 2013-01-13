@@ -10,7 +10,6 @@ namespace FSharpYacc.Plugin
 
 open System.ComponentModel.Composition
 open System.IO
-//open System.Text
 open LanguagePrimitives
 open FSharpYacc
 open FSharpYacc.Ast
@@ -23,6 +22,7 @@ open FSharpYacc.Compiler
 module private FsYacc =
     open System
     open System.CodeDom.Compiler
+    open System.Text.RegularExpressions
     open Graham.Grammar
     open Graham.LR
     open BackendUtils.CodeGen
@@ -162,18 +162,47 @@ module private FsYacc =
     /// The name of the error terminal.
     let [<Literal>] private errorTerminal : TerminalIdentifier = "error"
 
-    /// Emits code for an fsyacc-compatible parser into an IndentedTextWriter.
-    let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
-                parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) : unit =
-        // TODO : Emit the module declaration
-        //
+    //
+    let private tablesRecordAndParserFunctions terminalCount (writer : IndentedTextWriter) =
+        // Emit the 'tables' record.
+        Printf.fprintfn writer "let tables () : %s.Tables<_> = {" defaultParsingNamespace
+        IndentedTextWriter.indented writer <| fun writer ->
+            writer.WriteLine "reductions = _fsyacc_reductions ();"
+            writer.WriteLine "endOfInputTag = _fsyacc_endOfInputTag;"
+            writer.WriteLine "tagOfToken = tagOfToken;"
+            writer.WriteLine "dataOfToken = _fsyacc_dataOfToken;"
+            writer.WriteLine "actionTableElements = _fsyacc_actionTableElements;"
+            writer.WriteLine "actionTableRowOffsets = _fsyacc_actionTableRowOffsets;"
+            writer.WriteLine "stateToProdIdxsTableElements = _fsyacc_stateToProdIdxsTableElements;"
+            writer.WriteLine "stateToProdIdxsTableRowOffsets = _fsyacc_stateToProdIdxsTableRowOffsets;"
+            writer.WriteLine "reductionSymbolCounts = _fsyacc_reductionSymbolCounts;"
+            writer.WriteLine "immediateActions = _fsyacc_immediateActions;"
+            writer.WriteLine "gotos = _fsyacc_gotos;"
+            writer.WriteLine "sparseGotoTableRowOffsets = _fsyacc_sparseGotoTableRowOffsets;"
+            writer.WriteLine "tagOfErrorTerminal = _fsyacc_tagOfErrorTerminal;"
 
-        // TODO : Emit the "open" statements
-        //
+            writer.WriteLine "parseError ="
+            IndentedTextWriter.indented writer <| fun writer ->
+                Printf.fprintfn writer "(fun (ctxt : %s.ParseErrorContext<_>) ->" defaultParsingNamespace
+                IndentedTextWriter.indented writer <| fun writer ->
+                    writer.WriteLine "match parse_error_rich with"
+                    writer.WriteLine "| Some f -> f ctxt"
+                    writer.WriteLine "| None -> parse_error ctxt.Message);"
 
-        // TODO : Emit the header code
-        //
+            Printf.fprintfn writer "numTerminals = %i;" terminalCount
+            writer.WriteLine "productionToNonTerminalTable = _fsyacc_productionToNonTerminalTable;"
 
+            // Write the closing bracket for the record.
+            writer.WriteLine "}"
+
+        // Emit the parser functions.
+        writer.WriteLine "let engine lexer lexbuf startState = (tables ()).Interpret(lexer, lexbuf, startState)"
+        writer.WriteLine "let spec lexer lexbuf : Ast.ParserSpec ="
+        IndentedTextWriter.indented writer <| fun writer ->
+            writer.WriteLine "unbox ((tables ()).Interpret(lexer, lexbuf, 0))"
+
+    //
+    let private parserTypes (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
         // Emit the token type declaration.
         comment writer "This type is the type of tokens accepted by the parser"
         unionTypeDecl ("token", true, processedSpec.Terminals) writer
@@ -348,9 +377,14 @@ module private FsYacc =
                 |> writer.WriteLine)
         writer.WriteLine ()
 
+        // Return some of the lookup tables, they're needed
+        // when emitting the parser tables.
+        productionIndices
 
-        (*** Emit parser tables ***)
-
+    /// Emits F# code which creates the parser tables into an IndentedTextWriter.
+    let private parserTables (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
+                              parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>,
+                              productionIndices : Map<_,_>) (writer : IndentedTextWriter) =
         /// The source and target states of GOTO transitions over each nonterminal.
         let gotoEdges =
             (Map.empty, parserTable.GotoTable)
@@ -453,6 +487,7 @@ module private FsYacc =
 
         (* _fsyacc_actionTableElements *)
         let _fsyacc_actionTableElements =
+            raise <| System.NotImplementedException ()
             [| |]
 
         oneLineArrayUInt16 ("_fsyacc_actionTableElements", false,
@@ -461,6 +496,7 @@ module private FsYacc =
 
         (* _fsyacc_actionTableRowOffsets *)
         let _fsyacc_actionTableRowOffsets =
+            raise <| System.NotImplementedException ()
             [| |]
 
         oneLineArrayUInt16 ("_fsyacc_actionTableRowOffsets", false,
@@ -479,7 +515,8 @@ module private FsYacc =
             // Add the number of symbols in each production rule.
             processedSpec.ProductionRules
             |> Map.iter (fun _ rules ->
-                rules |> Array.iter (Array.length >> uint16 >> symbolCounts.Add))
+                rules |> Array.iter (fun rule ->
+                    rule.Symbols |> Array.length |> uint16 |> symbolCounts.Add))
 
             // Return the symbol count.
             symbolCounts.ToArray ()
@@ -535,8 +572,8 @@ module private FsYacc =
                 ((Map.empty, startSymbolCount), processedSpec.ProductionRules)
                 ||> Map.fold (fun productionIndices_productionIndex nonterminal rules ->
                     (productionIndices_productionIndex, rules)
-                    ||> Array.fold (fun (productionIndices, productionIndex) symbols ->
-                        Map.add (nonterminal, symbols) productionIndex productionIndices,
+                    ||> Array.fold (fun (productionIndices, productionIndex) rule ->
+                        Map.add (nonterminal, rule.Symbols) productionIndex productionIndices,
                         productionIndex + 1))
                 // Discard the production index counter.
                 |> fst
@@ -584,15 +621,77 @@ module private FsYacc =
             _fsyacc_immediateActions) writer
 
         // _fsyacc_reductions
-        // TODO : When emitting the code, need to replace placeholder values (e.g., $2)
-        // with the corresponding variable value (e.g., _2).
+        writer.WriteLine "let private _fsyacc_reductions () = [|"
+        IndentedTextWriter.indented writer <| fun writer ->
+            // TODO : When emitting the code, need to replace placeholder values (e.g., $2)
+            // with the corresponding variable value (e.g., _2).
+            comment writer "TODO"
+            
+            // Emit the closing bracket of the array.
+            writer.WriteLine "|]"
 
-        // TODO : Emit the parser "tables" record and parser functions
-        //
+    /// Emits code for an fsyacc-compatible parser into an IndentedTextWriter.
+    let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
+                parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
+             (options : FsyaccBackendOptions, writer : IndentedTextWriter) : unit =
+        (* Emit the module declaration. *)
 
-        // TEMP
-        writer.Flush () // Flush before throwing the exception, so we can see the output.
-        raise <| System.NotImplementedException "Fsyacc.emit"
+        quickSummary writer "Implementation file for parser generated by the fsyacc-compatibility backend for fsharpyacc."
+
+        /// The name of the emitted parser module.
+        let parserModuleName =
+            defaultArg options.ModuleName "Parser"
+        
+        if options.InternalModule then
+            Printf.fprintfn writer "module internal %s" parserModuleName
+        else
+            Printf.fprintfn writer "module %s" parserModuleName
+        writer.WriteLine ()
+
+        // Emit a "nowarn" directive to disable a certain type-related warning message.
+        Printf.fprintf writer "#nowarn \"%i\" " 64
+        comment writer "turn off warnings that type variables used in production annotations are instantiated to concrete type"
+        writer.WriteLine ()
+
+        (* Emit the "open" statements. *)
+        [|  defaultLexingNamespace;
+            defaultParsingNamespace + ".ParseHelpers"; |]
+        |> Array.iter (Printf.fprintfn writer "open %s")
+        writer.WriteLine ()
+
+        (* Emit the header code. *)
+        processedSpec.Header
+        |> Option.iter (fun header ->
+            // Normalize the line endings in the header code.
+            let header =
+                Regex.Replace (header, "\r\n|\r|\n", Environment.NewLine)
+
+            // Write the header code into the TextWriter.
+            // TODO : Instead of normalizing the line endings in the header, then emitting the whole
+            // header at once, perhaps split the header (using the same regex) and emit each of it's
+            // lines into the IndentedTextWriter so it'll have the correct indenting _and_ newline sequence.
+            writer.WriteLine header
+            writer.WriteLine ())
+
+        // Emit the parser types (e.g., the token type).
+        let productionIndices =
+            parserTypes processedSpec writer
+
+        // TEST
+        writer.Flush ()
+
+        // Emit the parser tables.
+        parserTables (processedSpec, parserTable, productionIndices) writer
+
+        // Emit the parser "tables" record and parser functions.
+        let terminalCount =
+            // TEMP : Add 2 to account for the end-of-input and error tokens.
+            processedSpec.Terminals.Count + 2
+        tablesRecordAndParserFunctions terminalCount writer
+
+        // Flush the writer before returning, to force it to write any
+        // output text remaining in it's internal buffer.
+        writer.Flush ()
 
 /// A backend which emits code implementing a table-based pattern matcher
 /// compatible with 'fsyacc' and the table interpreters in the F# PowerPack.
@@ -619,5 +718,5 @@ type FsyaccBackend () =
             using (File.CreateText fsyaccOptions.OutputPath) <| fun streamWriter ->
                 use indentedTextWriter =
                     new System.CodeDom.Compiler.IndentedTextWriter (streamWriter)
-                FsYacc.emit (processedSpec, parserTable) indentedTextWriter
+                FsYacc.emit (processedSpec, parserTable) (fsyaccOptions, indentedTextWriter)
 
