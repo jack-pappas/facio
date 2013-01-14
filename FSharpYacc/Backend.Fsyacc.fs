@@ -22,6 +22,7 @@ open FSharpYacc.Compiler
 module private FsYacc =
     open System
     open System.CodeDom.Compiler
+    open System.Diagnostics
     open Printf
     open Graham.Grammar
     open Graham.LR
@@ -399,24 +400,24 @@ module private FsYacc =
     let private parserTables (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
                               parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>,
                               productionIndices : Map<_,_>) (writer : IndentedTextWriter) =
-        /// The source and target states of GOTO transitions over each nonterminal.
-        let gotoEdges =
-            (Map.empty, parserTable.GotoTable)
-            ||> Map.fold (fun gotoEdges (source, nonterminal) target ->
-                /// The GOTO edges labeled with this nonterminal.
-                let edges =
-                    match Map.tryFind nonterminal gotoEdges with
-                    | None ->
-                        Set.singleton (source, target)
-                    | Some edges ->
-                        Set.add (source, target) edges
-
-                // Update the map with the new set of edges for this nonterminal.
-                Map.add nonterminal edges gotoEdges)
-
         // _fsyacc_gotos
         // _fsyacc_sparseGotoTableRowOffsets
         let _fsyacc_gotos, _fsyacc_sparseGotoTableRowOffsets =
+            /// The source and target states of GOTO transitions over each nonterminal.
+            let gotoEdges =
+                (Map.empty, parserTable.GotoTable)
+                ||> Map.fold (fun gotoEdges (source, nonterminal) target ->
+                    /// The GOTO edges labeled with this nonterminal.
+                    let edges =
+                        match Map.tryFind nonterminal gotoEdges with
+                        | None ->
+                            Set.singleton (source, target)
+                        | Some edges ->
+                            Set.add (source, target) edges
+
+                    // Update the map with the new set of edges for this nonterminal.
+                    Map.add nonterminal edges gotoEdges)
+
             let startSymbolCount = Set.count processedSpec.StartSymbols
             let gotos = ResizeArray ()
             let offsets = Array.zeroCreate (startSymbolCount + gotoEdges.Count)
@@ -451,6 +452,13 @@ module private FsYacc =
             // Convert the ResizeArray to an array and return it.
             gotos.ToArray (),
             offsets
+
+        Debug.Assert (
+            (let elementCount = Checked.uint16 <| Array.length _fsyacc_gotos in
+                _fsyacc_sparseGotoTableRowOffsets
+                |> Array.forall ((>) elementCount)),
+            "One or more of the offsets in '_fsyacc_gotos' \
+             is greater than the length of '_fsyacc_sparseGotoTableRowOffsets'.")
 
         oneLineArrayUInt16 ("_fsyacc_gotos", false,
             _fsyacc_gotos) writer
@@ -496,22 +504,40 @@ module private FsYacc =
                 Map.toArray parserTable.ParserStates
 
             let stateToProdIdxsTableElements =
-                parserStates
-                |> Array.collect (fun (_, items) ->
-                    items
-                    |> Set.map (fun item ->
-                        productionRuleIndices
-                        |> Map.find (item.Nonterminal, item.Production)
-                        |> Checked.uint16)
-                    |> Set.toArray)
+                // Initialize to a reasonable size to avoid small re-allocations.
+                ResizeArray (4 * parserStates.Length)
 
             let stateToProdIdxsTableRowOffsets =
-                (0us, parserStates)
-                ||> Array.scan (fun elementCount (_, items) ->
-                    elementCount + (Checked.uint16 <| Set.count items))
+                Array.zeroCreate <| Array.length parserStates
+
+            // Populate the arrays from 'parserStates'.
+            parserStates
+            |> Array.iteri (fun idx (_, items) ->
+                // Record the starting index (offset) for this state.
+                stateToProdIdxsTableRowOffsets.[idx] <-
+                    Checked.uint16 stateToProdIdxsTableElements.Count
+
+                // Add the number of elements for this state to the 'elements' array.
+                stateToProdIdxsTableElements.Add (Checked.uint16 <| Set.count items)
+
+                // Store the elements for this state into the 'elements' array.
+                items
+                |> Set.iter (fun item ->
+                    productionRuleIndices
+                    |> Map.find (item.Nonterminal, item.Production)
+                    |> Checked.uint16
+                    |> stateToProdIdxsTableElements.Add))
 
             // Return the constructed arrays.
-            stateToProdIdxsTableElements, stateToProdIdxsTableRowOffsets
+            stateToProdIdxsTableElements.ToArray (),
+            stateToProdIdxsTableRowOffsets
+
+        Debug.Assert (
+            (let elementCount = Checked.uint16 <| Array.length _fsyacc_stateToProdIdxsTableElements in
+                _fsyacc_stateToProdIdxsTableRowOffsets
+                |> Array.forall ((>) elementCount)),
+            "One or more of the offsets in '_fsyacc_stateToProdIdxsTableRowOffsets' \
+             is greater than the length of '_fsyacc_stateToProdIdxsTableElements'.")
 
         oneLineArrayUInt16 ("_fsyacc_stateToProdIdxsTableElements", false,
             _fsyacc_stateToProdIdxsTableElements) writer
@@ -669,7 +695,7 @@ module private FsYacc =
 
                     // The entries for this state.
                     let elements = Array.zeroCreate <| 2 * (Array.length entries + 1)
-                    elements.[0] <- Checked.uint16 <| (2 * Array.length entries)
+                    elements.[0] <- Checked.uint16 <| Array.length entries
                     elements.[1] <- mostFrequentActionValue
                     
                     entries
@@ -687,11 +713,18 @@ module private FsYacc =
 
             compressedActionTable
             |> Map.iter (fun stateId elements ->
-                actionTableRowOffsets.[int stateId] <- Checked.uint16 actionTableElements.Count
+                actionTableRowOffsets.[int stateId] <- Checked.uint16 <| actionTableElements.Count / 2
                 actionTableElements.AddRange elements)
 
             actionTableElements.ToArray (),
             actionTableRowOffsets
+
+        Debug.Assert (
+            (let elementCount = Checked.uint16 <| Array.length _fsyacc_actionTableElements in
+                _fsyacc_actionTableRowOffsets
+                |> Array.forall ((>) elementCount)),
+            "One or more of the offsets in '_fsyacc_actionTableRowOffsets' \
+             is greater than the length of '_fsyacc_actionTableElements'.")
 
         oneLineArrayUInt16 ("_fsyacc_actionTableElements", false,
             _fsyacc_actionTableElements) writer
