@@ -55,23 +55,37 @@ module private FsYacc =
             ActionValue.Shift |||
             EnumOfValue (Checked.uint16 targetStateId)
 
+    //
+    type private FsyaccNonterminal<'Nonterminal when 'Nonterminal : comparison> =
+        //
+        | Start of 'Nonterminal
+        //
+        | Nonterminal of 'Nonterminal
+
+    //
+    type private FsyaccTerminal<'Terminal when 'Terminal : comparison> =
+        //
+        | Terminal of 'Terminal
+        //
+        | Error
+
     // TEMP : Only needed until we modify Graham.LR.LrParserTable to provide the
     // production rules of the _augmented_ grammar.
     let private deaugmentSymbols (symbols : AugmentedSymbol<'Nonterminal, 'Terminal>[]) =
         symbols
         |> Array.map (function
-            | Nonterminal nonterminal ->
+            | Symbol.Nonterminal nonterminal ->
                 match nonterminal with
-                | Start ->
+                | AugmentedNonterminal.Start ->
                     failwith "Start symbol in an item which is not part of the start production."
                 | AugmentedNonterminal.Nonterminal nonterminal ->
-                    Nonterminal nonterminal
-            | Terminal terminal ->
+                    Symbol.Nonterminal nonterminal
+            | Symbol.Terminal terminal ->
                 match terminal with
                 | EndOfFile ->
                     failwith "Unexpected end-of-file symbol."
                 | AugmentedTerminal.Terminal terminal ->
-                    Terminal terminal)
+                    Symbol.Terminal terminal)
 
     /// Emit a formatted string as a single-line F# comment into an IndentedTextWriter.
     let inline private comment (writer : IndentedTextWriter) fmt : ^T =
@@ -447,11 +461,36 @@ module private FsYacc =
         (* _fsyacc_stateToProdIdxsTableElements *)
         (* _fsyacc_stateToProdIdxsTableRowOffsets *)
         let _fsyacc_stateToProdIdxsTableElements, _fsyacc_stateToProdIdxsTableRowOffsets =
-            // TEST : Need to modify Graham.LR.LrParserTable to provide the production rules
-            // of the _augmented_ grammar before this can be correctly implemented.
-            let productionRuleIndices : Map<_, int> =
-                raise <| System.NotImplementedException ()
-                Map.empty
+            // OPTIMIZE : Modify Graham.LR.LrParserTable to provide the production rules
+            // of the _augmented_ grammar instead of re-augmenting them here.
+            let productionRuleIndices : Map<AugmentedNonterminal<_> * AugmentedSymbol<_,_>[], int> =
+                let productionRuleIndices =
+                    (Map.empty, processedSpec.StartSymbols)
+                    ||> Set.fold (fun productionRuleIndices startSymbol ->
+                        let key =
+                            AugmentedNonterminal.Start,
+                            [| Symbol.Nonterminal <| AugmentedNonterminal.Nonterminal startSymbol; Symbol.Terminal EndOfFile |]
+                        Map.add key productionRuleIndices.Count productionRuleIndices)
+
+                // Add the rest of the production rules.
+                (productionRuleIndices, processedSpec.ProductionRules)
+                ||> Map.fold (fun productionRuleIndices nonterminal rules ->
+                    (productionRuleIndices, rules)
+                    ||> Array.fold (fun productionRuleIndices rule ->
+                        let key =
+                            let symbols =
+                                rule.Symbols
+                                |> Array.map (function
+                                    | Symbol.Nonterminal nonterminal ->
+                                        AugmentedNonterminal.Nonterminal nonterminal
+                                        |> Symbol.Nonterminal
+                                    | Symbol.Terminal terminal ->
+                                        AugmentedTerminal.Terminal terminal
+                                        |> Symbol.Terminal)
+
+                            AugmentedNonterminal.Nonterminal nonterminal, symbols
+
+                        Map.add key productionRuleIndices.Count productionRuleIndices))
 
             let parserStates =
                 Map.toArray parserTable.ParserStates
@@ -486,19 +525,176 @@ module private FsYacc =
 
 
         (* _fsyacc_actionTableElements *)
-        let _fsyacc_actionTableElements =
-            raise <| System.NotImplementedException ()
-            [| |]
+        (* _fsyacc_actionTableRowOffsets *)
+        let _fsyacc_actionTableElements, _fsyacc_actionTableRowOffsets =
+            //
+            let actionsByState =
+                // OPTIMIZE : Some of the computations below could be merged together to
+                // avoid creating intermediate data structures (and avoid unnecessary calculations).
+                (Map.empty, parserTable.ActionTable)
+                ||> Map.fold (fun parserActionsByState (stateId, terminal) actionSet ->
+                    match actionSet with
+                    | Conflict _ ->
+                        failwithf "Conflicting actions on terminal %O in state #%i." terminal (int stateId)
+                    | Action action ->
+                        let stateActions =
+                            let value = terminal, action
+                            match Map.tryFind stateId parserActionsByState with
+                            | None ->
+                                [value]
+                            | Some stateActions ->
+                                value :: stateActions
+
+                        Map.add stateId stateActions parserActionsByState)
+
+            //
+            let terminalsByActionByState =
+                actionsByState
+                |> Map.map (fun _ actions ->
+                    (Map.empty, actions)
+                    ||> List.fold (fun terminalsByAction (terminal, action) ->
+                        let terminals =
+                            match Map.tryFind action terminalsByAction with
+                            | None ->
+                                Set.singleton terminal
+                            | Some terminals ->
+                                Set.add terminal terminals
+
+                        Map.add action terminals terminalsByAction))
+
+            /// The total number of parser actions (excluding implicit error actions) for each parser state.
+            let actionCountByState =
+                actionsByState
+                |> Map.map (fun _ actions ->
+                    List.length actions)                    
+
+            /// The most-frequent parser action (if any) for each parser state.
+            let mostFrequentAction =
+                terminalsByActionByState
+                |> Map.map (fun _ terminalsByAction ->
+                    (None, terminalsByAction)
+                    ||> Map.fold (fun mostFrequent action terminals ->
+                        let terminalCount = Set.count terminals
+                        match mostFrequent with
+                        | None ->
+                            Some (action, terminalCount)
+                        | Some (mostFrequentAction, mostFrequentActionTerminalCount) ->
+                            if terminalCount > mostFrequentActionTerminalCount then
+                                Some (action, terminalCount)
+                            else
+                                mostFrequent)
+                    |> Option.map fst
+                    |> Option.get)
+
+            //
+            let compressedActionTable =
+                /// Integer indices (tags) of terminals (tokens).
+                // TEMP : This is computed when emitting the parser types -- pass it in
+                // to this function instead of re-computing it.
+                let tokenTags =
+                    ((Map.empty, 0), processedSpec.Terminals)
+                    ||> Map.fold (fun (tokenTags, index) terminal _ ->
+                        Map.add (AugmentedTerminal.Terminal terminal) index tokenTags,
+                        index + 1)
+                    // Add the end-of-input and error terminals and discard the index value.
+                    |> fun (tokenTags, index) ->
+                        tokenTags
+                        |> Map.add (AugmentedTerminal.Terminal errorTerminal) index
+                        |> Map.add EndOfFile (index + 1)
+
+                /// The set of all terminals in the augmented grammar (including the fsyacc error terminal).
+                let allTerminals =
+                    (Set.empty, processedSpec.Terminals)
+                    ||> Map.fold (fun otherActionTerminals terminal _ ->
+                        Set.add (AugmentedTerminal.Terminal terminal) otherActionTerminals)
+                    // Add the error and end-of-input terminals.
+                    |> Set.add (AugmentedTerminal.Terminal errorTerminal)
+                    |> Set.add EndOfFile
+
+                mostFrequentAction
+                |> Map.map (fun stateId mostFrequentAction ->
+                    /// The terminals for which each action is executed in this state.
+                    let terminalsByAction =
+                        Map.find stateId terminalsByActionByState
+
+                    /// The terminals for which the most-frequent action is taken in this parser state.
+                    let mostFrequentActionTerminals =
+                        Map.find mostFrequentAction terminalsByAction
+
+                    /// The total number of parser actions for this state, excluding implicit error actions.
+                    let totalActionCount = Map.find stateId actionsByState
+
+                    /// The terminals for which the most-frequent action is NOT taken.
+                    let otherActionTerminals =
+                        Set.difference allTerminals mostFrequentActionTerminals
+
+                    // We only bother "factoring" out the most-frequent action when doing so actually saves space;
+                    // i.e., when the most-frequent action covers a greater number of terminals than the implicit error action.
+                    let explicitActionCount =
+                        allTerminals
+                        |> Set.filter (fun terminal ->
+                            Map.containsKey (stateId, terminal) parserTable.ActionTable)
+                        |> Set.count
+
+                    let mostFrequentActionValue, entries =
+                        let errorActionCount = (Set.count allTerminals) - explicitActionCount
+                        if Set.count mostFrequentActionTerminals <= errorActionCount then
+                            // No space savings, leave the error action.
+                            EnumToValue ActionValue.Error,
+                            Map.find stateId actionsByState
+                            |> List.toArray
+                            |> Array.map (fun (terminal, action) ->
+                                let terminalTag = Map.find terminal tokenTags
+                                let action = EnumToValue (actionValue action)
+                                (Checked.uint16 terminalTag), action)
+                            |> Array.sortWith (fun (tag1, _) (tag2, _) ->
+                                compare tag1 tag2)
+                        else
+                            EnumToValue (actionValue mostFrequentAction),
+                            otherActionTerminals
+                            |> Set.toArray
+                            |> Array.map (fun terminal ->
+                                let terminalTag = Map.find terminal tokenTags
+                                let action =
+                                    match Map.tryFind (stateId, terminal) parserTable.ActionTable with
+                                    | None ->
+                                        ActionValue.Error
+                                    | Some (Action action) ->
+                                        actionValue action
+                                    | Some (Conflict _) ->
+                                        failwithf "Conflicting actions on terminal %O in state #%i." terminal (int stateId)
+                                (Checked.uint16 terminalTag), (EnumToValue action))
+                            |> Array.sortWith (fun (tag1, _) (tag2, _) ->
+                                compare tag1 tag2)
+
+                    // The entries for this state.
+                    let elements = Array.zeroCreate <| 2 * (Array.length entries + 1)
+                    elements.[0] <- Checked.uint16 <| (2 * Array.length entries)
+                    elements.[1] <- mostFrequentActionValue
+                    
+                    entries
+                    |> Array.iteri (fun i (terminalTag, actionValue) ->
+                        let idx = 2 * (i + 1)
+                        elements.[idx] <- terminalTag
+                        elements.[idx + 1] <- actionValue)
+                    elements)
+
+            let actionTableElements =
+                // Initialize to roughly the correct size (to avoid multiple small reallocations).
+                ResizeArray (6 * compressedActionTable.Count)
+
+            let actionTableRowOffsets = Array.zeroCreate compressedActionTable.Count
+
+            compressedActionTable
+            |> Map.iter (fun stateId elements ->
+                actionTableRowOffsets.[int stateId] <- Checked.uint16 actionTableElements.Count
+                actionTableElements.AddRange elements)
+
+            actionTableElements.ToArray (),
+            actionTableRowOffsets
 
         oneLineArrayUInt16 ("_fsyacc_actionTableElements", false,
             _fsyacc_actionTableElements) writer
-
-
-        (* _fsyacc_actionTableRowOffsets *)
-        let _fsyacc_actionTableRowOffsets =
-            raise <| System.NotImplementedException ()
-            [| |]
-
         oneLineArrayUInt16 ("_fsyacc_actionTableRowOffsets", false,
             _fsyacc_actionTableRowOffsets) writer
 
@@ -581,7 +777,7 @@ module private FsYacc =
             parserTable.ParserStates
             |> Map.iter (fun parserStateId items ->
                 // Set the array element corresponding to this parser state.
-                immediateActions.[int parserStateId - 1] <-
+                immediateActions.[int parserStateId] <-
                     // Does this state contain just one (1) item?
                     if Set.count items <> 1 then
                         // Return the value which indicates this parser state has no immediate action.
@@ -593,7 +789,7 @@ module private FsYacc =
                         // Is the parser position at the end of the production rule?
                         // (Or, if it's one of the starting productions -- the next-to-last position).
                         match item.Nonterminal with
-                        | Start when int item.Position = (Array.length item.Production - 1) ->
+                        | AugmentedNonterminal.Start when int item.Position = (Array.length item.Production - 1) ->
                             // This state should have an immediate Accept action.
                             EnumToValue ActionValue.Accept
 
