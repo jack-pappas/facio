@@ -172,6 +172,17 @@ module private FsYacc =
         ||> Map.fold (fun valueMap _ value ->
             Map.add value None valueMap)
 
+    /// "Flattens" an array of tuples into an array of values.
+    let private flattenTupleArray (array : ('T * 'T)[]) =
+        let len = Array.length array
+        let flattened = Array.zeroCreate <| 2 * len
+        for i = 0 to len - 1 do
+            let a, b = array.[i]
+            let idx = 2 * i
+            flattened.[idx] <- a
+            flattened.[idx + 1] <- b
+        flattened
+
     /// The name of the end-of-input terminal.
     let [<Literal>] private endOfInputTerminal : TerminalIdentifier = "end_of_input"
     /// The name of the error terminal.
@@ -419,7 +430,9 @@ module private FsYacc =
                     Map.add nonterminal edges gotoEdges)
 
             let startSymbolCount = Set.count processedSpec.StartSymbols
-            let gotos = ResizeArray ()
+            let gotos =
+                // Initialize to a reasonable size to avoid small re-allocations.
+                ResizeArray (4 * gotoEdges.Count)
             let offsets = Array.zeroCreate (startSymbolCount + gotoEdges.Count)
 
             // Add entries for the "fake" starting nonterminals.
@@ -432,7 +445,7 @@ module private FsYacc =
             (startSymbolCount, gotoEdges)
             ||> Map.fold (fun nonterminalIndex nonterminal edges ->
                 // Store the starting index (in the sparse GOTO table) for this nonterminal.
-                offsets.[nonterminalIndex] <- Checked.uint16 gotos.Count
+                offsets.[nonterminalIndex] <- Checked.uint16 (gotos.Count / 2)
 
                 // Add the number of edges and the "any" action to the sparse GOTOs table.
                 gotos.Add (uint16 <| Set.count edges)
@@ -592,7 +605,7 @@ module private FsYacc =
             let actionCountByState =
                 actionsByState
                 |> Map.map (fun _ actions ->
-                    List.length actions)                    
+                    List.length actions)
 
             /// The most-frequent parser action (if any) for each parser state.
             let mostFrequentAction =
@@ -694,16 +707,10 @@ module private FsYacc =
                                 compare tag1 tag2)
 
                     // The entries for this state.
-                    let elements = Array.zeroCreate <| 2 * (Array.length entries + 1)
-                    elements.[0] <- Checked.uint16 <| Array.length entries
-                    elements.[1] <- mostFrequentActionValue
-                    
-                    entries
-                    |> Array.iteri (fun i (terminalTag, actionValue) ->
-                        let idx = 2 * (i + 1)
-                        elements.[idx] <- terminalTag
-                        elements.[idx + 1] <- actionValue)
-                    elements)
+                    Array.append [|
+                        Checked.uint16 <| Array.length entries;
+                        mostFrequentActionValue; |]
+                        (flattenTupleArray entries))
 
             let actionTableElements =
                 // Initialize to roughly the correct size (to avoid multiple small reallocations).
