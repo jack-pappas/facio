@@ -44,25 +44,33 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
         let sb = System.Text.StringBuilder ()
 
         // Add the nonterminal text and arrow to the StringBuilder.
-        sprintf "%O \u2192 " this.Nonterminal
+        sprintf "%O \u2192" this.Nonterminal
         |> sb.Append |> ignore
 
-        for i = 0 to Array.length this.Production do
-            if i < int this.Position then
-                this.Production.[i].ToString ()
-                |> sb.Append |> ignore
-            elif i = int this.Position then
-                // Append the dot character representing the parser position.
-                sb.Append dotChar |> ignore
-            else
-                this.Production.[i - 1].ToString ()
-                |> sb.Append |> ignore
+        // Is this an empty (epsilon) production?
+        if Array.isEmpty this.Production then
+            sb.Append " (Empty)" |> ignore
+        else
+            for i = 0 to Array.length this.Production do
+                // Append a space before each symbol.
+                sb.Append " " |> ignore
+
+                if i < int this.Position then
+                    this.Production.[i].ToString ()
+                    |> sb.Append |> ignore
+                elif i = int this.Position then
+                    // Append the dot character representing the parser position.
+                    sb.Append dotChar |> ignore
+                else
+                    this.Production.[i - 1].ToString ()
+                    |> sb.Append |> ignore
 
         // Append the lookahead symbol, if applicable.
         if typeof<'Lookahead> <> typeof<unit> then
             sprintf ", %A" this.Lookahead
             |> sb.Append |> ignore
 
+        // Return the constructed string.
         sb.ToString ()
 
     /// <inherit />
