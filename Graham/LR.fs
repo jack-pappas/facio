@@ -322,7 +322,7 @@ module LrTableGenState =
                 ||> Array.fold (fun productionRuleIds ruleRhs ->
                     /// The identifier for this production rule.
                     let productionRuleId : ProductionRuleId =
-                        productionRuleIds.Count + 1
+                        productionRuleIds.Count
                         |> Int32WithMeasure
 
                     // Add this identifier to the map.
