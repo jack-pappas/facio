@@ -22,7 +22,7 @@ open FSharpYacc.Compiler
 module private FsYacc =
     open System
     open System.CodeDom.Compiler
-    open System.Text.RegularExpressions
+    open Printf
     open Graham.Grammar
     open Graham.LR
     open BackendUtils.CodeGen
@@ -90,7 +90,7 @@ module private FsYacc =
     /// Emit a formatted string as a single-line F# comment into an IndentedTextWriter.
     let inline private comment (writer : IndentedTextWriter) fmt : ^T =
         writer.Write "// "
-        Printf.fprintfn writer fmt
+        fprintfn writer fmt
 
     /// Emits a formatted string as a quick-summary (F# triple-slash comment) into an IndentedTextWriter.
     let inline private quickSummary (writer : IndentedTextWriter) fmt : ^T =
@@ -179,7 +179,7 @@ module private FsYacc =
     //
     let private tablesRecordAndParserFunctions terminalCount (writer : IndentedTextWriter) =
         // Emit the 'tables' record.
-        Printf.fprintfn writer "let tables () : %s.Tables<_> = {" defaultParsingNamespace
+        fprintfn writer "let tables () : %s.Tables<_> = {" defaultParsingNamespace
         IndentedTextWriter.indented writer <| fun writer ->
             writer.WriteLine "reductions = _fsyacc_reductions ();"
             writer.WriteLine "endOfInputTag = _fsyacc_endOfInputTag;"
@@ -197,13 +197,13 @@ module private FsYacc =
 
             writer.WriteLine "parseError ="
             IndentedTextWriter.indented writer <| fun writer ->
-                Printf.fprintfn writer "(fun (ctxt : %s.ParseErrorContext<_>) ->" defaultParsingNamespace
+                fprintfn writer "(fun (ctxt : %s.ParseErrorContext<_>) ->" defaultParsingNamespace
                 IndentedTextWriter.indented writer <| fun writer ->
                     writer.WriteLine "match parse_error_rich with"
                     writer.WriteLine "| Some f -> f ctxt"
                     writer.WriteLine "| None -> parse_error ctxt.Message);"
 
-            Printf.fprintfn writer "numTerminals = %i;" terminalCount
+            fprintfn writer "numTerminals = %i;" terminalCount
             writer.WriteLine "productionToNonTerminalTable = _fsyacc_productionToNonTerminalTable;"
 
             // Write the closing bracket for the record.
@@ -816,12 +816,94 @@ module private FsYacc =
         oneLineArrayUInt16 ("_fsyacc_immediateActions", false,
             _fsyacc_immediateActions) writer
 
+    //
+    let private reduction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
+                           nonterminal : NonterminalIdentifier,
+                           symbols : Symbol<NonterminalIdentifier, TerminalIdentifier>[],
+                           action : CodeFragment) (writer : IndentedTextWriter) : unit =
+        // Write the function declaration for this semantic action.
+        fprintfn writer "(fun (parseState : %s.IParseState) ->" defaultParsingNamespace
+        IndentedTextWriter.indented writer <| fun writer ->
+        // Emit code to get the values of symbols carrying data values.
+        symbols
+        |> Array.iteri (fun idx symbol ->
+            match symbol with
+            | Symbol.Nonterminal nonterminal ->
+                match Map.find nonterminal processedSpec.Nonterminals with
+                | (Some _) as declaredType ->
+                    declaredType
+                | None ->
+                    // Create a generic type parameter to use for this nonterminal and let
+                    // the F# compiler use type inference to figure out what type it should be.
+                    Some <| "'" + nonterminal
+            | Symbol.Terminal terminal ->
+                Map.find terminal processedSpec.Terminals
+            // Emit a let-binding to get the value of this symbol if it carries any data.
+            |> Option.iter (fun symbolType ->
+                fprintfn writer "let _%d = (let data = parseState.GetInput(%d) in (Microsoft.FSharp.Core.Operators.unbox data : %s)) in"
+                    (idx + 1) (idx + 1) symbolType))
+
+        /// The type of the value carried by the nonterminal produced by this rule.
+        let nonterminalValueType =
+            match Map.tryFind nonterminal processedSpec.Nonterminals with
+            | Some (Some declaredType) ->
+                declaredType
+            | None
+            | Some None ->
+                // Create a generic type parameter to use for this nonterminal and let
+                // the F# compiler use type inference to figure out what type it should be.
+                "'" + nonterminal
+            
+        // Emit the semantic action code, wrapped in a bit of code which boxes the return value.
+        writer.WriteLine "Microsoft.FSharp.Core.Operators.box"
+        IndentedTextWriter.indented writer <| fun writer ->
+            writer.WriteLine "("
+            IndentedTextWriter.indented writer <| fun writer ->
+                writer.WriteLine "("
+                IndentedTextWriter.indented writer <| fun writer ->
+                    // TODO : May need to split 'code' into individual lines and write them to the
+                    // IndentedTextWriter one-by-one to preserve correct indentation level.
+                    writer.WriteLineNoTabs action
+                writer.WriteLine ")"
+
+            // Emit the nonterminal type for this production rule.
+            fprintfn writer ": %s))" nonterminalValueType
+
+    /// Replaces the placeholders for symbols in production rules
+    /// (e.g., $2) with valid F# value identifiers.
+    let inline private replaceSymbolPlaceholders (code : CodeFragment) =
+        System.Text.RegularExpressions.Regex.Replace (code, "\$(?=\d+)", "_")
+
+    /// Emits the user-defined semantic actions for the reductions.
+    let private reductions (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+                           (writer : IndentedTextWriter) : unit =
+        /// The default action to execute when a production rule
+        /// has no semantic action code associated with it.
+        let defaultAction =
+            sprintf "raise (%s.Accept (Microsoft.FSharp.Core.Operators.box _1))" defaultParsingNamespace
+
         // _fsyacc_reductions
         writer.WriteLine "let private _fsyacc_reductions () = [|"
         IndentedTextWriter.indented writer <| fun writer ->
-            // TODO : When emitting the code, need to replace placeholder values (e.g., $2)
-            // with the corresponding variable value (e.g., _2).
-            comment writer "TODO"
+            // Emit actions for the augmented starting nonterminals.
+            processedSpec.StartSymbols
+            |> Set.iter (fun startSymbol ->
+                let startNonterminal = "_start" + startSymbol
+                reduction (processedSpec, startNonterminal, [| Symbol.Nonterminal startSymbol |], defaultAction) writer)
+
+            // Emit the actions for each of the production rules.
+            processedSpec.ProductionRules
+            |> Map.iter (fun nonterminal rules ->
+                rules |> Array.iter (fun rule ->
+                    let action =
+                        match rule.Action with
+                        | Some action ->
+                            // Replace the symbol placeholders; e.g., change $2 to _2
+                            replaceSymbolPlaceholders action
+                        | None ->
+                            defaultAction
+
+                    reduction (processedSpec, nonterminal, rule.Symbols, action) writer))
             
             // Emit the closing bracket of the array.
             writer.WriteLine "|]"
@@ -839,45 +921,45 @@ module private FsYacc =
             defaultArg options.ModuleName "Parser"
         
         if options.InternalModule then
-            Printf.fprintfn writer "module internal %s" parserModuleName
+            fprintfn writer "module internal %s" parserModuleName
         else
-            Printf.fprintfn writer "module %s" parserModuleName
+            fprintfn writer "module %s" parserModuleName
         writer.WriteLine ()
 
         // Emit a "nowarn" directive to disable a certain type-related warning message.
-        Printf.fprintf writer "#nowarn \"%i\" " 64
+        fprintf writer "#nowarn \"%i\" " 64
         comment writer "turn off warnings that type variables used in production annotations are instantiated to concrete type"
         writer.WriteLine ()
 
         (* Emit the "open" statements. *)
         [|  defaultLexingNamespace;
             defaultParsingNamespace + ".ParseHelpers"; |]
-        |> Array.iter (Printf.fprintfn writer "open %s")
+        |> Array.iter (fprintfn writer "open %s")
         writer.WriteLine ()
 
         (* Emit the header code. *)
         processedSpec.Header
         |> Option.iter (fun header ->
-            // Normalize the line endings in the header code.
-            let header =
-                Regex.Replace (header, "\r\n|\r|\n", Environment.NewLine)
-
             // Write the header code into the TextWriter.
-            // TODO : Instead of normalizing the line endings in the header, then emitting the whole
-            // header at once, perhaps split the header (using the same regex) and emit each of it's
-            // lines into the IndentedTextWriter so it'll have the correct indenting _and_ newline sequence.
-            writer.WriteLine header
+            // We split the code into individual lines, then write them one at a time to the
+            // IndentedTextWriter; this ensures that the newlines are correct for this system
+            // and also that the indentation level is correct.
+            header.Split ([| "\r\n"; "\r"; "\n" |], StringSplitOptions.None)
+            |> Array.iter (fun codeLine ->
+                // TODO : Trim the lines? We'd have to process the entire array first
+                // to determine the "base" indentation level, then trim only that much
+                // from the front of each string.
+                writer.WriteLine codeLine)
+
             writer.WriteLine ())
 
         // Emit the parser types (e.g., the token type).
         let productionIndices =
             parserTypes processedSpec writer
 
-        // TEST
-        writer.Flush ()
-
         // Emit the parser tables.
         parserTables (processedSpec, parserTable, productionIndices) writer
+        reductions processedSpec writer
 
         // Emit the parser "tables" record and parser functions.
         let terminalCount =
