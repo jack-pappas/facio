@@ -436,8 +436,8 @@ module VertexLabeledSparseDigraph =
 type LabeledSparseDigraph<[<EqualityConditionalOn>]'Vertex, [<EqualityConditionalOn; ComparisonConditionalOn>]'Edge when 'Vertex : comparison>
         private (vertices : Set<'Vertex>, edges : Map<'Vertex * 'Vertex, 'Edge>) =
     //
-    static member internal Empty
-        with get () = LabeledSparseDigraph<'Vertex, 'Edge> (Set.empty, Map.empty)
+    static member internal Empty =
+        LabeledSparseDigraph<'Vertex, 'Edge> (Set.empty, Map.empty)
 
     //
     member __.IsEmpty
