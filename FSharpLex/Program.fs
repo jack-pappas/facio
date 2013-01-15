@@ -158,7 +158,7 @@ module Program =
         
         // TEST : Just use an hard-coded CompilationOptions record for now.
         invoke (@"C:\Users\Jack\Desktop\fsyacc-test\fslexlex.fsl", {
-            Unicode = false;
+            Unicode = true;
             // TEMP
             FslexBackendOptions = Some {
                 OutputPath = @"C:\Users\Jack\Desktop\fsyacc-test\fslex_lexer.fs";

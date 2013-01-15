@@ -59,28 +59,36 @@ module private FsLex =
     //
     let [<Literal>] private lexingStateVariableName = "_fslex_state"
 
-    //
+    /// Emits the elements into an ASCII transition table row for the given DFA state.
     let private asciiTransitionVectorElements (compiledRule, ruleDfaStateId, baseDfaStateId, indentingWriter : IndentedTextWriter) =
         (*  The transition vector for each state in an 'fslex'-compatible ASCII transition
             table has 257 elements. The first 256 elements represent each possible ASCII value;
             the last element represents the 'end-of-file' marker. *)
 
-        // Emit the transition vector elements, based on the transitions out of this state.
         let ruleDfaTransitions = compiledRule.Dfa.Transitions
+
+        /// The transitions out of this DFA state, keyed by the
+        /// character labeling the transition edge.
+        // OPTIMIZE : This should use an IntervalMap for better performance.
+        // Additionally, it should be created on-the-fly while creating the DFA instead of having to re-compute it here.
+        let outTransitions =
+            (Map.empty, ruleDfaTransitions.AdjacencyMap)
+            ||> Map.fold (fun outTransitions edgeKey edgeSet ->
+                // Filter to include only this DFA state's out-edges.
+                if edgeKey.Source <> ruleDfaStateId then
+                    outTransitions
+                else
+                    // Add the transition edges to the map.
+                    let target = edgeKey.Target + baseDfaStateId
+
+                    (outTransitions, edgeSet)
+                    ||> CharSet.fold (fun outTransitions c ->
+                        Map.add c target outTransitions))
+
+        // Emit the transition vector elements, based on the transitions out of this state.        
         for c = 0 to 255 do
             let targetStateId =
-                // Determine the id of the state we transition to when this character is the input.
-                // OPTIMIZE : This lookup is *really* slow -- we should create an optimized
-                // lookup table on-the-fly while compiling the DFA.
-                let targetStateId =
-                    ruleDfaTransitions.AdjacencyMap
-                    |> Map.tryPick (fun edgeKey edgeSet ->
-                        if edgeKey.Source = ruleDfaStateId &&
-                            CharSet.contains (char c) edgeSet then
-                            // Add the starting state of this rule to the relative DFA state id
-                            // to get the DFA state id for the combined DFA table.
-                            Some (edgeKey.Target + baseDfaStateId)
-                        else None)
+                let targetStateId = Map.tryFind (char c) outTransitions
 
                 // If no transition edge was found for this character, return the
                 // sentinel value to indicate there's no transition.
@@ -106,10 +114,85 @@ module private FsLex =
         sprintf "%uus; " eofTransitionTarget
         |> indentingWriter.Write
 
-    //
+    /// Emits the elements into a Unicode transition table row for the given DFA state.
     let private unicodeTransitionVectorElements (compiledRule, ruleDfaStateId, baseDfaStateId, indentingWriter : IndentedTextWriter) =
+        (*  Each row of a Unicode-based, 'fslex'-compatible transition table contains:
+              - 128 entries for the standard ASCII characters
+              - n entries comprised of a pair of entries (giving 2*n actual entries);
+                These entries represent specific Unicode characters.
+              - 30 entries representing Unicode categories (UnicodeCategory)
+              - 1 entry representing the end-of-file (EOF) marker. *)
+
+        let ruleDfaTransitions = compiledRule.Dfa.Transitions
+
+        /// The transitions out of this DFA state, keyed by the
+        /// character labeling the transition edge.
+        // OPTIMIZE : This should use an IntervalMap for better performance.
+        // Additionally, it should be created on-the-fly while creating the DFA instead of having to re-compute it here.
+        let outTransitions =
+            (Map.empty, ruleDfaTransitions.AdjacencyMap)
+            ||> Map.fold (fun outTransitions edgeKey edgeSet ->
+                // Filter to include only this DFA state's out-edges.
+                if edgeKey.Source <> ruleDfaStateId then
+                    outTransitions
+                else
+                    // Add the transition edges to the map.
+                    let target = edgeKey.Target + baseDfaStateId
+
+                    (outTransitions, edgeSet)
+                    ||> CharSet.fold (fun outTransitions c ->
+                        Map.add c target outTransitions))
+
+        // Emit the transition vector elements for the lower range of ASCII elements [0-127].
+        for c = 0 to 127 do
+            let targetStateId =
+                // Determine the id of the state we transition to when this character is the input.
+                // OPTIMIZE : This lookup is *really* slow -- we should create an optimized
+                // lookup table on-the-fly while compiling the DFA.
+                let targetStateId =
+                    ruleDfaTransitions.AdjacencyMap
+                    |> Map.tryPick (fun edgeKey edgeSet ->
+                        if edgeKey.Source = ruleDfaStateId &&
+                            CharSet.contains (char c) edgeSet then
+                            // Add the starting state of this rule to the relative DFA state id
+                            // to get the DFA state id for the combined DFA table.
+                            Some (edgeKey.Target + baseDfaStateId)
+                        else None)
+
+                // If no transition edge was found for this character, return the
+                // sentinel value to indicate there's no transition.
+                defaultArg targetStateId (Int32WithMeasure <| int sentinelValue)
+
+            // Emit the state number of the transition target.
+            sprintf "%uus; " (Checked.uint16 targetStateId)
+            |> indentingWriter.Write
+
+        // Emit entries for specific Unicode elements.
+        // TODO
         raise <| System.NotImplementedException "unicodeTransitionVectorElements"
-        ()
+
+        // Emit entries for Unicode categories.
+        for i = 0 to 29 do
+            raise <| System.NotImplementedException "unicodeTransitionVectorElements"
+            // Emit the state number of the transition target.
+            sprintf "%uus; " (Int32WithMeasure <| int sentinelValue)
+            |> indentingWriter.Write
+
+        // Emit the element representing the state to transition
+        // into when the 'end-of'file' marker is consumed.
+        // NOTE : Only the initial DFA state of a rule can consume the EOF marker!
+        let eofTransitionTarget =
+            if compiledRule.Dfa.InitialState = ruleDfaStateId then
+                match ruleDfaTransitions.EofTransition with
+                | None -> sentinelValue
+                | Some edgeKey ->
+                    // Remember the target DFA state is _relative_ to this DFA --
+                    // add it to the base DFA state id to get it's state id for the combined DFA.
+                    Checked.uint16 (edgeKey.Target + baseDfaStateId)
+            else sentinelValue
+
+        sprintf "%uus; " eofTransitionTarget
+        |> indentingWriter.Write
 
     //
     let private transitionAndActionTables (compiledRules : Map<RuleIdentifier, CompiledRule>) (options : CompilationOptions) (indentingWriter : IndentedTextWriter) =
