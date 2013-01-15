@@ -467,7 +467,7 @@ let private precedenceSettings (processedSpec : ProcessedSpecification<Nontermin
                     | None ->
                         // The precedence of a rule is the precedence of it's last (right-most) terminal.
                         match System.Array.FindLastIndex (rule.Symbols, (function Terminal _ -> true | Nonterminal _ -> false)) with
-                        //match System.Array.FindIndex (rule, (function Terminal _ -> true | Nonterminal _ -> false)) with
+                        //match System.Array.FindIndex (rule.Symbols, (function Terminal _ -> true | Nonterminal _ -> false)) with
                         | -1 ->
                             // This rule does not contain any terminals, so it is not assigned a precedence.
                             None
@@ -543,16 +543,11 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
     //
     let lr0Table = Lr0.createTable grammar
 
-    /// The LR(0) parser table, after applying precedence settings.
-    let lr0Table' =
-        // Apply precedences to resolve conflicts.
-        Lr0.applyPrecedence (lr0Table, precedenceSettings)
-
     (*  Upgrade the LR(0) automaton to SLR(1); report the remaining number of S/R and
         R/R conflicts. If there aren't any remaining conflicts, report that the grammar
         is SLR(1) and return. *)
     //
-    let slr1Table = Slr1.upgrade (grammar, lr0Table', productionRuleIds)        
+    let slr1Table = Slr1.upgrade (grammar, lr0Table, productionRuleIds)        
 
     (*  Upgrade the LR(0)/SLR(1) automaton to LALR(1); report the remaining number of
         S/R and R/R conflicts. If there aren't any remaining conflicts, report that the
@@ -569,15 +564,21 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
         //
         let lalr1Table =
             Lalr1.upgrade (grammar, slr1Table, productionRuleIds, lookaheadSets)
+
+        (* Apply precedence settings to resolve as many conflicts as possible. *)
+        /// The LALR(1) parser table, after applying precedence settings.
+        let lalr1Table =
+            // Apply precedences to resolve conflicts.
+            Lr0.applyPrecedence (lalr1Table, precedenceSettings)
             
         (*  If we reach this point, the grammar is not LALR(1), but we can still create a
             parser by taking certain actions to resolve any remaining conflicts.
             Emit a _warning_ message for each of these conflicts, specifying the action
             we've taken to resolve it. *)
         //
-        let lalr1Table' =
+        let lalr1Table =
             Lr0.resolveConflicts lalr1Table
 
         // Return the compiled parser table.
-        Choice1Of2 lalr1Table'
+        Choice1Of2 lalr1Table
 
