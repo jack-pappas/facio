@@ -56,18 +56,21 @@ module private FsYacc =
             ActionValue.Shift |||
             EnumOfValue (Checked.uint16 targetStateId)
 
-    //
+    /// An 'fsyacc' nonterminal.
+    /// This augments the set of grammar nonterminals with some additional "fake"
+    /// nonterminals representing the productions of the nonterminals used as start symbols.
     type private FsyaccNonterminal<'Nonterminal when 'Nonterminal : comparison> =
-        //
+        /// A "fake" starting nonterminal.
         | Start of 'Nonterminal
-        //
+        /// Original nonterminal from the parser specification.
         | Nonterminal of 'Nonterminal
 
-    //
+    /// An 'fsyacc' terminal.
+    /// This augments the set of grammar terminals with an additional 'error' symbol.
     type private FsyaccTerminal<'Terminal when 'Terminal : comparison> =
-        //
+        /// Original terminal from the parser specification.
         | Terminal of 'Terminal
-        //
+        /// The error terminal.
         | Error
 
     // TEMP : Only needed until we modify Graham.LR.LrParserTable to provide the
