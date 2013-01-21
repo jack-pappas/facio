@@ -631,7 +631,7 @@ module private Diet =
         // For compatibility with the F# range operator,
         // when minValue > minValue it's just considered
         // to be an empty range.
-        if minValue >= minValue then
+        if minValue >= maxValue then
             empty
         else
             Range (minValue, maxValue)
