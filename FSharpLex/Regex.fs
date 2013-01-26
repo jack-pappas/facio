@@ -28,10 +28,6 @@ open SpecializedCollections
 type Regex =
     /// The empty string.
     | Epsilon
-    /// A set of characters.
-    | CharacterSet of CharSet
-    /// Negation.
-    | Negate of Regex
     /// Kleene *-closure.
     /// The specified Regex will be matched zero (0) or more times.
     | Star of Regex
@@ -42,15 +38,47 @@ type Regex =
     /// Boolean AND of two regular expressions.
     | And of Regex * Regex
 
-    (* TODO :   Remove these -- we'll leave them in Pattern for convenience
-                but they can all be handled by the CharacterSet case here. *)
-    /// The empty language.
-    | Empty
-    /// Any character except for newline ('\n').
+    /// Negation.
+    | Negate of Regex
+    /// Any character.
     | Any
-    /// A character.
-    | Character of char
+    /// A set of characters.
+    | CharacterSet of CharSet
 
+    //
+    [<CompiledName("Empty")>]
+    static member empty =
+        CharacterSet CharSet.empty
+
+    //
+    [<CompiledName("OfCharacter")>]
+    static member ofChar c =
+        CharacterSet <| CharSet.singleton c
+
+/// Active patterns for matching special cases of Regex.
+[<AutoOpen>]
+module private RegexPatterns =
+    //
+    let (|Empty|_|) regex =
+        match regex with
+        | CharacterSet charSet
+            when CharSet.isEmpty charSet ->
+            Some ()
+        | _ ->
+            None
+
+    //
+    let (|Character|_|) regex =
+        match regex with
+        | CharacterSet charSet
+            when CharSet.count charSet = 1 ->
+            Some <| CharSet.minElement charSet
+        | _ ->
+            None
+
+
+// Add additional members to Regex.
+type Regex with
     //
     static member private IsNullableImpl regex cont =
         match regex with
@@ -83,34 +111,20 @@ type Regex =
     static member IsNullable (regex : Regex) =
         Regex.IsNullableImpl regex id
 
-    /// Given a CharSet from a CharacterSet case, returns the simplest Regex
-    /// representing the CharSet.
-    static member inline private SimplifyCharacterSet (charSet : CharSet) =
-        match CharSet.count charSet with
-        | 0 ->
-            Empty
-        | 1 ->
-            CharSet.minElement charSet
-            |> Character
-        | _ ->
-            CharacterSet charSet
-
     /// Implementation of the canonicalization function.
     static member private CanonicalizeImpl (regex : Regex) (charUniverse : CharSet) (cont : Regex -> Regex) =
         match regex with
         | Epsilon
-        | Empty
-        | Any
-        | Character _ as regex ->
+        | Any as regex ->
             cont regex
 
         | CharacterSet charSet as charSetRegex ->
             match CharSet.count charSet with
             | 0 ->
-                Empty
+                Regex.empty
             | 1 ->
                 CharSet.minElement charSet
-                |> Character
+                |> Regex.ofChar
             | _ ->
                 charSetRegex
             |> cont
@@ -118,17 +132,9 @@ type Regex =
         | Negate Empty ->
             cont Any
         | Negate Any ->
-            cont Empty
+            cont Regex.empty
         | Negate Epsilon ->
-            cont Empty
-        | Negate (Character c) ->
-             let anyMinusChar = CharSet.remove c charUniverse
-             Regex.SimplifyCharacterSet anyMinusChar
-             |> cont
-        | Negate (CharacterSet charSet) ->
-             let anyMinusCharSet = CharSet.difference charUniverse charSet
-             Regex.SimplifyCharacterSet anyMinusCharSet
-             |> cont
+            cont Regex.empty
         | Negate (Negate regex) ->
             Regex.CanonicalizeImpl regex charUniverse cont
         | Negate _ as notRegex ->
@@ -151,7 +157,7 @@ type Regex =
 
         | Concat (Empty, _)
         | Concat (_, Empty) ->
-            cont Empty
+            cont Regex.empty
         | Concat (Epsilon, r)
         | Concat (r, Epsilon) ->
             Regex.CanonicalizeImpl r charUniverse cont
@@ -166,7 +172,7 @@ type Regex =
                 match r', s' with
                 | Empty, _
                 | _, Empty ->
-                    cont Empty
+                    cont Regex.empty
                 | Epsilon, r'
                 | r', Epsilon ->
                     Regex.CanonicalizeImpl r' charUniverse cont
@@ -200,28 +206,12 @@ type Regex =
                 | _, Any ->
                     cont Any
 
-                | (Character c1 as charRegex), Character c2 ->
-                    if c1 = c2 then
-                        charRegex
-                    else
-                        CharSet.empty
-                        |> CharSet.add c1
-                        |> CharSet.add c2
-                        |> CharacterSet
-                    |> cont
-
-                | Character c, CharacterSet charSet
-                | CharacterSet charSet, Character c ->
-                    CharSet.add c charSet
-                    |> CharacterSet
-                    |> cont
-
                 | CharacterSet charSet1, CharacterSet charSet2 ->
                     // 'Or' is the disjunction (union) of two Regexes.
                     let charSetUnion = CharSet.union charSet1 charSet2
 
                     // Return the simplest Regex for the union set.
-                    Regex.SimplifyCharacterSet charSetUnion
+                    CharacterSet charSetUnion
                     |> cont
 
                 | r', s' ->
@@ -229,13 +219,14 @@ type Regex =
                     // of the symmetry rule (r | s) = (s | r) so the
                     // "approximately equal" relation is simply handled by
                     // F#'s structural equality.
-                    if r' < s' then Or (r', s')
+                    if r' < s'
+                    then Or (r', s')
                     else Or (s', r')
                     |> cont
         
         | And (Empty, _)
         | And (_, Empty) ->
-            cont Empty
+            cont Regex.empty
         | And (Any, r)
         | And (r, Any) ->
             Regex.CanonicalizeImpl r charUniverse cont
@@ -253,7 +244,7 @@ type Regex =
 
                 | Empty, _
                 | _, Empty ->
-                    cont Empty
+                    cont Regex.empty
 
                 | Any, r
                 | r, Any ->
@@ -266,7 +257,7 @@ type Regex =
                         // TODO : Emit a warning to TraceListener?
                         // The 'And' case represents a conjunction (intersection) of two Regexes;
                         // since the characters are different, the intersection must be empty.
-                        Empty
+                        Regex.empty
                     |> cont
 
                 | Character c, CharacterSet charSet
@@ -280,7 +271,7 @@ type Regex =
                     let charSetIntersection = CharSet.intersect charSet1 charSet2
 
                     // Return the simplest Regex for the intersection set.
-                    Regex.SimplifyCharacterSet charSetIntersection
+                    CharacterSet charSetIntersection
                     |> cont
 
                 | r', s' ->
@@ -288,7 +279,8 @@ type Regex =
                     // of the symmetry rule (r & s) = (s & r) so the
                     // "approximately equal" relation is simply handled by
                     // F#'s structural equality.
-                    if r' < s' then And (r', s')
+                    if r' < s'
+                    then And (r', s')
                     else And (s', r')
                     |> cont
 
@@ -305,14 +297,14 @@ type Regex =
         match regex with
         | Empty
         | Epsilon ->
-            cont Empty
+            cont Regex.empty
         | Any ->
             cont Epsilon
         | Character c ->
-            if c = wrtSymbol then Epsilon else Empty
+            if c = wrtSymbol then Epsilon else Regex.empty
             |> cont
         | CharacterSet charSet ->
-            if CharSet.contains wrtSymbol charSet then Epsilon else Empty
+            if CharSet.contains wrtSymbol charSet then Epsilon else Regex.empty
             |> cont
         | Negate r ->
             Regex.DerivativeImpl wrtSymbol r <| fun r' ->
@@ -323,7 +315,7 @@ type Regex =
                 Concat (r', ``r*``)
                 |> cont
         | Concat (r, s) ->
-            let ``nu(r)`` = if Regex.IsNullable r then Epsilon else Empty
+            let ``nu(r)`` = if Regex.IsNullable r then Epsilon else Regex.empty
             Regex.DerivativeImpl wrtSymbol r <| fun r' ->
             Regex.DerivativeImpl wrtSymbol s <| fun s' ->
                 Or (Concat (r', s),
@@ -446,7 +438,6 @@ module RegularVector =
         // are equal to the empty character set.
         regVec
         |> Array.forall (function
-            | Empty -> true
             | CharacterSet charSet ->
                 CharSet.isEmpty charSet
             | _ -> false)

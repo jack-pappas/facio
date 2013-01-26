@@ -418,7 +418,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
         | Pattern.Character c ->
             // Make sure the character is an ASCII character unless the 'Unicode' option is set.
             if options.Unicode || int c <= 255 then
-                Regex.Character c
+                Regex.ofChar c
                 |> Choice1Of2
                 |> cont
             else
@@ -470,7 +470,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                     if Set.contains nestedMacroId badMacros then
                         // We have to return something, so return Empty to take the place
                         // of this macro reference.
-                        Choice1Of2 Regex.Empty
+                        Choice1Of2 Regex.empty
                         |> cont
                     else
                         Choice2Of2 [ sprintf "The macro '%s' is not defined." nestedMacroId ]
@@ -591,7 +591,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 if Set.contains macroId badMacros then
                     // We have to return something, so return Empty to
                     // take the place of this macro reference.
-                    Choice1Of2 Regex.Empty
+                    Choice1Of2 Regex.empty
                     |> cont
                 else
                     Choice2Of2 [ sprintf "The macro '%s' is not defined." macroId ]
@@ -692,7 +692,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
         | Pattern.Character c ->
             // Make sure the character is an ASCII character unless the 'Unicode' option is set.
             if options.Unicode || int c <= 255 then
-                Regex.Character c
+                Regex.ofChar c
                 |> Choice1Of2
                 |> cont
             else
