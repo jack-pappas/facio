@@ -116,10 +116,6 @@ type Pattern =
     (* Regex cases *)
     /// The empty string.
     | Epsilon
-    /// A set of characters.
-    | CharacterSet of CharSet
-    /// Negation.
-    | Negate of Pattern
     /// Kleene *-closure.
     /// The specified Pattern will be matched zero (0) or more times.
     | Star of Pattern
@@ -129,7 +125,6 @@ type Pattern =
     | Or of Pattern * Pattern
     /// Boolean AND of two regular expressions.
     | And of Pattern * Pattern
-
     (* TODO :   The Xor pattern can be implemented easily by rewriting it with one of the identities:
                 p XOR q => (p OR q) AND (NOT (p AND q))
                 -- or --
@@ -138,14 +133,6 @@ type Pattern =
 //    | Xor of Pattern * Pattern
 
     (* Extensions *)
-    /// The empty language.
-    | Empty
-    /// Any character.
-    // NOTE : This actually represents *any* character; it is not the same as the '.' pattern
-    // in a lexer definition ('.' represents any character _except_ for '\n').
-    | Any
-    /// A character.
-    | Character of char
     /// The specified Pattern is matched one (1) or more times.
     /// This is the Plus (+) operator in a regular expression.
     | OneOrMore of Pattern
@@ -157,46 +144,26 @@ type Pattern =
     /// 'm' times and at most 'n' times.
     /// This is the {} operator in a regular expression.
     | Repetition of Pattern * uint32 option * uint32 option
+    /// Negation.
+    | Negate of Pattern
 
     (* Macros *)
     /// Match a pattern specified by a pattern macro.
     | Macro of MacroIdentifier
+
+    (* Symbols *)
+    /// Any character.
+    | Any
+    /// A set of characters.
+    | CharacterSet of CharSet
+
+    (* NOTE : The following cases are special cases of CharacterSet. *)
+    /// The empty language.
+    | Empty
+    /// A character.
+    | Character of char
     /// Match a character belonging to a specific Unicode category.
     | UnicodeCategory of UnicodeCategory
-
-    /// Creates a Pattern which matches a string.
-    [<CompiledName("LiteralString")>]
-    static member literalString (str : string) =
-        // If the string is empty, return an Epsilon pattern; by definition,
-        // Epsilon is the acceptance of the empty string.
-        if str.Length < 1 then
-            Pattern.Epsilon
-        else
-            (* Construct the pattern backwards (i.e., starting at the end of the string) *)
-            let mutable pattern = Pattern.Character str.[str.Length - 1]
-
-            // Loop backwards through the string to prepend the rest of the characters
-            for i = str.Length - 2 downto 0 do
-                pattern <-
-                    Pattern.Concat (
-                        Pattern.Character str.[i],
-                        pattern)
-
-            // Return the constructed pattern.
-            pattern
-
-    /// Creates a pattern which matches any one character in the specified list.
-    [<CompiledName("OfCharacterList")>]
-    static member ofCharList list =
-        CharSet.ofList list
-        |> CharacterSet
-
-    /// <summary>Creates a pattern which matches any one character in the range
-    /// specified by [<paramref name="lower"/>, <paramref name="upper"/>].</summary>
-    [<CompiledName("OfCharacterRange")>]
-    static member ofCharRange lower upper =
-        CharSet.ofRange lower upper
-        |> CharacterSet
 
     /// Returns a Pattern created by concatenating the Patterns in the specified list.
     [<CompiledName("ConcatenateList")>]
@@ -231,6 +198,46 @@ type Pattern =
     [<CompiledName("OrArray")>]
     static member orArray array =
         Array.reduce (FuncConvert.FuncFromTupled Pattern.Or) array
+
+    /// Creates a pattern which matches the given character.
+    [<CompiledName("OfCharacter")>]
+    static member ofChar c : Pattern =
+        CharSet.singleton c
+        |> CharacterSet
+
+    /// Creates a pattern which matches any one character in the specified list.
+    [<CompiledName("OfCharacterList")>]
+    static member ofCharList list : Pattern =
+        CharSet.ofList list
+        |> CharacterSet
+
+    /// <summary>Creates a pattern which matches any one character in the range
+    /// specified by [<paramref name="lower"/>, <paramref name="upper"/>].</summary>
+    [<CompiledName("OfCharacterRange")>]
+    static member ofCharRange lower upper : Pattern=
+        CharSet.ofRange lower upper
+        |> CharacterSet
+
+    /// Creates a Pattern which matches a string.
+    [<CompiledName("LiteralString")>]
+    static member literalString (str : string) =
+        // If the string is empty, return an Epsilon pattern; by definition,
+        // Epsilon is the acceptance of the empty string.
+        if str.Length < 1 then
+            Pattern.Epsilon
+        else
+            (* Construct the pattern backwards (i.e., starting at the end of the string) *)
+            let mutable pattern = Pattern.Character str.[str.Length - 1]
+
+            // Loop backwards through the string to prepend the rest of the characters
+            for i = str.Length - 2 downto 0 do
+                pattern <-
+                    Pattern.Concat (
+                        Pattern.Character str.[i],
+                        pattern)
+
+            // Return the constructed pattern.
+            pattern
 
 /// <summary>A pattern defined in some clause (case) of a lexer rule.</summary>
 /// <remarks>
