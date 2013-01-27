@@ -446,7 +446,7 @@ let private _fsyacc_reductions = [|
             box
                 (
                    (
-                      Pattern Any 
+                      Pattern <| And (Any, Negate (Pattern.Character '\n'))
                    )
                  : 'regexp));
         (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
