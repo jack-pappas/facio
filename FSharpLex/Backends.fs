@@ -17,27 +17,27 @@ type Backends () =
     let mutable fslexBackend = None
     let mutable graphBackend = None
 
-    /// The fslex-compatible backend.
-    [<Import>]
-    member __.FslexBackend
-        with get () : IBackend =
-            match fslexBackend with
-            | None ->
-                invalidOp "The fslex backend has not been set."
-            | Some backend ->
-                backend
-        and set value =
-            fslexBackend <- Some value
-
-//    /// The graph-based backend.
+//    /// The fslex-compatible backend.
 //    [<Import>]
-//    member __.GraphBackend
+//    member __.FslexBackend
 //        with get () : IBackend =
-//            match graphBackend with
+//            match fslexBackend with
 //            | None ->
-//                invalidOp "The graph backend has not been set."
+//                invalidOp "The fslex backend has not been set."
 //            | Some backend ->
 //                backend
 //        and set value =
-//            graphBackend <- Some value
+//            fslexBackend <- Some value
+
+    /// The graph-based backend.
+    [<Import>]
+    member __.GraphBackend
+        with get () : IBackend =
+            match graphBackend with
+            | None ->
+                invalidOp "The graph backend has not been set."
+            | Some backend ->
+                backend
+        and set value =
+            graphBackend <- Some value
 

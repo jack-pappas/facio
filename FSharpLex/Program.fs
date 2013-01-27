@@ -109,6 +109,13 @@ module Program =
                     UnicodeFileAsLexbuf (inputFile, None)
                 use stream = stream
                 use reader = reader
+//                let tokens =
+//                    let tokens = ResizeArray ()
+//                    try
+//                        while true do
+//                            tokens.Add <| Lexer.token lexbuf
+//                    with _ -> ()
+//                    tokens.ToArray ()
                 let lexerSpec = Parser.spec Lexer.token lexbuf
 
                 // TEMP : Some of the lists need to be reversed so they're in the order we expect.
@@ -139,13 +146,13 @@ module Program =
         | Choice1Of2 compiledLexerSpec ->
             // TEMP : Invoke the various backends "manually".
             // Eventually we'll modify this so the user can specify the backend to use.
-            backends.FslexBackend.EmitCompiledSpecification (
-                compiledLexerSpec,
-                options)
-
-//            backends.GraphBackend.EmitCompiledSpecification (
+//            backends.FslexBackend.EmitCompiledSpecification (
 //                compiledLexerSpec,
 //                options)
+
+            backends.GraphBackend.EmitCompiledSpecification (
+                compiledLexerSpec,
+                options)
 
             0   // Exit code: Success
 

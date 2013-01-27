@@ -559,7 +559,7 @@ module private FsLex =
 
 /// A backend which emits code implementing a table-based pattern matcher
 /// compatible with 'fslex' and the table interpreters in the F# PowerPack.
-[<Export(typeof<IBackend>)>]
+//[<Export(typeof<IBackend>)>]
 type FslexBackend () =
     interface IBackend with
         member this.EmitCompiledSpecification (compiledSpec, options) : unit =

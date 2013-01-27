@@ -27,7 +27,7 @@ type GraphFileFormat =
 
 /// Options to control the behavior of the graph-based backend.
 type GraphBackendOptions = {
-    /// The output path. The graph data will be written to this file."
+    /// The output path. The graph data will be written to this file.
     OutputPath : string;
     /// The format to use when serializing the automaton graph.
     Format : GraphFileFormat;
