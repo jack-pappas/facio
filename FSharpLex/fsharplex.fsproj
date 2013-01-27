@@ -48,6 +48,7 @@
       <Link>CommonAssemblyInfo.fs</Link>
     </Compile>
     <Compile Include="Collections.fs" />
+    <Compile Include="Unicode.fs" />
     <Compile Include="Regex.fs" />
     <Compile Include="Ast.fs" />
     <Compile Include="Parser.fs" />
