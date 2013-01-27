@@ -10,6 +10,7 @@ See LICENSE.TXT for licensing details.
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module FSharpLex.Regex
 
+open System.Diagnostics
 open LanguagePrimitives
 open SpecializedCollections
 
@@ -135,9 +136,10 @@ type Regex with
             cont Regex.empty
         | Negate (Negate regex) ->
             Regex.CanonicalizeImpl regex cont
-        | Negate _ as notRegex ->
-            // This regex is canonical
-            cont notRegex
+        | Negate r ->
+            Regex.CanonicalizeImpl r <| fun r' ->
+                Negate r'
+                |> cont
 
         | Star (Star _ as ``r*``) ->
             Regex.CanonicalizeImpl ``r*`` cont
@@ -149,9 +151,10 @@ type Regex with
             Regex.CanonicalizeImpl r <| fun r' ->
                 Star r'
                 |> cont
-        | Star _ as ``r*`` ->
-            // This regex is canonical
-            cont ``r*``
+        | Star r ->
+            Regex.CanonicalizeImpl r <| fun r' ->
+                Star r'
+                |> cont
 
         | Concat (Empty, _)
         | Concat (_, Empty) ->
@@ -178,12 +181,20 @@ type Regex with
                     Concat (r', s')
                     |> cont
 
-        | Or (Empty, r)
-        | Or (r, Empty) ->
-            Regex.CanonicalizeImpl r cont
         | Or (Any, _)
         | Or (_, Any) ->
             cont Any
+        | Or (Empty, r)
+        | Or (r, Empty) ->
+            Regex.CanonicalizeImpl r cont
+        | Or (CharacterSet charSet1, CharacterSet charSet2) ->
+            // 'Or' is the disjunction (union) of two Regexes.
+            let charSetUnion = CharSet.union charSet1 charSet2
+
+            // Return the simplest Regex for the union set.
+            CharacterSet charSetUnion
+            |> cont
+
         | Or (r, Or (s, t)) ->
             // Rewrite the expression so it's left-associative.
             let regex = Or (Or (r, s), t)
@@ -222,12 +233,19 @@ type Regex with
                     else Or (s', r')
                     |> cont
         
-        | And (Empty, _)
-        | And (_, Empty) ->
-            cont Regex.empty
         | And (Any, r)
         | And (r, Any) ->
             Regex.CanonicalizeImpl r cont
+        | And (Empty, _)
+        | And (_, Empty) ->
+            cont Regex.empty
+        | And (CharacterSet charSet1, CharacterSet charSet2) ->
+            // 'And' is the conjunction (intersection) of two Regexes.
+            let charSetIntersection = CharSet.intersect charSet1 charSet2
+
+            // Return the simplest Regex for the intersection set.
+            CharacterSet charSetIntersection
+            |> cont
         | And (r, And (s, t)) ->
             // Rewrite the expression so it's left-associative.
             let regex = And (And (r, s), t)
