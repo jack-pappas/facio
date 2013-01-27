@@ -205,7 +205,7 @@ module private FsLex =
             // individual entries in the transition vector.
             outTransitions
             // Filter out ASCII characters
-            |> Map.filter (fun c _ -> int c < 128)
+            |> Map.filter (fun c _ -> int c >= 128)
             // Filter out any characters whose transitions were consolidated
             // into a Unicode category transition.
             |> Map.filter (fun c _ ->
@@ -559,7 +559,7 @@ module private FsLex =
 
 /// A backend which emits code implementing a table-based pattern matcher
 /// compatible with 'fslex' and the table interpreters in the F# PowerPack.
-//[<Export(typeof<IBackend>)>]
+[<Export(typeof<IBackend>)>]
 type FslexBackend () =
     interface IBackend with
         member this.EmitCompiledSpecification (compiledSpec, options) : unit =
