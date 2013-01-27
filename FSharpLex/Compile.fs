@@ -86,7 +86,7 @@ module private CompilationState =
         dfaState, compilationState
 
 //
-let private transitions regularVector universe (transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState) derivativeClass =
+let private transitions regularVector (transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState) derivativeClass =
     // Ignore empty derivative classes.
     if CharSet.isEmpty derivativeClass then
         transitionsFromCurrentDfaState,
@@ -105,7 +105,7 @@ let private transitions regularVector universe (transitionsFromCurrentDfaState, 
             // Canonicalize the derivative vector.
             // THIS IS EXTREMELY IMPORTANT -- this algorithm absolutely
             // will not work without this step.
-            |> RegularVector.canonicalize universe
+            |> RegularVector.canonicalize
 
         (*  If the derivative of the regular vector represents the 'error' state,
             ignore it. Instead of representing the error state with an explicit state
@@ -150,7 +150,7 @@ let private transitions regularVector universe (transitionsFromCurrentDfaState, 
             compilationState
 
 //
-let rec private createDfa universe pending compilationState =
+let rec private createDfa pending compilationState =
     // If there are no more pending states, we're finished compiling.
     if Set.isEmpty pending then
         compilationState
@@ -165,18 +165,22 @@ let rec private createDfa universe pending compilationState =
         // If this regular vector represents the error state, there's nothing to do
         // for it -- just continue processing the worklist.
         if RegularVector.isEmpty regularVector then
-            createDfa universe pending compilationState
+            createDfa pending compilationState
         else
             /// The approximate set of derivative classes of the regular vector,
             /// representing transitions out of the DFA state representing it.
-            let derivativeClasses = RegularVector.derivativeClasses regularVector universe
+            let derivativeClasses = RegularVector.derivativeClasses regularVector
 
             // For each DFA state (regular vector) targeted by a transition (derivative class),
             // add the DFA state to the compilation state (if necessary), then add an edge
             // to the transition graph from this DFA state to the target DFA state.
             let transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState =
-                ((Map.empty, Set.empty, compilationState), derivativeClasses)
-                ||> Set.fold (transitions regularVector universe)
+                ((Map.empty, Set.empty, compilationState), derivativeClasses.Elements)
+                ||> CharSet.fold (fun state element ->
+                    // TEMP : The Elements field of DerivativeClasses needs to be redefined
+                    // because it is possible for a class to contain multiple values.
+                    let derivClass = CharSet.singleton element
+                    transitions regularVector state derivClass)
 
             // Add any newly-created, unvisited states to the
             // set of states which still need to be visited.
@@ -191,7 +195,7 @@ let rec private createDfa universe pending compilationState =
                             LexerDfaGraph.addEdges currentState target derivativeClass transitions); }
 
             // Continue processing recursively.
-            createDfa universe pending compilationState
+            createDfa pending compilationState
 
 
 /// A deterministic finite automaton (DFA) implementing a lexer rule.
@@ -220,49 +224,6 @@ type CompiledRule = {
 }
 
 //
-[<RequireQualifiedAccess>]
-module private EncodingCharSet =
-    open System
-
-    //
-    let ascii =
-        CharSet.ofRange Char.MinValue (char Byte.MaxValue)
-
-    //
-    let unicode =
-        CharSet.ofRange Char.MinValue Char.MaxValue
-
-
-//
-[<RequireQualifiedAccess>]
-module private Unicode =
-    /// Maps each UnicodeCategory to the set of characters in the category.
-    let categoryCharSet =
-        // OPTIMIZE : If this takes "too long" to compute on-the-fly, we could pre-compute
-        // the category sets and implement code which recreates the CharSets from the intervals
-        // in the CharSets (not the individual values, which would be much slower).
-        let table = System.Collections.Generic.Dictionary<_,_> (30)
-        for i = 0 to 65535 do
-            /// The Unicode category of this character.
-            let category = System.Char.GetUnicodeCategory (char i)
-
-            // Add this character to the set for this category.
-            table.[category] <-
-                match table.TryGetValue category with
-                | true, charSet ->
-                    CharSet.add (char i) charSet
-                | false, _ ->
-                    CharSet.singleton (char i)
-
-        // TODO : Assert that the table contains an entry for every UnicodeCategory value.
-        // Otherwise, exceptions will be thrown at run-time if we try to retrive non-existent entries.
-
-        // Convert the dictionary to a Map
-        (Map.empty, table)
-        ||> Seq.fold (fun categoryMap kvp ->
-            Map.add kvp.Key kvp.Value categoryMap)
-
-//
 let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : RuleClauseIndex[]) (options : CompilationOptions) : LexerRuleDfa =
     // Preconditions
     if Array.isEmpty rulePatterns then
@@ -270,18 +231,10 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
     elif Array.length rulePatterns <> Array.length patternIndices then
         invalidArg "patternIndices" "The array must have the same length as 'rulePatterns'."
 
-    // Determine which "universe" to use when compiling this
-    // pattern based on the compilation settings.
-    let universe =
-        if options.Unicode then
-            EncodingCharSet.unicode
-        else
-            EncodingCharSet.ascii
-
     // The initial DFA compilation state.
     let initialDfaStateId, compilationState =
         // Canonicalize the patterns before creating a state for them.
-        let rulePatterns = RegularVector.canonicalize universe rulePatterns
+        let rulePatterns = RegularVector.canonicalize rulePatterns
 
         CompilationState.empty
         |> CompilationState.createDfaState rulePatterns
@@ -289,7 +242,7 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
     // Compile the DFA.
     let compilationState =
         let initialPending = Set.singleton initialDfaStateId
-        createDfa universe initialPending compilationState
+        createDfa initialPending compilationState
 
     //
     let rulesAcceptedByDfaState =
@@ -332,26 +285,6 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
         match pattern with
         | Pattern.Epsilon ->
             Choice1Of2 Regex.Epsilon
-
-        | Pattern.CharacterSet charSet ->
-            // Make sure all of the characters in the set are ASCII characters unless the 'Unicode' option is set.
-            if options.Unicode || CharSet.forall (fun c -> int c <= 255) charSet then
-                Regex.CharacterSet charSet
-                |> Choice1Of2
-                |> cont
-            else
-                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
-                |> Choice2Of2
-                |> cont
-
-        | Pattern.Negate r ->
-            preprocessMacro r <| fun rResult ->
-                match rResult with
-                | (Choice2Of2 _ as err) -> err
-                | Choice1Of2 r ->
-                    Regex.Negate r
-                    |> Choice1Of2
-                |> cont
 
         | Pattern.Star r ->
             preprocessMacro r <| fun rResult ->
@@ -406,26 +339,6 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
 
         (*  Extended patterns are rewritten using the cases of Pattern
             which have corresponding cases in Regex. *)
-        | Pattern.Empty ->
-            Regex.CharacterSet CharSet.empty
-            |> Choice1Of2
-            |> cont
-        
-        | Pattern.Any ->
-            Choice1Of2 Regex.Any
-            |> cont
-
-        | Pattern.Character c ->
-            // Make sure the character is an ASCII character unless the 'Unicode' option is set.
-            if options.Unicode || int c <= 255 then
-                Regex.ofChar c
-                |> Choice1Of2
-                |> cont
-            else
-                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
-                |> Choice2Of2
-                |> cont
-
         | Pattern.OneOrMore r ->
             // Rewrite r+ as rr*
             let rewritten =
@@ -451,6 +364,15 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
 
             // Process the rewritten expression.
             //preprocessMacro rewritten cont
+
+        | Pattern.Negate r ->
+            preprocessMacro r <| fun rResult ->
+                match rResult with
+                | (Choice2Of2 _ as err) -> err
+                | Choice1Of2 r ->
+                    Regex.Negate r
+                    |> Choice1Of2
+                |> cont
 
         (* Macro patterns *)
         | Pattern.Macro nestedMacroId ->
@@ -480,11 +402,50 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                     Choice1Of2 nestedMacro
                     |> cont
 
-        | Pattern.UnicodeCategory unicodeCategory ->
-            if options.Unicode then
-                Regex.CharacterSet EncodingCharSet.unicode
+        (* Characters and character sets *)
+        | Pattern.Any ->
+            Choice1Of2 Regex.Any
+            |> cont
+
+        | Pattern.Empty ->
+            Regex.empty
+            |> Choice1Of2
+            |> cont
+
+        | Pattern.Character c ->
+            // Make sure the character is an ASCII character unless the 'Unicode' option is set.
+            if options.Unicode || int c <= 255 then
+                Regex.ofChar c
                 |> Choice1Of2
                 |> cont
+            else
+                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                |> Choice2Of2
+                |> cont
+
+        | Pattern.CharacterSet charSet ->
+            // Make sure all of the characters in the set are ASCII characters unless the 'Unicode' option is set.
+            if options.Unicode || CharSet.forall (fun c -> int c <= 255) charSet then
+                Regex.CharacterSet charSet
+                |> Choice1Of2
+                |> cont
+            else
+                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                |> Choice2Of2
+                |> cont
+
+        | Pattern.UnicodeCategory unicodeCategory ->
+            if options.Unicode then
+                match Map.tryFind unicodeCategory Unicode.categoryCharSet with
+                | None ->
+                    ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
+                    |> Choice2Of2
+                    |> cont
+                | Some categoryCharSet ->
+                    categoryCharSet
+                    |> Regex.CharacterSet
+                    |> Choice1Of2
+                    |> cont
             else
                 ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
                 |> Choice2Of2
@@ -681,7 +642,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
         (*  Extended patterns are rewritten using the cases of Pattern
             which have corresponding cases in Regex. *)
         | Pattern.Empty ->
-            Regex.CharacterSet CharSet.empty
+            Regex.empty
             |> Choice1Of2
             |> cont
         

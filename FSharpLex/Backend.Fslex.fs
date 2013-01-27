@@ -150,6 +150,9 @@ module private FsLex =
                 // OPTIMIZE : This lookup is *really* slow -- we should create an optimized
                 // lookup table on-the-fly while compiling the DFA.
                 let targetStateId =
+                    // TODO : Replace the loop below with this single line
+                    //Map.tryFind (char c) outTransitions
+
                     ruleDfaTransitions.AdjacencyMap
                     |> Map.tryPick (fun edgeKey edgeSet ->
                         if edgeKey.Source = ruleDfaStateId &&
@@ -167,15 +170,70 @@ module private FsLex =
             sprintf "%uus; " (Checked.uint16 targetStateId)
             |> indentingWriter.Write
 
+        //
+        let unicodeCategoryTransitions =
+            (Map.empty, Unicode.categoryCharSet)
+            ||> Map.fold (fun categoryTransitions category categoryChars ->
+                // If there is a transition out of this DFA state for each character
+                // in this Unicode category, and all of the transitions go to the same
+                // state, then we combine them into a single transition along an edge
+                // labeled with this Unicode category.
+                if categoryChars |> CharSet.forall (fun c -> Map.containsKey c outTransitions) then
+                    // OK, all the transitions are present -- do they all transition to the same target state?
+                    // OPTIMIZE : This could be rewritten for efficiency -- i.e., do this without
+                    // using a Set to hold the transition targets.
+                    let categoryTargets =
+                        (Set.empty, categoryChars)
+                        ||> CharSet.fold (fun categoryTargets c ->
+                            let target = Map.find c outTransitions
+                            Set.add target categoryTargets)
+
+                    if Set.count categoryTargets = 1 then
+                        // Add a transition into the category-transitions map.                        
+                        let categoryTarget = Set.minElement categoryTargets
+                        Map.add category categoryTarget categoryTransitions
+                    else
+                        // This category can't be combined because some characters
+                        // transition to different target states.
+                        categoryTransitions
+                else
+                    categoryTransitions)
+
+        //
+        let unicodeCharTransitions =
+            // Determine the Unicode characters for which we must emit
+            // individual entries in the transition vector.
+            outTransitions
+            // Filter out ASCII characters
+            |> Map.filter (fun c _ -> int c < 128)
+            // Filter out any characters whose transitions were consolidated
+            // into a Unicode category transition.
+            |> Map.filter (fun c _ ->
+                let category = System.Char.GetUnicodeCategory c
+                Map.containsKey category unicodeCategoryTransitions)
+
         // Emit entries for specific Unicode elements.
-        // TODO
-        raise <| System.NotImplementedException "unicodeTransitionVectorElements"
+        unicodeCharTransitions
+        |> Map.iter (fun c targetStateId ->
+            // Emit the character itself (as a uint16).
+            sprintf "%uus; " (uint16 c)
+            |> indentingWriter.Write
+
+            // Emit the target state ID.
+            sprintf "%uus; " (Checked.uint16 targetStateId)
+            |> indentingWriter.Write)
 
         // Emit entries for Unicode categories.
         for i = 0 to 29 do
-            raise <| System.NotImplementedException "unicodeTransitionVectorElements"
+            let targetStateId =
+                let targetStateId =
+                    Map.tryFind (EnumOfValue i) unicodeCategoryTransitions
+
+                // If this category does not have a transition, use the sentinel value as the target.
+                defaultArg targetStateId (Int32WithMeasure <| int sentinelValue)
+
             // Emit the state number of the transition target.
-            sprintf "%uus; " (Int32WithMeasure <| int sentinelValue)
+            sprintf "%uus; " (Checked.uint16 targetStateId)
             |> indentingWriter.Write
 
         // Emit the element representing the state to transition

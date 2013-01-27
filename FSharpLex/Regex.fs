@@ -85,9 +85,7 @@ type Regex with
         | Epsilon
         | Star _ ->
             cont true
-        | Empty
         | Any
-        | Character _
         | CharacterSet _ ->
             cont false
         | Negate regex ->
@@ -112,7 +110,7 @@ type Regex with
         Regex.IsNullableImpl regex id
 
     /// Implementation of the canonicalization function.
-    static member private CanonicalizeImpl (regex : Regex) (charUniverse : CharSet) (cont : Regex -> Regex) =
+    static member private CanonicalizeImpl (regex : Regex) (cont : Regex -> Regex) =
         match regex with
         | Epsilon
         | Any as regex ->
@@ -136,19 +134,19 @@ type Regex with
         | Negate Epsilon ->
             cont Regex.empty
         | Negate (Negate regex) ->
-            Regex.CanonicalizeImpl regex charUniverse cont
+            Regex.CanonicalizeImpl regex cont
         | Negate _ as notRegex ->
             // This regex is canonical
             cont notRegex
 
         | Star (Star _ as ``r*``) ->
-            Regex.CanonicalizeImpl ``r*`` charUniverse cont
+            Regex.CanonicalizeImpl ``r*`` cont
         | Star Epsilon
         | Star Empty ->
             cont Epsilon
         | Star (Or (Epsilon, r))
         | Star (Or (r, Epsilon)) ->
-            Regex.CanonicalizeImpl r charUniverse <| fun r' ->
+            Regex.CanonicalizeImpl r <| fun r' ->
                 Star r'
                 |> cont
         | Star _ as ``r*`` ->
@@ -160,14 +158,14 @@ type Regex with
             cont Regex.empty
         | Concat (Epsilon, r)
         | Concat (r, Epsilon) ->
-            Regex.CanonicalizeImpl r charUniverse cont
+            Regex.CanonicalizeImpl r cont
         | Concat (r, Concat (s, t)) ->
             // Rewrite the expression so it's left-associative.
             let regex = Concat (Concat (r, s), t)
-            Regex.CanonicalizeImpl regex charUniverse cont        
+            Regex.CanonicalizeImpl regex cont        
         | Concat (r, s) ->
-            Regex.CanonicalizeImpl r charUniverse <| fun r' ->
-            Regex.CanonicalizeImpl s charUniverse <| fun s' ->
+            Regex.CanonicalizeImpl r <| fun r' ->
+            Regex.CanonicalizeImpl s <| fun s' ->
                 // Try to simplify the expression, using the canonicalized components.
                 match r', s' with
                 | Empty, _
@@ -175,24 +173,24 @@ type Regex with
                     cont Regex.empty
                 | Epsilon, r'
                 | r', Epsilon ->
-                    Regex.CanonicalizeImpl r' charUniverse cont
+                    Regex.CanonicalizeImpl r' cont
                 | r', s' ->
                     Concat (r', s')
                     |> cont
 
         | Or (Empty, r)
         | Or (r, Empty) ->
-            Regex.CanonicalizeImpl r charUniverse cont
+            Regex.CanonicalizeImpl r cont
         | Or (Any, _)
         | Or (_, Any) ->
             cont Any
         | Or (r, Or (s, t)) ->
             // Rewrite the expression so it's left-associative.
             let regex = Or (Or (r, s), t)
-            Regex.CanonicalizeImpl regex charUniverse cont
+            Regex.CanonicalizeImpl regex cont
         | Or (r, s) ->
-            Regex.CanonicalizeImpl r charUniverse <| fun r' ->
-            Regex.CanonicalizeImpl s charUniverse <| fun s' ->
+            Regex.CanonicalizeImpl r <| fun r' ->
+            Regex.CanonicalizeImpl s <| fun s' ->
                 // Try to simplify the expression, using the canonicalized components.
                 match r', s' with
                 | r', s' when r' = s' ->
@@ -200,7 +198,7 @@ type Regex with
 
                 | Empty, r
                 | r, Empty ->
-                    Regex.CanonicalizeImpl r charUniverse cont
+                    Regex.CanonicalizeImpl r cont
 
                 | Any, _
                 | _, Any ->
@@ -229,14 +227,14 @@ type Regex with
             cont Regex.empty
         | And (Any, r)
         | And (r, Any) ->
-            Regex.CanonicalizeImpl r charUniverse cont
+            Regex.CanonicalizeImpl r cont
         | And (r, And (s, t)) ->
             // Rewrite the expression so it's left-associative.
             let regex = And (And (r, s), t)
-            Regex.CanonicalizeImpl regex charUniverse cont
+            Regex.CanonicalizeImpl regex cont
         | And (r, s) ->
-            Regex.CanonicalizeImpl r charUniverse <| fun r' ->
-            Regex.CanonicalizeImpl s charUniverse <| fun s' ->
+            Regex.CanonicalizeImpl r <| fun r' ->
+            Regex.CanonicalizeImpl s <| fun s' ->
                 // Try to simplify the expression, using the canonicalized components.
                 match r', s' with
                 | r', s' when r' = s' ->
@@ -248,23 +246,7 @@ type Regex with
 
                 | Any, r
                 | r, Any ->
-                    Regex.CanonicalizeImpl r charUniverse cont
-
-                | (Character c1 as charRegex), Character c2 ->
-                    if c1 = c2 then
-                        charRegex
-                    else
-                        // TODO : Emit a warning to TraceListener?
-                        // The 'And' case represents a conjunction (intersection) of two Regexes;
-                        // since the characters are different, the intersection must be empty.
-                        Regex.empty
-                    |> cont
-
-                | Character c, CharacterSet charSet
-                | CharacterSet charSet, Character c ->
-                    CharSet.add c charSet
-                    |> CharacterSet
-                    |> cont
+                    Regex.CanonicalizeImpl r cont
 
                 | CharacterSet charSet1, CharacterSet charSet2 ->
                     // 'And' is the conjunction (intersection) of two Regexes.
@@ -285,31 +267,14 @@ type Regex with
                     |> cont
 
     /// Creates a new Regex in canonical form from the given Regex.
-    static member Canonicalize (regex : Regex, universe) : Regex =
-        // Preconditions
-        if CharSet.isEmpty universe then
-            invalidArg "universe" "The character universe (set of all characters used in the lexer) is empty."
-        
-        Regex.CanonicalizeImpl regex universe id
+    static member Canonicalize (regex : Regex) : Regex =
+        Regex.CanonicalizeImpl regex id
 
     //
     static member private DerivativeImpl wrtSymbol regex cont =
         match regex with
-        | Empty
         | Epsilon ->
             cont Regex.empty
-        | Any ->
-            cont Epsilon
-        | Character c ->
-            if c = wrtSymbol then Epsilon else Regex.empty
-            |> cont
-        | CharacterSet charSet ->
-            if CharSet.contains wrtSymbol charSet then Epsilon else Regex.empty
-            |> cont
-        | Negate r ->
-            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-                Negate r'
-                |> cont
         | Star r as ``r*`` ->
             Regex.DerivativeImpl wrtSymbol r <| fun r' ->
                 Concat (r', ``r*``)
@@ -332,69 +297,88 @@ type Regex with
                 And (r', s')
                 |> cont
 
+        | Any ->
+            cont Epsilon
+        | Negate r ->
+            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
+                Negate r'
+                |> cont
+        | CharacterSet charSet ->
+            if CharSet.contains wrtSymbol charSet
+            then Epsilon
+            else Regex.empty
+            |> cont
+
     /// Computes the derivative of a Regex with respect to a specified symbol.
     static member Derivative symbol regex =
         Regex.DerivativeImpl symbol regex id
 
+
+//
+type DerivativeClasses = {
+    /// When set, indicates that this set of
+    /// derivative classes includes the empty set.
+    HasEmptySet : bool;
+    //
+    Elements : CharSet;
+    //
+    Negated : CharSet;
+} with
+    //
+    static member Universe =
+        {   HasEmptySet = false;
+            Elements = CharSet.empty;
+            Negated = CharSet.empty; }
+
     /// Computes a conservative approximation of the intersection of two sets of
     /// derivative classes. This is needed when computing the set of derivative
     /// classes for a compound regular expression ('And', 'Or', and 'Concat').
-    static member IntersectionOfDerivativeClasses (``C(r)``, ``C(s)``) =
-        (Set.empty, ``C(r)``)
-        ||> Set.fold (fun intersections el1 ->
-            (intersections, ``C(s)``)
-            ||> Set.fold (fun intersections el2 ->
-                // The intersection of the two elements (character sets)
-                let elementIntersection = CharSet.intersect el1 el2
+    static member Intersect (``C(r)``, ``C(s)``) =
+        {   HasEmptySet =
+                ``C(r)``.HasEmptySet || ``C(s)``.HasEmptySet;
+            Elements =
+                CharSet.union ``C(r)``.Elements ``C(s)``.Elements;
+            Negated =
+                CharSet.union ``C(r)``.Negated ``C(s)``.Negated; }
 
-                // Add the intersection to the set of intersections
-                // (if it's already in the set, no error is thrown).
-                Set.add elementIntersection intersections))
-
+// Add more members to Regex
+type Regex with
     //
-    static member private DerivativeClassesImpl regex universe cont =
+    static member private DerivativeClassesImpl regex cont =
         match regex with
-        | Epsilon
-        | Empty ->
-            Set.singleton universe
+        | Epsilon ->
+            DerivativeClasses.Universe
             |> cont
         | Any ->
-            Set.singleton universe
-            |> Set.add CharSet.empty
-            |> cont
-        | Character c ->
-            Set.singleton (CharSet.singleton c)
-            |> Set.add (CharSet.remove c universe)
+            { DerivativeClasses.Universe
+                with HasEmptySet = true; }
             |> cont
         | CharacterSet charSet ->
-            Set.singleton charSet
-            |> Set.add (CharSet.difference universe charSet)
+            { HasEmptySet = false;
+              Elements = charSet;
+              Negated = charSet; }
             |> cont
         | Negate r
         | Star r ->
-            Regex.DerivativeClassesImpl r universe cont
+            Regex.DerivativeClassesImpl r cont
         | Concat (r, s) ->
             if not <| Regex.IsNullable r then
-                Regex.DerivativeClassesImpl r universe cont
+                Regex.DerivativeClassesImpl r cont
             else
-                Regex.DerivativeClassesImpl r universe <| fun ``C(r)`` ->
-                Regex.DerivativeClassesImpl s universe <| fun ``C(s)`` ->
-                    Regex.IntersectionOfDerivativeClasses (``C(r)``, ``C(s)``)
+                Regex.DerivativeClassesImpl r <| fun ``C(r)`` ->
+                Regex.DerivativeClassesImpl s <| fun ``C(s)`` ->
+                    DerivativeClasses.Intersect (``C(r)``, ``C(s)``)
                     |> cont
         | Or (r, s)
         | And (r, s) ->
-            Regex.DerivativeClassesImpl r universe <| fun ``C(r)`` ->
-            Regex.DerivativeClassesImpl s universe <| fun ``C(s)`` ->
-                Regex.IntersectionOfDerivativeClasses (``C(r)``, ``C(s)``)
+            Regex.DerivativeClassesImpl r <| fun ``C(r)`` ->
+            Regex.DerivativeClassesImpl s <| fun ``C(s)`` ->
+                DerivativeClasses.Intersect (``C(r)``, ``C(s)``)
                 |> cont
 
     /// Computes an approximate set of derivative classes for the specified Regex.
-    static member DerivativeClasses (regex : Regex, universe) =
-        // Preconditions
-        if CharSet.isEmpty universe then
-            invalidArg "universe" "The character universe (set of all characters used in the lexer) is empty."
-        
-        Regex.DerivativeClassesImpl regex universe id
+    static member DerivativeClasses (regex : Regex) =
+        Regex.DerivativeClassesImpl regex id
 
 /// An array of regular expressions.
 // Definition 4.3.
@@ -443,29 +427,25 @@ module RegularVector =
             | _ -> false)
 
     /// Compute the approximate set of derivative classes of a regular vector.
-    let derivativeClasses (regVec : RegularVector) universe =
+    let derivativeClasses (regVec : RegularVector) =
         // Preconditions
         if Array.isEmpty regVec then
             invalidArg "regVec" "The regular vector does not contain any regular expressions."
-        elif CharSet.isEmpty universe then
-            invalidArg "universe" "The character universe (set of all characters used in the lexer) is empty."
 
         regVec
         // Compute the approximate set of derivative classes
         // for each regular expression in the vector.
-        |> Array.map (fun r ->
-            Regex.DerivativeClasses (r, universe))
-        // By Definition 4.3, the approximate set of derivative classes of a regular vector
-        // is the intersection of the approximate sets of derivative classes of it's elements.
+        |> Array.map Regex.DerivativeClasses
+        // By Definition 4.3, the approximate set of derivative classes
+        // of a regular vector is the intersection of the approximate
+        // sets of derivative classes of it's elements.
         |> Array.reduce (
-            FuncConvert.FuncFromTupled Regex.IntersectionOfDerivativeClasses)
+            FuncConvert.FuncFromTupled DerivativeClasses.Intersect)
 
     /// Creates a new regular vector in canonical form by canonicalizing
     /// each regular expression in the given regular vector.
-    let inline canonicalize universe (regVec : RegularVector) : RegularVector =
-        regVec
-        |> Array.map (fun regex ->
-            Regex.Canonicalize (regex, universe))
+    let inline canonicalize (regVec : RegularVector) : RegularVector =
+        Array.map Regex.Canonicalize regVec
 
 
 
