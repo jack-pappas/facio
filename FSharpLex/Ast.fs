@@ -239,6 +239,83 @@ type Pattern =
             // Return the constructed pattern.
             pattern
 
+    /// Returns a new pattern which repeats a pattern a specified number of times.
+    [<CompiledName("RepeatExactly")>]
+    static member repeatExact count pattern =
+        // OPTIMIZE : Simplify (and optimize) the code below by rewriting
+        // it to use a mutable variable and a 'for' loop.
+        let rec repeatExact count pattern cont =
+            match count with
+            | 0u ->
+                Epsilon // NOTE : Don't need to call 'cont' here, just return directly.
+            | 1u ->
+                cont pattern
+            | count ->
+                repeatExact (count - 1u) pattern <| fun repeatedPattern ->
+                    // Since we're concatenating the pattern with itself, we can order
+                    // things how we like here. The repeated pattern goes on the *left*
+                    // here to enforce left-associativity.
+                    Concat (repeatedPattern, pattern)
+                    |> cont
+
+        repeatExact count pattern id
+
+    /// Returns a new pattern which repeats a pattern at least the specified number of times.
+    [<CompiledName("RepeatAtLeast")>]
+    static member repeatAtLeast count pattern =
+        // If the pattern can be repeated zero (0) times,
+        // that's the Star pattern (by definition).
+        if count = 0u then
+            Star pattern
+        else
+            /// The pattern which repeats the input pattern
+            /// _exactly_ 'count' times.
+            let repeatedPattern = Pattern.repeatExact count pattern
+
+            // Follow the repeated pattern with a Star pattern which'll handle
+            // any matches beyond the specified number of times.
+            Concat (repeatedPattern, Star pattern)
+
+    /// Returns a new pattern which repeats a pattern at most the specified number of times.
+    [<CompiledName("RepeatAtMost")>]
+    static member repeatAtMost count pattern =
+        // OPTIMIZE : Simplify (and optimize) the code below by rewriting
+        // it to use a mutable variable and a 'for' loop.
+        let rec repeatAtMost count pattern cont =
+            match count with
+            | 0u ->
+                Epsilon // NOTE : Don't need to call 'cont' here, just return directly.
+            | 1u ->
+                Optional pattern
+                |> cont
+            | count ->
+                repeatAtMost (count - 1u) pattern <| fun repeatedPattern ->
+                    Concat (Optional pattern, repeatedPattern)
+                    |> cont
+
+        repeatAtMost count pattern id
+
+    /// Returns a new pattern which repeats a pattern a specified number of times.
+    [<CompiledName("Repeat")>]
+    static member repeat minReps maxReps pattern =
+        // Preconditions
+        if minReps > maxReps then
+            invalidArg "maxReps" "The maximum number of repetitions is less than the minimum number of repetitions."
+
+        /// The pattern which repeats exactly 'minReps' times.
+        let minRepeatedPattern = Pattern.repeatExact minReps pattern
+
+        if minReps = maxReps then
+            minRepeatedPattern
+        else
+            // Combine the pattern which matches 'pattern' the minimum number
+            // of times with the pattern which adds additional, optional matches
+            // up to the specified number of times.
+            Concat (
+                minRepeatedPattern,
+                Pattern.repeatAtMost (maxReps - minReps) pattern)
+
+
 /// <summary>A pattern defined in some clause (case) of a lexer rule.</summary>
 /// <remarks>
 /// This type can be thought of as extending <see cref="Pattern" /> with additional

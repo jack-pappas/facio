@@ -356,14 +356,41 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
             preprocessMacro rewritten cont
 
         | Pattern.Repetition (r, atLeast, atMost) ->
-            // If not specified, the lower bound defaults to zero (0).
-            let atLeast = defaultArg atLeast LanguagePrimitives.GenericZero
+            match atLeast, atMost with
+            | None, None ->
+                ["Invalid number of repetitions. Either the minimum or maximum (or both) number of repetitions must be specified."]
+                |> Choice2Of2
+                |> cont
 
-            // TODO : Rewrite this pattern using simpler cases.
-            raise <| System.NotImplementedException "preprocessMacro"
+            | None, Some atMost ->
+                // TODO : If 'atMost' = 0, emit a warning (not an error) message
+                // to let the user know the pattern will _always_ be matched.
 
-            // Process the rewritten expression.
-            //preprocessMacro rewritten cont
+                /// Repeats the pattern at most the specified number of times.
+                let rewritten = Pattern.repeatAtMost atMost r
+
+                // Process the rewritten expression.
+                preprocessMacro rewritten cont
+
+            | Some atLeast, None ->
+                /// Repeats the pattern at least the specified number of times.
+                let rewritten = Pattern.repeatAtLeast atLeast r
+
+                // Process the rewritten expression.
+                preprocessMacro rewritten cont
+
+            | Some atLeast, Some atMost
+                when atLeast > atMost ->
+                ["Invalid number of repetitions. The lower value of the range is greater than the upper value of the range."]
+                |> Choice2Of2
+                |> cont
+
+            | Some atLeast, Some atMost ->
+                /// Repeats the pattern at least 'atLeast' times and at most 'atMost' times.
+                let rewritten = Pattern.repeat atLeast atMost r
+
+                // Process the rewritten expression.
+                preprocessMacro rewritten cont
 
         | Pattern.Negate r ->
             preprocessMacro r <| fun rResult ->
@@ -535,7 +562,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
 
         | Pattern.CharacterSet charSet ->
             // Make sure all of the characters in the set are ASCII characters unless the 'Unicode' option is set.
-            if options.Unicode || CharSet.forall (fun c -> int c <= 255) charSet then
+            if options.Unicode || CharSet.forall (fun c -> int c <= int System.Byte.MaxValue) charSet then
                 Regex.CharacterSet charSet
                 |> Choice1Of2
                 |> cont
@@ -672,20 +699,47 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
         | Pattern.Optional r ->
             // Rewrite r? as (|r)
             let rewritten =
-                Pattern.Concat (Pattern.Epsilon, r)
+                Pattern.Or (Pattern.Epsilon, r)
 
             // Process the rewritten expression.
             validateAndSimplify rewritten cont
 
         | Pattern.Repetition (r, atLeast, atMost) ->
-            // If not specified, the lower bound defaults to zero (0).
-            let atLeast = defaultArg atLeast LanguagePrimitives.GenericZero
+            match atLeast, atMost with
+            | None, None ->
+                ["Invalid number of repetitions. Either the minimum or maximum (or both) number of repetitions must be specified."]
+                |> Choice2Of2
+                |> cont
 
-            // TODO : Rewrite this pattern using simpler cases.
-            raise <| System.NotImplementedException "validateAndSimplifyPattern"
+            | None, Some atMost ->
+                // TODO : If 'atMost' = 0, emit a warning (not an error) message
+                // to let the user know the pattern will _always_ be matched.
 
-            // Process the rewritten expression.
-            //validateAndSimplify rewritten cont
+                /// Repeats the pattern at most the specified number of times.
+                let rewritten = Pattern.repeatAtMost atMost r
+
+                // Process the rewritten expression.
+                validateAndSimplify rewritten cont
+
+            | Some atLeast, None ->
+                /// Repeats the pattern at least the specified number of times.
+                let rewritten = Pattern.repeatAtLeast atLeast r
+
+                // Process the rewritten expression.
+                validateAndSimplify rewritten cont
+
+            | Some atLeast, Some atMost
+                when atLeast > atMost ->
+                ["Invalid number of repetitions. The lower value of the range is greater than the upper value of the range."]
+                |> Choice2Of2
+                |> cont
+
+            | Some atLeast, Some atMost ->
+                /// Repeats the pattern at least 'atLeast' times and at most 'atMost' times.
+                let rewritten = Pattern.repeat atLeast atMost r
+
+                // Process the rewritten expression.
+                validateAndSimplify rewritten cont
 
     // Call the function which traverses the pattern to validate/preprocess it.
     validateAndSimplify pattern <| function
