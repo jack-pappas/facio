@@ -430,10 +430,6 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                     |> cont
 
         (* Characters and character sets *)
-        | Pattern.Any ->
-            Choice1Of2 Regex.Any
-            |> cont
-
         | Pattern.Empty ->
             Regex.empty
             |> Choice1Of2
@@ -477,6 +473,13 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                 ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
                 |> Choice2Of2
                 |> cont
+
+        (* Wildcard pattern *)
+        | Pattern.Any ->
+            // Macros are not allowed to use the wildcard pattern.
+            ["The wildcard pattern cannot be used within macro definitions."]
+            |> Choice2Of2
+            |> cont
 
     /// Contains an error if a macro has already been defined with this name; otherwise, None.
     let duplicateNameError =
@@ -797,7 +800,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
     /// The index of the rule clause whose action will be executed
     /// if the lexer attempts to match this rule once the end-of-file
     /// has been reached.
-    let eofAcceptingClause =
+    let eofAcceptingClauseIndex =
         if Set.isEmpty eofClauseIndices then
             None
         else
@@ -814,7 +817,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             Some acceptingClauseIndex
 
     /// The index of the wildcard rule clause, if this rule contains one.
-    let wildcardClauseIndex =
+    let wildcardAcceptingClauseIndex =
         let wildcardClauseIndices =
             patterns
             |> Array.choose (fun (idx, pat) ->
@@ -882,41 +885,80 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         // create an additional DFA state to serve as the EOF-accepting state
         // and create a transition edge labeled with the EOF symbol to it.
         let compiledPatternDfa =
-            match eofAcceptingClause with
-            | None -> compiledPatternDfa
-            | Some eofAcceptingClause ->
-                let dfaAcceptingState, transitions =
+            match eofAcceptingClauseIndex with
+            | None ->
+                compiledPatternDfa
+            | Some eofAcceptingClauseIndex ->
+                let eofAcceptingState, transitions =
                     LexerDfaGraph.createVertex compiledPatternDfa.Transitions
                 let transitions =
-                    LexerDfaGraph.addEofEdge compiledPatternDfa.InitialState dfaAcceptingState transitions
+                    LexerDfaGraph.addEofEdge compiledPatternDfa.InitialState eofAcceptingState transitions
                 { compiledPatternDfa with
                     Transitions = transitions;
                     RuleAcceptedByState =
                         compiledPatternDfa.RuleAcceptedByState
-                        |> Map.add dfaAcceptingState eofAcceptingClause; }
+                        |> Map.add eofAcceptingState eofAcceptingClauseIndex; }
 
         // If this rule has a clause with the wildcard pattern, create an additional
         // DFA state which accepts any single character which won't be matched by the
         // earlier patterns in the rule.
         let compiledPatternDfa =
-            match wildcardClauseIndex with
+            match wildcardAcceptingClauseIndex with
             | None ->
                 compiledPatternDfa
-            | Some wildcardClauseIndex ->
+            | Some wildcardAcceptingClauseIndex ->
                 // TEMP : The way the transition characters are computed here is specific
                 // to fslex -- once we implement our own interpreter, we'll have to come
                 // up with a backend-specific way to handle this. Perhaps we can just store
                 // the wildcard-clause index in the returned DFA, and let the plugins themselves
                 // compute the transition characters.
 
-                //
-                
+                /// The alphabet for this rule.
+                let ruleAlphabet =
+                    // The alphabet for this rule is the edge-label-set of the transition graph.
+                    (CharSet.empty, compiledPatternDfa.Transitions.AdjacencyMap)
+                    ||> Map.fold (fun ruleAlphabet _ edgeChars ->
+                        CharSet.union ruleAlphabet edgeChars)
 
+                /// The set of characters labelling the out-edges of the initial DFA state.
+                let initialEdgeLabels =
+                    (CharSet.empty, compiledPatternDfa.Transitions.AdjacencyMap)
+                    ||> Map.fold (fun initialEdgeLabels edgeKey edgeChars ->
+                        // We only care about out-edges from the initial DFA state.
+                        if edgeKey.Source = compiledPatternDfa.InitialState then
+                            CharSet.union initialEdgeLabels edgeChars
+                        else
+                            initialEdgeLabels)
 
+                /// The characters matched by this rule's wildcard pattern.
+                let wildcardChars =
+                    // Augment the rule alphabet with the low ASCII characters,
+                    // because that's how fslex does it and we need to be compatible (for now).
+                    let ruleAlphabet =
+                        CharSet.ofRange (char 0) (char 127)
+                        |> CharSet.union ruleAlphabet
 
+                    CharSet.difference ruleAlphabet initialEdgeLabels
 
+                // If the set of characters matched by the wildcard pattern is not empty,
+                // create a new DFA state which accepts the wildcard pattern, then add
+                // transition edges to it from the initial state.
+                if CharSet.isEmpty wildcardChars then
+                    // TODO : Emit a warning to let the user know this pattern will never be matched.
+                    //
 
-                raise <| System.NotImplementedException "wildcardClauseIndex"
+                    compiledPatternDfa
+                else
+                    let wildcardAcceptingState, transitions =
+                        LexerDfaGraph.createVertex compiledPatternDfa.Transitions
+                    let transitions =
+                        LexerDfaGraph.addEdges compiledPatternDfa.InitialState wildcardAcceptingState wildcardChars transitions
+
+                    { compiledPatternDfa with
+                        Transitions = transitions;
+                        RuleAcceptedByState =
+                            compiledPatternDfa.RuleAcceptedByState
+                            |> Map.add wildcardAcceptingState wildcardAcceptingClauseIndex; }
 
         // TODO : Emit warnings about any overlapping patterns.
         // E.g., "This pattern will never be matched."
