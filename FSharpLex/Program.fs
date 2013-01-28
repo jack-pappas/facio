@@ -109,15 +109,15 @@ module Program =
                     UnicodeFileAsLexbuf (inputFile, None)
                 use stream = stream
                 use reader = reader
-                let tokens =
-                    let tokens = ResizeArray ()
-                    try
-                        while true do
-                            tokens.Add <| Lexer.token lexbuf
-                    with ex ->
-                        printfn "Error: %s" ex.Message
-                        ()
-                    tokens.ToArray ()
+//                let tokens =
+//                    let tokens = ResizeArray ()
+//                    try
+//                        while true do
+//                            tokens.Add <| Lexer.token lexbuf
+//                    with ex ->
+//                        printfn "Error: %s" ex.Message
+//                        ()
+//                    tokens.ToArray ()
                 let lexerSpec = Parser.spec Lexer.token lexbuf
 
                 // TEMP : Some of the lists need to be reversed so they're in the order we expect.
@@ -166,14 +166,14 @@ module Program =
                     then call the 'invoke' function with it. *)
         
         // TEST : Just use an hard-coded CompilationOptions record for now.
-        invoke (@"C:\Users\Jack\Desktop\fsyacc-test\fslexlex.fsl", {
+        invoke (@"C:\Users\Jack\Desktop\fslexlex.fsl", {
             Unicode = true;
             // TEMP
             FslexBackendOptions = Some {
-                OutputPath = @"C:\Users\Jack\Desktop\fsyacc-test\fslex_lexer.fs";
+                OutputPath = @"C:\Users\Jack\Desktop\fslex_lexer.fs";
                 };
             GraphBackendOptions = Some {
-                OutputPath = @"C:\Users\Jack\Desktop\fsyacc-test\CompiledLexerDfa.dgml";
+                OutputPath = @"C:\Users\Jack\Desktop\CompiledLexerDfa.dgml";
                 Format = GraphFileFormat.Dgml; };
             })
 

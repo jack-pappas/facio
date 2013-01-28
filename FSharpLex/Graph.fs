@@ -43,7 +43,9 @@ type TransitionEdgeKey =
     "Vertices = {VertexCount}, \
      EdgeSets = {EdgeSetCount}, \
      Edges = {EdgeCount}")>]
-type LexerDfaGraph private (vertexCount : int, adjacencyMap : Map<TransitionEdgeKey, CharSet>, eofTransition : TransitionEdgeKey option) =
+type LexerDfaGraph private (vertexCount : int,
+                            adjacencyMap : Map<TransitionEdgeKey, CharSet>,
+                            eofTransition : TransitionEdgeKey option) =
     //
     static let empty =
         LexerDfaGraph (GenericZero, Map.empty, None)
