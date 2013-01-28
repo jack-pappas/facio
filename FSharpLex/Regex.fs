@@ -41,10 +41,13 @@ type Regex =
 
     /// Negation.
     | Negate of Regex
-    /// Any character.
-    | Any
     /// A set of characters.
     | CharacterSet of CharSet
+
+    (* TODO :   Remove this -- Pattern.Any should compile
+                into standard regexes for simplicity. *)
+    /// Any character.
+    | Any
 
     //
     [<CompiledName("Empty")>]

@@ -802,12 +802,41 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             None
         else
             // Only the earliest use of the "eof" pattern will be matched.
-            let acceptingClause = Set.minElement eofClauseIndices
-            let neverMatchedClauseIndices = Set.remove acceptingClause eofClauseIndices
+            let acceptingClauseIndex = Set.minElement eofClauseIndices
+            let neverMatchedClauseIndices = Set.remove acceptingClauseIndex eofClauseIndices
 
             // TODO : Implement code to emit warning messages when 'neverMatchedClauseIndices'
             // is non-empty. (E.g., "This pattern will never be matched.")
-            Some acceptingClause
+//            if not <| Set.isEmpty neverMatchedClauseIndices then
+//                // TODO
+//                ()
+
+            Some acceptingClauseIndex
+
+    /// The index of the wildcard rule clause, if this rule contains one.
+    let wildcardClauseIndex =
+        let wildcardClauseIndices =
+            patterns
+            |> Array.choose (fun (idx, pat) ->
+                match pat with
+                | Any -> Some idx
+                | _ -> None)
+            |> Set.ofArray
+
+        if Set.isEmpty wildcardClauseIndices then
+            None
+        else
+            // Only the earliest use of the wildcard pattern will be matched.
+            let acceptingClauseIndex = Set.minElement wildcardClauseIndices
+            let neverMatchedClauseIndices = Set.remove acceptingClauseIndex wildcardClauseIndices
+
+            // TODO : Implement code to emit warning messages when 'neverMatchedClauseIndices'
+            // is non-empty. (E.g., "This pattern will never be matched.")
+//            if not <| Set.isEmpty neverMatchedClauseIndices then
+//                // TODO
+//                ()
+
+            Some acceptingClauseIndex
 
     // Validate and simplify the patterns of the rule clauses.
     let simplifiedRuleClausePatterns =
@@ -865,6 +894,29 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
                     RuleAcceptedByState =
                         compiledPatternDfa.RuleAcceptedByState
                         |> Map.add dfaAcceptingState eofAcceptingClause; }
+
+        // If this rule has a clause with the wildcard pattern, create an additional
+        // DFA state which accepts any single character which won't be matched by the
+        // earlier patterns in the rule.
+        let compiledPatternDfa =
+            match wildcardClauseIndex with
+            | None ->
+                compiledPatternDfa
+            | Some wildcardClauseIndex ->
+                // TEMP : The way the transition characters are computed here is specific
+                // to fslex -- once we implement our own interpreter, we'll have to come
+                // up with a backend-specific way to handle this. Perhaps we can just store
+                // the wildcard-clause index in the returned DFA, and let the plugins themselves
+                // compute the transition characters.
+
+                //
+                
+
+
+
+
+
+                raise <| System.NotImplementedException "wildcardClauseIndex"
 
         // TODO : Emit warnings about any overlapping patterns.
         // E.g., "This pattern will never be matched."
