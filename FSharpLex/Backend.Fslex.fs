@@ -147,20 +147,8 @@ module private FsLex =
         for c = 0 to 127 do
             let targetStateId =
                 // Determine the id of the state we transition to when this character is the input.
-                // OPTIMIZE : This lookup is *really* slow -- we should create an optimized
-                // lookup table on-the-fly while compiling the DFA.
                 let targetStateId =
-                    // TODO : Replace the loop below with this single line
-                    //Map.tryFind (char c) outTransitions
-
-                    ruleDfaTransitions.AdjacencyMap
-                    |> Map.tryPick (fun edgeKey edgeSet ->
-                        if edgeKey.Source = ruleDfaStateId &&
-                            CharSet.contains (char c) edgeSet then
-                            // Add the starting state of this rule to the relative DFA state id
-                            // to get the DFA state id for the combined DFA table.
-                            Some (edgeKey.Target + baseDfaStateId)
-                        else None)
+                    Map.tryFind (char c) outTransitions
 
                 // If no transition edge was found for this character, return the
                 // sentinel value to indicate there's no transition.
