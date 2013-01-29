@@ -110,15 +110,6 @@ module Program =
                     UnicodeFileAsLexbuf (inputFile, None)
                 use stream = stream
                 use reader = reader
-//                let tokens =
-//                    let tokens = ResizeArray ()
-//                    try
-//                        while true do
-//                            tokens.Add <| Lexer.token lexbuf
-//                    with ex ->
-//                        printfn "Error: %s" ex.Message
-//                        ()
-//                    tokens.ToArray ()
                 let lexerSpec = Parser.spec Lexer.token lexbuf
 
                 // TEMP : Some of the lists need to be reversed so they're in the order we expect.
@@ -129,6 +120,7 @@ module Program =
                         |> List.map (fun (position, rule) ->
                             position,
                             { rule with
+                                Parameters = List.rev rule.Parameters;
                                 Clauses = List.rev rule.Clauses; })
                         |> List.rev; }
 
