@@ -754,6 +754,78 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
             Choice1Of2 processedPattern
 
 //
+let private getAlphabet regex =
+    let rec getAlphabet regex cont =
+        match regex with
+        | Regex.Any
+        | Regex.Epsilon ->
+            cont CharSet.empty
+
+        | Regex.CharacterSet charSet ->
+            cont charSet
+
+        | Regex.Negate r
+        | Regex.Star r ->
+            getAlphabet r cont
+
+        | Regex.And (r, s)
+        | Regex.Concat (r, s)
+        | Regex.Or (r, s) ->
+            getAlphabet r <| fun rAlphabet ->
+            getAlphabet s <| fun sAlphabet ->
+                CharSet.union rAlphabet sAlphabet
+                |> cont
+
+    getAlphabet regex id
+
+// This is necessary for fslex-compatibility.
+// In the future, it will be moved into the fslex-compatibility backend.
+let private rewriteNegatedCharSets universe regex =
+    let rec rewriteNegatedCharSets regex cont =
+        match regex with
+        | Regex.Negate (Regex.CharacterSet charSet) ->
+            charSet
+            |> CharSet.difference universe
+            |> Regex.CharacterSet
+            |> cont
+
+        | Regex.Any
+        | Regex.Epsilon
+        | Regex.CharacterSet _
+            as regex ->
+            cont regex
+
+        | Regex.Negate r ->
+            rewriteNegatedCharSets r <| fun r ->
+                Regex.Negate r
+                |> cont
+
+        | Regex.Star r ->
+            rewriteNegatedCharSets r <| fun r ->
+                Regex.Star r
+                |> cont
+
+        | Regex.And (r, s) ->
+            rewriteNegatedCharSets r <| fun r ->
+            rewriteNegatedCharSets s <| fun s ->
+                Regex.And (r, s)
+                |> cont
+
+        | Regex.Concat (r, s) ->
+            rewriteNegatedCharSets r <| fun r ->
+            rewriteNegatedCharSets s <| fun s ->
+                Regex.Concat (r, s)
+                |> cont
+
+        | Regex.Or (r, s) ->
+            rewriteNegatedCharSets r <| fun r ->
+            rewriteNegatedCharSets s <| fun s ->
+                Regex.Or (r, s)
+                |> cont
+
+    rewriteNegatedCharSets regex id
+
+//
 let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, badMacros) =
     (* TODO :   Simplify this function by folding over rule.Clauses; this way,
                 we don't create so many intermediate data structures and we avoid
@@ -879,6 +951,21 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             let regexOriginalClauseIndices, ruleClauseRegexes =
                 Array.unzip ruleClauseRegexes
             
+            (* TEMP :   For compatibility with fslex, we need to determine the alphabet used
+                        by the rule, then rewrite any negated character sets so the transition
+                        table is generated in a way that fslex can handle. *)
+            let ruleAlphabet =
+                ruleClauseRegexes
+                |> Array.map getAlphabet
+                |> Array.reduce CharSet.union
+                // Add the low ASCII characters too, like fslex does.
+                |> CharSet.union (CharSet.ofRange (char 0) (char 127))
+
+            // Rewrite the regexes so they don't contain negated character sets.
+            let ruleClauseRegexes =
+                ruleClauseRegexes
+                |> Array.map (rewriteNegatedCharSets ruleAlphabet)
+
             rulePatternsToDfa ruleClauseRegexes regexOriginalClauseIndices options
 
         // If this rule has a pattern accepting the end-of-file marker,
