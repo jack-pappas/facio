@@ -160,7 +160,7 @@ module Program =
             0   // Exit code: Success
 
     //
-    let [<Literal>] private defaultInterpreterNamespace = "Microsoft.FSharp.Text.Lexing"
+    let [<Literal>] private defaultLexerInterpreterNamespace = "Microsoft.FSharp.Text.Lexing"
 
     /// The entry point for the application.
     [<EntryPoint; CompiledName("Main")>]
@@ -170,7 +170,7 @@ module Program =
         let inputCodePage = ref None
         let outputFile = ref None        
         let unicode = ref false
-        let lexlib = ref defaultInterpreterNamespace
+        let lexlib = ref defaultLexerInterpreterNamespace
 
         /// Command-line options.
         let usage =
@@ -180,7 +180,7 @@ module Program =
                     "Assume input lexer specification file is encoded with the given codepage.");
                 ArgInfo ("--lexlib", ArgType.String (fun s -> lexlib := s),
                     sprintf "Specify the namespace for the implementation of the lexer table interpreter. \
-                    The default is '%s'." defaultInterpreterNamespace);
+                    The default is '%s'." defaultLexerInterpreterNamespace);
                 ArgInfo ("--unicode", ArgType.Set unicode,
                     "Produce a lexer which supports 16-bit Unicode characters."); ]
 
@@ -193,7 +193,7 @@ module Program =
                 // If the input filename has already been set, print a message
                 // to the screen, then exit with an error code.
                 printfn "Error: Only one lexer specification file may be used as input."
-                exit 1            
+                exit 1
 
         // Parse the command-line arguments.
         ArgParser.Parse (usage, plainArgParser, "fsharplex <filename>")
