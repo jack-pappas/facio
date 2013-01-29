@@ -82,6 +82,11 @@
       <Project>{4841364d-cb0b-45cc-ac84-f8e3b86a1c11}</Project>
       <Private>True</Private>
     </ProjectReference>
+    <ProjectReference Include="..\CliArgs\CliArgs.fsproj">
+      <Name>CliArgs</Name>
+      <Project>{a44bb5dc-c851-4b5d-8242-3fbe035df939}</Project>
+      <Private>True</Private>
+    </ProjectReference>
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
 	     Other similar extension points exist, see Microsoft.Common.targets.
