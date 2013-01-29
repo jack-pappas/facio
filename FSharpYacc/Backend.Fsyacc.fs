@@ -8,6 +8,7 @@ See LICENSE.TXT for licensing details.
 
 namespace FSharpYacc.Plugin
 
+open System.CodeDom.Compiler
 open System.ComponentModel.Composition
 open System.IO
 open LanguagePrimitives
@@ -21,7 +22,6 @@ open FSharpYacc.Compiler
 [<RequireQualifiedAccess>]
 module private FsYacc =
     open System
-    open System.CodeDom.Compiler
     open System.Diagnostics
     open Printf
     open Graham.Grammar
@@ -226,7 +226,7 @@ module private FsYacc =
 
         // Emit the parser functions.
         writer.WriteLine "let engine lexer lexbuf startState = (tables ()).Interpret(lexer, lexbuf, startState)"
-        writer.WriteLine "let spec lexer lexbuf : Ast.ParserSpec ="
+        writer.WriteLine "let spec lexer lexbuf : Specification ="
         IndentedTextWriter.indented writer <| fun writer ->
             writer.WriteLine "unbox ((tables ()).Interpret(lexer, lexbuf, 0))"
 
@@ -1038,6 +1038,8 @@ type FsyaccBackend () =
             // Generate the code and write it to the specified file.
             using (File.CreateText fsyaccOptions.OutputPath) <| fun streamWriter ->
                 use indentedTextWriter =
-                    new System.CodeDom.Compiler.IndentedTextWriter (streamWriter)
+                    // Set the indentation to the standard F# indent (4 spaces).
+                    new IndentedTextWriter (streamWriter, "    ")
+
                 FsYacc.emit (processedSpec, parserTable) (fsyaccOptions, indentedTextWriter)
 
