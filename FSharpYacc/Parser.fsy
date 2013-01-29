@@ -21,7 +21,7 @@ open FSharpYacc.Ast
 
 %type <Specification> spec
 %token <string> IDENT 
-%token <CodeFragment option> HEADER CODE 
+%token <CodeFragment> HEADER CODE 
 %token BAR PERCENT_PERCENT START LEFT RIGHT NONASSOC LESS GREATER COLON PREC SEMI EOF ERROR
 %token <string> TYPE
 %token <string option> TOKEN

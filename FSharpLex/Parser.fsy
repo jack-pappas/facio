@@ -19,7 +19,7 @@ open FSharpLex.Ast
 
 %type <Specification> spec
 %token <string> STRING IDENT
-%token <CodeFragment option> CODE
+%token <CodeFragment> CODE
 %token <char> CHAR
 %token <string> UNICODE_CATEGORY
 %token RULE PARSE LET AND LPAREN RPAREN
@@ -34,10 +34,10 @@ open FSharpLex.Ast
 
 spec:
 	| codeopt Macros RULE Rules codeopt {
-		{ 	TopCode = $1;
+		{ 	Header = $1;
+			Footer = $5;
 			Macros = $2;
-			Rules = $4;
-			BottomCode = $5; } }
+			Rules = $4; } }
 
 codeopt:
 	| CODE { Some $1 }
