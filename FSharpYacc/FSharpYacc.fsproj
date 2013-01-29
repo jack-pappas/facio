@@ -27,7 +27,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <WarningsAsErrors>25</WarningsAsErrors>
-    <StartArguments>"C:\Users\Jack\Desktop\fsyacc-test\fsyaccpars.fsy"</StartArguments>
+    <StartArguments>--internal --module "FSharpLex.Parser" -o "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\FSharpLex\ParserGenerated.fs" "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\FSharpLex\Parser.fsy"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>

@@ -27,7 +27,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <WarningsAsErrors>25</WarningsAsErrors>
-    <StartArguments>--unicode "C:\Users\Jack\Desktop\fslexlex.fsl"</StartArguments>
+    <StartArguments>--unicode -o "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\FSharpLex\LexerGenerated.fs" "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\FSharpLex\Lexer.fsl"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
