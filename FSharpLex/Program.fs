@@ -159,25 +159,66 @@ module Program =
 
             0   // Exit code: Success
 
-
-    
+    //
+    let [<Literal>] private defaultInterpreterNamespace = "Microsoft.FSharp.Text.Lexing"
 
     /// The entry point for the application.
     [<EntryPoint; CompiledName("Main")>]
     let main (options : string[]) =
-        (* TODO :   Parse command-line options and use the values to
-                    create an instance of the CompilationOptions record,
-                    then call the 'invoke' function with it. *)
-        
-        // TEST : Just use an hard-coded CompilationOptions record for now.
-        invoke (@"C:\Users\Jack\Desktop\fslexlex.fsl", {
-            Unicode = true;
-            // TEMP
+        // Variables to hold parsed command-line arguments.
+        let inputFile = ref None
+        let inputCodePage = ref None
+        let outputFile = ref None        
+        let unicode = ref false
+        let lexlib = ref defaultInterpreterNamespace
+
+        /// Command-line options.
+        let usage =
+            [   ArgInfo ("-o", ArgType.String (fun s -> outputFile := Some s),
+                    "The path where the generated lexer source code will be written.");
+                ArgInfo ("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
+                    "Assume input lexer specification file is encoded with the given codepage.");
+                ArgInfo ("--lexlib", ArgType.String (fun s -> lexlib := s),
+                    sprintf "Specify the namespace for the implementation of the lexer table interpreter. \
+                    The default is '%s'." defaultInterpreterNamespace);
+                ArgInfo ("--unicode", ArgType.Set unicode,
+                    "Produce a lexer which supports 16-bit Unicode characters."); ]
+
+        // Parses argument values which aren't specified by flags.
+        let plainArgParser x =
+            match !inputFile with
+            | None ->
+                inputFile := Some x
+            | Some _ ->
+                // If the input filename has already been set, print a message
+                // to the screen, then exit with an error code.
+                printfn "Error: Only one lexer specification file may be used as input."
+                exit 1            
+
+        // Parse the command-line arguments.
+        ArgParser.Parse (usage, plainArgParser, "fsharplex <filename>")
+
+        // Validate the parsed arguments.
+        // TODO
+
+        // If the output file is not specified, use a default value.
+        if Option.isNone !outputFile then
+            outputFile := Some <| System.IO.Path.ChangeExtension (Option.get !inputFile, "fs")
+
+        // Create a CompilationOptions record from the parsed arguments
+        // and call the 'invoke' function with it.
+        invoke (Option.get !inputFile, {
+            Unicode = !unicode;
+            // TEMP : These should be specified in a better way -- perhaps we can get
+            // ArgInfo instances from the plugins along with some object which holds ref values
+            // internally (used by the returned ArgInfo instances), which has a method
+            // that produces an instance of FslexBackendOptions or GraphBackendOptions.
             FslexBackendOptions = Some {
-                OutputPath = @"C:\Users\Jack\Desktop\fslex_lexer.fs";
+                OutputPath = Option.get !outputFile;
                 };
             GraphBackendOptions = Some {
-                OutputPath = @"C:\Users\Jack\Desktop\CompiledLexerDfa.dgml";
+                OutputPath =
+                    System.IO.Path.ChangeExtension (Option.get !outputFile, "dgml");
                 Format = GraphFileFormat.Dgml; };
             })
 
