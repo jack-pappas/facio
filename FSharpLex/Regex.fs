@@ -26,6 +26,7 @@ open SpecializedCollections
 /// regular expressions. However, only those cases which are still closed under boolean
 /// operations are included here, so the lanugage it represents must still be a regular
 /// language.</remarks>
+[<DebuggerDisplay("{DebuggerDisplay,nq}")>]
 type Regex =
     /// The empty string.
     | Epsilon
@@ -58,6 +59,25 @@ type Regex =
     [<CompiledName("OfCharacter")>]
     static member ofChar c =
         CharacterSet <| CharSet.singleton c
+
+    //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
+    member private this.DebuggerDisplay
+        with get () =
+            match this with
+            | Epsilon ->
+                "\u03f5"    // Epsilon symbol
+            | CharacterSet charSet
+                when CharSet.isEmpty charSet ->
+                "Empty"
+            | CharacterSet charSet
+                when CharSet.count charSet = 1 ->
+                let c = CharSet.minElement charSet
+                c.ToString ()
+            | regex ->
+                // TODO : Finish this for the other regex cases.
+                // It would be nice if this would print the regex in usual printed form.
+                sprintf "%A" regex
 
 /// Active patterns for matching special cases of Regex.
 [<AutoOpen>]

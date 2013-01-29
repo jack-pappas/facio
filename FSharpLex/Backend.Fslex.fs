@@ -361,7 +361,7 @@ module private FsLex =
                 for dfaStateId = 0 to ruleDfaStateCount - 1 do
                     // Determine the index of the rule clause accepted by this DFA state (if any).
                     let acceptedRuleClauseIndex =
-                        compiledRule.Dfa.RuleAcceptedByState
+                        compiledRule.Dfa.RuleClauseAcceptedByState
                         |> Map.tryFind (LanguagePrimitives.Int32WithMeasure dfaStateId)
 
                     // Emit the accepted rule number.

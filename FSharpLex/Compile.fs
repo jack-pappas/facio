@@ -207,7 +207,7 @@ type LexerRuleDfa = {
     Transitions : LexerDfaGraph;
     /// For each accepting state of the DFA, specifies the
     /// index of the rule-clause accepted by the state.
-    RuleAcceptedByState : Map<DfaStateId, RuleClauseIndex>;
+    RuleClauseAcceptedByState : Map<DfaStateId, RuleClauseIndex>;
     /// The initial state of the DFA.
     InitialState : DfaStateId;
 }
@@ -245,7 +245,7 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
         createDfa initialPending compilationState
 
     //
-    let rulesAcceptedByDfaState =
+    let clausesAcceptedByDfaState =
         (Map.empty, compilationState.FinalStates)
         ||> Set.fold (fun map finalDfaStateId ->
             let acceptedRules : Set<RuleClauseIndex> =
@@ -264,17 +264,16 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
     (* TODO :   Add code here to generate warnings about overlapping rules. *)
 
     /// Maps final (accepting) DFA states to the rule clause they accept.
-    let ruleAcceptedByDfaState =
-        rulesAcceptedByDfaState
+    let clauseAcceptedByDfaState =
+        clausesAcceptedByDfaState
         // Disambiguate overlapping patterns by choosing the rule-clause with the
         // lowest index -- i.e., the rule which was declared earliest in the lexer definition.
         |> Map.map (fun _ -> Set.minElement)
 
-    // Create a LexerDfa record from the compiled DFA.
+    // Create a LexerRuleDfa record from the compiled DFA.
     {   Transitions = compilationState.Transitions;
-        RuleAcceptedByState = ruleAcceptedByDfaState;
+        RuleClauseAcceptedByState = clauseAcceptedByDfaState;
         InitialState = initialDfaStateId; }
-
 
 //
 let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition) option, macroId), pattern) (options : CompilationOptions) (macroEnv, badMacros) =
@@ -982,8 +981,8 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
                     LexerDfaGraph.addEofEdge compiledPatternDfa.InitialState eofAcceptingState transitions
                 { compiledPatternDfa with
                     Transitions = transitions;
-                    RuleAcceptedByState =
-                        compiledPatternDfa.RuleAcceptedByState
+                    RuleClauseAcceptedByState =
+                        compiledPatternDfa.RuleClauseAcceptedByState
                         |> Map.add eofAcceptingState eofAcceptingClauseIndex; }
 
         // If this rule has a clause with the wildcard pattern, create an additional
@@ -1043,8 +1042,8 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
 
                     { compiledPatternDfa with
                         Transitions = transitions;
-                        RuleAcceptedByState =
-                            compiledPatternDfa.RuleAcceptedByState
+                        RuleClauseAcceptedByState =
+                            compiledPatternDfa.RuleClauseAcceptedByState
                             |> Map.add wildcardAcceptingState wildcardAcceptingClauseIndex; }
 
         // TODO : Emit warnings about any overlapping patterns.

@@ -192,7 +192,7 @@ module private Dgml =
 
                 // If this is a final (accepting) DFA state, set the
                 // AcceptedRuleClauseIndex attribute value.
-                Map.tryFind dfaStateId compiledRule.Dfa.RuleAcceptedByState
+                Map.tryFind dfaStateId compiledRule.Dfa.RuleClauseAcceptedByState
                 |> Option.iter (fun acceptedRuleClauseIndex ->
                     let acceptedRuleClauseIndexAttr = dgmlDoc.CreateAttribute "AcceptedRuleClauseIndex"
                     dfaStateNode.Attributes.Append acceptedRuleClauseIndexAttr |> ignore
