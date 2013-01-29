@@ -1,0 +1,104 @@
+%{
+(*
+Copyright (c) 2012-2013, Jack Pappas
+All rights reserved.
+
+This code is provided under the terms of the 2-clause ("Simplified") BSD license.
+See LICENSE.TXT for licensing details.
+*)
+
+(* NOTE :   The code below is adapted from the 'fsyacc' grammar, which is
+            (c) Microsoft Corporation 2005-2008 and covered under the
+            Apache 2.0 license. *)
+
+open Graham.Grammar
+open FSharpYacc.Ast
+
+// Turn off ML-compatibility-only warnings.
+#nowarn "62"
+
+%} 
+
+%type <Specification> spec
+%token <string> IDENT 
+%token <CodeFragment option> HEADER CODE 
+%token BAR PERCENT_PERCENT START LEFT RIGHT NONASSOC LESS GREATER COLON PREC SEMI EOF ERROR
+%token <string> TYPE
+%token <string option> TOKEN
+%start spec
+%right BAR
+%%      
+
+spec:
+    | headeropt decls PERCENT_PERCENT rules {
+        List.foldBack (fun f x -> f x) $2 {
+            Header = $1;
+            Footer = None;
+            NonterminalDeclarations = List.empty;
+            TerminalDeclarations = List.empty;
+            StartingProductions = List.empty;
+            Associativities = List.empty;
+            Productions = $4; } }
+
+headeropt:
+    | HEADER { $1 }
+    | {
+        //"", (parseState.ResultRange |> fst)
+        None }
+
+decls:
+    | { [] }
+    | decl decls { $1 :: $2 }
+
+decl:
+    | TOKEN idents {
+        (fun x -> { x with TerminalDeclarations = x.TerminalDeclarations @ [($1, $2)] }) }
+    | TYPE idents {
+        (fun x -> { x with NonterminalDeclarations = x.NonterminalDeclarations @ (_2 |> List.map (fun x -> _1, x)); }) }
+    | START idents {
+        (fun x -> { x with StartingProductions = x.StartingProductions @ $2}) }
+    | LEFT idents {
+        (fun x -> { x with Associativities = x.Associativities @ [(Associativity.Left, $2)]; }) }
+    | RIGHT idents {
+        (fun x -> { x with Associativities = x.Associativities @ [(Associativity.Right, $2)]; }) }
+    | NONASSOC idents {
+        (fun x -> { x with Associativities = x.Associativities @ [(Associativity.NonAssociative, $2)]; }) }
+
+idents:
+    | IDENT idents { $1 :: $2 }
+    | { [] }
+
+rules:
+    | rule rules { $1 :: $2 }
+    | rule { [$1] }
+
+rule:
+    | IDENT COLON optbar clauses optsemi { ($1, $4) }
+
+optbar:
+    | { }
+    | BAR { }
+
+optsemi:
+    | { }
+    | SEMI { }
+
+clauses:
+    | clause BAR clauses { $1 :: $3 }
+    | clause { [$1] }
+
+clause:
+    | syms optprec CODE {
+        // Rule
+        {   Symbols = $1;
+            Action = $3;
+            ImpersonatedPrecedence = $2; } }
+
+syms:
+    | IDENT syms { $1 :: $2 }
+    | ERROR syms { "error" :: $2 }
+    | { [] }
+
+optprec:
+    | { None }
+    | PREC IDENT { Some $2 }
