@@ -73,24 +73,6 @@ module private FsYacc =
         /// The error terminal.
         | Error
 
-    // TEMP : Only needed until we modify Graham.LR.LrParserTable to provide the
-    // production rules of the _augmented_ grammar.
-    let private deaugmentSymbols (symbols : AugmentedSymbol<'Nonterminal, 'Terminal>[]) =
-        symbols
-        |> Array.map (function
-            | Symbol.Nonterminal nonterminal ->
-                match nonterminal with
-                | AugmentedNonterminal.Start ->
-                    failwith "Start symbol in an item which is not part of the start production."
-                | AugmentedNonterminal.Nonterminal nonterminal ->
-                    Symbol.Nonterminal nonterminal
-            | Symbol.Terminal terminal ->
-                match terminal with
-                | EndOfFile ->
-                    failwith "Unexpected end-of-file symbol."
-                | AugmentedTerminal.Terminal terminal ->
-                    Symbol.Terminal terminal)
-
     /// Emit a formatted string as a single-line F# comment into an IndentedTextWriter.
     let inline private comment (writer : IndentedTextWriter) fmt : ^T =
         writer.Write "// "
@@ -191,7 +173,8 @@ module private FsYacc =
     /// The name of the error terminal.
     let [<Literal>] private errorTerminal : TerminalIdentifier = "error"
 
-    //
+    /// Emits F# code which creates the 'tables' record and defines the
+    /// parser functions into an IndentedTextWriter.
     let private tablesRecordAndParserFunctions typedStartSymbols terminalCount (writer : IndentedTextWriter) =
         // Emit the 'tables' record.
         fprintfn writer "let tables () : %s.Tables<_> = {" defaultParsingNamespace
@@ -240,7 +223,8 @@ module private FsYacc =
                 writer.WriteLine "unbox ((tables ()).Interpret(lexer, lexbuf, 0))"
             writer.WriteLine ())
 
-    //
+    /// Emits F# code declaring terminal (token) and nonterminal types
+    /// used by the generated parser into an IndentedTextWriter.
     let private parserTypes (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
         // Emit the token type declaration.
         comment writer "This type is the type of tokens accepted by the parser"
@@ -419,6 +403,31 @@ module private FsYacc =
         // Return some of the lookup tables, they're needed
         // when emitting the parser tables.
         productionIndices
+
+    // TEMP : Only needed until we modify Graham.LR.LrParserTable to provide the
+    // production rules of the _augmented_ grammar.
+    let private deaugmentSymbols (symbols : AugmentedSymbol<'Nonterminal, 'Terminal>[]) =
+        symbols
+        |> Array.map (function
+            | Symbol.Nonterminal nonterminal ->
+                match nonterminal with
+                | AugmentedNonterminal.Start ->
+                    failwith "Start symbol in an item which is not part of the start production."
+                | AugmentedNonterminal.Nonterminal nonterminal ->
+                    Symbol.Nonterminal nonterminal
+            | Symbol.Terminal terminal ->
+                match terminal with
+                | EndOfFile ->
+                    failwith "Unexpected end-of-file symbol."
+                | AugmentedTerminal.Terminal terminal ->
+                    Symbol.Terminal terminal)
+
+    (* TODO :   Refactor the 'parserTables' function.
+                The code which handles each table (or pair of tables, for sparse tables) can be
+                moved into a separate function. Once that's done (and everything still works)
+                each of those functions should be refactored further into a pair of functions --
+                a "pure" function which computes the tables, and another which calls the
+                table-computing function then emits code to create the tables into an IndentedTextWriter. *)
 
     /// Emits F# code which creates the parser tables into an IndentedTextWriter.
     let private parserTables (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
