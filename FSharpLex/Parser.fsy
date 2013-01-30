@@ -25,7 +25,7 @@ open FSharpLex.Ast
 %token RULE PARSE LET AND LPAREN RPAREN
 %token EOF BAR DOT PLUS STAR QMARK EQUALS UNDERSCORE LBRACK RBRACK HAT DASH
 %start spec
-%left BAR
+%right BAR
 %left regexp_alt
 %left regexp_seq
 %nonassoc regexp_opt
