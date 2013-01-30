@@ -1023,12 +1023,9 @@ module private FsYacc =
             |> Map.iter (fun nonterminal rules ->
                 rules |> Array.iter (fun rule ->
                     let action =
-                        match rule.Action with
-                        | Some action ->
-                            // Replace the symbol placeholders; e.g., change $2 to _2
-                            replaceSymbolPlaceholders action
-                        | None ->
-                            defaultAction
+                        // Replace the symbol placeholders; e.g., change $2 to _2
+                        let action = Option.map replaceSymbolPlaceholders rule.Action
+                        defaultArg action defaultAction
 
                     reduction (processedSpec, nonterminal, rule.Symbols, action) writer))
             
