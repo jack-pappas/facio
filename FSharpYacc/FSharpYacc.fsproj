@@ -55,6 +55,7 @@
     <Compile Include="Compiler.fs" />
     <Compile Include="Plugin.fs" />
     <Compile Include="Backend.Fsyacc.fs" />
+    <Compile Include="Backend.Listing.fs" />
     <Compile Include="Backend.Graph.fs" />
     <Compile Include="Backends.fs" />
     <Compile Include="Program.fs" />
