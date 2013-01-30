@@ -33,130 +33,130 @@ open FSharpLex.Ast
 %%
 
 spec:
-	| codeopt Macros RULE Rules codeopt {
-		{ 	Header = $1;
-			Footer = $5;
-			Macros = $2;
-			Rules = $4; } }
+    | codeopt Macros RULE Rules codeopt {
+        {   Header = $1;
+            Footer = $5;
+            Macros = $2;
+            Rules = $4; } }
 
 codeopt:
-	| CODE { Some $1 }
-	| {
-		//"", (fst parseState.ResultRange)
-		None }
+    | CODE { Some $1 }
+    | {
+        //"", (fst parseState.ResultRange)
+        None }
 
 Macros:
-	| { [] }
-	| macro Macros { $1 :: $2 }
+    | { [] }
+    | macro Macros { $1 :: $2 }
 
 macro:
-	| LET IDENT EQUALS regexp {
-		match $4 with
-      	| Pattern pattern ->
+    | LET IDENT EQUALS regexp {
+        match $4 with
+        | Pattern pattern ->
             let pos =
                 let rawStartPos, rawEndPos = parseState.ResultRange
                 let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
                 let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
                 Some (startPos, endPos)
             ((pos, _2), pattern)
-      	| EndOfFile ->
+        | EndOfFile ->
             let msg = sprintf "End-of-file pattern in macro '%s'." $2
             raise <| exn msg
-		}
+        }
 
 Rules:
-	| rule AND Rules { $1 :: $3 }
-	| rule { [$1] }
+    | rule AND Rules { $1 :: $3 }
+    | rule { [$1] }
 
 rule:
-	| IDENT args EQUALS PARSE optbar clauses {
-		let rule = {
-          	Parameters = $2;
-          	Clauses = $6; }
-      	let pos =
+    | IDENT args EQUALS PARSE optbar clauses {
+        let rule = {
+            Parameters = $2;
+            Clauses = $6; }
+        let pos =
             let rawStartPos, rawEndPos = parseState.ResultRange
             let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
             let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
             Some (startPos, endPos)
       
-      	((pos, $1), rule) }
+        ((pos, $1), rule) }
 
 args:
-	| { [] }
-	| IDENT args { $1 :: $2 }
+    | { [] }
+    | IDENT args { $1 :: $2 }
 
 optbar:
-	| { }
-	| BAR { }
+    | { }
+    | BAR { }
 
 clauses:
-	| clause BAR clauses { $1 :: $3 }
-	| clause { [$1] }
+    | clause BAR clauses { $1 :: $3 }
+    | clause { [$1] }
 
 clause:
-	| regexp CODE {
-		{ Pattern = $1; Action = $2; } }
+    | regexp CODE {
+        { Pattern = $1; Action = $2; } }
 
 regexp:
-	| CHAR {
-		Pattern <| Character $1 }
-	| UNICODE_CATEGORY {
-		//UnicodeCategory $1
-      	raise <| System.NotImplementedException "UnicodeCategory pattern" }
-	| EOF {
-		EndOfFile }
-	| UNDERSCORE {
-		Pattern Any }
-	| STRING {
-		Pattern <| Pattern.literalString $1 }
-	| IDENT {
-		Pattern <| Macro $1 }
+    | CHAR {
+        Pattern <| Character $1 }
+    | UNICODE_CATEGORY {
+        //UnicodeCategory $1
+        raise <| System.NotImplementedException "UnicodeCategory pattern" }
+    | EOF {
+        EndOfFile }
+    | UNDERSCORE {
+        Pattern Any }
+    | STRING {
+        Pattern <| Pattern.literalString $1 }
+    | IDENT {
+        Pattern <| Macro $1 }
 
-	| regexp regexp %prec regexp_seq {
-		match $1, $2 with
-      	| Pattern pat1, Pattern pat2 ->
-			Pattern <| Concat (pat1, pat2)
-      	| _ ->
-        	raise <| exn "End-of-file marker in Concat pattern." }
+    | regexp regexp %prec regexp_seq {
+        match $1, $2 with
+        | Pattern pat1, Pattern pat2 ->
+            Pattern <| Concat (pat1, pat2)
+        | _ ->
+            raise <| exn "End-of-file marker in Concat pattern." }
 
-	| regexp PLUS %prec regexp_plus {
-		match $1 with
-      	| Pattern pattern ->
-			Pattern <| OneOrMore pattern
-      	| EndOfFile ->
+    | regexp PLUS %prec regexp_plus {
+        match $1 with
+        | Pattern pattern ->
+            Pattern <| OneOrMore pattern
+        | EndOfFile ->
             raise <| exn "End-of-file marker in OneOrMore pattern." }
 
-	| regexp STAR %prec regexp_star {
-		match $1 with
-      	| Pattern pattern ->
-			Pattern <| Star pattern
-      	| EndOfFile ->
-			raise <| exn "End-of-file marker in Star pattern." }
+    | regexp STAR %prec regexp_star {
+        match $1 with
+        | Pattern pattern ->
+            Pattern <| Star pattern
+        | EndOfFile ->
+            raise <| exn "End-of-file marker in Star pattern." }
 
-	| regexp QMARK %prec regexp_opt {
-		match $1 with
-      	| Pattern pattern ->
+    | regexp QMARK %prec regexp_opt {
+        match $1 with
+        | Pattern pattern ->
             Pattern <| Optional pattern
-      	| EndOfFile ->
+        | EndOfFile ->
             raise <| exn "End-of-file marker in Optional pattern." }
 
-	| regexp BAR regexp %prec regexp_alt {
-		match $1, $3 with
+    | regexp BAR regexp %prec regexp_alt {
+        match $1, $3 with
         | Pattern pat1, Pattern pat2 ->
-        	Pattern <| Or (pat1, pat2)
+            Pattern <| Or (pat1, pat2)
         | _ ->
             raise <| exn "End-of-file marker in Or pattern." }
 
-	| LPAREN regexp RPAREN { $2 }
-	| LBRACK charset RBRACK {
-		Pattern <| CharacterSet $2 }
-	| LBRACK HAT charset RBRACK {
-		Pattern <| Negate (CharacterSet $3) }
+    | LPAREN regexp RPAREN { $2 }
+    | LBRACK charset RBRACK {
+        Pattern <| CharacterSet $2 }
+    | LBRACK HAT charset RBRACK {
+        Pattern <| Negate (CharacterSet $3) }
 
 charset:
-	| CHAR {
-		CharSet.singleton $1 }
-	| CHAR DASH CHAR {
-		CharSet.ofRange $1 $3 }
-	| charset charset {
-		CharSet.union $1 $2 }
+    | CHAR {
+        CharSet.singleton $1 }
+    | CHAR DASH CHAR {
+        CharSet.ofRange $1 $3 }
+    | charset charset {
+        CharSet.union $1 $2 }
