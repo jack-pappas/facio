@@ -869,7 +869,31 @@ module private FsYacc =
         oneLineArrayUInt16 ("_fsyacc_immediateActions", false,
             _fsyacc_immediateActions) writer
 
-    //
+    /// Compute the number of consecutive space characters starting at the beginning of a string.
+    /// If the string is empty or contains only space characters, this function returns None.
+    let private countLeadingSpaces str =
+        let mutable index = 0
+        let mutable foundNonSpace = false
+        let len = String.length str
+        while index < len && not foundNonSpace do
+            // Is the current character a space character?
+            if str.[index] = ' ' then
+                index <- index + 1
+            else
+                foundNonSpace <- true
+
+        // If all of the characters in the string are space characters,
+        // return None. Note this also correctly handles empty strings.
+        if index = len then
+            None
+        else
+            Some <| uint32 index
+
+    /// Replaces the tab characters in a string with some equivalent tab string.
+    let inline private replaceTabs tabString (str : string) =
+        str.Replace ("\t", tabString)
+
+    /// Emits F# code for a single reduction action into an IndentedTextWriter.
     let private reduction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
                            nonterminal : NonterminalIdentifier,
                            symbols : Symbol<NonterminalIdentifier, TerminalIdentifier>[],
@@ -906,6 +930,55 @@ module private FsYacc =
                 // Create a generic type parameter to use for this nonterminal and let
                 // the F# compiler use type inference to figure out what type it should be.
                 "'" + nonterminal
+
+        (*  Split 'action' into multiple lines. Determine the minimum amount of whitespace
+            which appears on the left of any line in the action, but do not consider blank
+            lines. Then, trim this minimum amount of whitespace from the left side of each
+            line. When this is done, the action can be written line-by-line using the standard
+            'writer.WriteLine' method of the IndentedTextWriter, and the generated code will
+            have the correct indentation. *)
+
+        /// The individual lines of the reduction action code, trimmed to remove a number of
+        /// leading spaces common to all non-empty/non-whitespace lines.
+        let trimmedActionLines =
+            /// The individual lines of the reduction action code,
+            /// annotated with the number of leading spaces on that line.
+            let annotatedActionLines =
+                action.Split ([| "\r\n"; "\n"; "\r" |], StringSplitOptions.None)
+                |> Array.map (fun line ->
+                    // First replace any tab characters in the string.
+                    let line = replaceTabs "    " line
+                    let leadingSpaces = countLeadingSpaces line
+                    line, leadingSpaces)
+        
+            /// The minimum number of spaces on the left side of any line of code.
+            let minIndentation =
+                let minIndentation =
+                    (None, annotatedActionLines)
+                    ||> Array.fold (fun x (_, y) ->
+                        match x, y with
+                        | None, None ->
+                            None
+                        | (Some _ as x), None ->
+                            x
+                        | None, (Some _ as y) ->
+                            y
+                        | Some x, Some y ->
+                            Some <| min x y)
+
+                // Default to zero (0) indentation.
+                defaultArg minIndentation GenericZero
+
+            // Remove the same amount of indentation from every non-empty line.
+            annotatedActionLines
+            |> Array.map (fun (line, leadingSpaces) ->
+                match leadingSpaces with
+                | None ->
+                    assert (String.IsNullOrWhiteSpace line)
+                    String.Empty
+                | Some _ ->
+                    // Remove the computed number of spaces from the left side of this line.
+                    line.Substring (int minIndentation))
             
         // Emit the semantic action code, wrapped in a bit of code which boxes the return value.
         writer.WriteLine "Microsoft.FSharp.Core.Operators.box"
@@ -914,9 +987,10 @@ module private FsYacc =
             IndentedTextWriter.indented writer <| fun writer ->
                 writer.WriteLine "("
                 IndentedTextWriter.indented writer <| fun writer ->
-                    // TODO : May need to split 'code' into individual lines and write them to the
-                    // IndentedTextWriter one-by-one to preserve correct indentation level.
-                    writer.WriteLineNoTabs action
+                    // Write the trimmed action-code lines to the IndentedTextWriter one-by-one.
+                    // This ensures they're indented correctly with respect to the rest of the emitted code.
+                    trimmedActionLines
+                    |> Array.iter writer.WriteLine
                 writer.WriteLine ")"
 
             // Emit the nonterminal type for this production rule.
