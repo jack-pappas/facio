@@ -192,7 +192,7 @@ module private FsYacc =
     let [<Literal>] private errorTerminal : TerminalIdentifier = "error"
 
     //
-    let private tablesRecordAndParserFunctions terminalCount (writer : IndentedTextWriter) =
+    let private tablesRecordAndParserFunctions typedStartSymbols terminalCount (writer : IndentedTextWriter) =
         // Emit the 'tables' record.
         fprintfn writer "let tables () : %s.Tables<_> = {" defaultParsingNamespace
         IndentedTextWriter.indented writer <| fun writer ->
@@ -221,14 +221,24 @@ module private FsYacc =
             fprintfn writer "numTerminals = %i;" terminalCount
             writer.WriteLine "productionToNonTerminalTable = _fsyacc_productionToNonTerminalTable;"
 
-            // Write the closing bracket for the record.
+            // Write the closing bracket for the record,
+            // and an additional newline for spacing.
             writer.WriteLine "}"
+            writer.WriteLine ()
 
-        // Emit the parser functions.
-        writer.WriteLine "let engine lexer lexbuf startState = (tables ()).Interpret(lexer, lexbuf, startState)"
-        writer.WriteLine "let spec lexer lexbuf : Specification ="
+        // Emit the parser "engine" function.
+        writer.WriteLine "let engine lexer lexbuf startState ="
         IndentedTextWriter.indented writer <| fun writer ->
-            writer.WriteLine "unbox ((tables ()).Interpret(lexer, lexbuf, 0))"
+            writer.WriteLine "(tables ()).Interpret(lexer, lexbuf, startState)"
+        writer.WriteLine ()
+
+        // Emit a parser function for each of the start symbols.
+        typedStartSymbols
+        |> Map.iter (fun startSymbol startSymbolType ->
+            fprintfn writer "let %s lexer lexbuf : %s =" startSymbol startSymbolType
+            IndentedTextWriter.indented writer <| fun writer ->
+                writer.WriteLine "unbox ((tables ()).Interpret(lexer, lexbuf, 0))"
+            writer.WriteLine ())
 
     //
     let private parserTypes (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
@@ -951,6 +961,9 @@ module private FsYacc =
             // Emit the closing bracket of the array.
             writer.WriteLine "|]"
 
+        // Write a blank line for readability.
+        writer.WriteLine ()
+
     /// Emits code for an fsyacc-compatible parser into an IndentedTextWriter.
     let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
                 parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
@@ -1004,11 +1017,24 @@ module private FsYacc =
         parserTables (processedSpec, parserTable, productionIndices) writer
         reductions processedSpec writer
 
-        // Emit the parser "tables" record and parser functions.
-        let terminalCount =
-            // TEMP : Add 2 to account for the end-of-input and error tokens.
-            processedSpec.Terminals.Count + 2
-        tablesRecordAndParserFunctions terminalCount writer
+        do
+            // Emit the parser "tables" record and parser functions.
+            let terminalCount =
+                // TEMP : Add 2 to account for the end-of-input and error tokens.
+                processedSpec.Terminals.Count + 2
+
+            let typedStartSymbols =
+                (Map.empty, processedSpec.StartSymbols)
+                ||> Set.fold (fun typedStartSymbols startSymbol ->
+                    let startSymbolType =
+                        Map.find startSymbol processedSpec.Nonterminals
+                        // Start symbols are required to have a type, so if this breaks
+                        // the problem is in the validation stage of the compiler.
+                        |> Option.get
+
+                    Map.add startSymbol startSymbolType typedStartSymbols)
+
+            tablesRecordAndParserFunctions typedStartSymbols terminalCount writer
 
         // Flush the writer before returning, to force it to write any
         // output text remaining in it's internal buffer.
@@ -1027,13 +1053,6 @@ type FsyaccBackend () =
                     raise <| exn "No backend-specific options were provided."
                 | Some options ->
                     options
-
-            (* TODO :   This backend places an additional restriction on the parser specification --
-                        all start symbols (nonterminals) must produce the same type.
-                        For now, we should implement a simple check for this and raise an exception
-                        if they have different types; in the future, we should find a way to pass this
-                        constraint into the Compiler.precompile function so it can provide a better
-                        error message for the user. *)
 
             // Generate the code and write it to the specified file.
             using (File.CreateText fsyaccOptions.OutputPath) <| fun streamWriter ->
