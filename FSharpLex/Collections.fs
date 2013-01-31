@@ -41,7 +41,7 @@ module private AvlTree =
     let empty : AvlTree<'T> = AvlTree.Empty
 
     /// Returns the height of an AVL tree's root node.
-    let private ht (tree : AvlTree<'T>) =
+    let inline height (tree : AvlTree<'T>) =
         match tree with
         | Empty -> 0u
         | Node (_,_,_,h) -> h
@@ -49,15 +49,15 @@ module private AvlTree =
     /// Creates an AVL tree whose root node holds the specified value
     /// and the specified left and right subtrees.
     let inline internal create value l (r : AvlTree<'T>) =
-        Node (value, l, r, (max (ht l) (ht r)) + 1u)
+        Node (value, l, r, (max (height l) (height r)) + 1u)
 
     let rec private mkt_bal_l n l (r : AvlTree<'T>) =
-        if ht l = ht r + 2u then
+        if height l = height r + 2u then
             match l with
             | Empty ->
                 failwith "mkt_bal_l"
             | Node (ln, ll, lr, _) ->
-                if ht ll < ht lr then
+                if height ll < height lr then
                     match lr with
                     | Empty ->
                         failwith "mkt_bal_l"
@@ -69,12 +69,12 @@ module private AvlTree =
             create n l r
 
     let rec private mkt_bal_r n l (r : AvlTree<'T>) =
-        if ht r = ht l + 2u then
+        if height r = height l + 2u then
             match r with
             | Empty ->
                 failwith "mkt_bal_r"
             | Node (rn, rl, rr, _) ->
-                if ht rr < ht rl then
+                if height rr < height rl then
                     match rl with
                     | Empty ->
                         failwith "mkt_bal_r"
@@ -115,19 +115,19 @@ module private AvlTree =
         | Node (_,_,_,_) -> false
 
     /// Implementation. Returns the height of an AVL tree.
-    let rec private heightRec (tree : AvlTree<'T>) cont =
+    let rec private computeHeightRec (tree : AvlTree<'T>) cont =
         match tree with
         | Empty ->
             cont 0u
         | Node (_, l, r, _) ->
-            heightRec l <| fun height_l ->
-            heightRec r <| fun height_r ->
+            computeHeightRec l <| fun height_l ->
+            computeHeightRec r <| fun height_r ->
                 (max height_l height_r) + 1u
                 |> cont
 
     /// Returns the height of an AVL tree.
-    let height (tree : AvlTree<'T>) =
-        heightRec tree id
+    let internal computeHeight (tree : AvlTree<'T>) =
+        computeHeightRec tree id
 
     /// Determines if an AVL tree is correctly formed.
     /// It isn't necessary to call this at run-time, though it may be useful for asserting
@@ -135,8 +135,8 @@ module private AvlTree =
     let rec internal avl = function
         | Empty -> true
         | Node (x, l, r, h) ->
-            let height_l = height l
-            let height_r = height r
+            let height_l = computeHeight l
+            let height_r = computeHeight r
             height_l = height_r
             || (height_l = (1u + height_r) || height_r = (1u + height_l))
             && h = ((max height_l height_r) + 1u)
