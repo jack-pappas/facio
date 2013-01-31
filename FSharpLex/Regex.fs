@@ -433,7 +433,11 @@ module RegularVector =
     /// Compute the derivative of a regular vector
     /// with respect to the given symbol.
     let inline derivative symbol (regVec : RegularVector) : RegularVector =
+        #if PARALLEL_FX
+        Array.Parallel.map (Regex.Derivative symbol) regVec
+        #else
         Array.map (Regex.Derivative symbol) regVec
+        #endif
 
     /// Determines if the regular vector is nullable,
     /// i.e., it accepts the empty string (epsilon).

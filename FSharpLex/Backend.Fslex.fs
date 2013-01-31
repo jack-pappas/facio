@@ -160,7 +160,7 @@ module private FsLex =
 
         //
         let unicodeCategoryTransitions =
-            (Map.empty, Unicode.categoryCharSet)
+            (Map.empty, UnicodeCharSet.byCategory)
             ||> Map.fold (fun categoryTransitions category categoryChars ->
                 // If there is a transition out of this DFA state for each character
                 // in this Unicode category, and all of the transitions go to the same
