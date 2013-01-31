@@ -101,8 +101,7 @@ regexp:
     | CHAR {
         Pattern <| Character $1 }
     | UNICODE_CATEGORY {
-        //UnicodeCategory $1
-        raise <| System.NotImplementedException "UnicodeCategory pattern" }
+        Pattern <| UnicodeCategory $1 }
     | EOF {
         EndOfFile }
     | UNDERSCORE {

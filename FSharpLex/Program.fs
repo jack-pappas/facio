@@ -160,7 +160,7 @@ module Program =
         // Variables to hold parsed command-line arguments.
         let inputFile = ref None
         let inputCodePage = ref None
-        let outputFile = ref None        
+        let outputFile = ref None
         let unicode = ref false
         let lexlib = ref defaultLexerInterpreterNamespace
 

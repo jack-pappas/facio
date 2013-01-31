@@ -262,14 +262,14 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                raise (Microsoft.FSharp.Text.Parsing.Accept (Microsoft.FSharp.Core.Operators.box _1))
+                    raise (Microsoft.FSharp.Text.Parsing.Accept (Microsoft.FSharp.Core.Operators.box _1))
                 )
             : '_startspec))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                [] 
+                    [] 
                 )
             : 'Macros))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -278,7 +278,7 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                     _1 :: _2 
+                    _1 :: _2 
                 )
             : 'Macros))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -287,7 +287,7 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                       _1 :: _3 
+                    _1 :: _3 
                 )
             : 'Rules))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -295,14 +295,14 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                [_1] 
+                    [_1] 
                 )
             : 'Rules))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                [] 
+                    [] 
                 )
             : 'args))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -311,7 +311,7 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                   _1 :: _2 
+                    _1 :: _2 
                 )
             : 'args))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -319,8 +319,8 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-            
-                CharSet.singleton _1 
+                    
+                    CharSet.singleton _1 
                 )
             : 'charset))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -329,8 +329,8 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                      
-                CharSet.ofRange _1 _3 
+                    
+                    CharSet.ofRange _1 _3 
                 )
             : 'charset))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -339,8 +339,8 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                       
-                CharSet.union _1 _2 
+                    
+                    CharSet.union _1 _2 
                 )
             : 'charset))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -349,8 +349,8 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                   
-                { Pattern = _1; Action = _2; } 
+                    
+                    { Pattern = _1; Action = _2; } 
                 )
             : 'clause))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -359,7 +359,7 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                           _1 :: _3 
+                    _1 :: _3 
                 )
             : 'clauses))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -367,7 +367,7 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                [_1] 
+                    [_1] 
                 )
             : 'clauses))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -375,16 +375,16 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                Some _1 
+                    Some _1 
                 )
             : 'codeopt))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-       
-                //"", (fst parseState.ResultRange)
-                None 
+                    
+                    //"", (fst parseState.ResultRange)
+                    None 
                 )
             : 'codeopt))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -393,33 +393,33 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                               
-                match _4 with
-                | Pattern pattern ->
-                    let pos =
-                        let rawStartPos, rawEndPos = parseState.ResultRange
-                        let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
-                        let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
-                        Some (startPos, endPos)
-                    ((pos, _2), pattern)
-                | EndOfFile ->
-                    let msg = sprintf "End-of-file pattern in macro '%s'." _2
-                    raise <| exn msg
-        
+                    
+                    match _4 with
+                    | Pattern pattern ->
+                        let pos =
+                            let rawStartPos, rawEndPos = parseState.ResultRange
+                            let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
+                            let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
+                            Some (startPos, endPos)
+                        ((pos, _2), pattern)
+                    | EndOfFile ->
+                        let msg = sprintf "End-of-file pattern in macro '%s'." _2
+                        raise <| exn msg
+                    
                 )
             : 'macro))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-        
+                    
                 )
             : 'optbar))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-            
+                    
                 )
             : 'optbar))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -427,8 +427,8 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-            
-                Pattern <| Character _1 
+                    
+                    Pattern <| Character _1 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -436,34 +436,24 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                        
-                //UnicodeCategory _1
-                raise <| System.NotImplementedException "UnicodeCategory pattern" 
+                    
+                    Pattern <| UnicodeCategory _1 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-           
-                EndOfFile 
+                    
+                    EndOfFile 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                  
-                Pattern Any 
-                )
-            : 'regexp))
-    (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
-        let _1 = (let data = parseState.GetInput(1) in (Microsoft.FSharp.Core.Operators.unbox data : string)) in
-        Microsoft.FSharp.Core.Operators.box
-            (
-                (
-              
-                Pattern <| Pattern.literalString _1 
+                    
+                    Pattern Any 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -471,8 +461,17 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-             
-                Pattern <| Macro _1 
+                    
+                    Pattern <| Pattern.literalString _1 
+                )
+            : 'regexp))
+    (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
+        let _1 = (let data = parseState.GetInput(1) in (Microsoft.FSharp.Core.Operators.unbox data : string)) in
+        Microsoft.FSharp.Core.Operators.box
+            (
+                (
+                    
+                    Pattern <| Macro _1 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -481,12 +480,12 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                                      
-                match _1, _2 with
-                | Pattern pat1, Pattern pat2 ->
-                    Pattern <| Concat (pat1, pat2)
-                | _ ->
-                    raise <| exn "End-of-file marker in Concat pattern." 
+                    
+                    match _1, _2 with
+                    | Pattern pat1, Pattern pat2 ->
+                        Pattern <| Concat (pat1, pat2)
+                    | _ ->
+                        raise <| exn "End-of-file marker in Concat pattern." 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -494,12 +493,12 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                                     
-                match _1 with
-                | Pattern pattern ->
-                    Pattern <| OneOrMore pattern
-                | EndOfFile ->
-                    raise <| exn "End-of-file marker in OneOrMore pattern." 
+                    
+                    match _1 with
+                    | Pattern pattern ->
+                        Pattern <| OneOrMore pattern
+                    | EndOfFile ->
+                        raise <| exn "End-of-file marker in OneOrMore pattern." 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -507,12 +506,12 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                                     
-                match _1 with
-                | Pattern pattern ->
-                    Pattern <| Star pattern
-                | EndOfFile ->
-                    raise <| exn "End-of-file marker in Star pattern." 
+                    
+                    match _1 with
+                    | Pattern pattern ->
+                        Pattern <| Star pattern
+                    | EndOfFile ->
+                        raise <| exn "End-of-file marker in Star pattern." 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -520,12 +519,12 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                                     
-                match _1 with
-                | Pattern pattern ->
-                    Pattern <| Optional pattern
-                | EndOfFile ->
-                    raise <| exn "End-of-file marker in Optional pattern." 
+                    
+                    match _1 with
+                    | Pattern pattern ->
+                        Pattern <| Optional pattern
+                    | EndOfFile ->
+                        raise <| exn "End-of-file marker in Optional pattern." 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -534,12 +533,12 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                                          
-                match _1, _3 with
-                | Pattern pat1, Pattern pat2 ->
-                    Pattern <| Or (pat1, pat2)
-                | _ ->
-                    raise <| exn "End-of-file marker in Or pattern." 
+                    
+                    match _1, _3 with
+                    | Pattern pat1, Pattern pat2 ->
+                        Pattern <| Or (pat1, pat2)
+                    | _ ->
+                        raise <| exn "End-of-file marker in Or pattern." 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -547,7 +546,7 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                             _2 
+                    _2 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -555,8 +554,8 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                             
-                Pattern <| CharacterSet _2 
+                    
+                    Pattern <| CharacterSet _2 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -564,8 +563,8 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                                 
-                Pattern <| Negate (CharacterSet _3) 
+                    
+                    Pattern <| Negate (CharacterSet _3) 
                 )
             : 'regexp))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -576,17 +575,17 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                                              
-                let rule = {
-                    Parameters = _2;
-                    Clauses = _6; }
-                let pos =
-                    let rawStartPos, rawEndPos = parseState.ResultRange
-                    let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
-                    let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
-                    Some (startPos, endPos)
-      
-                ((pos, _1), rule) 
+                    
+                    let rule = {
+                        Parameters = _2;
+                        Clauses = _6; }
+                    let pos =
+                        let rawStartPos, rawEndPos = parseState.ResultRange
+                        let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
+                        let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
+                        Some (startPos, endPos)
+                    
+                    ((pos, _1), rule) 
                 )
             : 'rule))
     (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -597,11 +596,11 @@ let private _fsyacc_reductions () = [|
         Microsoft.FSharp.Core.Operators.box
             (
                 (
-                                         
-                {   Header = _1;
-                    Footer = _5;
-                    Macros = _2;
-                    Rules = _4; } 
+                    
+                    {   Header = _1;
+                        Footer = _5;
+                        Macros = _2;
+                        Rules = _4; } 
                 )
             : Specification))
     |]

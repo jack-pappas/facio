@@ -163,7 +163,7 @@ type Pattern =
     /// A character.
     | Character of char
     /// Match a character belonging to a specific Unicode category.
-    | UnicodeCategory of UnicodeCategory
+    | UnicodeCategory of string
 
     /// Returns a Pattern created by concatenating the Patterns in the specified list.
     [<CompiledName("ConcatenateList")>]

@@ -456,11 +456,11 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                 |> Choice2Of2
                 |> cont
 
-        | Pattern.UnicodeCategory unicodeCategory ->
+        | Pattern.UnicodeCategory abbrev ->
             if options.Unicode then
-                match Map.tryFind unicodeCategory Unicode.categoryCharSet with
+                match UnicodeCharSet.ofAbbreviation abbrev with
                 | None ->
-                    ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
+                    [ sprintf "Unknown or invalid Unicode category specified. (Category = %s)" abbrev ]
                     |> Choice2Of2
                     |> cont
                 | Some categoryCharSet ->
@@ -591,12 +591,12 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 Choice1Of2 nestedMacro
                 |> cont
 
-        | Pattern.UnicodeCategory unicodeCategory ->
+        | Pattern.UnicodeCategory abbrev ->
             if options.Unicode then
                 // Return the CharSet representing this UnicodeCategory.
-                match Map.tryFind unicodeCategory Unicode.categoryCharSet with
+                match UnicodeCharSet.ofAbbreviation abbrev with
                 | None ->
-                    [ sprintf "Unknown or invalid Unicode category specified. (Category = %i)" <| int unicodeCategory ]
+                    [ sprintf "Unknown or invalid Unicode category specified. (Category = %s)" abbrev ]
                     |> Choice2Of2
                     |> cont
                 | Some charSet ->
