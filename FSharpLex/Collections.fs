@@ -448,6 +448,9 @@ type private Range<'T when 'T : comparison> =
         { MinValue = rangeMin;
           MaxValue = rangeMax; }
 
+    override this.ToString () =
+        sprintf "[%O, %O]" this.MinValue this.MaxValue
+
 /// A Discrete Interval Encoding Tree (DIET).
 type private Diet<'T when 'T : comparison> =
     AvlTree<Range<'T>>
@@ -725,30 +728,40 @@ module private Diet =
     /// Returns a new set with the given element removed.
     /// No exception is thrown if the set doesn't contain the specified element.
     let rec remove (measurer : IMeasurer<_>) z (tree : Diet<'T>) : Diet<'T> =
+        let inline compare a b =
+            measurer.Compare (a, b)
+
         match tree with
         | AvlTree.Empty ->
             AvlTree.Empty
         | AvlTree.Node (range, left, right, h) ->
-            let czx = measurer.Compare (z, range.MinValue)
+            let czx = compare z range.MinValue
             if czx < 0 then
                 AvlTree.join range (remove measurer z left) right
             else
-                let cyz = measurer.Compare (range.MaxValue, z)
+                let cyz = compare range.MaxValue z
                 if cyz < 0 then
                     AvlTree.join range left (remove measurer z right)
                 elif cyz = 0 then
                     if czx = 0 then
                         AvlTree.reroot measurer left right
                     else
-                        AvlTree.Node (Range (range.MinValue, measurer.Previous range.MaxValue), left, right, h)
+                        let newRange = Range (range.MinValue, measurer.Previous range.MaxValue)
+                        AvlTree.Node (newRange, left, right, h)
                 elif czx = 0 then
-                    AvlTree.Node (Range (measurer.Next range.MinValue, range.MaxValue), left, right, h)
+                    let newRange = Range (measurer.Next range.MinValue, range.MaxValue)
+                    AvlTree.Node (newRange, left, right, h)
                 else
-                    AvlTree.Node (Range (range.MinValue, measurer.Previous z), left, right, h)
-                    |> addRange measurer (Range (measurer.Next z, range.MaxValue))
+                    let newRange = Range (range.MinValue, measurer.Previous z)
+                    let newRange' = Range (measurer.Next z, range.MaxValue)
+                    AvlTree.Node (newRange, left, right, h)
+                    |> addRange measurer newRange'
 
     /// Computes the union of the two sets.
     let rec union (measurer : IMeasurer<_>) (input : Diet<_>) (stream : Diet<_>) : Diet<'T> =
+        let inline compare a b =
+            measurer.Compare (a, b)
+
         let rec union' (input : Diet<_>) limit head (stream : Diet<_>) =
             match head with
             | None ->
@@ -759,7 +772,7 @@ module private Diet =
                     (AvlTree.Empty, head, stream)
                 | AvlTree.Node (rangeAB, left, right, _) ->
                     let left', head, stream =
-                        if measurer.Compare (rangeXY.MinValue, rangeAB.MinValue) < 0 then
+                        if compare rangeXY.MinValue rangeAB.MinValue < 0 then
                             union' left (Some (measurer.Previous rangeAB.MinValue)) head stream
                         else (left, head, stream)
 
@@ -774,22 +787,27 @@ module private Diet =
                     match limit with
                     | None -> false
                     | Some u ->
-                        measurer.Compare (z, u) >= 0
+                        compare z u >= 0
                 
-                if (measurer.Compare (rangeXY.MaxValue, rangeAB.MinValue) < 0) && (measurer.Compare (rangeXY.MaxValue, measurer.Previous rangeAB.MinValue) < 0) then
+                if compare rangeXY.MaxValue rangeAB.MinValue < 0 && compare rangeXY.MaxValue (measurer.Previous rangeAB.MinValue) < 0 then
                     let left' = addRange measurer rangeXY left
                     let head, stream = AvlTree.tryExtractMin measurer stream
                     union_helper left' rangeAB right limit head stream
-                elif (measurer.Compare (rangeXY.MinValue, rangeAB.MaxValue) > 0) && (measurer.Compare (rangeXY.MinValue, measurer.Next rangeAB.MaxValue) > 0) then
+
+                elif compare rangeXY.MinValue rangeAB.MaxValue > 0 && compare rangeXY.MinValue (measurer.Next rangeAB.MaxValue) > 0 then
                     let right', head, stream = union' right limit head stream
                     (AvlTree.join rangeAB left right', head, stream)
-                elif measurer.Compare (rangeAB.MaxValue, rangeXY.MaxValue) >= 0 then
+                elif compare rangeAB.MaxValue rangeXY.MaxValue >= 0 then
                     let head, stream = AvlTree.tryExtractMin measurer stream
-                    union_helper left (Range (min measurer rangeAB.MinValue rangeXY.MinValue, rangeAB.MaxValue)) right limit head stream
+                    let newRange = Range (min measurer rangeAB.MinValue rangeXY.MinValue, rangeAB.MaxValue)
+                    union_helper left newRange right limit head stream
                 elif greater_limit rangeXY.MaxValue then
-                    (left, Some (Range (min measurer rangeAB.MinValue rangeXY.MinValue, rangeXY.MaxValue)), stream)
+                    let newRange = Range (min measurer rangeAB.MinValue rangeXY.MinValue, rangeXY.MaxValue)
+                    (left, Some newRange, stream)
                 else
-                    let (right', head, stream) = union' right limit (Some (Range (min measurer rangeAB.MinValue rangeXY.MinValue, rangeXY.MaxValue))) stream
+                    let (right', head, stream) =
+                        let newRange = Range (min measurer rangeAB.MinValue rangeXY.MinValue, rangeXY.MaxValue)
+                        union' right limit (Some newRange) stream
                     (AvlTree.reroot measurer left right', head, stream)
         
         if AvlTree.height stream > AvlTree.height input then
@@ -824,6 +842,9 @@ module private Diet =
 
     /// Computes the intersection of the two sets.
     let rec intersect (measurer : IMeasurer<_>) (input : Diet<'T>) (stream : Diet<'T>) : Diet<'T> =
+        let inline compare a b =
+            measurer.Compare (a, b)
+
         let rec inter' (input : Diet<_>) head (stream : Diet<_>) =
             match head with
             | None ->
@@ -834,7 +855,7 @@ module private Diet =
                     AvlTree.Empty, head, stream
                 | AvlTree.Node (rangeAB, left, right, _) ->
                     let left, head, stream =
-                        if measurer.Compare (rangeXY.MinValue, rangeAB.MinValue) < 0 then
+                        if compare rangeXY.MinValue rangeAB.MinValue < 0 then
                             inter' left head stream
                         else
                             AvlTree.Empty, head, stream
@@ -845,21 +866,25 @@ module private Diet =
             | None ->
                 left, None, AvlTree.Empty
             | Some (rangeXY : Range<_>) ->
-                if measurer.Compare (rangeXY.MaxValue, rangeAB.MinValue) < 0 then
+                if compare rangeXY.MaxValue rangeAB.MinValue < 0 then
                     if AvlTree.isEmpty stream then
                         (left, None, AvlTree.Empty)
                     else
                         let head, stream = AvlTree.extractMin measurer stream
                         inter_help rangeAB right left (Some head) stream
-                elif measurer.Compare (rangeAB.MaxValue, rangeXY.MinValue) < 0 then
+                elif compare rangeAB.MaxValue rangeXY.MinValue < 0 then
                     let right, head, stream = inter' right head stream
                     AvlTree.reroot measurer left right, head, stream
-                elif measurer.Compare (rangeXY.MaxValue, safe_pred measurer rangeXY.MaxValue rangeAB.MaxValue) >= 0 then
+                elif compare rangeXY.MaxValue (safe_pred measurer rangeXY.MaxValue rangeAB.MaxValue) >= 0 then
                     let (right, head, stream) = inter' right head stream
-                    ((AvlTree.join (Range (max measurer rangeXY.MinValue rangeAB.MinValue, min measurer rangeXY.MaxValue rangeAB.MaxValue)) left right), head, stream)
+                    let newRange = Range (max measurer rangeXY.MinValue rangeAB.MinValue, min measurer rangeXY.MaxValue rangeAB.MaxValue)
+                    ((AvlTree.join newRange left right), head, stream)
                 else
-                    let left = addRange measurer (Range (max measurer rangeXY.MinValue rangeAB.MinValue, rangeXY.MaxValue)) left
-                    inter_help (Range (measurer.Next rangeXY.MaxValue, rangeAB.MaxValue)) right left head stream
+                    let left =
+                        let newRange = Range (max measurer rangeXY.MinValue rangeAB.MinValue, rangeXY.MaxValue)
+                        addRange measurer newRange left
+                    let newRange = Range (measurer.Next rangeXY.MaxValue, rangeAB.MaxValue)
+                    inter_help newRange right left head stream
 
         if AvlTree.height stream > AvlTree.height input then
             intersect measurer stream input
@@ -1016,16 +1041,19 @@ module private Diet =
 
     //
     let rec split (measurer : IMeasurer<_>) x (tree : Diet<'T>) =
+        let inline compare a b =
+            measurer.Compare (a, b)
+
         match tree with
         | AvlTree.Empty ->
             AvlTree.Empty, false, AvlTree.Empty
         | AvlTree.Node (rangeAB : Range<_>, l, r, _) ->
-            let cxa = measurer.Compare (x, rangeAB.MinValue)
+            let cxa = compare x rangeAB.MinValue
             if cxa < 0 then
                 let ll, pres, rl = split measurer x l
                 ll, pres, AvlTree.join rangeAB rl r
             else
-                let cbx = measurer.Compare (rangeAB.MaxValue, x)
+                let cbx = compare rangeAB.MaxValue x
                 if cbx < 0 then
                     let lr, pres, rr = split measurer x r
                     AvlTree.join rangeAB l lr, pres, rr
