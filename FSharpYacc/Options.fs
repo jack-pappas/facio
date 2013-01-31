@@ -16,11 +16,20 @@ namespace FSharpYacc
 type FsyaccBackendOptions = {
     /// The output path. The generated code will be written to this file.
     OutputPath : string;
-    /// When set, the parser module will be generated with the 'internal' visibility modifier.
-    InternalModule : bool;
     /// The name to use for the generated parser module.
     /// If not set, a default value is used instead.
     ModuleName : string option;
+    /// The namespace containing the lexer interpreter.
+    /// If not set, a default value is used instead.
+    LexerInterpreterNamespace : string option;
+    /// The namespace containing the lexer interpreter.
+    /// If not set, a default value is used instead.
+    ParserInterpreterNamespace : string option;
+    /// When generating the parser code, F# 'open' declarations are generated
+    /// for these modules/namespace names (in addition to those emitted by default).
+    OpenDeclarations : string[];
+    /// When set, the parser module will be generated with the 'internal' visibility modifier.
+    InternalModule : bool;
 }
 
 (* END: Backend-specific options *)

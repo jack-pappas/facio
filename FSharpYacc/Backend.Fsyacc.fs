@@ -175,9 +175,13 @@ module private FsYacc =
 
     /// Emits F# code which creates the 'tables' record and defines the
     /// parser functions into an IndentedTextWriter.
-    let private tablesRecordAndParserFunctions typedStartSymbols terminalCount (writer : IndentedTextWriter) =
+    let private tablesRecordAndParserFunctions
+                    typedStartSymbols terminalCount (options, writer : IndentedTextWriter) =
+        /// The namespace where the parser interpreter can be found.
+        let parsingNamespace = defaultArg options.ParserInterpreterNamespace defaultParsingNamespace
+
         // Emit the 'tables' record.
-        fprintfn writer "let tables () : %s.Tables<_> = {" defaultParsingNamespace
+        fprintfn writer "let tables () : %s.Tables<_> = {" parsingNamespace
         IndentedTextWriter.indented writer <| fun writer ->
             writer.WriteLine "reductions = _fsyacc_reductions ();"
             writer.WriteLine "endOfInputTag = _fsyacc_endOfInputTag;"
@@ -195,7 +199,7 @@ module private FsYacc =
 
             writer.WriteLine "parseError ="
             IndentedTextWriter.indented writer <| fun writer ->
-                fprintfn writer "(fun (ctxt : %s.ParseErrorContext<_>) ->" defaultParsingNamespace
+                fprintfn writer "(fun (ctxt : %s.ParseErrorContext<_>) ->" parsingNamespace
                 IndentedTextWriter.indented writer <| fun writer ->
                     writer.WriteLine "match parse_error_rich with"
                     writer.WriteLine "| Some f -> f ctxt"
@@ -906,9 +910,10 @@ module private FsYacc =
     let private reduction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
                            nonterminal : NonterminalIdentifier,
                            symbols : Symbol<NonterminalIdentifier, TerminalIdentifier>[],
-                           action : CodeFragment) (writer : IndentedTextWriter) : unit =
+                           action : CodeFragment) (options, writer : IndentedTextWriter) : unit =
         // Write the function declaration for this semantic action.
-        fprintfn writer "(fun (parseState : %s.IParseState) ->" defaultParsingNamespace
+        fprintfn writer "(fun (parseState : %s.IParseState) ->"
+            <| defaultArg options.ParserInterpreterNamespace defaultParsingNamespace
         IndentedTextWriter.indented writer <| fun writer ->
         // Emit code to get the values of symbols carrying data values.
         symbols
@@ -1012,11 +1017,12 @@ module private FsYacc =
 
     /// Emits the user-defined semantic actions for the reductions.
     let private reductions (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-                           (writer : IndentedTextWriter) : unit =
+                           (options, writer : IndentedTextWriter) : unit =
         /// The default action to execute when a production rule
         /// has no semantic action code associated with it.
         let defaultAction =
-            sprintf "raise (%s.Accept (Microsoft.FSharp.Core.Operators.box _1))" defaultParsingNamespace
+            sprintf "raise (%s.Accept (Microsoft.FSharp.Core.Operators.box _1))"
+                <| defaultArg options.ParserInterpreterNamespace defaultParsingNamespace
 
         // _fsyacc_reductions
         writer.WriteLine "let private _fsyacc_reductions () = [|"
@@ -1025,7 +1031,7 @@ module private FsYacc =
             processedSpec.StartSymbols
             |> Set.iter (fun startSymbol ->
                 let startNonterminal = "_start" + startSymbol
-                reduction (processedSpec, startNonterminal, [| Symbol.Nonterminal startSymbol |], defaultAction) writer)
+                reduction (processedSpec, startNonterminal, [| Symbol.Nonterminal startSymbol |], defaultAction) (options, writer))
 
             // Emit the actions for each of the production rules.
             processedSpec.ProductionRules
@@ -1036,7 +1042,7 @@ module private FsYacc =
                         let action = Option.map replaceSymbolPlaceholders rule.Action
                         defaultArg action defaultAction
 
-                    reduction (processedSpec, nonterminal, rule.Symbols, action) writer))
+                    reduction (processedSpec, nonterminal, rule.Symbols, action) (options, writer)))
             
             // Emit the closing bracket of the array.
             writer.WriteLine "|]"
@@ -1067,11 +1073,16 @@ module private FsYacc =
         comment writer "turn off warnings that type variables used in production annotations are instantiated to concrete type"
         writer.WriteLine ()
 
-        (* Emit the "open" statements. *)
+        (* Emit the default "open" declarations. *)
         [|  defaultLexingNamespace;
             defaultParsingNamespace + ".ParseHelpers"; |]
         |> Array.iter (fprintfn writer "open %s")
         writer.WriteLine ()
+
+        (* Emit additional "open" declarations, if any. *)
+        if not <| Array.isEmpty options.OpenDeclarations then
+            Array.iter (fprintfn writer "open %s") options.OpenDeclarations
+            writer.WriteLine ()
 
         (* Emit the header code. *)
         processedSpec.Header
@@ -1095,7 +1106,7 @@ module private FsYacc =
 
         // Emit the parser tables.
         parserTables (processedSpec, parserTable, productionIndices) writer
-        reductions processedSpec writer
+        reductions processedSpec (options, writer)
 
         do
             // Emit the parser "tables" record and parser functions.
@@ -1114,7 +1125,7 @@ module private FsYacc =
 
                     Map.add startSymbol startSymbolType typedStartSymbols)
 
-            tablesRecordAndParserFunctions typedStartSymbols terminalCount writer
+            tablesRecordAndParserFunctions typedStartSymbols terminalCount (options, writer)
 
         // Flush the writer before returning, to force it to write any
         // output text remaining in it's internal buffer.
