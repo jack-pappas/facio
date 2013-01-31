@@ -41,7 +41,7 @@ module private AvlTree =
     let empty : AvlTree<'T> = AvlTree.Empty
 
     /// Returns the height of an AVL tree's root node.
-    let rec private ht (tree : AvlTree<'T>) =
+    let private ht (tree : AvlTree<'T>) =
         match tree with
         | Empty -> 0u
         | Node (_,_,_,h) -> h
@@ -279,22 +279,6 @@ module private AvlTree =
         ||> fold (fun count _ ->
             count + 1)
 
-    /// Extracts the maximum (greatest) value from an AVL tree,
-    /// returning the value along with the updated tree.
-    let rec extractMax (comparer : IComparer<_>) (tree : AvlTree<'T>) =
-        match tree with
-        | Empty ->
-            invalidArg "tree" "The tree is empty."
-        | Node (n, l, Empty, _) ->
-            n, l
-        | Node (x, l, Node (a, mid, right, _), _) ->
-            // Rebalance the tree at the same time we're traversing downwards
-            // to find the maximum value. This avoids the need to perform a
-            // second traversal to remove the element once it's found.
-            let n = create x l mid
-            create a n right
-            |> extractMax comparer
-
     /// Extracts the minimum (least) value from an AVL tree,
     /// returning the value along with the updated tree.
     let rec extractMin (comparer : IComparer<_>) (tree : AvlTree<'T>) =
@@ -311,17 +295,6 @@ module private AvlTree =
             create a left n
             |> extractMin comparer
 
-    /// Extracts the maximum (greatest) value from an AVL tree,
-    /// returning the value along with the updated tree.
-    /// No exception is thrown if the tree is empty.
-    let tryExtractMax (comparer : IComparer<_>) (tree : AvlTree<'T>) =
-        // Is the tree empty?
-        if isEmpty tree then
-            None, tree
-        else
-            let maxElement, tree = extractMax comparer tree
-            Some maxElement, tree
-
     /// Extracts the minimum (least) value from an AVL tree,
     /// returning the value along with the updated tree.
     /// No exception is thrown if the tree is empty.
@@ -332,6 +305,33 @@ module private AvlTree =
         else
             let minElement, tree = extractMin comparer tree
             Some minElement, tree
+
+    /// Extracts the maximum (greatest) value from an AVL tree,
+    /// returning the value along with the updated tree.
+    let rec extractMax (comparer : IComparer<_>) (tree : AvlTree<'T>) =
+        match tree with
+        | Empty ->
+            invalidArg "tree" "The tree is empty."
+        | Node (n, l, Empty, _) ->
+            n, l
+        | Node (x, l, Node (a, mid, right, _), _) ->
+            // Rebalance the tree at the same time we're traversing downwards
+            // to find the maximum value. This avoids the need to perform a
+            // second traversal to remove the element once it's found.
+            let n = create x l mid
+            create a n right
+            |> extractMax comparer
+
+    /// Extracts the maximum (greatest) value from an AVL tree,
+    /// returning the value along with the updated tree.
+    /// No exception is thrown if the tree is empty.
+    let tryExtractMax (comparer : IComparer<_>) (tree : AvlTree<'T>) =
+        // Is the tree empty?
+        if isEmpty tree then
+            None, tree
+        else
+            let maxElement, tree = extractMax comparer tree
+            Some maxElement, tree
 
     /// Merges two AVL trees and returns the result.
     let union (comparer : IComparer<_>) (tree1 : AvlTree<'T>) (tree2 : AvlTree<'T>) =
@@ -426,6 +426,8 @@ type private IMeasurer<'T> =
 
 //
 [<Struct>]
+[<DebuggerDisplay("Min = {MinValue}, Max = {MaxValue}")>]
+[<StructuredFormatDisplay("[{MinValue}, {MaxValue}]")>]
 type private Range<'T when 'T : comparison> =
     //
     val MinValue : 'T
@@ -523,13 +525,11 @@ module private Diet =
 
         /// Reroot of balanced trees.
         let reroot (comparer : IComparer<_>) l (r : AvlTree<'T>) =
-            match r with
-            | Empty ->
-                Empty
-            | _ ->
-                if AvlTree.height l > AvlTree.height r then
-                    let i, l' = AvlTree.extractMax comparer l
-                    join i l' r
+            if AvlTree.height l > AvlTree.height r then
+                let i, l' = AvlTree.extractMax comparer l
+                join i l' r
+            else
+                if AvlTree.isEmpty r then Empty
                 else
                     let i, r' = AvlTree.extractMin comparer r
                     join i l r'
@@ -749,69 +749,6 @@ module private Diet =
 
     /// Computes the union of the two sets.
     let rec union (measurer : IMeasurer<_>) (input : Diet<_>) (stream : Diet<_>) : Diet<'T> =
-        let rec union' (input : Diet<_>) limit head (stream : Diet<_>) cont =
-            match head with
-            | None ->
-                cont (input, None, AvlTree.Empty)
-            | Some (rangeXY : Range<_>) ->
-                match input with
-                | AvlTree.Empty ->
-                    cont (AvlTree.Empty, head, stream)
-                | AvlTree.Node (rangeAB, left, right, _) ->
-                    if measurer.Compare (rangeXY.MinValue, rangeAB.MinValue) < 0 then
-                        union' left (Some (measurer.Previous rangeAB.MinValue)) head stream <| fun (left', head, stream) ->
-                            union_helper left' rangeAB right limit head stream
-                            |> cont
-                    else
-                        union_helper left rangeAB right limit head stream
-                        |> cont
-
-        and union_helper left (rangeAB : Range<_>) right limit head stream =
-            match head with
-            | None ->
-                (AvlTree.join rangeAB left right, None, AvlTree.Empty)
-            | Some (rangeXY : Range<_>) ->
-                let greater_limit z =
-                    match limit with
-                    | None -> false
-                    | Some u ->
-                        measurer.Compare (z, u) >= 0
-                
-                if measurer.Compare (rangeXY.MaxValue, rangeAB.MinValue) < 0 &&
-                   measurer.Compare (rangeXY.MaxValue, measurer.Previous rangeAB.MinValue) < 0 then
-                    let left' = addRange measurer rangeXY left
-                    let head, stream = AvlTree.tryExtractMin measurer stream
-                    union_helper left' rangeAB right limit head stream
-
-                elif measurer.Compare (rangeXY.MinValue, rangeAB.MaxValue) > 0 &&
-                     measurer.Compare (rangeXY.MinValue, measurer.Next rangeAB.MaxValue) > 0 then
-                    union' right limit head stream <| fun (right', head, stream) ->
-                        (AvlTree.join rangeAB left right', head, stream)
-
-                elif measurer.Compare (rangeAB.MaxValue, rangeXY.MaxValue) >= 0 then
-                    let head, stream = AvlTree.tryExtractMin measurer stream
-                    union_helper left (Range (min measurer rangeAB.MinValue rangeXY.MinValue, rangeAB.MaxValue)) right limit head stream
-
-                elif greater_limit rangeXY.MaxValue then
-                    (left, Some (Range (min measurer rangeAB.MinValue rangeXY.MinValue, rangeXY.MaxValue)), stream)
-
-                else
-                    union' right limit (Some (Range (min measurer rangeAB.MinValue rangeXY.MinValue, rangeXY.MaxValue))) stream <| fun (right', head, stream) ->
-                        (AvlTree.reroot measurer left right', head, stream)
-        
-        if AvlTree.height stream > AvlTree.height input then
-            union measurer stream input
-        else
-            let head, stream = AvlTree.tryExtractMin measurer stream
-            let result, head, stream = union' input None head stream id
-            match head with
-            | None ->
-                result
-            | Some i ->
-                AvlTree.join i result stream
-
-    /// Computes the union of the two sets.
-    let rec union' (measurer : IMeasurer<_>) (input : Diet<_>) (stream : Diet<_>) : Diet<'T> =
         let rec union' (input : Diet<_>) limit head (stream : Diet<_>) =
             match head with
             | None ->
@@ -858,13 +795,32 @@ module private Diet =
         if AvlTree.height stream > AvlTree.height input then
             union measurer stream input
         else
+            #if DEBUG
+            /// The minimum possible number of elements in the resulting set.
+            let minPossibleResultCount =
+                let inputCount = count measurer input
+                let streamCount = count measurer stream
+                GenericMaximum inputCount streamCount
+            #endif
+
             let head, stream = AvlTree.tryExtractMin measurer stream
             let result, head, stream = union' input None head stream
-            match head with
-            | None ->
-                result
-            | Some i ->
-                AvlTree.join i result stream
+            let result =
+                match head with
+                | None ->
+                    result
+                | Some i ->
+                    AvlTree.join i result stream
+
+            #if DEBUG
+            let resultCount = count measurer result
+            Debug.Assert (
+                resultCount >= minPossibleResultCount,
+                sprintf "The result set should not contain fewer than %i elements, but it contains only %i elements."
+                    minPossibleResultCount resultCount)
+            #endif
+
+            result
 
     /// Computes the intersection of the two sets.
     let rec intersect (measurer : IMeasurer<_>) (input : Diet<'T>) (stream : Diet<'T>) : Diet<'T> =
@@ -889,25 +845,21 @@ module private Diet =
             | None ->
                 left, None, AvlTree.Empty
             | Some (rangeXY : Range<_>) ->
-                let cya = measurer.Compare (rangeXY.MaxValue, rangeAB.MinValue)
-                if cya < 0 then
+                if measurer.Compare (rangeXY.MaxValue, rangeAB.MinValue) < 0 then
                     if AvlTree.isEmpty stream then
                         (left, None, AvlTree.Empty)
                     else
                         let head, stream = AvlTree.extractMin measurer stream
                         inter_help rangeAB right left (Some head) stream
+                elif measurer.Compare (rangeAB.MaxValue, rangeXY.MinValue) < 0 then
+                    let right, head, stream = inter' right head stream
+                    AvlTree.reroot measurer left right, head, stream
+                elif measurer.Compare (rangeXY.MaxValue, safe_pred measurer rangeXY.MaxValue rangeAB.MaxValue) >= 0 then
+                    let (right, head, stream) = inter' right head stream
+                    ((AvlTree.join (Range (max measurer rangeXY.MinValue rangeAB.MinValue, min measurer rangeXY.MaxValue rangeAB.MaxValue)) left right), head, stream)
                 else
-                    let cbx = measurer.Compare (rangeAB.MaxValue, rangeXY.MinValue)
-                    if cbx < 0 then
-                        let right, head, stream = inter' right head stream
-                        AvlTree.reroot measurer left right, head, stream
-                    else
-                        if measurer.Compare (rangeXY.MaxValue, safe_pred measurer rangeXY.MaxValue rangeAB.MaxValue) >= 0 then
-                            let (right, head, stream) = inter' right head stream
-                            ((AvlTree.join (Range (max measurer rangeXY.MinValue rangeAB.MinValue, min measurer rangeXY.MaxValue rangeAB.MaxValue)) left right), head, stream)
-                        else
-                            let left = addRange measurer (Range (max measurer rangeXY.MinValue rangeAB.MinValue, rangeXY.MaxValue)) left
-                            inter_help (Range (measurer.Next rangeXY.MaxValue, rangeAB.MaxValue)) right left head stream
+                    let left = addRange measurer (Range (max measurer rangeXY.MinValue rangeAB.MinValue, rangeXY.MaxValue)) left
+                    inter_help (Range (measurer.Next rangeXY.MaxValue, rangeAB.MaxValue)) right left head stream
 
         if AvlTree.height stream > AvlTree.height input then
             intersect measurer stream input
@@ -920,6 +872,9 @@ module private Diet =
 
     /// Returns a new set with the elements of the second set removed from the first.
     let difference (measurer : IMeasurer<_>) (input : Diet<'T>) (stream : Diet<'T>) : Diet<'T> =
+        let inline compare a b =
+            measurer.Compare (a, b)
+
         let rec diff' input head stream =
             match head with
             | None ->
@@ -930,7 +885,7 @@ module private Diet =
                     (AvlTree.Empty, head, stream)
                 | AvlTree.Node (rangeAB : Range<_>, left, right, _) ->
                     let left, head, stream =
-                        if measurer.Compare (rangeXY.MinValue, rangeAB.MinValue) < 0 then
+                        if compare rangeXY.MinValue rangeAB.MinValue < 0 then
                             diff' left head stream
                         else
                             left, head, stream
@@ -943,24 +898,31 @@ module private Diet =
                 None,
                 AvlTree.Empty
             | Some (rangeXY : Range<_>) ->
-                let cya = measurer.Compare (rangeXY.MaxValue, rangeAB.MinValue)
-                if cya < 0 then
+                if compare rangeXY.MaxValue rangeAB.MinValue < 0 then
+                    // [x, y] and [a, b] are disjoint
                     let head, stream = AvlTree.tryExtractMin measurer stream
                     diff_helper rangeAB right left head stream
+                elif compare rangeAB.MaxValue rangeXY.MinValue < 0 then
+                    // [a, b] and [x, y] are disjoint
+                    let (right, head, stream) = diff' right head stream
+                    (AvlTree.join rangeAB left right, head, stream)
+                elif compare rangeAB.MinValue rangeXY.MinValue < 0 then
+                    // [a, b] and [x, y] overlap
+                    // a < x
+                    let rangeXB = Range (rangeXY.MinValue, rangeAB.MaxValue)
+                    let newRange = Range (rangeAB.MinValue, measurer.Previous rangeXY.MinValue)
+                    let newLeft = addRange measurer newRange left
+                    diff_helper rangeXB right newLeft head stream
+                elif compare rangeXY.MaxValue rangeAB.MaxValue < 0 then
+                    // [a, b] and [x, y] overlap
+                    // y < b
+                    let (head, stream) = AvlTree.tryExtractMin measurer stream
+                    let newRange = Range (measurer.Next rangeXY.MaxValue, rangeAB.MaxValue)
+                    diff_helper newRange right left head stream
                 else
-                    let cbx = measurer.Compare (rangeAB.MaxValue, rangeXY.MinValue)
-                    if cbx < 0 then
-                        let (right, head, stream) = diff' right head stream
-                        (AvlTree.join rangeAB left right, head, stream)
-                    elif measurer.Compare (rangeAB.MinValue, rangeXY.MinValue) < 0 then
-                        let rangeXB = Range (rangeXY.MinValue, rangeAB.MaxValue)
-                        diff_helper rangeXB right ((addRange measurer (Range (rangeAB.MinValue, measurer.Previous rangeXY.MinValue)) left)) head stream
-                    elif measurer.Compare (rangeXY.MaxValue, rangeAB.MaxValue) < 0 then
-                        let (head, stream) = AvlTree.tryExtractMin measurer stream
-                        diff_helper (Range (measurer.Next rangeXY.MaxValue, rangeAB.MaxValue)) right left head stream
-                    else
-                        let (right, head, stream) = diff' right head stream
-                        (AvlTree.reroot measurer left right, head, stream)
+                    // [a, b] and [x, y] overlap
+                    let (right, head, stream) = diff' right head stream
+                    (AvlTree.reroot measurer left right, head, stream)
         
         if AvlTree.isEmpty stream then
             input
@@ -970,14 +932,11 @@ module private Diet =
             let minPossibleResultCount =
                 let inputCount = count measurer input
                 let streamCount = count measurer stream
-
-                if inputCount > streamCount then
-                    inputCount - streamCount
-                else 0
+                GenericMaximum 0 (inputCount - streamCount)
             #endif
 
-            let head, stream = AvlTree.extractMin measurer stream
-            let result, _, _ = diff' input (Some head) stream
+            let head, stream' = AvlTree.extractMin measurer stream
+            let result, _, _ = diff' input (Some head) stream'
 
             #if DEBUG
             let resultCount = count measurer result
