@@ -140,15 +140,8 @@ type Regex with
         | Any as regex ->
             cont regex
 
-        | CharacterSet charSet as charSetRegex ->
-            match CharSet.count charSet with
-            | 0 ->
-                Regex.empty
-            | 1 ->
-                CharSet.minElement charSet
-                |> Regex.ofChar
-            | _ ->
-                charSetRegex
+        | CharacterSet _ as charSetRegex ->
+            charSetRegex
             |> cont
 
         | Negate Empty ->
