@@ -1103,11 +1103,7 @@ let lexerSpec (spec : Specification) options =
         let compiledRules, compilationErrors =
             let compiledRulesOrErrors =
                 rules
-                #if PARALLEL_FX
-                |> Array.Parallel.map (fun rule ->
-                #else
                 |> Array.map (fun rule ->
-                #endif
                     compileRule rule options (macroEnv, Set.empty))
 
             let compiledRules = ResizeArray<_> (Array.length rules)
