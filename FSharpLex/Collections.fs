@@ -41,7 +41,7 @@ module private AvlTree =
     let empty : AvlTree<'T> = AvlTree.Empty
 
     /// Returns the height of an AVL tree's root node.
-    let private ht (tree : AvlTree<'T>) =
+    let internal ht (tree : AvlTree<'T>) =
         match tree with
         | Empty -> 0u
         | Node (_,_,_,h) -> h
@@ -126,6 +126,8 @@ module private AvlTree =
                 |> cont
 
     /// Returns the height of an AVL tree.
+    // OPTIMIZE : Most of the AVL functions below can use the much-faster
+    // 'ht' function instead of this function.
     let height (tree : AvlTree<'T>) =
         heightRec tree id
 
