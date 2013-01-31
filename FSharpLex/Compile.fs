@@ -1031,7 +1031,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
                 // transition edges to it from the initial state.
                 if CharSet.isEmpty wildcardChars then
                     // TODO : Emit a warning to let the user know this pattern will never be matched.
-                    //
+                    Debug.WriteLine "Warning: Wildcard pattern in rule will never be matched."
 
                     compiledPatternDfa
                 else
