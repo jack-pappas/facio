@@ -172,6 +172,8 @@ module Program =
 
                 0   // Exit code: Success
 
+    (* TEMP :   These defaults will be moved into the 'fsyacc'-compatible backend once we implement
+                a way for the backends to "export" a list of the arguments/options they accept. *)
     //
     let [<Literal>] private defaultLexerInterpreterNamespace = "Microsoft.FSharp.Text.Lexing"
     //
@@ -183,41 +185,38 @@ module Program =
     [<EntryPoint; CompiledName("Main")>]
     let main (options : string[]) =
         // Variables to hold parsed command-line arguments.
-        let inputFile = ref None
+        let outputPath = ref None
+        let createListing = ref false
         let generatedModuleName = ref None
         let internalModule = ref false
-        //let opens = ref []
-        let outputFile = ref None
-        //let tokenize = ref false
-        //let compat = ref false
-        //let log = ref false
+        let openDeclarations = ResizeArray ()
+        //let mlCompatible = ref false
+        let lexerInterpreterNamespace = ref None
+        let parserInterpreterNamespace = ref None
         //let inputCodePage = ref None
-        let lexerInterpreterNamespace = ref defaultLexerInterpreterNamespace
-        let parserInterpreterNamespace = ref defaultParserInterpreterNamespace
+        let inputFile = ref None
 
         /// Command-line options.
         let usage =
-            [   ArgInfo("-o", ArgType.String (fun s -> outputFile := Some s),
-                    "Name the output file.");
-//                ArgInfo("-v", ArgType.Unit (fun () -> log := true),
-//                    "Produce a listing file."); 
+            [   ArgInfo("-o", ArgType.String (fun s -> outputPath := Some s),
+                    "The path where the output file will be written.");
+                ArgInfo("-v", ArgType.Unit (fun () -> createListing := true),
+                    "Produce a listing file.");
                 ArgInfo("--module", ArgType.String (fun s -> generatedModuleName := Some s),
                     sprintf "The name to use for the F# module containing the generated parser. \
                      The default is '%s'." defaultParserModuleName);
                 ArgInfo("--internal", ArgType.Unit (fun () -> internalModule := true),
                     "Generate an internal module");
-//                ArgInfo("--open", ArgType.String (fun s -> opens := !opens @ [s]),
-//                    "Add the given module to the list of those to open in both the generated signature and implementation.");
-//                ArgInfo("--ml-compatibility", ArgType.Set compat,
-//                    "Support the use of the global state from the 'Parsing' module in FSharp.PowerPack.dll.");
-//                ArgInfo("--tokens", ArgType.Set tokenize,
-//                    "Simply tokenize the specification file itself.");
-//                ArgInfo("--lexlib", ArgType.String (fun s -> lexerInterpreterNamespace := s),
-//                    sprintf "Specify the namespace for the implementation of the lexer table interpreter. \
-//                     The default is '%s'." defaultLexerInterpreterNamespace);
-//                ArgInfo("--parslib", ArgType.String (fun s -> parserInterpreterNamespace := s),
-//                    sprintf "Specify the namespace for the implementation of the parser table interpreter. \
-//                     The default is '%s'." defaultParserInterpreterNamespace);
+                ArgInfo("--open", ArgType.String openDeclarations.Add,
+                    "Add the given module to the list of those to open in both the generated signature and implementation.");
+//                ArgInfo("--ml-compatibility", ArgType.Set mlCompatible,
+//                    "Support the use of the global state from the 'Parsing' module in FSharp.Compatibility.OCaml.dll (available on NuGet).");
+                ArgInfo("--lexlib", ArgType.String (fun s -> lexerInterpreterNamespace := Some s),
+                    sprintf "Specify the namespace for the implementation of the lexer table interpreter. \
+                     The default is '%s'." defaultLexerInterpreterNamespace);
+                ArgInfo("--parslib", ArgType.String (fun s -> parserInterpreterNamespace := Some s),
+                    sprintf "Specify the namespace for the implementation of the parser table interpreter. \
+                     The default is '%s'." defaultParserInterpreterNamespace);
 //                ArgInfo("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
 //                    "Assume input lexer specification file is encoded with the given codepage.");
                 ]
@@ -240,8 +239,8 @@ module Program =
         // TODO
 
         // If the output file is not specified, use a default value.
-        if Option.isNone !outputFile then
-            outputFile := Some <| System.IO.Path.ChangeExtension (Option.get !inputFile, "fs")
+        if Option.isNone !outputPath then
+            outputPath := Some <| System.IO.Path.ChangeExtension (Option.get !inputFile, "fs")
 
         // Create a CompilationOptions record from the parsed arguments
         // and call the 'invoke' function with it.
@@ -249,9 +248,13 @@ module Program =
             ParserType = ParserType.Lalr1;
             // TEMP
             FsyaccBackendOptions = Some {
-                OutputPath = Option.get !outputFile;
+                OutputPath = Option.get !outputPath;
+                ModuleName = !generatedModuleName;
+                LexerInterpreterNamespace = !lexerInterpreterNamespace;
+                ParserInterpreterNamespace = !parserInterpreterNamespace;
+                OpenDeclarations = openDeclarations.ToArray ();
                 InternalModule = !internalModule;
-                ModuleName = !generatedModuleName; };
+                };
             })
         
 
