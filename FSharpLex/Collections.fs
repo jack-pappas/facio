@@ -637,6 +637,18 @@ module private Diet =
             Range (minValue, maxValue)
             |> AvlTree.singleton
 
+    /// Returns the number of elements in the set.
+    let count (measurer : IMeasurer<_>) (t : Diet<'T>) =
+        let rec cardinal_aux acc = function
+            | [] -> acc
+            | AvlTree.Empty :: ts ->
+                cardinal_aux acc ts
+            | AvlTree.Node (range : Range<_>, left, right, _) :: ts ->
+                let dist = measurer.Distance (range.MinValue, range.MaxValue)
+                cardinal_aux (acc + dist + 1) (left :: right :: ts)
+        
+        cardinal_aux 0 [t]
+
     //
     let rec private addRec (measurer : IMeasurer<_>) p (tree : Diet<'T>) cont : Diet<_> =
         match tree with
@@ -941,7 +953,8 @@ module private Diet =
                         let (right, head, stream) = diff' right head stream
                         (AvlTree.join rangeAB left right, head, stream)
                     elif measurer.Compare (rangeAB.MinValue, rangeXY.MinValue) < 0 then
-                        diff_helper (Range (rangeXY.MinValue, rangeAB.MaxValue)) right ((addRange measurer (Range (rangeAB.MinValue, measurer.Previous rangeXY.MinValue)) left)) head stream
+                        let rangeXB = Range (rangeXY.MinValue, rangeAB.MaxValue)
+                        diff_helper rangeXB right ((addRange measurer (Range (rangeAB.MinValue, measurer.Previous rangeXY.MinValue)) left)) head stream
                     elif measurer.Compare (rangeXY.MaxValue, rangeAB.MaxValue) < 0 then
                         let (head, stream) = AvlTree.tryExtractMin measurer stream
                         diff_helper (Range (measurer.Next rangeXY.MaxValue, rangeAB.MaxValue)) right left head stream
@@ -952,8 +965,28 @@ module private Diet =
         if AvlTree.isEmpty stream then
             input
         else
+            #if DEBUG
+            /// The minimum possible number of elements in the resulting set.
+            let minPossibleResultCount =
+                let inputCount = count measurer input
+                let streamCount = count measurer stream
+
+                if inputCount > streamCount then
+                    inputCount - streamCount
+                else 0
+            #endif
+
             let head, stream = AvlTree.extractMin measurer stream
             let result, _, _ = diff' input (Some head) stream
+
+            #if DEBUG
+            let resultCount = count measurer result
+            Debug.Assert (
+                resultCount >= minPossibleResultCount,
+                sprintf "The result set should not contain fewer than %i elements, but it contains only %i elements."
+                    minPossibleResultCount resultCount)
+            #endif
+
             result
 
     /// Comparison function for DIETs.
@@ -1010,18 +1043,6 @@ module private Diet =
             folder p state
 
         AvlTree.foldBack rangeFolder tree state
-
-    /// Returns the number of elements in the set.
-    let count (measurer : IMeasurer<_>) (t : Diet<'T>) =
-        let rec cardinal_aux acc = function
-            | [] -> acc
-            | AvlTree.Empty :: ts ->
-                cardinal_aux acc ts
-            | AvlTree.Node (range : Range<_>, left, right, _) :: ts ->
-                let dist = measurer.Distance (range.MinValue, range.MaxValue)
-                cardinal_aux (acc + dist + 1) (left :: right :: ts)
-        
-        cardinal_aux 0 [t]
 
     /// Returns the number of intervals in the set.
     let intervalCount (t : Diet<'T>) =
