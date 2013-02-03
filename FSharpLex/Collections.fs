@@ -451,6 +451,17 @@ type private Range<'T when 'T : comparison> =
     override this.ToString () =
         sprintf "[%O, %O]" this.MinValue this.MaxValue
 
+    //
+    member this.ToSeq (measurer : IMeasurer<_>) =
+        let maxValue = this.MaxValue
+        let rec loop current = seq {
+            if current <= maxValue then
+                yield current
+                yield! loop (measurer.Next current)
+            }
+
+        loop this.MinValue
+
 /// A Discrete Interval Encoding Tree (DIET).
 type private Diet<'T when 'T : comparison> =
     AvlTree<Range<'T>>
@@ -568,8 +579,8 @@ module private Diet =
             cont (p, AvlTree.Empty)
         | AvlTree.Node (range, left, right, _) ->
             if measurer.Compare (p, measurer.Next range.MaxValue) > 0 then
-                find_del_left_rec measurer p right <| fun (p', right') ->
-                    cont (p', AvlTree.join range left right')
+                find_del_left_rec measurer p right <| fun (p, right) ->
+                    cont (p, AvlTree.join range left right)
             elif measurer.Compare (p, range.MinValue) < 0 then
                 find_del_left_rec measurer p left cont
             else
@@ -586,8 +597,8 @@ module private Diet =
             cont (p, AvlTree.Empty)
         | AvlTree.Node (range, left, right, _) ->
             if measurer.Compare (p, measurer.Previous range.MinValue) < 0 then
-                find_del_right_rec measurer p left <| fun (p', left') ->
-                    cont (p', AvlTree.join range left' right)
+                find_del_right_rec measurer p left <| fun (p, left) ->
+                    cont (p, AvlTree.join range left right)
             elif measurer.Compare (p, range.MaxValue) > 0 then
                 find_del_right_rec measurer p right cont
             else
@@ -652,50 +663,137 @@ module private Diet =
         
         cardinal_aux 0 [t]
 
+    /// Returns the number of intervals in the set.
+    let intervalCount (t : Diet<'T>) =
+        let rec cardinal_aux acc = function
+            | [] -> acc
+            | AvlTree.Empty :: ts ->
+                cardinal_aux acc ts
+            | AvlTree.Node (range : Range<_>, left, right, _) :: ts ->
+                cardinal_aux (acc + 1) (left :: right :: ts)
+        
+        cardinal_aux 0 [t]
+
+    /// Applies the given accumulating function to all elements in a DIET.
+    let fold (folder : 'State -> _ -> 'State) (measurer : IMeasurer<_>) (state : 'State) (tree : Diet<'T>) =
+        let rangeFolder (state : 'State) (range : Range<_>) =
+            let q = range.MaxValue
+            // Fold over the items in increasing order.
+            let mutable state = state
+            let mutable currentItem = range.MinValue
+            while currentItem <> q do
+                state <- folder state currentItem
+                currentItem <- measurer.Next currentItem
+
+            // Apply the folder function to the last value in the range 'q'.
+            folder state q
+
+        AvlTree.fold rangeFolder state tree
+
+    /// Applies the given accumulating function to all elements in a DIET.
+    let foldBack (folder : _ -> 'State -> 'State) (measurer : IMeasurer<_>) (tree : Diet<'T>) (state : 'State) =
+        let rangeFolder (range : Range<_>) (state : 'State) =
+            let p = range.MinValue
+
+            // Fold over the items in decreasing order.
+            let mutable state = state
+            let mutable currentItem = range.MaxValue
+            while currentItem <> p do
+                state <- folder currentItem state
+                currentItem <- measurer.Previous currentItem
+
+            // Apply the folder function to the first value in the range 'p'.
+            folder p state
+
+        AvlTree.foldBack rangeFolder tree state
+
+    //
+    let rec toSeq (measurer : IMeasurer<_>) (tree : Diet<'T>) =
+        seq {
+        match tree with
+        | Empty -> ()
+        | Node (range : Range<_>, l, r, _) ->
+            yield! toSeq measurer l
+            yield! range.ToSeq measurer
+            yield! toSeq measurer r
+        }
+
+    //
+    let toList (measurer : IMeasurer<_>) (tree : Diet<'T>) =
+        (measurer, [], tree)
+        |||> fold (fun list el ->
+            el :: list)
+
+    //
+    let toArray (measurer : IMeasurer<_>) (tree : Diet<'T>) =
+        let elements = ResizeArray ()
+        // TODO : Simplify this to use 'iter' instead of 'fold'.
+        (measurer, elements, tree)
+        |||> fold (fun resizeArr el ->
+            resizeArr.Add el
+            resizeArr)
+        |> ignore
+        elements.ToArray ()
+
+    //
+    let forall (predicate : 'T -> bool) (measurer : IMeasurer<_>) (t : Diet<'T>) =
+        // OPTIMIZE : Rewrite this to short-circuit and return early
+        // if we find a non-matching element.
+        (measurer, true, t)
+        |||> fold (fun state el ->
+            state && predicate el)
+
     //
     let rec private addRec (measurer : IMeasurer<_>) p (tree : Diet<'T>) cont : Diet<_> =
+        let inline compare a b =
+            measurer.Compare (a, b)
+
         match tree with
         | Empty ->
             singleton p
             |> cont
-        | Node (range, left, right, h) as t ->
-            if measurer.Compare (p, range.MinValue) >= 0 then
-                if measurer.Compare (p, range.MaxValue) <= 0 then
+        | Node (rangeXY, left, right, h) as t ->
+            if compare p rangeXY.MinValue >= 0 then
+                if compare p rangeXY.MaxValue <= 0 then
                     cont t
 
-                elif measurer.Compare (p, measurer.Next range.MaxValue) > 0 then
+                elif compare p (measurer.Next rangeXY.MaxValue) > 0 then
                     addRec measurer p right <| fun right ->
-                        AvlTree.join range left right
+                        AvlTree.join rangeXY left right
                         |> cont
 
                 elif AvlTree.isEmpty right then
-                    AvlTree.Node (Range (range.MinValue, p), left, right, h)
+                    AvlTree.Node (Range (rangeXY.MinValue, p), left, right, h)
                     |> cont
 
                 else
-                    let range', r = AvlTree.extractMin measurer right
-
-                    if measurer.Previous range'.MinValue = p then
-                        AvlTree.join (Range (range.MinValue, range'.MaxValue)) left r
+                    let rangeUV, r = AvlTree.extractMin measurer right
+                    if measurer.Previous rangeUV.MinValue = p then
+                        let rangeXV = Range (rangeXY.MinValue, rangeUV.MaxValue)
+                        AvlTree.join rangeXV left r
                     else
-                        AvlTree.Node (Range (range.MinValue, p), left, right, h)
+                        let rangeXP = Range (rangeXY.MinValue, p)
+                        AvlTree.Node (rangeXP, left, right, h)
                     |> cont
 
-            elif measurer.Compare (p, measurer.Previous range.MinValue) < 0 then
+            elif compare p (measurer.Previous rangeXY.MinValue) < 0 then
                 addRec measurer p left <| fun left ->
-                    AvlTree.join range left right
+                    AvlTree.join rangeXY left right
                     |> cont
 
             elif AvlTree.isEmpty left then
-                AvlTree.Node (Range (p, range.MaxValue), left, right, h)
+                let rangePY = Range (p, rangeXY.MaxValue)
+                AvlTree.Node (rangePY, left, right, h)
                 |> cont
 
             else
-                let range', l = AvlTree.extractMax measurer left
-                if measurer.Next range'.MaxValue = p then
-                    AvlTree.join (Range (range'.MinValue, range.MaxValue)) l right
+                let rangeUV, l = AvlTree.extractMax measurer left
+                if measurer.Next rangeUV.MaxValue = p then
+                    let rangeUY = Range (rangeUV.MinValue, rangeXY.MaxValue)
+                    AvlTree.join rangeUY l right
                 else
-                    AvlTree.Node (Range (p, range.MaxValue), left, right, h)
+                    let rangePY = Range (p, rangeXY.MaxValue)
+                    AvlTree.Node (rangePY, left, right, h)
                 |> cont
 
     /// Returns a new set with the specified value added to the set.
@@ -703,27 +801,51 @@ module private Diet =
     let add (measurer : IMeasurer<_>) p (tree : Diet<'T>) : Diet<_> =
         addRec measurer p tree id
 
+    /// Builds a new DIET from the elements of a sequence.
+    let ofSeq (measurer : IMeasurer<_>) (sequence : seq<_>) : Diet<'T> =
+        (Empty, sequence)
+        ||> Seq.fold (fun tree el ->
+            add measurer el tree)
+
+    /// Builds a new DIET from the elements of an F# list.
+    let ofList (measurer : IMeasurer<_>) (list : _ list) : Diet<'T> =
+        (Empty, list)
+        ||> List.fold (fun tree el ->
+            add measurer el tree)
+
+    /// Builds a new DIET from the elements of an array.
+    let ofArray (measurer : IMeasurer<_>) (array : _[]) : Diet<'T> =
+        (Empty, array)
+        ||> Array.fold (fun tree el ->
+            add measurer el tree)
+
     /// Returns a new set with the specified range of values added to the set.
     /// No exception is thrown if any of the values are already contained in the set.
-    let rec addRange (measurer : IMeasurer<_>) newRange (tree : Diet<'T>) : Diet<_> =
+    let rec addRange (measurer : IMeasurer<_>) rangePQ (tree : Diet<'T>) : Diet<_> =
+        let inline compare a b =
+            measurer.Compare (a, b)
+
         match tree with
         | AvlTree.Empty ->
-            AvlTree.singleton newRange
-        | AvlTree.Node (range, left, right, _) ->
-            if measurer.Compare (newRange.MinValue, measurer.Previous range.MinValue) < 0 then
-                AvlTree.join range (addRange measurer newRange left) right
-            elif measurer.Compare (newRange.MinValue, measurer.Next range.MaxValue) > 0 then
-                AvlTree.join range left (addRange measurer newRange right)
+            AvlTree.singleton rangePQ
+        | AvlTree.Node (rangeXY, left, right, _) ->
+            if compare rangePQ.MaxValue (measurer.Previous rangeXY.MinValue) < 0 then
+                AvlTree.join rangeXY (addRange measurer rangePQ left) right
+            elif compare rangePQ.MinValue (measurer.Next rangeXY.MaxValue) > 0 then
+                AvlTree.join rangeXY left (addRange measurer rangePQ right)
             else
                 let x', left' =
-                    if measurer.Compare (newRange.MinValue, range.MinValue) >= 0 then range.MinValue, left
-                    else find_del_left measurer newRange.MinValue left
+                    if compare rangePQ.MinValue rangeXY.MinValue >= 0 then
+                        rangeXY.MinValue, left
+                    else find_del_left measurer rangePQ.MinValue left
 
                 let y', right' =
-                    if measurer.Compare (newRange.MaxValue, range.MaxValue) <= 0 then range.MaxValue, right
-                    else find_del_right measurer newRange.MaxValue right
+                    if compare rangePQ.MaxValue rangeXY.MaxValue <= 0 then
+                        rangeXY.MaxValue, right
+                    else find_del_right measurer rangePQ.MaxValue right
 
-                AvlTree.join (Range (x', y')) left' right'
+                let rangeXY' = Range (x', y')
+                AvlTree.join rangeXY' left' right'
 
     /// Returns a new set with the given element removed.
     /// No exception is thrown if the set doesn't contain the specified element.
@@ -821,17 +943,24 @@ module private Diet =
                 GenericMaximum inputCount streamCount
             #endif
 
-            let head, stream = AvlTree.tryExtractMin measurer stream
-            let result, head, stream = union' input None head stream
+            let head, stream' = AvlTree.tryExtractMin measurer stream
+            let result, head', stream'' = union' input None head stream'
             let result =
-                match head with
+                match head' with
                 | None ->
                     result
                 | Some i ->
-                    AvlTree.join i result stream
+                    AvlTree.join i result stream''
 
             #if DEBUG
             let resultCount = count measurer result
+            let inputArr =
+                if resultCount >= minPossibleResultCount then Array.empty
+                else toArray measurer input
+            let streamArr =
+                if resultCount >= minPossibleResultCount then Array.empty
+                else toArray measurer stream
+                    
             Debug.Assert (
                 resultCount >= minPossibleResultCount,
                 sprintf "The result set should not contain fewer than %i elements, but it contains only %i elements."
@@ -995,50 +1124,6 @@ module private Diet =
     let equal (measurer : IMeasurer<_>) (t1 : Diet<'T>) (t2 : Diet<'T>) =
         compare measurer t1 t2 = 0
 
-    /// Applies the given accumulating function to all elements in a DIET.
-    let fold (folder : 'State -> _ -> 'State) (measurer : IMeasurer<_>) (state : 'State) (tree : Diet<'T>) =
-        let rangeFolder (state : 'State) (range : Range<_>) =
-            let q = range.MaxValue
-            // Fold over the items in increasing order.
-            let mutable state = state
-            let mutable currentItem = range.MinValue
-            while currentItem <> q do
-                state <- folder state currentItem
-                currentItem <- measurer.Next currentItem
-
-            // Apply the folder function to the last value in the range 'q'.
-            folder state q
-
-        AvlTree.fold rangeFolder state tree
-
-    /// Applies the given accumulating function to all elements in a DIET.
-    let foldBack (folder : _ -> 'State -> 'State) (measurer : IMeasurer<_>) (tree : Diet<'T>) (state : 'State) =
-        let rangeFolder (range : Range<_>) (state : 'State) =
-            let p = range.MinValue
-
-            // Fold over the items in decreasing order.
-            let mutable state = state
-            let mutable currentItem = range.MaxValue
-            while currentItem <> p do
-                state <- folder currentItem state
-                currentItem <- measurer.Previous currentItem
-
-            // Apply the folder function to the first value in the range 'p'.
-            folder p state
-
-        AvlTree.foldBack rangeFolder tree state
-
-    /// Returns the number of intervals in the set.
-    let intervalCount (t : Diet<'T>) =
-        let rec cardinal_aux acc = function
-            | [] -> acc
-            | AvlTree.Empty :: ts ->
-                cardinal_aux acc ts
-            | AvlTree.Node (range : Range<_>, left, right, _) :: ts ->
-                cardinal_aux (acc + 1) (left :: right :: ts)
-        
-        cardinal_aux 0 [t]
-
     //
     let rec split (measurer : IMeasurer<_>) x (tree : Diet<'T>) =
         let inline compare a b =
@@ -1061,32 +1146,6 @@ module private Diet =
                     ((if cxa = 0 then l else addRange measurer (Range (rangeAB.MinValue, measurer.Previous x)) l),
                        true,
                        (if cbx = 0 then r else addRange measurer (Range (measurer.Next x, rangeAB.MaxValue)) r))
-
-    /// Builds a new DIET from the elements of a sequence.
-    let ofSeq (measurer : IMeasurer<_>) (sequence : seq<_>) : Diet<'T> =
-        (Empty, sequence)
-        ||> Seq.fold (fun tree el ->
-            add measurer el tree)
-
-    /// Builds a new DIET from the elements of an F# list.
-    let ofList (measurer : IMeasurer<_>) (list : _ list) : Diet<'T> =
-        (Empty, list)
-        ||> List.fold (fun tree el ->
-            add measurer el tree)
-
-    /// Builds a new DIET from the elements of an array.
-    let ofArray (measurer : IMeasurer<_>) (array : _[]) : Diet<'T> =
-        (Empty, array)
-        ||> Array.fold (fun tree el ->
-            add measurer el tree)
-
-    //
-    let forall (predicate : 'T -> bool) (measurer : IMeasurer<_>) (t : Diet<'T>) =
-        // OPTIMIZE : Rewrite this to short-circuit and return early
-        // if we find a non-matching element.
-        (measurer, true, t)
-        |||> fold (fun state el ->
-            state && predicate el)
 
 
 /// Character set implementation based on a Discrete Interval Encoding Tree.
