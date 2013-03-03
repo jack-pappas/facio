@@ -29,8 +29,6 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Graham.Tests", "Graham.Test
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BackendUtils", "BackendUtils\BackendUtils.fsproj", "{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "CliArgs", "CliArgs\CliArgs.fsproj", "{A44BB5DC-C851-4B5D-8242-3FBE035DF939}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -74,12 +72,6 @@ Global
 		{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}.Release|Any CPU.Build.0 = Release|Any CPU
 		{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}.Testing|Any CPU.ActiveCfg = Release|Any CPU
 		{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}.Testing|Any CPU.Build.0 = Release|Any CPU
-		{A44BB5DC-C851-4B5D-8242-3FBE035DF939}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A44BB5DC-C851-4B5D-8242-3FBE035DF939}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A44BB5DC-C851-4B5D-8242-3FBE035DF939}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A44BB5DC-C851-4B5D-8242-3FBE035DF939}.Release|Any CPU.Build.0 = Release|Any CPU
-		{A44BB5DC-C851-4B5D-8242-3FBE035DF939}.Testing|Any CPU.ActiveCfg = Release|Any CPU
-		{A44BB5DC-C851-4B5D-8242-3FBE035DF939}.Testing|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

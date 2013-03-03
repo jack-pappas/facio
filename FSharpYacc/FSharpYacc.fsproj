@@ -45,6 +45,7 @@
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft F#\v4.0\Microsoft.FSharp.Targets" Condition=" Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <ItemGroup>
+    <None Include="packages.config" />
     <Compile Include="..\Common\CommonAssemblyInfo.fs">
       <Link>CommonAssemblyInfo.fs</Link>
     </Compile>
@@ -61,6 +62,10 @@
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="ExtCore">
+      <HintPath>..\packages\ExtCore.0.8.0\lib\net40\ExtCore.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="FSharp.PowerPack">
       <HintPath>bin\Debug\FSharp.PowerPack.dll</HintPath>
     </Reference>
@@ -72,11 +77,6 @@
     <ProjectReference Include="..\BackendUtils\BackendUtils.fsproj">
       <Name>BackendUtils</Name>
       <Project>{4841364d-cb0b-45cc-ac84-f8e3b86a1c11}</Project>
-      <Private>True</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\CliArgs\CliArgs.fsproj">
-      <Name>CliArgs</Name>
-      <Project>{a44bb5dc-c851-4b5d-8242-3fbe035df939}</Project>
       <Private>True</Private>
     </ProjectReference>
     <ProjectReference Include="..\Graham\Graham.fsproj">

@@ -42,7 +42,7 @@ module internal AssemblyInfo =
 module Program =
     open System.ComponentModel.Composition
     open System.ComponentModel.Composition.Hosting
-    open FSharp.CliArgs
+    open ExtCore
     open FSharpLex.Plugin
 
     (* TEMP : This code is taken from the F# Powerpack, and is licensed under the Apache 2.0 license *)
@@ -87,6 +87,8 @@ module Program =
         container.ComposeParts (backends)
         backends
 
+    open FSharpLex.SpecializedCollections
+
     /// Invokes FSharpLex with the specified options.
     [<CompiledName("Invoke")>]
     let invoke (inputFile, options) : int =
@@ -97,6 +99,18 @@ module Program =
             invalidArg "inputFile" "The path to the lexer specification is empty."
         elif not <| System.IO.File.Exists inputFile then
             invalidArg "inputFile" "No lexer specification exists at the specified path."
+
+        let chars =
+            let chars =
+                let chars =
+                    (CharSet.singleton (char 41))
+                    |> CharSet.union (CharSet.singleton (char 34))
+                CharSet.union (CharSet.singleton (char 13)) chars
+
+            let foo =
+                int "wefpwpeflpepfpl".[0] + "wofwoefk".Length
+
+            CharSet.union (CharSet.singleton (char 10)) chars
 
         // TEMP : This is hard-coded for now, but eventually we'll make it
         // so the user can specify which backend(s) to use.
