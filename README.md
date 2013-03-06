@@ -31,4 +31,4 @@ At this time, both *fsharplex* and *fsharpyacc* generate code which uses the lex
 
 ### Licensing
 ---
-All projects in this repository are licensed under permissive licenses; at this time, that means either the [Modified (2-clause) BSD license](http://opensource.org/licenses/BSD-2-Clause) or the [Apache 2.0 license](http://opensource.org/licenses/Apache-2.0).
+All projects in this repository are licensed under the [Apache 2.0 license](http://opensource.org/licenses/Apache-2.0).
