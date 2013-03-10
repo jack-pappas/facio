@@ -22,6 +22,10 @@ module FSharpLex.Regex
 
 open System.Diagnostics
 open LanguagePrimitives
+open ExtCore
+open ExtCore.Collections
+open ExtCore.Control
+open ExtCore.Control.Collections
 open SpecializedCollections
 
 (*  Turn off warning about uppercase variable identifiers;
@@ -114,29 +118,34 @@ module private RegexPatterns =
 // Add additional members to Regex.
 type Regex with
     //
-    static member private IsNullableImpl regex cont =
+    static member private IsNullableImpl regex =
+        Cps.cont {
         match regex with
         | Epsilon
         | Star _ ->
-            cont true
+            return true
         | Any
         | CharacterSet _ ->
-            cont false
+            return false
         | Negate regex ->
-            Regex.IsNullableImpl regex (cont >> not)
+            let! result = Regex.IsNullableImpl regex
+            return not result
         | Concat (a, b)
         | And (a, b) ->
             // IsNullable(a) && IsNullable(b)
-            Regex.IsNullableImpl a <| fun a ->
-                if not a then false
-                else
-                    Regex.IsNullableImpl b cont
+            let! aNullable = Regex.IsNullableImpl a
+            if aNullable then
+                return! Regex.IsNullableImpl b
+            else
+                return false
         | Or (a, b) ->
             // IsNullable(a) || IsNullable(b)
-            Regex.IsNullableImpl a <| fun a ->
-                if a then true
-                else
-                    Regex.IsNullableImpl b cont
+            let! aNullable = Regex.IsNullableImpl a
+            if aNullable then
+                return true
+            else
+                return! Regex.IsNullableImpl b
+        }
 
     /// Determines if a specified Regex is 'nullable',
     /// i.e., it accepts the empty string (epsilon).
@@ -144,214 +153,207 @@ type Regex with
         Regex.IsNullableImpl regex id
 
     /// Implementation of the canonicalization function.
-    static member private CanonicalizeImpl (regex : Regex) (cont : Regex -> Regex) =
+    static member private CanonicalizeImpl (regex : Regex) =
+        Cps.cont {
         match regex with
         | Epsilon
         | Any as regex ->
-            cont regex
-
+            return regex
         | CharacterSet _ as charSetRegex ->
-            charSetRegex
-            |> cont
-
+            return charSetRegex
         | Negate Empty ->
-            cont Any
+            return Any
         | Negate Any ->
-            cont Regex.empty
+            return Regex.empty
         | Negate Epsilon ->
-            cont Regex.empty
+            return Regex.empty
         | Negate (Negate regex) ->
-            Regex.CanonicalizeImpl regex cont
+            return! Regex.CanonicalizeImpl regex
         | Negate r ->
-            Regex.CanonicalizeImpl r <| fun r' ->
-                Negate r'
-                |> cont
+            let! r' = Regex.CanonicalizeImpl r
+            return Negate r'
 
         | Star (Star _ as ``r*``) ->
-            Regex.CanonicalizeImpl ``r*`` cont
+            return! Regex.CanonicalizeImpl ``r*``
         | Star Epsilon
         | Star Empty ->
-            cont Epsilon
+            return Epsilon
         | Star (Or (Epsilon, r))
         | Star (Or (r, Epsilon)) ->
-            Regex.CanonicalizeImpl r <| fun r' ->
-                Star r'
-                |> cont
+            let! r' = Regex.CanonicalizeImpl r
+            return Star r'
         | Star r ->
-            Regex.CanonicalizeImpl r <| fun r' ->
-                Star r'
-                |> cont
+            let! r' = Regex.CanonicalizeImpl r
+            return Star r'
 
         | Concat (Empty, _)
         | Concat (_, Empty) ->
-            cont Regex.empty
+            return Regex.empty
         | Concat (Epsilon, r)
         | Concat (r, Epsilon) ->
-            Regex.CanonicalizeImpl r cont
+            return! Regex.CanonicalizeImpl r
         | Concat (r, Concat (s, t)) ->
             // Rewrite the expression so it's left-associative.
             let regex = Concat (Concat (r, s), t)
-            Regex.CanonicalizeImpl regex cont        
+            return! Regex.CanonicalizeImpl regex
         | Concat (r, s) ->
-            Regex.CanonicalizeImpl r <| fun r' ->
-            Regex.CanonicalizeImpl s <| fun s' ->
-                // Try to simplify the expression, using the canonicalized components.
-                match r', s' with
-                | Empty, _
-                | _, Empty ->
-                    cont Regex.empty
-                | Epsilon, r'
-                | r', Epsilon ->
-                    Regex.CanonicalizeImpl r' cont
-                | r', s' ->
-                    Concat (r', s')
-                    |> cont
+            let! r' = Regex.CanonicalizeImpl r
+            let! s' = Regex.CanonicalizeImpl s
+
+            // Try to simplify the expression, using the canonicalized components.
+            match r', s' with
+            | Empty, _
+            | _, Empty ->
+                return Regex.empty
+            | Epsilon, r'
+            | r', Epsilon ->
+                return! Regex.CanonicalizeImpl r'
+            | r', s' ->
+                return Concat (r', s')
 
         | Or (Any, _)
         | Or (_, Any) ->
-            cont Any
+            return Any
         | Or (Empty, r)
         | Or (r, Empty) ->
-            Regex.CanonicalizeImpl r cont
+            return! Regex.CanonicalizeImpl r
         | Or (CharacterSet charSet1, CharacterSet charSet2) ->
             // 'Or' is the disjunction (union) of two Regexes.
             let charSetUnion = CharSet.union charSet1 charSet2
 
             // Return the simplest Regex for the union set.
-            CharacterSet charSetUnion
-            |> cont
+            return CharacterSet charSetUnion
 
         | Or (r, Or (s, t)) ->
             // Rewrite the expression so it's left-associative.
             let regex = Or (Or (r, s), t)
-            Regex.CanonicalizeImpl regex cont
+            return! Regex.CanonicalizeImpl regex
         | Or (r, s) ->
-            Regex.CanonicalizeImpl r <| fun r' ->
-            Regex.CanonicalizeImpl s <| fun s' ->
-                // Try to simplify the expression, using the canonicalized components.
-                match r', s' with
-                | r', s' when r' = s' ->
-                    cont r'
+            let! r' = Regex.CanonicalizeImpl r
+            let! s' = Regex.CanonicalizeImpl s
 
-                | Empty, r
-                | r, Empty ->
-                    Regex.CanonicalizeImpl r cont
+            // Try to simplify the expression, using the canonicalized components.
+            match r', s' with
+            | r', s' when r' = s' ->
+                return r'
 
-                | Any, _
-                | _, Any ->
-                    cont Any
+            | Empty, r
+            | r, Empty ->
+                return! Regex.CanonicalizeImpl r
 
-                | CharacterSet charSet1, CharacterSet charSet2 ->
-                    // 'Or' is the disjunction (union) of two Regexes.
-                    let charSetUnion = CharSet.union charSet1 charSet2
+            | Any, _
+            | _, Any ->
+                return Any
 
-                    // Return the simplest Regex for the union set.
-                    CharacterSet charSetUnion
-                    |> cont
+            | CharacterSet charSet1, CharacterSet charSet2 ->
+                // 'Or' is the disjunction (union) of two Regexes.
+                let charSetUnion = CharSet.union charSet1 charSet2
 
-                | r', s' ->
-                    // Sort the components before returning; this takes care
-                    // of the symmetry rule (r | s) = (s | r) so the
-                    // "approximately equal" relation is simply handled by
-                    // F#'s structural equality.
+                // Return the simplest Regex for the union set.
+                return CharacterSet charSetUnion
+
+            | r', s' ->
+                // Sort the components before returning; this takes care
+                // of the symmetry rule (r | s) = (s | r) so the
+                // "approximately equal" relation is simply handled by
+                // F#'s structural equality.
+                return
                     if r' < s'
                     then Or (r', s')
                     else Or (s', r')
-                    |> cont
         
         | And (Any, r)
         | And (r, Any) ->
-            Regex.CanonicalizeImpl r cont
+            return! Regex.CanonicalizeImpl r
         | And (Empty, _)
         | And (_, Empty) ->
-            cont Regex.empty
+            return Regex.empty
         | And (CharacterSet charSet1, CharacterSet charSet2) ->
             // 'And' is the conjunction (intersection) of two Regexes.
             let charSetIntersection = CharSet.intersect charSet1 charSet2
 
             // Return the simplest Regex for the intersection set.
-            CharacterSet charSetIntersection
-            |> cont
+            return CharacterSet charSetIntersection
         | And (r, And (s, t)) ->
             // Rewrite the expression so it's left-associative.
             let regex = And (And (r, s), t)
-            Regex.CanonicalizeImpl regex cont
+            return! Regex.CanonicalizeImpl regex
         | And (r, s) ->
-            Regex.CanonicalizeImpl r <| fun r' ->
-            Regex.CanonicalizeImpl s <| fun s' ->
-                // Try to simplify the expression, using the canonicalized components.
-                match r', s' with
-                | r', s' when r' = s' ->
-                    cont r'
+            let! r' = Regex.CanonicalizeImpl r
+            let! s' = Regex.CanonicalizeImpl s
 
-                | Empty, _
-                | _, Empty ->
-                    cont Regex.empty
+            // Try to simplify the expression, using the canonicalized components.
+            match r', s' with
+            | r', s' when r' = s' ->
+                return r'
 
-                | Any, r
-                | r, Any ->
-                    Regex.CanonicalizeImpl r cont
+            | Empty, _
+            | _, Empty ->
+                return Regex.empty
 
-                | CharacterSet charSet1, CharacterSet charSet2 ->
-                    // 'And' is the conjunction (intersection) of two Regexes.
-                    let charSetIntersection = CharSet.intersect charSet1 charSet2
+            | Any, r
+            | r, Any ->
+                return! Regex.CanonicalizeImpl r
 
-                    // Return the simplest Regex for the intersection set.
-                    CharacterSet charSetIntersection
-                    |> cont
+            | CharacterSet charSet1, CharacterSet charSet2 ->
+                // 'And' is the conjunction (intersection) of two Regexes.
+                let charSetIntersection = CharSet.intersect charSet1 charSet2
 
-                | r', s' ->
-                    // Sort the components before returning; this takes care
-                    // of the symmetry rule (r & s) = (s & r) so the
-                    // "approximately equal" relation is simply handled by
-                    // F#'s structural equality.
+                // Return the simplest Regex for the intersection set.
+                return CharacterSet charSetIntersection
+
+            | r', s' ->
+                // Sort the components before returning; this takes care
+                // of the symmetry rule (r & s) = (s & r) so the
+                // "approximately equal" relation is simply handled by
+                // F#'s structural equality.
+                return
                     if r' < s'
                     then And (r', s')
                     else And (s', r')
-                    |> cont
+        }
 
     /// Creates a new Regex in canonical form from the given Regex.
     static member Canonicalize (regex : Regex) : Regex =
         Regex.CanonicalizeImpl regex id
 
     //
-    static member private DerivativeImpl wrtSymbol regex cont =
+    static member private DerivativeImpl wrtSymbol regex =
+        Cps.cont {
         match regex with
         | Epsilon ->
-            cont Regex.empty
+            return Regex.empty
         | Star r as ``r*`` ->
-            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-                Concat (r', ``r*``)
-                |> cont
+            let! r' = Regex.DerivativeImpl wrtSymbol r
+            return Concat (r', ``r*``)
+
         | Concat (r, s) ->
             let ``nu(r)`` = if Regex.IsNullable r then Epsilon else Regex.empty
-            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-            Regex.DerivativeImpl wrtSymbol s <| fun s' ->
+            let! r' = Regex.DerivativeImpl wrtSymbol r
+            let! s' = Regex.DerivativeImpl wrtSymbol s
+            return
                 Or (Concat (r', s),
                     Concat (``nu(r)``, s'))
-                |> cont
         | Or (r, s) ->
-            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-            Regex.DerivativeImpl wrtSymbol s <| fun s' ->
-                Or (r', s')
-                |> cont
+            let! r' = Regex.DerivativeImpl wrtSymbol r
+            let! s' = Regex.DerivativeImpl wrtSymbol s
+            return Or (r', s')
         | And (r, s) ->
-            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-            Regex.DerivativeImpl wrtSymbol s <| fun s' ->
-                And (r', s')
-                |> cont
+            let! r' = Regex.DerivativeImpl wrtSymbol r
+            let! s' = Regex.DerivativeImpl wrtSymbol s
+            return And (r', s')
 
         | Any ->
-            cont Epsilon
+            return Epsilon
         | Negate r ->
-            Regex.DerivativeImpl wrtSymbol r <| fun r' ->
-                Negate r'
-                |> cont
+            let! r' = Regex.DerivativeImpl wrtSymbol r
+            return Negate r'
         | CharacterSet charSet ->
-            if CharSet.contains wrtSymbol charSet
-            then Epsilon
-            else Regex.empty
-            |> cont
+            return
+                if CharSet.contains wrtSymbol charSet
+                then Epsilon
+                else Regex.empty
+        }
 
     /// Computes the derivative of a Regex with respect to a specified symbol.
     static member Derivative symbol regex =
@@ -388,37 +390,36 @@ type DerivativeClasses = {
 // Add more members to Regex
 type Regex with
     //
-    static member private DerivativeClassesImpl regex cont =
+    static member private DerivativeClassesImpl regex =
+        Cps.cont {
         match regex with
         | Epsilon ->
-            DerivativeClasses.Universe
-            |> cont
+            return DerivativeClasses.Universe
         | Any ->
-            { DerivativeClasses.Universe
-                with HasEmptySet = true; }
-            |> cont
+            return
+                { DerivativeClasses.Universe
+                    with HasEmptySet = true; }
         | CharacterSet charSet ->
-            { HasEmptySet = false;
-              Elements = charSet;
-              Negated = charSet; }
-            |> cont
+            return
+                { HasEmptySet = false;
+                  Elements = charSet;
+                  Negated = charSet; }
         | Negate r
         | Star r ->
-            Regex.DerivativeClassesImpl r cont
+            return! Regex.DerivativeClassesImpl r
         | Concat (r, s) ->
             if not <| Regex.IsNullable r then
-                Regex.DerivativeClassesImpl r cont
+                return! Regex.DerivativeClassesImpl r
             else
-                Regex.DerivativeClassesImpl r <| fun ``C(r)`` ->
-                Regex.DerivativeClassesImpl s <| fun ``C(s)`` ->
-                    DerivativeClasses.Intersect (``C(r)``, ``C(s)``)
-                    |> cont
+                let! ``C(r)`` = Regex.DerivativeClassesImpl r
+                let! ``C(s)`` = Regex.DerivativeClassesImpl s
+                return DerivativeClasses.Intersect (``C(r)``, ``C(s)``)
         | Or (r, s)
         | And (r, s) ->
-            Regex.DerivativeClassesImpl r <| fun ``C(r)`` ->
-            Regex.DerivativeClassesImpl s <| fun ``C(s)`` ->
-                DerivativeClasses.Intersect (``C(r)``, ``C(s)``)
-                |> cont
+            let! ``C(r)`` = Regex.DerivativeClassesImpl r
+            let! ``C(s)`` = Regex.DerivativeClassesImpl s
+            return DerivativeClasses.Intersect (``C(r)``, ``C(s)``)
+        }
 
     /// Computes an approximate set of derivative classes for the specified Regex.
     static member DerivativeClasses (regex : Regex) =
