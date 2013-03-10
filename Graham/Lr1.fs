@@ -197,7 +197,7 @@ module Lr1 =
             ((Set.empty, tableGenState), workSet)
             ||> Set.fold (fun workSet_tableGenState stateId ->
                 /// The set of parser items for this state.
-                let stateItems = Map.find stateId (fst tableGenState).ParserStates
+                let stateItems = Map.find stateId (snd tableGenState).ParserStates
 
                 (workSet_tableGenState, stateItems)
                 ||> Set.fold (fun (workSet, tableGenState) item ->
@@ -208,7 +208,7 @@ module Lr1 =
                         let productionRuleId =
                             // Get the production-rule-id from the 'environment' component of the table-generation state.
                             let productionKey = (item.Nonterminal, item.Production)
-                            Map.find productionKey (snd tableGenState).ProductionRuleIds
+                            Map.find productionKey (fst tableGenState).ProductionRuleIds
 
                         // Add a 'reduce' action for the entry with this state and lookahead token.
                         workSet,
@@ -275,7 +275,8 @@ module Lr1 =
             ||> createTableImpl (grammar, predictiveSets)
 
     /// Create an LR(1) parser table for the specified grammar.
-    let createTable (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) : Lr1ParserTable<'Nonterminal, 'Terminal> =
+    let createTable (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>)
+        : Lr1ParserTable<'Nonterminal, 'Terminal> =
         /// Analysis of the augmented grammar.
         let predictiveSets = PredictiveSets.ofGrammar grammar
 
@@ -312,5 +313,5 @@ module Lr1 =
         // Create the table.
         createTableImpl (grammar, predictiveSets) (Set.singleton initialParserStateId) tableGenState
         // Get the table from the table-generation state.
-        |> fst
+        |> snd
 

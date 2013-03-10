@@ -20,6 +20,10 @@ limitations under the License.
 namespace Graham.LR
 
 open LanguagePrimitives
+open ExtCore
+open ExtCore.Collections
+open ExtCore.Control
+open ExtCore.Control.Collections
 open Graham.Grammar
 open AugmentedPatterns
 open Graham.Analysis
@@ -165,7 +169,7 @@ module Lr0 =
             ((Set.empty, tableGenState), workSet)
             ||> Set.fold (fun workSet_tableGenState stateId ->
                 /// The set of parser items for this state.
-                let stateItems = Map.find stateId (fst tableGenState).ParserStates
+                let stateItems = Map.find stateId (snd tableGenState).ParserStates
 
                 (workSet_tableGenState, stateItems)
                 ||> Set.fold (fun (workSet, ((_, env) as tableGenState)) item ->
@@ -176,7 +180,7 @@ module Lr0 =
                         let productionRuleId =
                             // Get the production-rule-id from the 'environment' component of the table-generation state.
                             let productionKey = (item.Nonterminal, item.Production)
-                            Map.find productionKey (snd tableGenState).ProductionRuleIds
+                            Map.find productionKey (fst tableGenState).ProductionRuleIds
 
                         // Add a 'reduce' action to the ACTION table for each terminal (token) in the grammar.
                         workSet,
@@ -279,7 +283,7 @@ module Lr0 =
         // Create the parser table.
         createTableImpl grammar (Set.singleton initialParserStateId) tableGenState
         // Get the table from the table-generation state.
-        |> fst
+        |> snd
 
     //
     let applyPrecedence (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,
