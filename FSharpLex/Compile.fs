@@ -24,6 +24,7 @@ open System.Diagnostics
 open LanguagePrimitives
 open ExtCore
 open ExtCore.Collections
+open ExtCore.Control
 open SpecializedCollections
 open Graph
 open Regex
@@ -39,10 +40,12 @@ type private CompilationState = {
     //
     Transitions : LexerDfaGraph;
     /// Final (accepting) DFA states.
+    // OPTIMIZE : Use the TagSet type from ExtCore.
     FinalStates : Set<DfaStateId>;
     /// Maps regular vectors to the DFA state representing them.
     RegularVectorToDfaState : Map<RegularVector, DfaStateId>;
     /// Maps a DFA state to the regular vector it represents.
+    // OPTIMIZE : Use the TagMap type from ExtCore.
     DfaStateToRegularVector : Map<DfaStateId, RegularVector>;
 }
 
@@ -219,6 +222,7 @@ type LexerRuleDfa = {
     Transitions : LexerDfaGraph;
     /// For each accepting state of the DFA, specifies the
     /// index of the rule-clause accepted by the state.
+    // OPTIMIZE : Use the TagMap type from ExtCore.
     RuleClauseAcceptedByState : Map<DfaStateId, RuleClauseIndex>;
     /// The initial state of the DFA.
     InitialState : DfaStateId;
@@ -765,73 +769,71 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
 
 //
 let private getAlphabet regex =
-    let rec getAlphabet regex cont =
+    let rec getAlphabet regex =
+        Cps.cont {
         match regex with
         | Regex.Any
         | Regex.Epsilon ->
-            cont CharSet.empty
+            return CharSet.empty
 
         | Regex.CharacterSet charSet ->
-            cont charSet
+            return charSet
 
         | Regex.Negate r
         | Regex.Star r ->
-            getAlphabet r cont
+            return! getAlphabet r
 
         | Regex.And (r, s)
         | Regex.Concat (r, s)
         | Regex.Or (r, s) ->
-            getAlphabet r <| fun rAlphabet ->
-            getAlphabet s <| fun sAlphabet ->
-                CharSet.union rAlphabet sAlphabet
-                |> cont
+            let! rAlphabet = getAlphabet r
+            let! sAlphabet = getAlphabet s
+            return CharSet.union rAlphabet sAlphabet
+        }
 
     getAlphabet regex id
 
 // This is necessary for fslex-compatibility.
 // In the future, it will be moved into the fslex-compatibility backend.
 let private rewriteNegatedCharSets universe regex =
-    let rec rewriteNegatedCharSets regex cont =
+    let rec rewriteNegatedCharSets regex =
+        Cps.cont {
         match regex with
         | Regex.Negate (Regex.CharacterSet charSet) ->
-            charSet
-            |> CharSet.difference universe
-            |> Regex.CharacterSet
-            |> cont
+            return
+                charSet
+                |> CharSet.difference universe
+                |> Regex.CharacterSet
 
         | Regex.Any
         | Regex.Epsilon
         | Regex.CharacterSet _
             as regex ->
-            cont regex
+            return regex
 
         | Regex.Negate r ->
-            rewriteNegatedCharSets r <| fun r ->
-                Regex.Negate r
-                |> cont
+            let! r = rewriteNegatedCharSets r
+            return Regex.Negate r
 
         | Regex.Star r ->
-            rewriteNegatedCharSets r <| fun r ->
-                Regex.Star r
-                |> cont
+            let! r = rewriteNegatedCharSets r
+            return Regex.Star r
 
         | Regex.And (r, s) ->
-            rewriteNegatedCharSets r <| fun r ->
-            rewriteNegatedCharSets s <| fun s ->
-                Regex.And (r, s)
-                |> cont
+            let! r = rewriteNegatedCharSets r
+            let! s = rewriteNegatedCharSets s
+            return Regex.And (r, s)
 
         | Regex.Concat (r, s) ->
-            rewriteNegatedCharSets r <| fun r ->
-            rewriteNegatedCharSets s <| fun s ->
-                Regex.Concat (r, s)
-                |> cont
+            let! r = rewriteNegatedCharSets r
+            let! s = rewriteNegatedCharSets s
+            return Regex.Concat (r, s)
 
         | Regex.Or (r, s) ->
-            rewriteNegatedCharSets r <| fun r ->
-            rewriteNegatedCharSets s <| fun s ->
-                Regex.Or (r, s)
-                |> cont
+            let! r = rewriteNegatedCharSets r
+            let! s = rewriteNegatedCharSets s
+            return Regex.Or (r, s)
+        }
 
     rewriteNegatedCharSets regex id
 
@@ -923,8 +925,9 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
 
             Some acceptingClauseIndex
 
+    choice {
     // Validate and simplify the patterns of the rule clauses.
-    let simplifiedRuleClausePatterns =
+    let! ruleClauseRegexes =
         let simplifiedRuleClausePatterns =
             patterns
             |> Array.map (fun (originalRuleClauseIndex, pattern) ->
@@ -951,126 +954,122 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         else
             Choice1Of2 <| results.ToArray ()
 
-    //
-    match simplifiedRuleClausePatterns with
-    | Choice2Of2 errors ->
-        Choice2Of2 errors
-    | Choice1Of2 ruleClauseRegexes ->
-        /// The DFA compiled from the rule clause patterns.
-        let compiledPatternDfa =
-            let regexOriginalClauseIndices, ruleClauseRegexes =
-                Array.unzip ruleClauseRegexes
+    /// The DFA compiled from the rule clause patterns.
+    let compiledPatternDfa =
+        let regexOriginalClauseIndices, ruleClauseRegexes =
+            Array.unzip ruleClauseRegexes
             
-            (* TEMP :   For compatibility with fslex, we need to determine the alphabet used
-                        by the rule, then rewrite any negated character sets so the transition
-                        table is generated in a way that fslex can handle. *)
+        (* TEMP :   For compatibility with fslex, we need to determine the alphabet used
+                    by the rule, then rewrite any negated character sets so the transition
+                    table is generated in a way that fslex can handle. *)
+        let ruleAlphabet =
+            ruleClauseRegexes
+            |> Array.map getAlphabet
+            |> Array.reduce CharSet.union
+            // Add the low ASCII characters too, like fslex does.
+            |> CharSet.union (CharSet.ofRange (char 0) (char 127))
+
+        // Rewrite the regexes so they don't contain negated character sets.
+        let ruleClauseRegexes =
+            ruleClauseRegexes
+            |> Array.map (rewriteNegatedCharSets ruleAlphabet)
+
+        rulePatternsToDfa ruleClauseRegexes regexOriginalClauseIndices options
+
+    // If this rule has a pattern accepting the end-of-file marker,
+    // create an additional DFA state to serve as the EOF-accepting state
+    // and create a transition edge labeled with the EOF symbol to it.
+    let compiledPatternDfa =
+        match eofAcceptingClauseIndex with
+        | None ->
+            compiledPatternDfa
+        | Some eofAcceptingClauseIndex ->
+            let eofAcceptingState, transitions =
+                LexerDfaGraph.createVertex compiledPatternDfa.Transitions
+            let transitions =
+                LexerDfaGraph.addEofEdge compiledPatternDfa.InitialState eofAcceptingState transitions
+            { compiledPatternDfa with
+                Transitions = transitions;
+                RuleClauseAcceptedByState =
+                    compiledPatternDfa.RuleClauseAcceptedByState
+                    |> Map.add eofAcceptingState eofAcceptingClauseIndex; }
+
+    // If this rule has a clause with the wildcard pattern, create an additional
+    // DFA state which accepts any single character which won't be matched by the
+    // earlier patterns in the rule.
+    let compiledPatternDfa =
+        match wildcardAcceptingClauseIndex with
+        | None ->
+            compiledPatternDfa
+        | Some wildcardAcceptingClauseIndex ->
+            // TEMP : The way the transition characters are computed here is specific
+            // to fslex -- once we implement our own interpreter, we'll have to come
+            // up with a backend-specific way to handle this. Perhaps we can just store
+            // the wildcard-clause index in the returned DFA, and let the plugins themselves
+            // compute the transition characters.
+
+            /// The alphabet for this rule.
             let ruleAlphabet =
-                ruleClauseRegexes
-                |> Array.map getAlphabet
-                |> Array.reduce CharSet.union
-                // Add the low ASCII characters too, like fslex does.
-                |> CharSet.union (CharSet.ofRange (char 0) (char 127))
+                // The alphabet for this rule is the edge-label-set of the transition graph.
+                (CharSet.empty, compiledPatternDfa.Transitions.AdjacencyMap)
+                ||> Map.fold (fun ruleAlphabet _ edgeChars ->
+                    CharSet.union ruleAlphabet edgeChars)
 
-            // Rewrite the regexes so they don't contain negated character sets.
-            let ruleClauseRegexes =
-                ruleClauseRegexes
-                |> Array.map (rewriteNegatedCharSets ruleAlphabet)
+            /// The set of characters labelling the out-edges of the initial DFA state.
+            let initialEdgeLabels =
+                (CharSet.empty, compiledPatternDfa.Transitions.AdjacencyMap)
+                ||> Map.fold (fun initialEdgeLabels edgeKey edgeChars ->
+                    // We only care about out-edges from the initial DFA state.
+                    if edgeKey.Source = compiledPatternDfa.InitialState then
+                        CharSet.union initialEdgeLabels edgeChars
+                    else
+                        initialEdgeLabels)
 
-            rulePatternsToDfa ruleClauseRegexes regexOriginalClauseIndices options
+            /// The characters matched by this rule's wildcard pattern.
+            let wildcardChars =
+                // Augment the rule alphabet with the low ASCII characters,
+                // because that's how fslex does it and we need to be compatible (for now).
+                let ruleAlphabet =
+                    CharSet.ofRange (char 0) (char 127)
+                    |> CharSet.union ruleAlphabet
 
-        // If this rule has a pattern accepting the end-of-file marker,
-        // create an additional DFA state to serve as the EOF-accepting state
-        // and create a transition edge labeled with the EOF symbol to it.
-        let compiledPatternDfa =
-            match eofAcceptingClauseIndex with
-            | None ->
+                CharSet.difference ruleAlphabet initialEdgeLabels
+
+            // If the set of characters matched by the wildcard pattern is not empty,
+            // create a new DFA state which accepts the wildcard pattern, then add
+            // transition edges to it from the initial state.
+            if CharSet.isEmpty wildcardChars then
+                // TODO : Emit a warning to let the user know this pattern will never be matched.
+                Debug.WriteLine "Warning: Wildcard pattern in rule will never be matched."
+
                 compiledPatternDfa
-            | Some eofAcceptingClauseIndex ->
-                let eofAcceptingState, transitions =
+            else
+                let wildcardAcceptingState, transitions =
                     LexerDfaGraph.createVertex compiledPatternDfa.Transitions
                 let transitions =
-                    LexerDfaGraph.addEofEdge compiledPatternDfa.InitialState eofAcceptingState transitions
+                    LexerDfaGraph.addEdges compiledPatternDfa.InitialState wildcardAcceptingState wildcardChars transitions
+
                 { compiledPatternDfa with
                     Transitions = transitions;
                     RuleClauseAcceptedByState =
                         compiledPatternDfa.RuleClauseAcceptedByState
-                        |> Map.add eofAcceptingState eofAcceptingClauseIndex; }
+                        |> Map.add wildcardAcceptingState wildcardAcceptingClauseIndex; }
 
-        // If this rule has a clause with the wildcard pattern, create an additional
-        // DFA state which accepts any single character which won't be matched by the
-        // earlier patterns in the rule.
-        let compiledPatternDfa =
-            match wildcardAcceptingClauseIndex with
-            | None ->
-                compiledPatternDfa
-            | Some wildcardAcceptingClauseIndex ->
-                // TEMP : The way the transition characters are computed here is specific
-                // to fslex -- once we implement our own interpreter, we'll have to come
-                // up with a backend-specific way to handle this. Perhaps we can just store
-                // the wildcard-clause index in the returned DFA, and let the plugins themselves
-                // compute the transition characters.
+    // TODO : Emit warnings about any overlapping patterns.
+    // E.g., "This pattern will never be matched."
 
-                /// The alphabet for this rule.
-                let ruleAlphabet =
-                    // The alphabet for this rule is the edge-label-set of the transition graph.
-                    (CharSet.empty, compiledPatternDfa.Transitions.AdjacencyMap)
-                    ||> Map.fold (fun ruleAlphabet _ edgeChars ->
-                        CharSet.union ruleAlphabet edgeChars)
-
-                /// The set of characters labelling the out-edges of the initial DFA state.
-                let initialEdgeLabels =
-                    (CharSet.empty, compiledPatternDfa.Transitions.AdjacencyMap)
-                    ||> Map.fold (fun initialEdgeLabels edgeKey edgeChars ->
-                        // We only care about out-edges from the initial DFA state.
-                        if edgeKey.Source = compiledPatternDfa.InitialState then
-                            CharSet.union initialEdgeLabels edgeChars
-                        else
-                            initialEdgeLabels)
-
-                /// The characters matched by this rule's wildcard pattern.
-                let wildcardChars =
-                    // Augment the rule alphabet with the low ASCII characters,
-                    // because that's how fslex does it and we need to be compatible (for now).
-                    let ruleAlphabet =
-                        CharSet.ofRange (char 0) (char 127)
-                        |> CharSet.union ruleAlphabet
-
-                    CharSet.difference ruleAlphabet initialEdgeLabels
-
-                // If the set of characters matched by the wildcard pattern is not empty,
-                // create a new DFA state which accepts the wildcard pattern, then add
-                // transition edges to it from the initial state.
-                if CharSet.isEmpty wildcardChars then
-                    // TODO : Emit a warning to let the user know this pattern will never be matched.
-                    Debug.WriteLine "Warning: Wildcard pattern in rule will never be matched."
-
-                    compiledPatternDfa
-                else
-                    let wildcardAcceptingState, transitions =
-                        LexerDfaGraph.createVertex compiledPatternDfa.Transitions
-                    let transitions =
-                        LexerDfaGraph.addEdges compiledPatternDfa.InitialState wildcardAcceptingState wildcardChars transitions
-
-                    { compiledPatternDfa with
-                        Transitions = transitions;
-                        RuleClauseAcceptedByState =
-                            compiledPatternDfa.RuleClauseAcceptedByState
-                            |> Map.add wildcardAcceptingState wildcardAcceptingClauseIndex; }
-
-        // TODO : Emit warnings about any overlapping patterns.
-        // E.g., "This pattern will never be matched."
-
-        // Create a CompiledRule record from the compiled DFA.
-        Choice1Of2 {
-            Dfa = compiledPatternDfa;
-            Parameters =
-                // Reverse the list so it's in the correct left-to-right order.
-                List.rev rule.Parameters
-                |> List.toArray;
-            RuleClauseActions =
-                ruleClauses
-                |> Array.map (fun clause ->
-                    clause.Action); }
+    // Create a CompiledRule record from the compiled DFA.
+    return {
+        Dfa = compiledPatternDfa;
+        Parameters =
+            // Reverse the list so it's in the correct left-to-right order.
+            List.rev rule.Parameters
+            |> List.toArray;
+        RuleClauseActions =
+            ruleClauses
+            |> Array.map (fun clause ->
+                clause.Action); }
+    }
 
 
 /// A compiled lexer specification.
