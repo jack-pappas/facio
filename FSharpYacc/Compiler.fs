@@ -76,14 +76,6 @@ type PrecompilationState<'Nonterminal, 'Terminal
     ProcessedSpecification<'Nonterminal, 'Terminal> * ValidationMessages
 
 //
-let inline private result (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>) =
-    fst precompilationState
-
-//
-let inline private messages (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>) =
-    snd precompilationState
-
-//
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module private PrecompilationState =
     /// The empty precompilation state.
@@ -100,28 +92,104 @@ module private PrecompilationState =
         {   Errors = List.empty;
             Warnings = List.empty; }
 
-    /// Adds an error message to the precompilation state.
-    let addError message (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>) =
-        // Destructure the precompilation state to get it's components.
-        let result, messages = precompilationState
-        result,
-        { messages with
-            Errors = message :: messages.Errors; }
-
-    /// Adds a warning message to the precompilation state.
-    let addWarning message (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>) =
-        // Destructure the precompilation state to get it's components.
-        let result, messages = precompilationState
-        result,
-        { messages with
-            Warnings = message :: messages.Warnings; }
+    //
+    let inline result (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>) =
+        fst precompilationState, precompilationState
 
     //
-    let setHeader header (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>) =
+    let inline messages (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>) =
+        snd precompilationState, precompilationState
+
+    /// Adds an error message to the precompilation state.
+    let addError message (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>)
+        : unit * PrecompilationState<_,_> =
+        // Destructure the precompilation state to get it's components.
+        let result, messages = precompilationState
+        (), (result,
+            { messages with
+                Errors = message :: messages.Errors; })
+
+    /// Adds a warning message to the precompilation state.
+    let addWarning message (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>)
+        : unit * PrecompilationState<_,_> =
+        // Destructure the precompilation state to get it's components.
+        let result, messages = precompilationState
+        (), (result,
+            { messages with
+                Warnings = message :: messages.Warnings; })
+
+    //
+    let setHeader header (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>)
+        : unit * PrecompilationState<_,_> =
         // Set the header contents.
-        { fst precompilationState with
-            Header = header; },
-        snd precompilationState
+        (), ({ fst precompilationState with
+                Header = header; },
+            snd precompilationState)
+
+    //
+    let addTerminal terminalId declaredType (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>)
+        : unit * PrecompilationState<_,_> =
+        // Preconditions
+        // TODO
+
+        // Add the terminal and it's declared type to the table in the precompilation state.
+        (), ({ (fst precompilationState) with
+                Terminals = Map.add terminalId declaredType (fst precompilationState).Terminals; },
+            snd precompilationState)
+
+    //
+    let addNonterminal nonterminalId declaredType (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>)
+        : unit * PrecompilationState<_,_> =
+        // Preconditions
+        // TODO
+        
+        // Add this nonterminal to the precompilation state.
+        (), ({ (fst precompilationState) with
+                Nonterminals = Map.add nonterminalId None (fst precompilationState).Nonterminals; },
+            snd precompilationState)
+
+    //
+    let addStartSymbol nonterminalId (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>)
+        : unit * PrecompilationState<_,_> =
+        // Preconditions
+        // TODO
+
+        // Add this nonterminal to the set of start symbols.
+        (), ({ (fst precompilationState) with
+                    StartSymbols = Set.add nonterminalId (fst precompilationState).StartSymbols; },
+                snd precompilationState)
+
+    /// Sets the production rules for a nonterminal.
+    let setProductionRules nonterminalId productionRules (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>)
+        : unit * PrecompilationState<_,_> =
+        // Preconditions
+        // TODO
+
+        // Add the converted production rules into the precompilation state.
+        (), ({ (fst precompilationState) with
+                ProductionRules = Map.add nonterminalId productionRules (fst precompilationState).ProductionRules; },
+            snd precompilationState)
+
+    //
+    let impersonateTerminal nonterminalId ruleSymbols impersonatedTerminal
+        (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>) : unit * PrecompilationState<_,_> =
+        // Preconditions
+        // TODO
+
+        (), ({ (fst precompilationState) with
+                    ProductionRulePrecedenceOverrides =
+                        (fst precompilationState).ProductionRulePrecedenceOverrides
+                        |> Map.add (nonterminalId, ruleSymbols) impersonatedTerminal; },
+                snd precompilationState)
+
+    /// Sets the precedence level and associativity of a terminal.
+    let setTerminalPrecedence terminal associativity precedenceLevel
+        (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>) : unit * PrecompilationState<_,_> =
+        (), ({ (fst precompilationState) with
+                    TerminalPrecedence =
+                        (fst precompilationState).TerminalPrecedence
+                        |> Map.add terminal (associativity, precedenceLevel); },
+                snd precompilationState)
 
 
 /// Reserved terminal identifiers.
@@ -140,27 +208,27 @@ let private reservedTerminalIdentifiers : Set<TerminalIdentifier> =
 // support all features.
 let precompile (spec : Specification, options : CompilationOptions)
     : PrecompilationState<NonterminalIdentifier, TerminalIdentifier> =
-    (* TODO :   This function must be modified/rewritten ASAP to use the State workflow, or it'll soon be unreadable! *)
-
-    /// The initial (empty) precompilation state.
-    let precompilationState = PrecompilationState.empty
-
+    // Start with an empty precompilation state.
+    PrecompilationState.empty
+    |> state {
     // Copy some fields which don't need to be validated from the
     // original specification to the precompilation state.
-    let precompilationState =
-        PrecompilationState.setHeader spec.Header precompilationState
+    do! PrecompilationState.setHeader spec.Header
 
     (* NOTE :   In the code below, we fold *backwards* over the lists of declarations because they are all provided
                 in reverse order (compared to the way they were ordered in the parser specification file). *)
 
     // Validation %token declarations of terminals.
-    let precompilationState =
-        (spec.TerminalDeclarations, precompilationState)
-        ||> List.foldBack (fun (declaredType, terminalIds) precompilationState ->
-            (terminalIds, precompilationState)
-            ||> List.foldBack (fun terminalId precompilationState ->
+    do! spec.TerminalDeclarations
+        |> List.rev
+        |> State.List.iter (fun (declaredType, terminalIds) ->
+            terminalIds
+            |> List.rev
+            |> State.List.iter (fun terminalId ->
+                state {
                 // Has this nonterminal been declared already?
-                match Map.tryFind terminalId (result precompilationState).Terminals with
+                let! result = PrecompilationState.result
+                match Map.tryFind terminalId result.Terminals with
                 | None ->
                     (* TODO : Also make sure this 'terminalId' hasn't been declared as a nonterminal. *)
 
@@ -168,22 +236,19 @@ let precompile (spec : Specification, options : CompilationOptions)
                     if Set.contains terminalId reservedTerminalIdentifiers then
                         // Add an error message to the precompilation state.
                         let msg = sprintf "The identifier '%s' is reserved and may not be used for user-defined tokens." terminalId
-                        PrecompilationState.addError msg precompilationState
+                        do! PrecompilationState.addError msg
                     else
                         // Add the terminal and it's declared type to the table in the precompilation state.
-                        { (result precompilationState) with
-                            Terminals = Map.add terminalId declaredType (result precompilationState).Terminals; },
-                        messages precompilationState
+                        do! PrecompilationState.addTerminal terminalId declaredType
                 
                 | Some existingDeclaredType ->
                     (*  This terminal has already been declared!
                         If the previous declaration has the same declared type, emit a warning message;
                         if it has a different declared type, emit an error message. *)
                     if existingDeclaredType = declaredType then
-                        let msg = sprintf "Duplicate declaration of the terminal '%s'." terminalId
-
                         // Add the warning message into the precompilation state.
-                        PrecompilationState.addWarning msg precompilationState
+                        let msg = sprintf "Duplicate declaration of the terminal '%s'." terminalId
+                        do! PrecompilationState.addWarning msg
                     else
                         let msg =
                             match existingDeclaredType with
@@ -193,59 +258,60 @@ let precompile (spec : Specification, options : CompilationOptions)
                                 sprintf "The terminal '%s' has already been declared with the type '%s'." terminalId existingDeclaredType
 
                         // Add the error message into the precompilation state.
-                        PrecompilationState.addError msg precompilationState))
+                        do! PrecompilationState.addError msg
+                        }))
 
     // Validate the nonterminals "declared" via production rules.
     // NOTE : Only the nonterminals themselves are validated here --
     // the production rules themselves are validated later.
-    let precompilationState =
-        (spec.Productions, precompilationState)
-        ||> List.foldBack (fun (nonterminalId, _) precompilationState ->
+    do! spec.Productions
+        |> List.rev
+        |> State.List.iter (fun (nonterminalId, _) ->
+            state {
             // Has this nonterminal been declared already?
-            if Map.containsKey nonterminalId (result precompilationState).Nonterminals then
+            let! result = PrecompilationState.result
+            if Map.containsKey nonterminalId result.Nonterminals then
                 // Add an error message into the compilation state.
                 // TODO : Add a better error message.
                 let msg = "Production rules can only be declared once for each nonterminal."
-                PrecompilationState.addError msg precompilationState
+                do! PrecompilationState.addError msg
 
-            elif Map.containsKey nonterminalId (result precompilationState).Terminals then
+            elif Map.containsKey nonterminalId result.Terminals then
                 // Can't have production rules for a terminal
                 // TODO : Add a better error message.
                 let msg = "Production rules cannot be declared for terminals."
-                PrecompilationState.addError msg precompilationState
+                do! PrecompilationState.addError msg
 
             else
                 // Add this nonterminal to the precompilation state.
-                { (result precompilationState) with
-                    Nonterminals = Map.add nonterminalId None (result precompilationState).Nonterminals; },
-                messages precompilationState)
+                do! PrecompilationState.addNonterminal nonterminalId None
+            })
 
     // Validate %type declarations of nonterminals.
-    let precompilationState =
-        // TODO : Change to use List.rev and State.List.iter
-        (spec.NonterminalDeclarations, precompilationState)
-        ||> List.foldBack (fun (declaredType, nonterminalId) precompilationState ->
+    do! spec.NonterminalDeclarations
+        |> List.rev
+        |> State.List.iter (fun (declaredType, nonterminalId) ->
+            state {
             // Has this nonterminal been declared?
-            match Map.tryFind nonterminalId (result precompilationState).Nonterminals with
+            let! result = PrecompilationState.result
+            match Map.tryFind nonterminalId result.Nonterminals with
             | None ->
                 // To provide a better error message, check if this is a terminal identifier.
-                match Map.tryFind nonterminalId (result precompilationState).Terminals with
+                match Map.tryFind nonterminalId result.Terminals with
                 | None ->
                     // Add an error message into the precompilation state.
                     let msg = sprintf "Undeclared nonterminal '%s'. Type declarations can only be made for nonterminals declared via production rules."
                                 nonterminalId
-                    PrecompilationState.addError msg precompilationState
+                    do! PrecompilationState.addError msg
 
                 | Some _ ->
                     // Add an error message into the precompilation state.
                     let msg = "Type declarations (%%type) cannot be applied to terminals. The %%token declaration should be used instead."
-                    PrecompilationState.addError msg precompilationState
+                    do! PrecompilationState.addError msg
 
             | Some None ->
                 // Add the nonterminal and it's declared type to the table in the precompilation state.
-                { (result precompilationState) with
-                    Nonterminals = Map.add nonterminalId (Some declaredType) (result precompilationState).Nonterminals; },
-                messages precompilationState
+                do! PrecompilationState.addNonterminal nonterminalId (Some declaredType)
             
             | Some (Some existingDeclaredType) ->
                 (*  If the previous declaration has the same declared type, emit a warning message;
@@ -253,83 +319,88 @@ let precompile (spec : Specification, options : CompilationOptions)
                 if existingDeclaredType = declaredType then
                     // Add a warning message into the precompilation state.
                     let msg = sprintf "Duplicate %%type declaration for the nonterminal '%s'." nonterminalId
-                    PrecompilationState.addWarning msg precompilationState
+                    do! PrecompilationState.addWarning msg
                 else
                     // Add an error message into the precompilation state.
                     let msg =
                         sprintf "The nonterminal '%s' has already been declared to have the type '%s'."
                             nonterminalId existingDeclaredType
-
-                    PrecompilationState.addError msg precompilationState)
+                    do! PrecompilationState.addError msg
+            })
 
     // The specification must declare at least one nonterminal as a starting production.
     // All nonterminals declared as starting productions must have type declarations.
-    let precompilationState =
-        match spec.StartingProductions with
-        | [] ->
-            let msg = "The specification must declare at least one (1) nonterminal as a starting nonterminal via the %start declaration."
-            PrecompilationState.addError msg precompilationState
-        | startingProductions ->
-            (startingProductions, precompilationState)
-            ||> List.foldBack (fun nonterminalId precompilationState ->
+    match spec.StartingProductions with
+    | [] ->
+        let msg = "The specification must declare at least one (1) nonterminal as a starting nonterminal via the %start declaration."
+        do! PrecompilationState.addError msg
+    | startingProductions ->
+        do! startingProductions
+            |> List.rev
+            |> State.List.iter (fun nonterminalId ->
+                state {
                 // Has this nonterminal been declared?
-                match Map.tryFind nonterminalId (result precompilationState).Nonterminals with
+                let! result = PrecompilationState.result
+                match Map.tryFind nonterminalId result.Nonterminals with
                 | None ->
                     // Add an error message into the precompilation state.
                     let msg = sprintf "The nonterminal '%s' is not defined." nonterminalId
-                    PrecompilationState.addError msg precompilationState
+                    do! PrecompilationState.addError msg
 
                 | Some None ->
                     // Add an error message into the precompilation state.
                     let msg = sprintf "The type of nonterminal '%s' has not been declared. \
                                         Nonterminals used as starting productions must have their types declared with a %%type declaration."
                                         nonterminalId
-                    PrecompilationState.addError msg precompilationState
+                    do! PrecompilationState.addError msg
 
                 | Some (Some _) ->
                     // Is this a duplicate %start declaration?
-                    if Set.contains nonterminalId (result precompilationState).StartSymbols then
+                    if Set.contains nonterminalId result.StartSymbols then
                         // Add a warning message to the precompilation state.
                         let msg = sprintf "Duplicate %%start declaration for the nonterminal '%s'." nonterminalId
-                        PrecompilationState.addWarning msg precompilationState
+                        do! PrecompilationState.addWarning msg
                     else
                         // Add this nonterminal to the set of start symbols in the precompilation state.
-                        { (result precompilationState) with
-                            StartSymbols = Set.add nonterminalId (result precompilationState).StartSymbols; },
-                        messages precompilationState)
+                        do! PrecompilationState.addStartSymbol nonterminalId
+                        })
 
     // Validate the production rules.
     // Determine which, if any, of the terminals used in the precedence-override declarations are "dummy" terminals.
-    let dummyTerminals, precompilationState =
-        (spec.Productions, (Set.empty, precompilationState))
-        ||> List.foldBack (fun (nonterminalId, rules) (dummyTerminals, precompilationState) ->
+    let! dummyTerminals =
+        (Set.empty, List.rev spec.Productions)
+        ||> State.List.fold (fun dummyTerminals (nonterminalId, rules) ->
+            state {
             // Make sure the symbols used in the production rules have all been declared.
             // OPTIMIZE : Both the validation and the conversion to Graham.Grammar.Symbol could be done in a single pass.
-            let productionRulesValid, precompilationState =
+            let! productionRulesValid =
                 (* Fold forward here, because the ordering doesn't matter. *)
-                ((true, precompilationState), rules)
-                ||> List.fold (fun (productionRulesValid, precompilationState) rule ->
-                    ((productionRulesValid, precompilationState), rule.Symbols)
-                    ||> List.fold (fun (productionRulesValid, precompilationState) symbolId ->
-                    // Is this symbol a defined terminal or nonterminal?
-                    // Or a reserved (built-in) terminal?
-                    if Map.containsKey symbolId (result precompilationState).Nonterminals
-                        || Map.containsKey symbolId (result precompilationState).Terminals
-                        (*|| Set.contains symbolId reservedTerminalIdentifiers*) then
-                        productionRulesValid,
-                        precompilationState
-                    else
-                        // Undefined symbol; add an error message to the precompilation state.
-                        let msg = sprintf "Undeclared symbol '%s'." symbolId
-                        false,
-                        PrecompilationState.addError msg precompilationState))
+                (true, rules)
+                ||> State.List.fold (fun productionRulesValid rule ->
+                    (productionRulesValid, rule.Symbols)
+                    ||> State.List.fold (fun productionRulesValid symbolId ->
+                        state {
+                        // Is this symbol a defined terminal or nonterminal?
+                        // Or a reserved (built-in) terminal?
+                        let! result = PrecompilationState.result
+                        if Map.containsKey symbolId result.Nonterminals
+                            || Map.containsKey symbolId result.Terminals
+                            (*|| Set.contains symbolId reservedTerminalIdentifiers*) then
+                            return productionRulesValid
+                        else
+                            // Undefined symbol; add an error message to the precompilation state.
+                            let msg = sprintf "Undeclared symbol '%s'." symbolId
+                            do! PrecompilationState.addError msg
+                            return false
+                            }))
 
             // Convert the production rules into the form needed for use with Graham,
             // then add them into the precompilation state.
             if not productionRulesValid then
                 // An error was found when validating the production rules, so don't bother processing them.
-                dummyTerminals, precompilationState
+                return dummyTerminals
             else
+                let! result = PrecompilationState.result
                 /// The production rules for this nonterminal.
                 let productionRules : ProcessedProductionRule<_,_>[] =
                     // OPTIMIZE : Use List.revMapIntoArray here to avoid unnecessary intermediate data structures.
@@ -342,117 +413,115 @@ let precompile (spec : Specification, options : CompilationOptions)
                             |> List.rev
                             |> List.toArray
                             |> Array.map (fun symbolId ->
-                                if Map.containsKey symbolId (result precompilationState).Nonterminals then
+                                if Map.containsKey symbolId result.Nonterminals then
                                     Symbol.Nonterminal symbolId
                                 else
                                     Symbol.Terminal symbolId);
                           Action = rule.Action; })
 
                 // Add the converted production rules into the precompilation state.
-                let precompilationState =
-                    { (result precompilationState) with
-                        ProductionRules = Map.add nonterminalId productionRules (result precompilationState).ProductionRules; },
-                    messages precompilationState
+                do! PrecompilationState.setProductionRules nonterminalId productionRules
 
                 // Validate the %prec declarations (if present) for these rules.
                 // OPTIMIZE : Combine this with the rule conversion (above) to avoid re-converting the rules.
-                ((dummyTerminals, precompilationState), rules)
-                ||> List.fold (fun (dummyTerminals, precompilationState) rule ->
-                    // Does this rule have a %prec declaration?
-                    match rule.ImpersonatedPrecedence with
-                    | None ->
-                        dummyTerminals, precompilationState
-                    | Some impersonatedTerminal ->
-                        let ruleSymbols =
-                            rule.Symbols
-                            |> List.rev
-                            |> List.toArray
-                            |> Array.map (fun symbolId ->
-                                if Map.containsKey symbolId (result precompilationState).Nonterminals then
-                                    Symbol.Nonterminal symbolId
-                                else
-                                    Symbol.Terminal symbolId)
+                return!
+                    (dummyTerminals, rules)
+                    ||> State.List.fold (fun dummyTerminals rule ->
+                        state {
+                        // Does this rule have a %prec declaration?
+                        match rule.ImpersonatedPrecedence with
+                        | None ->
+                            return dummyTerminals
+                        | Some impersonatedTerminal ->
+                            let! result = PrecompilationState.result
+                            let ruleSymbols =
+                                rule.Symbols
+                                |> List.rev
+                                |> List.toArray
+                                |> Array.map (fun symbolId ->
+                                    if Map.containsKey symbolId result.Nonterminals then
+                                        Symbol.Nonterminal symbolId
+                                    else
+                                        Symbol.Terminal symbolId)
 
-                        // Make sure the impersonated identifier is not already declared as a nonterminal.
-                        if Map.containsKey impersonatedTerminal (result precompilationState).Nonterminals then
-                            // Nonterminals can't be impersonated -- add an error message to the precompilation state.
-                            let msg = "Nonterminals cannot be impersonated by %prec declarations."
-                            dummyTerminals,
-                            PrecompilationState.addError msg precompilationState
-                        else
-                            // Is this a declared terminal? If not, it'll become a dummy terminal.
-                            let dummyTerminals =
-                                if Map.containsKey impersonatedTerminal (result precompilationState).Terminals then
-                                    dummyTerminals
-                                else
-                                    Set.add impersonatedTerminal dummyTerminals
+                            // Make sure the impersonated identifier is not already declared as a nonterminal.
+                            if Map.containsKey impersonatedTerminal result.Nonterminals then
+                                // Nonterminals can't be impersonated -- add an error message to the precompilation state.
+                                let msg = "Nonterminals cannot be impersonated by %prec declarations."
+                                do! PrecompilationState.addError msg
+                                return dummyTerminals
+                            else
+                                // Is this a declared terminal? If not, it'll become a dummy terminal.
+                                let dummyTerminals =
+                                    if Map.containsKey impersonatedTerminal result.Terminals then
+                                        dummyTerminals
+                                    else
+                                        Set.add impersonatedTerminal dummyTerminals
 
-                            dummyTerminals,
-                            ({ (result precompilationState) with
-                                ProductionRulePrecedenceOverrides =
-                                    (result precompilationState).ProductionRulePrecedenceOverrides
-                                    |> Map.add (nonterminalId, ruleSymbols) impersonatedTerminal; },
-                             messages precompilationState)))
+                                do! PrecompilationState.impersonateTerminal nonterminalId ruleSymbols impersonatedTerminal
+                                return dummyTerminals
+                        })
+            })
 
     // Validate the precedence/associativity declarations.
-    let dummyTerminalsWithoutPrecedence, precompilationState =
+    let! dummyTerminalsWithoutPrecedence =
         (* NOTE :   We REQUIRE the associativity/precedence to be specified for any dummy terminals
                     defined by the %prec declaration of a production rule. *)
-        (spec.Associativities, (dummyTerminals, (1<_> : PrecedenceLevel), precompilationState))
-        ||> List.foldBack (fun (associativity, terminals) (dummyTerminalsWithoutPrecedence, precedenceLevel, precompilationState) ->
-            let terminalSet, precompilationState =
-                (terminals, (Set.empty, precompilationState))
-                ||> List.foldBack (fun terminal (terminalSet, precompilationState) ->
+        ((dummyTerminals, (1<_> : PrecedenceLevel)), List.rev spec.Associativities)
+        ||> State.List.fold (fun (dummyTerminalsWithoutPrecedence, precedenceLevel) (associativity, terminals) ->
+            state {
+            let! terminalSet =
+                (Set.empty, List.rev terminals)
+                ||> State.List.fold (fun terminalSet terminal ->
+                    state {
                     // Has the associativity/precedence already been declared for this terminal?
-                    if Map.containsKey terminal (result precompilationState).TerminalPrecedence then
+                    let! result = PrecompilationState.result
+                    if Map.containsKey terminal result.TerminalPrecedence then
                         // If the previous declaration was within this precedence "group",
                         // then just emit a warning about the duplicate declaration.
                         // Otherwise, emit an error because we don't know which precedence
                         // the terminal is really supposed to belong to.
                         if Set.contains terminal terminalSet then
                             let msg = sprintf "Duplicate associativity declaration for '%s'." terminal
-                            terminalSet,
-                            PrecompilationState.addWarning msg precompilationState
+                            do! PrecompilationState.addWarning msg
+                            return terminalSet
                         else
                             let msg = sprintf "Duplicate associativity declaration for '%s' which conflicts with an earlier declaration." terminal
-                            terminalSet,
-                            PrecompilationState.addError msg precompilationState
+                            do! PrecompilationState.addError msg
+                            return terminalSet
                     else
                         // Add this terminal to the set of terminals in this precedence "group".
                         let terminalSet = Set.add terminal terminalSet
 
                         // Add the associativity and precedence for this terminal to the precompilation state.
-                        let precompilationState =
-                            { (result precompilationState) with
-                                TerminalPrecedence =
-                                    (result precompilationState).TerminalPrecedence
-                                    |> Map.add terminal (associativity, precedenceLevel); },
-                            messages precompilationState
-                        terminalSet,
-                        precompilationState)
+                        do! PrecompilationState.setTerminalPrecedence terminal associativity precedenceLevel
+                        return terminalSet
+                    })                
 
             // Remove any terminals in this set from the set of dummy terminals without precedences.
             let dummyTerminalsWithoutPrecedence =
                 Set.difference dummyTerminalsWithoutPrecedence terminalSet
             
-            dummyTerminalsWithoutPrecedence,
-            precedenceLevel + 1<_>,
-            precompilationState)
+            return
+                dummyTerminalsWithoutPrecedence,
+                precedenceLevel + 1<_>
+            })
         // Discard the precedence level counter
-        |> fun (a, _, c) -> a, c
+        |> State.map fst
 
     // Add error messages to the precompilation state for any dummy terminals which
     // don't have associativity declarations.
-    let precompilationState =
-        (precompilationState, dummyTerminalsWithoutPrecedence)
-        ||> Set.fold (fun precompilationState dummyTerminal ->
+    do! dummyTerminalsWithoutPrecedence
+        |> State.Set.iter (fun dummyTerminal ->
+            state {
             let msg = sprintf "The terminal '%s' does not have an associativity declaration. \
                                 'Dummy' terminals are required to have associativity declarations."
                                 dummyTerminal
-            PrecompilationState.addError msg precompilationState)
-
+            do! PrecompilationState.addError msg
+            })
+    }
     // Return the final precompilation state.
-    precompilationState
+    |> snd
 
 /// Creates a PrecedenceSettings record from a ProcessedSpecification.
 let private precedenceSettings (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
