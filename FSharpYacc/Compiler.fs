@@ -19,6 +19,10 @@ limitations under the License.
 //
 module FSharpYacc.Compiler
 
+open ExtCore
+open ExtCore.Collections
+open ExtCore.Control
+open ExtCore.Control.Collections
 open Graham.Grammar
 open Graham.LR
 open FSharpYacc.Ast
@@ -112,6 +116,13 @@ module private PrecompilationState =
         { messages with
             Warnings = message :: messages.Warnings; }
 
+    //
+    let setHeader header (precompilationState : PrecompilationState<'Nonterminal, 'Terminal>) =
+        // Set the header contents.
+        { fst precompilationState with
+            Header = header; },
+        snd precompilationState
+
 
 /// Reserved terminal identifiers.
 /// Defining a terminal with any of these identifiers will cause an error message
@@ -137,9 +148,7 @@ let precompile (spec : Specification, options : CompilationOptions)
     // Copy some fields which don't need to be validated from the
     // original specification to the precompilation state.
     let precompilationState =
-        { fst precompilationState with
-            Header = spec.Header; },
-        snd precompilationState
+        PrecompilationState.setHeader spec.Header precompilationState
 
     (* NOTE :   In the code below, we fold *backwards* over the lists of declarations because they are all provided
                 in reverse order (compared to the way they were ordered in the parser specification file). *)
@@ -213,6 +222,7 @@ let precompile (spec : Specification, options : CompilationOptions)
 
     // Validate %type declarations of nonterminals.
     let precompilationState =
+        // TODO : Change to use List.rev and State.List.iter
         (spec.NonterminalDeclarations, precompilationState)
         ||> List.foldBack (fun (declaredType, nonterminalId) precompilationState ->
             // Has this nonterminal been declared?
