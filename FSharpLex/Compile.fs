@@ -21,8 +21,10 @@ limitations under the License.
 module FSharpLex.Compile
 
 open System.Diagnostics
-open SpecializedCollections
 open LanguagePrimitives
+open ExtCore
+open ExtCore.Collections
+open SpecializedCollections
 open Graph
 open Regex
 open Ast
@@ -255,21 +257,18 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
         createDfa initialPending compilationState
 
     //
-    let clausesAcceptedByDfaState =
-        (Map.empty, compilationState.FinalStates)
-        ||> Set.fold (fun map finalDfaStateId ->
-            let acceptedRules : Set<RuleClauseIndex> =
-                // Get the regular vector represented by this DFA state.
-                compilationState.DfaStateToRegularVector
-                |> Map.find finalDfaStateId
-                // Determine which lexer rules are accepted by this regular vector.
-                |> RegularVector.acceptingElements
-                // Map the indices of the patterns in the regular vector back to their
-                // original RuleClauseIndex (it can be different if there are EOF-accepting
-                // clauses defined within the same rule).
-                |> Set.map (Array.get patternIndices)
-                
-            Map.add finalDfaStateId acceptedRules map)
+    let clausesAcceptedByDfaState : Map<_, Set<RuleClauseIndex>> =
+        compilationState.FinalStates
+        |> Map.ofKeys (fun finalDfaStateId ->
+            // Get the regular vector represented by this DFA state.
+            compilationState.DfaStateToRegularVector
+            |> Map.find finalDfaStateId
+            // Determine which lexer rules are accepted by this regular vector.
+            |> RegularVector.acceptingElements
+            // Map the indices of the patterns in the regular vector back to their
+            // original RuleClauseIndex (it can be different if there are EOF-accepting
+            // clauses defined within the same rule).
+            |> Set.map (Array.get patternIndices))
 
     (* TODO :   Add code here to generate warnings about overlapping rules. *)
 
@@ -290,6 +289,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
     //
     // OPTIMIZE : Modify this function to use a LazyList to hold the errors
     // instead of an F# list to avoid the list concatenation overhead.
+    // OPTIMIZE : Simplify this function using the Cps.choice workflow from ExtCore.
     let rec preprocessMacro pattern cont =
         match pattern with
         | Pattern.Epsilon ->
@@ -566,6 +566,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
     //
     // OPTIMIZE : Modify this function to use a LazyList to hold the errors
     // instead of an F# list to avoid the list concatenation overhead.
+    // OPTIMIZE : Simplify this function using the Cps.choice workflow from ExtCore.
     let rec validateAndSimplify pattern cont =
         match pattern with
         | Pattern.Epsilon ->
@@ -1111,23 +1112,9 @@ let lexerSpec (spec : Specification) options =
             ruleIdentifiers, rules
 
         let compiledRules, compilationErrors =
-            let compiledRulesOrErrors =
-                rules
-                |> Array.map (fun rule ->
-                    compileRule rule options (macroEnv, Set.empty))
-
-            let compiledRules = ResizeArray<_> (Array.length rules)
-            let compilationErrors = ResizeArray<_> (Array.length rules)
-
-            compiledRulesOrErrors
-            |> Array.iter (function
-                | Choice1Of2 compiledRule ->
-                    compiledRules.Add compiledRule
-                | Choice2Of2 errors ->
-                    compilationErrors.AddRange errors)
-
-            compiledRules.ToArray (),
-            compilationErrors.ToArray ()
+            rules
+            |> Array.mapPartition (fun rule ->
+                compileRule rule options (macroEnv, Set.empty))
 
         // If there are errors, return them; otherwise, create a
         // CompiledSpecification record from the compiled rules.
@@ -1140,5 +1127,5 @@ let lexerSpec (spec : Specification) options =
                     |||> Array.fold2 (fun map (_, ruleId) compiledRule ->
                         Map.add ruleId compiledRule map); }
         else
-            Choice2Of2 compilationErrors
+            Choice2Of2 <| Array.concat compilationErrors
 
