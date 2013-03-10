@@ -20,7 +20,8 @@ limitations under the License.
 namespace Graham.LR
 
 open System.Diagnostics
-open LanguagePrimitives
+open ExtCore
+//open LanguagePrimitives
 open Graham.Grammar
 open AugmentedPatterns
 open Graham.Analysis
@@ -126,9 +127,9 @@ type LrParserConflict =
     override this.ToString () =
         match this with
         | ShiftReduce (shiftStateId, productionRuleId) ->
-            sprintf "s%i/r%i" (int shiftStateId) (int productionRuleId)
+            sprintf "s%i/r%i" (Tag.toInt shiftStateId) (Tag.toInt productionRuleId)
         | ReduceReduce (productionRuleId1, productionRuleId2) ->
-            sprintf "r%i/r%i" (int productionRuleId1) (int productionRuleId2)
+            sprintf "r%i/r%i" (Tag.toInt productionRuleId1) (Tag.toInt productionRuleId2)
 
 /// A non-empty set of LrParserActions representing the
 /// action(s) to take for a specific parser state.
@@ -297,8 +298,8 @@ type LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
     and 'Lookahead : comparison> =
     (*  The table generation state is the table itself plus an "environment" record
         which holds lookup tables only needed while creating the table. *)
-    LrParserTable<'Nonterminal, 'Terminal, 'Lookahead> *
-    LrTableGenEnvironment<'Nonterminal, 'Terminal, 'Lookahead>
+    LrTableGenEnvironment<'Nonterminal, 'Terminal, 'Lookahead> *
+    LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>
 
 /// Functions which use the State monad to manipulate an LR(k) table-generation state.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -308,21 +309,21 @@ module LrTableGenState =
     /// Returns an empty LrTableGenState with the given
     /// nonterminal and terminal types.
     let empty : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
+        // The empty table-gen environment.
+        {   ParserStateIds = Map.empty;
+            ProductionRuleIds = Map.empty; },
         // The empty parser table.
         {   ParserStates = Map.empty;
             ParserTransitions = Graph.empty;
             ActionTable = Map.empty;
-            GotoTable = Map.empty; },
-        // The empty table-gen environment.
-        {   ParserStateIds = Map.empty;
-            ProductionRuleIds = Map.empty; }
+            GotoTable = Map.empty; }
 
     /// Creates the production-rule-id lookup table from the production rules of a grammar,
     /// then stores it in the environment component of the table-generation state.
     let setProductionRules (productionRules : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>)
                             (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
         // Destructure the table-generation state to get it's components.
-        let table, env = tableGenState
+        let env, table = tableGenState
 
         /// The production-rule-id lookup table.
         let productionRuleIds =
@@ -332,8 +333,7 @@ module LrTableGenState =
                 ||> Array.fold (fun productionRuleIds ruleRhs ->
                     /// The identifier for this production rule.
                     let productionRuleId : ProductionRuleId =
-                        productionRuleIds.Count
-                        |> Int32WithMeasure
+                        Tag.ofInt productionRuleIds.Count
 
                     // Add this identifier to the map.
                     Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
@@ -370,8 +370,7 @@ module LrTableGenState =
         | None ->
             // Create a new ID for this state.
             let parserStateId =
-                env.ParserStateIds.Count
-                |> Int32WithMeasure
+                Tag.ofInt env.ParserStateIds.Count
 
             // Update the table-generation state.
             let tableGenState =

@@ -20,6 +20,8 @@ limitations under the License.
 namespace Graham.Grammar
 
 open System.Diagnostics
+open ExtCore
+open ExtCore.Collections
 
 
 //
@@ -178,8 +180,8 @@ type Grammar<'Nonterminal, 'Terminal
             ||> Array.fold (fun productionRuleIds ruleRhs ->
                 /// The identifier for this production rule.
                 let productionRuleId : ProductionRuleId =
-                    productionRuleIds.Count + 1
-                    |> LanguagePrimitives.Int32WithMeasure
+                    Map.count productionRuleIds + 1
+                    |> Tag.ofInt
 
                 // Add this identifier to the map.
                 Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
