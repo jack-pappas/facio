@@ -519,19 +519,15 @@ module private Diet =
     open LanguagePrimitives
 
     //
-    let private charComparer =
-        FastGenericComparer<char>
-
-    //
-    let inline pred (c : char) : char =
+    let inline private pred (c : char) : char =
         char (int c - 1)
     
     //
-    let inline succ (c : char) : char =
+    let inline private succ (c : char) : char =
         char (int c + 1)
 
     //
-    let inline dist (x : char) (y : char) : int =
+    let inline private dist (x : char) (y : char) : int =
         int y - int x
 
     //
@@ -556,10 +552,10 @@ module private Diet =
         | AvlTree.Empty ->
             p, AvlTree.Empty
         | AvlTree.Node ((x, y), left, right, _) ->
-            if compare p (succ y) > 0 then
+            if p > succ y then
                 let p', right' = find_del_left p right
                 p', AvlDiet.join (x, y) left right'
-            elif compare p x < 0 then
+            elif p < x then
                 find_del_left p left
             else
                 x, left
@@ -570,10 +566,10 @@ module private Diet =
         | AvlTree.Empty ->
             p, AvlTree.Empty
         | AvlTree.Node ((x, y), left, right, _) ->
-            if compare p (pred x) < 0 then
+            if p < pred x then
                 let p', left' = find_del_right p left
                 p', AvlDiet.join (x, y) left' right
-            elif compare p y > 0 then
+            elif p > y then
                 find_del_right p right
             else
                 y, right
@@ -592,9 +588,9 @@ module private Diet =
         | Empty ->
             false
         | Node ((x, y), left, right, _) ->
-            if compare value x < 0 then
+            if value < x then
                 contains value left
-            elif compare value y > 0 then
+            elif value > y then
                 contains value right
             else true
         
@@ -733,9 +729,9 @@ module private Diet =
         | Empty ->
             singleton p
         | Node ((x, y), left, right, h) as t ->
-            if compare p x >= 0 then
-                if compare p y <= 0 then t
-                elif compare p (succ y) > 0 then
+            if p >= x then
+                if p <= y then t
+                elif p > succ y then
                     AvlDiet.join (x, y) left (add p right)
                 elif AvlTree.isEmpty right then
                     AvlTree.Node ((x, p), left, right, h)
@@ -746,13 +742,13 @@ module private Diet =
                     else
                         AvlTree.Node ((x, p), left, right, h)
 
-            elif compare p (pred x) < 0 then
+            elif p < pred x then
                 AvlDiet.join (x, y) (add p left) right
             elif AvlTree.isEmpty left then
                 AvlTree.Node ((p, y), left, right, h)
             else
                 let (u, v), l = AvlTree.extractMax left
-                if (succ v) = p then
+                if succ v = p then
                     AvlDiet.join (u, y) l right
                 else
                     AvlTree.Node ((p, y), left, right, h)
@@ -788,16 +784,16 @@ module private Diet =
         | AvlTree.Empty ->
             AvlTree.singleton (p, q)
         | AvlTree.Node ((x, y), left, right, _) ->
-            if compare q (pred x) < 0 then
+            if q < pred x then
                 AvlDiet.join (x, y) (addRange (p, q) left) right
-            elif compare p (succ y) > 0 then
+            elif p > succ y then
                 AvlDiet.join (x, y) left (addRange (p, q) right)
             else
                 let x', left' =
-                    if compare p x >= 0 then x, left
+                    if p >= x then x, left
                     else find_del_left p left
                 let y', right' =
-                    if compare q y <= 0 then y, right
+                    if q <= y then y, right
                     else find_del_right q right
 
                 AvlDiet.join (x', y') left' right'
@@ -824,74 +820,76 @@ module private Diet =
                 elif czx = 0 then
                     AvlTree.Node ((succ x, y), left, right, h)
                 else
-                    addRange (succ z, y) (AvlTree.Node ((x, pred z), left, right, h))
-
-    let rec private union_helper left (a, b) right limit head stream =        
-        match head with
-        | None ->
-            AvlDiet.join (a,b) left right, None, AvlTree.Empty
-        | Some (x, y) ->
-            let greater_limit z =
-                match limit with
-                | None -> false
-                | Some u ->
-                    compare z u >= 0
-                
-            if compare y a < 0 && compare y (pred a) < 0 then
-                let left' = addRange (x, y) left
-                let head, stream = AvlTree.tryExtractMin stream
-                union_helper left' (a, b) right limit head stream
-
-            elif compare x b > 0 && compare x (succ b) > 0 then
-                let right', head, stream = union' right limit head stream
-                AvlDiet.join (a,b) left right', head, stream
-
-            elif compare b y >= 0 then
-                let head, stream = AvlTree.tryExtractMin stream
-                union_helper left (min a x, b) right limit head stream
-
-            elif greater_limit y then
-                left, Some (min a x, y), stream
-
-            else
-                let right', head, stream = union' right limit (Some (min a x, y)) stream
-                AvlDiet.reroot left right', head, stream
-
-    and private union' (input : CharDiet) limit head (stream : CharDiet) =
-        match head with
-        | None ->
-            input, None, AvlTree.Empty
-        | Some (x, y) ->
-            match input with
-            | AvlTree.Empty ->
-                AvlTree.Empty, head, stream
-            | AvlTree.Node ((a, b), left, right, _) ->
-                let left', head, stream =
-                    if compare x a < 0 then
-                        union' left (Some <| pred a) head stream
-                    else
-                        left, head, stream
-                union_helper left' (a, b) right limit head stream
+                    addRange (succ z, y) (AvlTree.Node ((x, pred z), left, right, h))    
 
     /// Computes the union of the two sets.
     let rec union (input : CharDiet) (stream : CharDiet) : CharDiet =
+        let rec union' (input : CharDiet) limit head (stream : CharDiet) =
+            match head with
+            | None ->
+                input, None, AvlTree.Empty
+            | Some (x, y) ->
+                match input with
+                | AvlTree.Empty ->
+                    AvlTree.Empty, head, stream
+                | AvlTree.Node ((a, b), left, right, _) ->
+                    let left', head, stream =
+                        if x < a then
+                            union' left (Some <| pred a) head stream
+                        else
+                            left, head, stream
+                    union_helper left' (a, b) right limit head stream
+
+        and union_helper left (a, b) right limit head stream =
+            match head with
+            | None ->
+                AvlDiet.join (a, b) left right, None, AvlTree.Empty
+            | Some (x, y) ->
+                let greater_limit z =
+                    match limit with
+                    | None -> false
+                    | Some u ->
+                        z >= u
+
+                if y < a && y < pred a then
+                    let left' = addRange (x, y) left
+                    let head, stream = AvlTree.tryExtractMin stream
+                    union_helper left' (a, b) right limit head stream
+
+                elif x > b && x > succ b then
+                    let right', head, stream = union' right limit head stream
+                    AvlDiet.join (a,b) left right', head, stream
+
+                elif b >= y then
+                    let head, stream = AvlTree.tryExtractMin stream
+                    union_helper left (min a x, b) right limit head stream
+
+                elif greater_limit y then
+                    left, Some (min a x, y), stream
+
+                else
+                    let right', head, stream = union' right limit (Some (min a x, y)) stream
+                    AvlDiet.reroot left right', head, stream
+
         if AvlTree.height stream > AvlTree.height input then
             union stream input
         else
             #if DEBUG
+            let inputCount = count input
+            let streamCount = count stream
             /// The minimum possible number of elements in the resulting set.
             let minPossibleResultCount =
-                let inputCount = count input
-                let streamCount = count stream
-                GenericMaximum inputCount streamCount
+                max inputCount streamCount
+            /// The maximum possible number of elements in the resulting set.
+            let maxPossibleResultCount =
+                inputCount + streamCount
             #endif
 
-            let head, stream' =
-                AvlTree.tryExtractMin stream
-
-            let result, head', stream'' =
-                union' input None head stream'
             let result =
+                let result, head', stream'' =
+                    let head, stream' = AvlTree.tryExtractMin stream
+                    union' input None head stream'
+
                 match head' with
                 | None ->
                     result
@@ -911,6 +909,10 @@ module private Diet =
                 resultCount >= minPossibleResultCount,
                 sprintf "The result set should not contain fewer than %i elements, but it contains only %i elements."
                     minPossibleResultCount resultCount)
+            Debug.Assert (
+                resultCount <= maxPossibleResultCount,
+                sprintf "The result set should not contain more than %i elements, but it contains %i elements."
+                    maxPossibleResultCount resultCount)
             #endif
             result
 
@@ -926,7 +928,7 @@ module private Diet =
                     AvlTree.Empty, head, stream
                 | AvlTree.Node ((a, b), left, right, _) ->
                     let left, head, stream =
-                        if compare x a < 0 then
+                        if x < a then
                             inter' left head stream
                         else
                             AvlTree.Empty, head, stream
@@ -938,16 +940,16 @@ module private Diet =
             | None ->
                 left, None, AvlTree.Empty
             | Some (x, y) ->
-                if compare y a < 0 then
+                if y < a then
                     if AvlTree.isEmpty stream then
                         (left, None, AvlTree.Empty)
                     else
                         let head, stream = AvlTree.extractMin stream
                         inter_help (a, b) right left (Some head) stream
-                elif compare b x < 0 then
+                elif b < x then
                     let right, head, stream = inter' right head stream
                     AvlDiet.reroot left right, head, stream
-                elif compare y (safe_pred y b) >= 0 then
+                elif y >= safe_pred y b then
                     let right, head, stream = inter' right head stream
                     (AvlDiet.join (max x a, min y b) left right), head, stream
                 else
@@ -975,7 +977,7 @@ module private Diet =
                     AvlTree.Empty, head, stream
                 | AvlTree.Node ((a, b), left, right, _) ->
                     let left, head, stream =
-                        if compare x a < 0 then
+                        if x < a then
                             diff' left head stream
                         else
                             left, head, stream
@@ -986,19 +988,19 @@ module private Diet =
             | None ->
                 AvlDiet.join (a, b) left right, None, AvlTree.Empty
             | Some (x, y) ->
-                if compare y a < 0 then
+                if y < a then
                     // [x, y] and [a, b] are disjoint
                     let head, stream = AvlTree.tryExtractMin stream
                     diff_helper (a, b) right left head stream
-                elif compare b x < 0 then
+                elif b < x then
                     // [a, b] and [x, y] are disjoint
                     let right, head, stream = diff' right head stream
                     AvlDiet.join (a, b) left right, head, stream
-                elif compare a x < 0 then
+                elif a < x then
                     // [a, b] and [x, y] overlap
                     // a < x
                     diff_helper (x, b) right ((addRange (a, pred x) left)) head stream
-                elif compare y b < 0 then
+                elif y < b then
                     // [a, b] and [x, y] overlap
                     // y < b
                     let head, stream = AvlTree.tryExtractMin stream
