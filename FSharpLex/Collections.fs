@@ -159,52 +159,52 @@ module private AvlTree =
             && avl r
 
     /// Determines if an AVL tree contains a specified value.
-    let rec contains (comparer : IComparer<_>) value (tree : AvlTree<'T>) =
+    let rec contains value (tree : AvlTree<'T>) =
         match tree with
         | Empty ->
             false
         | Node (n, l, r, _) ->
-            let comparison = comparer.Compare (value, n)
+            let comparison = compare value n
             if comparison = 0 then      // value = n
                 true
             elif comparison < 0 then    // value < n
-                contains comparer value l
+                contains value l
             else                        // value > n
-                contains comparer value r
+                contains value r
 
     /// Removes the specified value from the tree.
     /// If the tree doesn't contain the value, no exception is thrown;
     /// the tree will be returned without modification.
-    let rec delete (comparer : IComparer<_>) x (tree : AvlTree<'T>) =
+    let rec delete x (tree : AvlTree<'T>) =
         match tree with
         | Empty ->
             Empty
         | Node (n, l, r, _) as tree ->
-            let comparison = comparer.Compare (x, n)
+            let comparison = compare x n
             if comparison = 0 then      // x = n
                 delete_root tree
             elif comparison < 0 then    // x < n
-                let la = delete comparer x l
+                let la = delete x l
                 mkt_bal_r n la r
             else                        // x > n
-                let a = delete comparer x r
+                let a = delete x r
                 mkt_bal_l n l a
 
     /// Adds a value to an AVL tree.
     /// If the tree already contains the value, no exception is thrown;
     /// the tree will be returned without modification.
-    let rec insert (comparer : IComparer<_>) x (tree : AvlTree<'T>) =
+    let rec insert x (tree : AvlTree<'T>) =
         match tree with
         | Empty ->
             Node (x, Empty, Empty, 1u)
         | Node (n, l, r, _) as tree ->
-            let comparison = comparer.Compare (x, n)
+            let comparison = compare x n
             if comparison = 0 then      // x = n
                 tree
             elif comparison < 0 then    // x < n
-                mkt_bal_l n (insert comparer x l) r
+                mkt_bal_l n (insert x l) r
             else                        // x > n
-                mkt_bal_r n l (insert comparer x r)
+                mkt_bal_r n l (insert x r)
 
     /// Gets the maximum (greatest) value stored in the AVL tree.
     let rec maxElement (tree : AvlTree<'T>) =
@@ -296,7 +296,7 @@ module private AvlTree =
 
     /// Extracts the minimum (least) value from an AVL tree,
     /// returning the value along with the updated tree.
-    let rec extractMin (comparer : IComparer<_>) (tree : AvlTree<'T>) =
+    let rec extractMin (tree : AvlTree<'T>) =
         match tree with
         | Empty ->
             invalidArg "tree" "The tree is empty."
@@ -308,22 +308,22 @@ module private AvlTree =
             // second traversal to remove the element once it's found.
             let n = create x mid r
             create a left n
-            |> extractMin comparer
+            |> extractMin
 
     /// Extracts the minimum (least) value from an AVL tree,
     /// returning the value along with the updated tree.
     /// No exception is thrown if the tree is empty.
-    let tryExtractMin (comparer : IComparer<_>) (tree : AvlTree<'T>) =
+    let tryExtractMin (tree : AvlTree<'T>) =
         // Is the tree empty?
         if isEmpty tree then
             None, tree
         else
-            let minElement, tree = extractMin comparer tree
+            let minElement, tree = extractMin tree
             Some minElement, tree
 
     /// Extracts the maximum (greatest) value from an AVL tree,
     /// returning the value along with the updated tree.
-    let rec extractMax (comparer : IComparer<_>) (tree : AvlTree<'T>) =
+    let rec extractMax (tree : AvlTree<'T>) =
         match tree with
         | Empty ->
             invalidArg "tree" "The tree is empty."
@@ -335,21 +335,21 @@ module private AvlTree =
             // second traversal to remove the element once it's found.
             let n = create x l mid
             create a n right
-            |> extractMax comparer
+            |> extractMax
 
     /// Extracts the maximum (greatest) value from an AVL tree,
     /// returning the value along with the updated tree.
     /// No exception is thrown if the tree is empty.
-    let tryExtractMax (comparer : IComparer<_>) (tree : AvlTree<'T>) =
+    let tryExtractMax (tree : AvlTree<'T>) =
         // Is the tree empty?
         if isEmpty tree then
             None, tree
         else
-            let maxElement, tree = extractMax comparer tree
+            let maxElement, tree = extractMax tree
             Some maxElement, tree
 
     /// Merges two AVL trees and returns the result.
-    let union (comparer : IComparer<_>) (tree1 : AvlTree<'T>) (tree2 : AvlTree<'T>) =
+    let union (tree1 : AvlTree<'T>) (tree2 : AvlTree<'T>) =
         let tree1_count = count tree1
         let tree2_count = count tree2
 
@@ -357,29 +357,29 @@ module private AvlTree =
         if tree1_count < tree2_count then
             (tree2, tree1)
             ||> fold (fun tree el ->
-                insert comparer el tree)
+                insert el tree)
         else
             (tree1, tree2)
             ||> fold (fun tree el ->
-                insert comparer el tree)
+                insert el tree)
 
     /// Builds a new AVL tree from the elements of a sequence.
-    let ofSeq (comparer : IComparer<_>) (sequence : seq<_>) : AvlTree<'T> =
+    let ofSeq (sequence : seq<_>) : AvlTree<'T> =
         (Empty, sequence)
         ||> Seq.fold (fun tree el ->
-            insert comparer el tree)
+            insert el tree)
 
     /// Builds a new AVL tree from the elements of an F# list.
-    let ofList (comparer : IComparer<_>) (list : _ list) : AvlTree<'T> =
+    let ofList (list : _ list) : AvlTree<'T> =
         (Empty, list)
         ||> List.fold (fun tree el ->
-            insert comparer el tree)
+            insert el tree)
 
     /// Builds a new AVL tree from the elements of an array.
-    let ofArray (comparer : IComparer<_>) (array : _[]) : AvlTree<'T> =
+    let ofArray (array : _[]) : AvlTree<'T> =
         (Empty, array)
         ||> Array.fold (fun tree el ->
-            insert comparer el tree)
+            insert el tree)
 
     /// Returns a sequence containing the elements stored
     /// in an AVL tree, ordered from least to greatest.
@@ -499,12 +499,12 @@ module private AvlDiet =
     /// Reroot of balanced trees.
     let reroot l (r : AvlTree<'T>) =
         if AvlTree.height l > AvlTree.height r then
-            let i, l' = AvlTree.extractMax FastGenericComparer<'T> l
+            let i, l' = AvlTree.extractMax l
             join i l' r
         else
             if AvlTree.isEmpty r then Empty
             else
-                let i, r' = AvlTree.extractMin FastGenericComparer<'T> r
+                let i, r' = AvlTree.extractMin r
                 join i l r'
 
 
@@ -740,7 +740,7 @@ module private Diet =
                 elif AvlTree.isEmpty right then
                     AvlTree.Node ((x, p), left, right, h)
                 else
-                    let (u, v), r = AvlTree.extractMin charComparer right
+                    let (u, v), r = AvlTree.extractMin right
                     if pred u = p then
                         AvlDiet.join (x, v) left r
                     else
@@ -751,7 +751,7 @@ module private Diet =
             elif AvlTree.isEmpty left then
                 AvlTree.Node ((p, y), left, right, h)
             else
-                let (u, v), l = AvlTree.extractMax charComparer left
+                let (u, v), l = AvlTree.extractMax left
                 if (succ v) = p then
                     AvlDiet.join (u, y) l right
                 else
@@ -839,7 +839,7 @@ module private Diet =
                 
             if compare y a < 0 && compare y (pred a) < 0 then
                 let left' = addRange (x, y) left
-                let head, stream = AvlTree.tryExtractMin charComparer stream
+                let head, stream = AvlTree.tryExtractMin stream
                 union_helper left' (a, b) right limit head stream
 
             elif compare x b > 0 && compare x (succ b) > 0 then
@@ -847,7 +847,7 @@ module private Diet =
                 AvlDiet.join (a,b) left right', head, stream
 
             elif compare b y >= 0 then
-                let head, stream = AvlTree.tryExtractMin charComparer stream
+                let head, stream = AvlTree.tryExtractMin stream
                 union_helper left (min a x, b) right limit head stream
 
             elif greater_limit y then
@@ -887,7 +887,7 @@ module private Diet =
             #endif
 
             let head, stream' =
-                AvlTree.tryExtractMin charComparer stream
+                AvlTree.tryExtractMin stream
 
             let result, head', stream'' =
                 union' input None head stream'
@@ -942,7 +942,7 @@ module private Diet =
                     if AvlTree.isEmpty stream then
                         (left, None, AvlTree.Empty)
                     else
-                        let head, stream = AvlTree.extractMin charComparer stream
+                        let head, stream = AvlTree.extractMin stream
                         inter_help (a, b) right left (Some head) stream
                 elif compare b x < 0 then
                     let right, head, stream = inter' right head stream
@@ -959,7 +959,7 @@ module private Diet =
         elif AvlTree.isEmpty stream then
             AvlTree.Empty
         else
-            let head, stream = AvlTree.extractMin charComparer stream
+            let head, stream = AvlTree.extractMin stream
             let result, _, _ = inter' input (Some head) stream
             result
 
@@ -988,7 +988,7 @@ module private Diet =
             | Some (x, y) ->
                 if compare y a < 0 then
                     // [x, y] and [a, b] are disjoint
-                    let head, stream = AvlTree.tryExtractMin charComparer stream
+                    let head, stream = AvlTree.tryExtractMin stream
                     diff_helper (a, b) right left head stream
                 elif compare b x < 0 then
                     // [a, b] and [x, y] are disjoint
@@ -1001,7 +1001,7 @@ module private Diet =
                 elif compare y b < 0 then
                     // [a, b] and [x, y] overlap
                     // y < b
-                    let head, stream = AvlTree.tryExtractMin charComparer stream
+                    let head, stream = AvlTree.tryExtractMin stream
                     diff_helper (succ y, b) right left head stream
                 else
                     // [a, b] and [x, y] overlap
@@ -1019,7 +1019,7 @@ module private Diet =
                 GenericMaximum 0 (inputCount - streamCount)
             #endif
 
-            let head, stream' = AvlTree.extractMin charComparer stream
+            let head, stream' = AvlTree.extractMin stream
             let result, _, _ = diff' input (Some head) stream'
 
             #if DEBUG
@@ -1036,8 +1036,8 @@ module private Diet =
     let rec comparison (t1 : CharDiet) (t2 : CharDiet) =
         match t1, t2 with
         | Node (_,_,_,_), Node (_,_,_,_) ->
-            let (ix1, iy1), r1 = AvlTree.extractMin charComparer t1
-            let (ix2, iy2), r2 = AvlTree.extractMin charComparer t2
+            let (ix1, iy1), r1 = AvlTree.extractMin t1
+            let (ix2, iy2), r2 = AvlTree.extractMin t2
             let c =
                 let d = compare ix1 ix2
                 if d <> 0 then -d
