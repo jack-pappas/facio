@@ -648,7 +648,7 @@ module private Diet =
     /// Applies the given accumulating function to all elements in a DIET.
     let fold (folder : 'State -> char -> 'State) (state : 'State) (tree : CharDiet) =
         // Preconditions
-        checkNonNull "tree" tree
+        // NONE -- Skip null check because the Empty tree is represented as null.
 
         let folder = FSharpFunc<_,_,_>.Adapt folder
 
@@ -664,7 +664,7 @@ module private Diet =
     /// Applies the given accumulating function to all elements in a DIET.
     let foldBack (folder : char -> 'State -> 'State) (tree : CharDiet) (state : 'State) =
         // Preconditions
-        checkNonNull "tree" tree
+        // NONE -- Skip null check because the Empty tree is represented as null.
 
         let folder = FSharpFunc<_,_,_>.Adapt folder
 
@@ -680,7 +680,7 @@ module private Diet =
     /// Applies the given function to all elements in a DIET.
     let iter (action : char -> unit) (tree : CharDiet) =
         // Preconditions
-        checkNonNull "tree" tree
+        // NONE -- Skip null check because the Empty tree is represented as null.
 
         /// Applies the action to all values within an interval.
         let intervalApplicator (lo, hi) =
@@ -1081,10 +1081,6 @@ module private Diet =
 type CharSet private (dietSet : CharDiet) =
     //
     static let empty = CharSet (Diet.empty)
-
-    //
-    static let charComparer =
-        LanguagePrimitives.FastGenericComparer<char>
 
     //
     static member Empty
