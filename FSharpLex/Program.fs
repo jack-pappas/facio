@@ -110,18 +110,6 @@ module Program =
         elif not <| System.IO.File.Exists inputFile then
             invalidArg "inputFile" "No lexer specification exists at the specified path."
 
-        let chars =
-            let chars =
-                let chars =
-                    (CharSet.singleton (char 41))
-                    |> CharSet.union (CharSet.singleton (char 34))
-                CharSet.union (CharSet.singleton (char 13)) chars
-
-            let foo =
-                int "wefpwpeflpepfpl".[0] + "wofwoefk".Length
-
-            CharSet.union (CharSet.singleton (char 10)) chars
-
         // TEMP : This is hard-coded for now, but eventually we'll make it
         // so the user can specify which backend(s) to use.
         /// Compiler backends.
