@@ -22,6 +22,9 @@ module FSharpLex.SpecializedCollections
 
 open System.Diagnostics
 open OptimizedClosures
+open ExtCore
+open ExtCore.Collections
+open ExtCore.Control
 
 
 (*  NOTE :  The core functions implementing the AVL tree algorithm were extracted into OCaml
@@ -125,6 +128,8 @@ module private AvlTree =
         | Node (_,_,_,_) -> false
 
     /// Implementation. Returns the height of an AVL tree.
+    // OPTIMIZE : This should be re-implemented without continuations --
+    // move it into 'computeHeight' and use a mutable stack to traverse the tree.
     let rec private computeHeightRec (tree : AvlTree<'T>) cont =
         match tree with
         | Empty ->
@@ -422,710 +427,485 @@ module private AvlTree =
         elements.ToArray ()
 
 
-/// Defines methods which allow a type to be "measured".
-type private IMeasurer<'T> =
-    inherit System.Collections.Generic.IComparer<'T>
-
-    // "Predecessor"
-    abstract Previous : x : 'T -> 'T
-    // "Successor"
-    abstract Next : x : 'T -> 'T
-    /// A distance metric. Calculuates the "distance" from the second
-    /// value to the first value (the ordering is important).
-    abstract Distance : x : 'T * y : 'T -> int
-
-//
-[<Struct>]
-[<DebuggerDisplay("Min = {MinValue}, Max = {MaxValue}")>]
-[<StructuredFormatDisplay("[{MinValue}, {MaxValue}]")>]
-type private Range<'T when 'T : comparison> =
-    //
-    val MinValue : 'T
-    //
-    val MaxValue : 'T
+/// Additional AVL tree operations needed to implement the DIET.
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module private AvlDiet =
+    open System.Collections.Generic
+    open LanguagePrimitives
 
     //
-    new (value) = {
-        MinValue = value;
-        MaxValue = value; }
+    let [<Literal>] balanceTolerance = 1u
 
-    //
-    new (rangeMin, rangeMax) =
-        // Preconditions
-        if rangeMin > rangeMax then
-            invalidArg "rangeMax" "The minimum range value cannot be greater than the maximum range value."
+    /// Join two trees together at a pivot point, then balance the resulting tree.
+    let private balance x l (r : AvlTree<'T>) =
+        let hl = AvlTree.height l
+        let hr = AvlTree.height r
+        if hl > hr + balanceTolerance then
+            match l with
+            | Empty ->
+                invalidArg "AvlTree.balance" "The left subtree is empty."
+            | Node (lvx, ll, lr, _) ->
+                if AvlTree.height ll >= AvlTree.height lr then
+                    AvlTree.create lvx ll (AvlTree.create x lr r)
+                else
+                    match lr with
+                    | Empty ->
+                        invalidArg "AvlTree.balance" "The right subtree is empty."
+                    | Node (lrx, lrl, lrr, _)->
+                        AvlTree.create lrx (AvlTree.create lvx ll lrl) (AvlTree.create x lrr r)
 
-        { MinValue = rangeMin;
-          MaxValue = rangeMax; }
+        else if hr > hl + balanceTolerance then
+            match r with
+            | Empty ->
+                invalidArg "AvlTree.balance" "The right subtree is empty."
+            | Node (rvx, rl, rr, _) ->
+                if AvlTree.height rr >= AvlTree.height rl then
+                    AvlTree.create rvx (AvlTree.create x l rl) rr
+                else
+                    match rl with
+                    | Empty ->
+                        invalidArg "AvlTree.balance" "The left subtree is empty."
+                    | Node (rlx, rll, rlr, _) ->
+                        AvlTree.create rlx (AvlTree.create x l rll) (AvlTree.create rvx rlr rr)
 
-    override this.ToString () =
-        sprintf "[%O, %O]" this.MinValue this.MaxValue
+        else
+            Node (x, l, r, (max hl hr) + 1u)
+    
+    /// Join two trees together at a pivot point.
+    /// The resulting tree may be unbalanced.
+    let rec join v l (r : AvlTree<'T>) =
+        let rec myadd left x = function
+            | Empty ->
+                Node (x, Empty, Empty, 1u)
+            | Node (vx, l, r, _) ->
+                if left then
+                    balance vx (myadd left x l) r
+                else
+                    balance vx l (myadd left x r)
+        
+        match l, r with
+        | Empty, _ ->
+            myadd true v r
+        | _, Empty ->
+            myadd false v l
+        | Node (lx, ll, lr, lh), Node (rx, rl, rr, rh) ->
+            if lh > rh + balanceTolerance then
+                balance lx ll (join v lr r)
+            else if rh > lh + balanceTolerance then
+                balance rx (join v l rl) rr
+            else
+                AvlTree.create v l r
 
-    //
-    member this.ToSeq (measurer : IMeasurer<_>) =
-        let maxValue = this.MaxValue
-        let rec loop current = seq {
-            if current <= maxValue then
-                yield current
-                yield! loop (measurer.Next current)
-            }
+    /// Reroot of balanced trees.
+    let reroot l (r : AvlTree<'T>) =
+        if AvlTree.height l > AvlTree.height r then
+            let i, l' = AvlTree.extractMax FastGenericComparer<'T> l
+            join i l' r
+        else
+            if AvlTree.isEmpty r then Empty
+            else
+                let i, r' = AvlTree.extractMin FastGenericComparer<'T> r
+                join i l r'
 
-        loop this.MinValue
 
-/// A Discrete Interval Encoding Tree (DIET).
-type private Diet<'T when 'T : comparison> =
-    AvlTree<Range<'T>>
+/// A Discrete Interval Encoding Tree (DIET) specialized to the 'char' type.
+/// This is abbreviated in our documentation as a 'char-DIET'.
+type private CharDiet = AvlTree<char * char>
 
-/// Functional operations for DIETs.
+/// Functional operations for char-DIETs.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module private Diet =
     open System.Collections.Generic
     open LanguagePrimitives
 
     //
-    module private AvlTree =
-        //
-        let [<Literal>] balanceTolerance = 1u
+    let private charComparer =
+        FastGenericComparer<char>
 
-        /// Join two trees together at a pivot point, then balance the resulting tree.
-        let balance x l (r : AvlTree<'T>) =
-            let hl = AvlTree.height l
-            let hr = AvlTree.height r
-            if hl > hr + balanceTolerance then
-                match l with
-                | Empty ->
-                    invalidArg "AvlTree.balance" "The left subtree is empty."
-                | Node (lvx, ll, lr, _) ->
-                    if AvlTree.height ll >= AvlTree.height lr then
-                        AvlTree.create lvx ll (AvlTree.create x lr r)
-                    else
-                        match lr with
-                        | Empty ->
-                            invalidArg "AvlTree.balance" "The right subtree is empty."
-                        | Node (lrx, lrl, lrr, _)->
-                            AvlTree.create lrx (AvlTree.create lvx ll lrl) (AvlTree.create x lrr r)
-
-            else if hr > hl + balanceTolerance then
-                match r with
-                | Empty ->
-                    invalidArg "AvlTree.balance" "The right subtree is empty."
-                | Node (rvx, rl, rr, _) ->
-                    if AvlTree.height rr >= AvlTree.height rl then
-                        AvlTree.create rvx (AvlTree.create x l rl) rr
-                    else
-                        match rl with
-                        | Empty ->
-                            invalidArg "AvlTree.balance" "The left subtree is empty."
-                        | Node (rlx, rll, rlr, _) ->
-                            AvlTree.create rlx (AvlTree.create x l rll) (AvlTree.create rvx rlr rr)
-
-            else
-                Node (x, l, r, (max hl hr) + 1u)
+    //
+    let inline pred (c : char) : char =
+        char (int c - 1)
     
-        /// Join two trees together at a pivot point.
-        /// The resulting tree may be unbalanced.
-        let rec join v l (r : AvlTree<'T>) =
-            let rec myadd left x = function
-                | Empty ->
-                    Node (x, Empty, Empty, 1u)
-                | Node (vx, l, r, _) ->
-                    if left then
-                        balance vx (myadd left x l) r
-                    else
-                        balance vx l (myadd left x r)
-        
-            match l, r with
-            | Empty, _ ->
-                myadd true v r
-            | _, Empty ->
-                myadd false v l
-            | Node (lx, ll, lr, lh), Node (rx, rl, rr, rh) ->
-                if lh > rh + balanceTolerance then
-                    balance lx ll (join v lr r)
-                else if rh > lh + balanceTolerance then
-                    balance rx (join v l rl) rr
-                else
-                    AvlTree.create v l r
-
-        /// Reroot of balanced trees.
-        let reroot (comparer : IComparer<_>) l (r : AvlTree<'T>) =
-            if AvlTree.height l > AvlTree.height r then
-                let i, l' = AvlTree.extractMax comparer l
-                join i l' r
-            else
-                if AvlTree.isEmpty r then Empty
-                else
-                    let i, r' = AvlTree.extractMin comparer r
-                    join i l r'
+    //
+    let inline succ (c : char) : char =
+        char (int c + 1)
 
     //
-    let inline private safe_pred (measurer : IMeasurer<_>) limit x =
-        if measurer.Compare (limit, x) < 0 then
-            measurer.Previous x
-        else x
+    let inline dist (x : char) (y : char) : int =
+        int y - int x
 
     //
-    let inline private safe_succ (measurer : IMeasurer<_>) limit x =
-        if measurer.Compare (limit, x) > 0 then
-            measurer.Next x
-        else x
+    let inline private safe_pred (limit : char) (c : char) =
+        if limit < c then
+            char (int c - 1)
+        else c
 
     //
-    let inline private max (measurer : IMeasurer<_>) x y =
-        if measurer.Compare (x, y) > 0 then x else y
+    let inline private safe_succ (limit : char) (c : char) =
+        if limit > c then
+            char (int c + 1)
+        else c
 
     //
-    let inline private min (measurer : IMeasurer<_>) x y =
-        if measurer.Compare (x, y) < 0 then x else y
-
-    //
-    let inline height (t : Diet<'T>) =
+    let inline height (t : CharDiet) =
         AvlTree.height t
 
-    // For debugging purposes.
-    let internal ensureCorrectlyFormed (measurer : IMeasurer<_>) (tree : Diet<'T>) =
-        let rec ensureCorrectlyFormed tree =
-            match tree with
-            | Empty
-            | Node (_, Empty, Empty, _) -> ()
-            | Node (rangeXY : Range<_>,
-                    (Node (leftChildRange : Range<_>,_,_, leftChildHeight) as left), Empty, height) ->
-                // Make sure the sets aren't overlapping or touching,
-                // and that the left-child range is "lesser" than this node's range.
-                Debug.Assert (
-                    height > leftChildHeight &&
-                    height - leftChildHeight <= 2u,
-                    sprintf "Node Height = %i, Left-Child Height = %i" height leftChildHeight)
-                Debug.Assert (
-                    measurer.Previous rangeXY.MinValue > leftChildRange.MaxValue,
-                    sprintf "pred(Node.MinValue) = %O, Left-Child MaxValue = %O" (measurer.Previous rangeXY.MinValue) leftChildRange.MaxValue)
-                ensureCorrectlyFormed left
-
-            | Node (rangeXY : Range<_>, Empty,
-                    (Node (rightChildRange : Range<_>,_,_, rightChildHeight) as right), height) ->
-                // Make sure the sets aren't overlapping or touching,
-                // and that the right-child range is "greater" than this node's range.
-                Debug.Assert (
-                    height > rightChildHeight &&
-                    height - rightChildHeight <= 2u,
-                    sprintf "Node Height = %i, Right-Child Height = %i" height rightChildHeight)
-                Debug.Assert (
-                    measurer.Next rangeXY.MaxValue < rightChildRange.MinValue,
-                    sprintf "succ(Node.MaxValue) = %O, Right-Child MinValue = %O" (measurer.Next rangeXY.MaxValue) rightChildRange.MinValue)
-                ensureCorrectlyFormed right
-
-            | Node (rangeXY : Range<_>,
-                    (Node (leftChildRange : Range<_>,_,_,leftChildHeight) as left),
-                    (Node (rightChildRange : Range<_>,_,_,rightChildHeight) as right), height) ->
-                // Make sure the sets aren't overlapping or touching,
-                // and that the left-child range is "lesser" than this node's range.
-                Debug.Assert (
-                    height > leftChildHeight &&
-                    height - leftChildHeight <= 2u,
-                    sprintf "Node Height = %i, Left-Child Height = %i" height leftChildHeight)
-                Debug.Assert (
-                    measurer.Previous rangeXY.MinValue > leftChildRange.MaxValue,
-                    sprintf "pred(Node.MinValue) = %O, Left-Child MaxValue = %O" (measurer.Previous rangeXY.MinValue) leftChildRange.MaxValue)
-                ensureCorrectlyFormed left
-                // Make sure the sets aren't overlapping or touching,
-                // and that the right-child range is "greater" than this node's range.
-                Debug.Assert (
-                    height > rightChildHeight &&
-                    height - rightChildHeight <= 2u,
-                    sprintf "Node Height = %i, Right-Child Height = %i" height rightChildHeight)
-                Debug.Assert (
-                    measurer.Next rangeXY.MaxValue < rightChildRange.MinValue,
-                    sprintf "succ(Node.MaxValue) = %O, Right-Child MinValue = %O" (measurer.Next rangeXY.MaxValue) rightChildRange.MinValue)
-                ensureCorrectlyFormed right
-
-        ensureCorrectlyFormed tree
-        tree
-
-    let internal ensureCorrectlyFormed1stAnd3rd measurer (x : Diet<'T>, y, z : Diet<'T>) =
-        let x' = ensureCorrectlyFormed measurer x
-        let z' = ensureCorrectlyFormed measurer z
-        x', y, z'
-
-    let internal ensureCorrectlyFormed2Of2 measurer (x, tree : Diet<'T>) =
-        x, ensureCorrectlyFormed measurer tree
-
     //
-    let rec private find_del_left_rec (measurer : IMeasurer<_>) p (tree : Diet<'T>) cont =
+    let rec private find_del_left p (tree : CharDiet) =
         match tree with
         | AvlTree.Empty ->
-            cont (p, AvlTree.Empty)
-        | AvlTree.Node (range, left, right, _) ->
-            if measurer.Compare (p, measurer.Next range.MaxValue) > 0 then
-                find_del_left_rec measurer p right <| fun (p, right) ->
-                    cont (p, AvlTree.join range left right)
-            elif measurer.Compare (p, range.MinValue) < 0 then
-                find_del_left_rec measurer p left cont
+            p, AvlTree.Empty
+        | AvlTree.Node ((x, y), left, right, _) ->
+            if compare p (succ y) > 0 then
+                let p', right' = find_del_left p right
+                p', AvlDiet.join (x, y) left right'
+            elif compare p x < 0 then
+                find_del_left p left
             else
-                cont (range.MinValue, left)
+                x, left
 
     //
-    let private find_del_left (measurer : IMeasurer<_>) p (tree : Diet<'T>) =
-        find_del_left_rec measurer p tree id
-
-    //
-    let rec private find_del_right_rec (measurer : IMeasurer<_>) p (tree : Diet<'T>) cont =
+    let rec private find_del_right p (tree : CharDiet) =
         match tree with
         | AvlTree.Empty ->
-            cont (p, AvlTree.Empty)
-        | AvlTree.Node (range, left, right, _) ->
-            if measurer.Compare (p, measurer.Previous range.MinValue) < 0 then
-                find_del_right_rec measurer p left <| fun (p, left) ->
-                    cont (p, AvlTree.join range left right)
-            elif measurer.Compare (p, range.MaxValue) > 0 then
-                find_del_right_rec measurer p right cont
+            p, AvlTree.Empty
+        | AvlTree.Node ((x, y), left, right, _) ->
+            if compare p (pred x) < 0 then
+                let p', left' = find_del_right p left
+                p', AvlDiet.join (x, y) left' right
+            elif compare p y > 0 then
+                find_del_right p right
             else
-                cont (range.MaxValue, right)
-    
-    //
-    let private find_del_right (measurer : IMeasurer<_>) p (tree : Diet<'T>) =
-        find_del_right_rec measurer p tree id
+                y, right
 
     /// An empty DIET.
-    let empty : Diet<'T> =
+    let empty : CharDiet =
         AvlTree.empty
 
     /// Determines if a DIET is empty.
-    let inline isEmpty (tree : Diet<'T>) =
+    let inline isEmpty (tree : CharDiet) =
         AvlTree.isEmpty tree
 
     /// Determines if a DIET contains a specified value.
-    let rec contains (measurer : IMeasurer<_>) value (tree : Diet<'T>) =
+    let rec contains value (tree : CharDiet) =
         match tree with
         | Empty ->
             false
-        | Node (range, left, right, _) ->
-            if measurer.Compare (value, range.MinValue) < 0 then
-                contains measurer value left
-            elif measurer.Compare (value, range.MaxValue) > 0 then
-                contains measurer value right
+        | Node ((x, y), left, right, _) ->
+            if compare value x < 0 then
+                contains value left
+            elif compare value y > 0 then
+                contains value right
             else true
         
     /// Gets the maximum (greatest) value stored in the DIET.
-    let maxElement (tree : Diet<'T>) =
-        (AvlTree.maxElement tree).MaxValue
+    let maxElement (tree : CharDiet) : char =
+        snd <| AvlTree.maxElement tree
     
     /// Gets the minimum (least) value stored in the DIET.
-    let minElement (tree : Diet<'T>) =
-        (AvlTree.minElement tree).MinValue
+    let minElement (tree : CharDiet) : char=
+        fst <| AvlTree.minElement tree
 
     /// Creates a DIET containing the specified value.
-    let singleton value : Diet<'T> =
-        AvlTree.singleton <| Range (value)
+    let singleton value : CharDiet =
+        AvlTree.singleton <| (value, value)
 
     /// Creates a DIET containing the specified range of values.
-    let ofRange minValue maxValue : Diet<'T> =
+    let ofRange minValue maxValue : CharDiet =
         // For compatibility with the F# range operator,
         // when minValue > minValue it's just considered
         // to be an empty range.
         if minValue >= maxValue then
             empty
         else
-            Range (minValue, maxValue)
-            |> AvlTree.singleton
+            AvlTree.singleton (minValue, maxValue)
 
     /// Returns the number of elements in the set.
-    let count (measurer : IMeasurer<_>) (t : Diet<'T>) =
+    let count (t : CharDiet) =
+        // OPTIMIZE : Modify this to use a mutable stack instead of an F# list.
         let rec cardinal_aux acc = function
             | [] -> acc
             | AvlTree.Empty :: ts ->
                 cardinal_aux acc ts
-            | AvlTree.Node (range : Range<_>, left, right, _) :: ts ->
-                let dist = measurer.Distance (range.MinValue, range.MaxValue)
-                cardinal_aux (acc + dist + 1) (left :: right :: ts)
+            | AvlTree.Node ((x, y), left, right, _) :: ts ->
+                let d = dist x y
+                cardinal_aux (acc + d + 1) (left :: right :: ts)
         
         cardinal_aux 0 [t]
 
     /// Returns the number of intervals in the set.
-    let intervalCount (t : Diet<'T>) =
+    let intervalCount (t : CharDiet) =
+        // OPTIMIZE : Modify this to use a mutable stack instead of an F# list.
         let rec cardinal_aux acc = function
             | [] -> acc
             | AvlTree.Empty :: ts ->
                 cardinal_aux acc ts
-            | AvlTree.Node (range : Range<_>, left, right, _) :: ts ->
+            | AvlTree.Node (_, left, right, _) :: ts ->
                 cardinal_aux (acc + 1) (left :: right :: ts)
         
         cardinal_aux 0 [t]
 
     /// Applies the given accumulating function to all elements in a DIET.
-    let fold (folder : 'State -> _ -> 'State) (measurer : IMeasurer<_>) (state : 'State) (tree : Diet<'T>) =
-        let rangeFolder (state : 'State) (range : Range<_>) =
-            let q = range.MaxValue
+    let fold (folder : 'State -> char -> 'State) (state : 'State) (tree : CharDiet) =
+        // Preconditions
+        checkNonNull "tree" tree
+
+        let folder = FSharpFunc<_,_,_>.Adapt folder
+
+        let rangeFolder (state : 'State) (lo, hi) =
             // Fold over the items in increasing order.
             let mutable state = state
-            let mutable currentItem = range.MinValue
-            while currentItem <> q do
-                state <- folder state currentItem
-                currentItem <- measurer.Next currentItem
-
-            // Apply the folder function to the last value in the range 'q'.
-            folder state q
+            for x = int lo to int hi do
+                state <- folder.Invoke (state, char x)
+            state
 
         AvlTree.fold rangeFolder state tree
 
     /// Applies the given accumulating function to all elements in a DIET.
-    let foldBack (folder : _ -> 'State -> 'State) (measurer : IMeasurer<_>) (tree : Diet<'T>) (state : 'State) =
-        let rangeFolder (range : Range<_>) (state : 'State) =
-            let p = range.MinValue
+    let foldBack (folder : char -> 'State -> 'State) (tree : CharDiet) (state : 'State) =
+        // Preconditions
+        checkNonNull "tree" tree
 
+        let folder = FSharpFunc<_,_,_>.Adapt folder
+
+        let rangeFolder (lo, hi) (state : 'State) =
             // Fold over the items in decreasing order.
             let mutable state = state
-            let mutable currentItem = range.MaxValue
-            while currentItem <> p do
-                state <- folder currentItem state
-                currentItem <- measurer.Previous currentItem
-
-            // Apply the folder function to the first value in the range 'p'.
-            folder p state
+            for x = int hi downto int lo do
+                state <- folder.Invoke (char x, state)
+            state
 
         AvlTree.foldBack rangeFolder tree state
 
+    /// Applies the given function to all elements in a DIET.
+    let iter (action : char -> unit) (tree : CharDiet) =
+        // Preconditions
+        checkNonNull "tree" tree
+
+        /// Applies the action to all values within an interval.
+        let intervalApplicator (lo, hi) =
+            for x = int lo to int hi do
+                action (char x)
+
+        AvlTree.iter intervalApplicator tree
+
     //
-    let rec toSeq (measurer : IMeasurer<_>) (tree : Diet<'T>) =
+    let rec toSeq (tree : CharDiet) =
         seq {
         match tree with
         | Empty -> ()
-        | Node (range : Range<_>, l, r, _) ->
-            yield! toSeq measurer l
-            yield! range.ToSeq measurer
-            yield! toSeq measurer r
+        | Node ((x, y), l, r, _) ->
+            yield! toSeq l
+            yield! seq {x .. y}
+            yield! toSeq r
         }
 
     //
-    let toList (measurer : IMeasurer<_>) (tree : Diet<'T>) =
-        (measurer, [], tree)
-        |||> fold (fun list el ->
+    let toList (tree : CharDiet) =
+        ([], tree)
+        ||> fold (fun list el ->
             el :: list)
 
     //
-    let toArray (measurer : IMeasurer<_>) (tree : Diet<'T>) =
+    let toArray (tree : CharDiet) =
         let elements = ResizeArray ()
-        // TODO : Simplify this to use 'iter' instead of 'fold'.
-        (measurer, elements, tree)
-        |||> fold (fun resizeArr el ->
-            resizeArr.Add el
-            resizeArr)
-        |> ignore
+        iter elements.Add tree
         elements.ToArray ()
 
     //
-    let toSet (measurer : IMeasurer<_>) (tree : Diet<'T>) =
-        (measurer, Set.empty, tree)
-        |||> fold (fun set el ->
+    let toSet (tree : CharDiet) =
+        (Set.empty, tree)
+        ||> fold (fun set el ->
             Set.add el set)
 
-    // TEMP
-    let internal ensureAllElementsUnique (measurer : IMeasurer<_>) (tree : Diet<'T>) =
-        let uniqueElementCount =
-            toSet measurer tree
-            |> Set.count
-
-        let actualElementCount = count measurer tree
-        Debug.Assert (
-            (actualElementCount = uniqueElementCount),
-            sprintf "Incorrectly-formed DIET found: contains %i elements, but only %i unique elements." actualElementCount uniqueElementCount)
-        tree
-
     //
-    let forall (predicate : 'T -> bool) (measurer : IMeasurer<_>) (t : Diet<'T>) =
+    let forall (predicate : char -> bool) (t : CharDiet) =
         // OPTIMIZE : Rewrite this to short-circuit and return early
         // if we find a non-matching element.
-        (measurer, true, t)
-        |||> fold (fun state el ->
+        (true, t)
+        ||> fold (fun state el ->
             state && predicate el)
-
-    //
-    let rec private addRec (measurer : IMeasurer<_>) p (tree : Diet<'T>) cont : Diet<_> =
-        let inline compare a b =
-            measurer.Compare (a, b)
-
-        match tree with
-        | Empty ->
-            singleton p
-            |> cont
-        | Node (rangeXY, left, right, h) as t ->
-            if compare p rangeXY.MinValue >= 0 then
-                if compare p rangeXY.MaxValue <= 0 then
-                    cont t
-
-                elif compare p (measurer.Next rangeXY.MaxValue) > 0 then
-                    addRec measurer p right <| fun right ->
-                        AvlTree.join rangeXY left right
-                        |> cont
-
-                elif AvlTree.isEmpty right then
-                    AvlTree.Node (Range (rangeXY.MinValue, p), left, right, h)
-                    |> cont
-
-                else
-                    let rangeUV, r = AvlTree.extractMin measurer right
-                    if measurer.Previous rangeUV.MinValue = p then
-                        let rangeXV = Range (rangeXY.MinValue, rangeUV.MaxValue)
-                        AvlTree.join rangeXV left r
-                    else
-                        let rangeXP = Range (rangeXY.MinValue, p)
-                        AvlTree.Node (rangeXP, left, right, h)
-                    |> cont
-
-            elif compare p (measurer.Previous rangeXY.MinValue) < 0 then
-                addRec measurer p left <| fun left ->
-                    AvlTree.join rangeXY left right
-                    |> cont
-
-            elif AvlTree.isEmpty left then
-                let rangePY = Range (p, rangeXY.MaxValue)
-                AvlTree.Node (rangePY, left, right, h)
-                |> cont
-
-            else
-                let rangeUV, l = AvlTree.extractMax measurer left
-                if measurer.Next rangeUV.MaxValue = p then
-                    let rangeUY = Range (rangeUV.MinValue, rangeXY.MaxValue)
-                    AvlTree.join rangeUY l right
-                else
-                    let rangePY = Range (p, rangeXY.MaxValue)
-                    AvlTree.Node (rangePY, left, right, h)
-                |> cont
 
     /// Returns a new set with the specified value added to the set.
     /// No exception is thrown if the set already contains the value.
-    let add (measurer : IMeasurer<_>) p (tree : Diet<'T>) : Diet<_> =
-        addRec measurer p tree id
-        //|> ensureAllElementsUnique measurer
-        |> ensureCorrectlyFormed measurer
+    let rec add p (tree : CharDiet) : CharDiet =
+        match tree with
+        | Empty ->
+            singleton p
+        | Node ((x, y), left, right, h) as t ->
+            if compare p x >= 0 then
+                if compare p y <= 0 then t
+                elif compare p (succ y) > 0 then
+                    AvlDiet.join (x, y) left (add p right)
+                elif AvlTree.isEmpty right then
+                    AvlTree.Node ((x, p), left, right, h)
+                else
+                    let (u, v), r = AvlTree.extractMin charComparer right
+                    if pred u = p then
+                        AvlDiet.join (x, v) left r
+                    else
+                        AvlTree.Node ((x, p), left, right, h)
+
+            elif compare p (pred x) < 0 then
+                AvlDiet.join (x, y) (add p left) right
+            elif AvlTree.isEmpty left then
+                AvlTree.Node ((p, y), left, right, h)
+            else
+                let (u, v), l = AvlTree.extractMax charComparer left
+                if (succ v) = p then
+                    AvlDiet.join (u, y) l right
+                else
+                    AvlTree.Node ((p, y), left, right, h)
 
     /// Builds a new DIET from the elements of a sequence.
-    let ofSeq (measurer : IMeasurer<_>) (sequence : seq<_>) : Diet<'T> =
+    let ofSeq (sequence : seq<_>) : CharDiet =
         (Empty, sequence)
         ||> Seq.fold (fun tree el ->
-            add measurer el tree)
+            add el tree)
 
     /// Builds a new DIET from the elements of an F# list.
-    let ofList (measurer : IMeasurer<_>) (list : _ list) : Diet<'T> =
+    let ofList (list : _ list) : CharDiet =
         (Empty, list)
         ||> List.fold (fun tree el ->
-            add measurer el tree)
+            add el tree)
 
     /// Builds a new DIET from the elements of an array.
-    let ofArray (measurer : IMeasurer<_>) (array : _[]) : Diet<'T> =
+    let ofArray (array : _[]) : CharDiet =
         (Empty, array)
         ||> Array.fold (fun tree el ->
-            add measurer el tree)
+            add el tree)
 
     /// Builds a new DIET from an F# Set.
-    let ofSet (measurer : IMeasurer<_>) (set : Set<'T>) : Diet<'T> =
+    let ofSet (set : Set<_>) : CharDiet =
         (Empty, set)
         ||> Set.fold (fun tree el ->
-            add measurer el tree)
+            add el tree)
 
     /// Returns a new set with the specified range of values added to the set.
     /// No exception is thrown if any of the values are already contained in the set.
-    let rec private addRange' (measurer : IMeasurer<_>) rangePQ (tree : Diet<'T>) : Diet<_> =
-        let inline compare a b =
-            measurer.Compare (a, b)
-
+    let rec addRange (p, q) (tree : CharDiet) : CharDiet =
         match tree with
         | AvlTree.Empty ->
-            AvlTree.singleton rangePQ
-        | AvlTree.Node (rangeXY, left, right, _) ->
-            if compare rangePQ.MaxValue (measurer.Previous rangeXY.MinValue) < 0 then
-                let left =
-                    addRange' measurer rangePQ left
-                    |> ensureCorrectlyFormed measurer
-
-                AvlTree.join rangeXY left right
-                |> ensureCorrectlyFormed measurer
-
-            elif compare rangePQ.MinValue (measurer.Next rangeXY.MaxValue) > 0 then
-                let right =
-                    addRange' measurer rangePQ right
-                    |> ensureCorrectlyFormed measurer
-                
-                AvlTree.join rangeXY left right
-                |> ensureCorrectlyFormed measurer
+            AvlTree.singleton (p, q)
+        | AvlTree.Node ((x, y), left, right, _) ->
+            if compare q (pred x) < 0 then
+                AvlDiet.join (x, y) (addRange (p, q) left) right
+            elif compare p (succ y) > 0 then
+                AvlDiet.join (x, y) left (addRange (p, q) right)
             else
                 let x', left' =
-                    if compare rangePQ.MinValue rangeXY.MinValue >= 0 then
-                        rangeXY.MinValue, left
-                    else
-                        find_del_left measurer rangePQ.MinValue left
-                        |> ensureCorrectlyFormed2Of2 measurer
-
+                    if compare p x >= 0 then x, left
+                    else find_del_left p left
                 let y', right' =
-                    if compare rangePQ.MaxValue rangeXY.MaxValue <= 0 then
-                        rangeXY.MaxValue, right
-                    else
-                        find_del_right measurer rangePQ.MaxValue right
-                        |> ensureCorrectlyFormed2Of2 measurer
+                    if compare q y <= 0 then y, right
+                    else find_del_right q right
 
-                let rangeXY' = Range (x', y')
-                AvlTree.join rangeXY' left' right'
-                |> ensureCorrectlyFormed measurer
-
-    // TEMP
-    let rec addRange (measurer : IMeasurer<_>) rangePQ (tree : Diet<'T>) : Diet<_> =
-        addRange' measurer rangePQ tree
-        //|> ensureAllElementsUnique measurer
-        |> ensureCorrectlyFormed measurer
+                AvlDiet.join (x', y') left' right'
 
     /// Returns a new set with the given element removed.
     /// No exception is thrown if the set doesn't contain the specified element.
-    let rec remove (measurer : IMeasurer<_>) z (tree : Diet<'T>) : Diet<'T> =
-        let inline compare a b =
-            measurer.Compare (a, b)
-
+    let rec remove z (tree : CharDiet) : CharDiet =
         match tree with
         | AvlTree.Empty ->
             AvlTree.Empty
-        | AvlTree.Node (range, left, right, h) ->
-            let czx = compare z range.MinValue
+        | AvlTree.Node ((x, y), left, right, h) ->
+            let czx = compare z x
             if czx < 0 then
-                AvlTree.join range (remove measurer z left) right
+                AvlDiet.join (x, y) (remove z left) right
             else
-                let cyz = compare range.MaxValue z
+                let cyz = compare y z
                 if cyz < 0 then
-                    AvlTree.join range left (remove measurer z right)
+                    AvlDiet.join (x, y) left (remove z right)
                 elif cyz = 0 then
                     if czx = 0 then
-                        AvlTree.reroot measurer left right
+                        AvlDiet.reroot left right
                     else
-                        let newRange = Range (range.MinValue, measurer.Previous range.MaxValue)
-                        AvlTree.Node (newRange, left, right, h)
+                        AvlTree.Node ((x, pred y), left, right, h)
                 elif czx = 0 then
-                    let newRange = Range (measurer.Next range.MinValue, range.MaxValue)
-                    AvlTree.Node (newRange, left, right, h)
+                    AvlTree.Node ((succ x, y), left, right, h)
                 else
-                    let newRange = Range (range.MinValue, measurer.Previous z)
-                    let newRange' = Range (measurer.Next z, range.MaxValue)
-                    AvlTree.Node (newRange, left, right, h)
-                    |> addRange measurer newRange'
+                    addRange (succ z, y) (AvlTree.Node ((x, pred z), left, right, h))
 
-    let rec private union_helper (measurer : IMeasurer<_>) left (rangeAB : Range<_>) right limit head stream =
-        let inline compare a b =
-            measurer.Compare (a, b)
-        
+    let rec private union_helper left (a, b) right limit head stream =        
         match head with
         | None ->
-            let joined =
-                AvlTree.join rangeAB left right
-                |> ensureCorrectlyFormed measurer
-            joined, None, AvlTree.Empty
-        | Some (rangeXY : Range<_>) ->
+            AvlDiet.join (a,b) left right, None, AvlTree.Empty
+        | Some (x, y) ->
             let greater_limit z =
                 match limit with
                 | None -> false
                 | Some u ->
                     compare z u >= 0
                 
-            if compare rangeXY.MaxValue rangeAB.MinValue < 0 && compare rangeXY.MaxValue (measurer.Previous rangeAB.MinValue) < 0 then
-                let left' =
-                    addRange measurer rangeXY left
-                    |> ensureCorrectlyFormed measurer
-                let head, stream =
-                    AvlTree.tryExtractMin measurer stream
-                    |> ensureCorrectlyFormed2Of2 measurer
-                union_helper measurer left' rangeAB right limit head stream
-                |> ensureCorrectlyFormed1stAnd3rd measurer
+            if compare y a < 0 && compare y (pred a) < 0 then
+                let left' = addRange (x, y) left
+                let head, stream = AvlTree.tryExtractMin charComparer stream
+                union_helper left' (a, b) right limit head stream
 
-            elif compare rangeXY.MinValue rangeAB.MaxValue > 0 && compare rangeXY.MinValue (measurer.Next rangeAB.MaxValue) > 0 then
-                let right', head, stream =
-                    union' measurer right limit head stream
-                    |> ensureCorrectlyFormed1stAnd3rd measurer
-                let joined =
-                    AvlTree.join rangeAB left right'
-                    |> ensureCorrectlyFormed measurer
-                joined, head, stream
+            elif compare x b > 0 && compare x (succ b) > 0 then
+                let right', head, stream = union' right limit head stream
+                AvlDiet.join (a,b) left right', head, stream
 
-            elif compare rangeAB.MaxValue rangeXY.MaxValue >= 0 then
-                let head, stream =
-                    AvlTree.tryExtractMin measurer stream
-                    |> ensureCorrectlyFormed2Of2 measurer
-                let newRange = Range (min measurer rangeAB.MinValue rangeXY.MinValue, rangeAB.MaxValue)
-                union_helper measurer left newRange right limit head stream
-                |> ensureCorrectlyFormed1stAnd3rd measurer
+            elif compare b y >= 0 then
+                let head, stream = AvlTree.tryExtractMin charComparer stream
+                union_helper left (min a x, b) right limit head stream
 
-            elif greater_limit rangeXY.MaxValue then
-                let newRange = Range (min measurer rangeAB.MinValue rangeXY.MinValue, rangeXY.MaxValue)
-                (left, Some newRange, stream)
+            elif greater_limit y then
+                left, Some (min a x, y), stream
 
             else
-                let right', head, stream =
-                    let newRange = Range (min measurer rangeAB.MinValue rangeXY.MinValue, rangeXY.MaxValue)
-                    union' measurer right limit (Some newRange) stream
-                    |> ensureCorrectlyFormed1stAnd3rd measurer
-                let rerooted =
-                    AvlTree.reroot measurer left right'
-                    |> ensureCorrectlyFormed measurer
-                rerooted, head, stream
+                let right', head, stream = union' right limit (Some (min a x, y)) stream
+                AvlDiet.reroot left right', head, stream
 
-    and private union' (measurer : IMeasurer<_>) (input : Diet<_>) limit head (stream : Diet<_>) =
-        let inline compare a b =
-            measurer.Compare (a, b)
-
+    and private union' (input : CharDiet) limit head (stream : CharDiet) =
         match head with
         | None ->
             input, None, AvlTree.Empty
-        | Some (rangeXY : Range<_>) ->
+        | Some (x, y) ->
             match input with
             | AvlTree.Empty ->
                 AvlTree.Empty, head, stream
-            | AvlTree.Node (rangeAB, left, right, _) ->
+            | AvlTree.Node ((a, b), left, right, _) ->
                 let left', head, stream =
-                    if compare rangeXY.MinValue rangeAB.MinValue < 0 then
-                        union' measurer left (Some (measurer.Previous rangeAB.MinValue)) head stream
-                        |> ensureCorrectlyFormed1stAnd3rd measurer
+                    if compare x a < 0 then
+                        union' left (Some <| pred a) head stream
                     else
                         left, head, stream
-
-                union_helper measurer left' rangeAB right limit head stream
-                |> ensureCorrectlyFormed1stAnd3rd measurer
+                union_helper left' (a, b) right limit head stream
 
     /// Computes the union of the two sets.
-    let rec union (measurer : IMeasurer<_>) (input : Diet<_>) (stream : Diet<_>) : Diet<'T> =
-        let inline compare a b =
-            measurer.Compare (a, b)
-
+    let rec union (input : CharDiet) (stream : CharDiet) : CharDiet =
         if AvlTree.height stream > AvlTree.height input then
-            union measurer stream input
+            union stream input
         else
             #if DEBUG
             /// The minimum possible number of elements in the resulting set.
             let minPossibleResultCount =
-                let inputCount = count measurer input
-                let streamCount = count measurer stream
+                let inputCount = count input
+                let streamCount = count stream
                 GenericMaximum inputCount streamCount
             #endif
 
             let head, stream' =
-                AvlTree.tryExtractMin measurer stream
-                |> ensureCorrectlyFormed2Of2 measurer
+                AvlTree.tryExtractMin charComparer stream
 
             let result, head', stream'' =
-                union' measurer input None head stream'
-                |> ensureCorrectlyFormed1stAnd3rd measurer
+                union' input None head stream'
             let result =
                 match head' with
                 | None ->
                     result
-                    |> ensureCorrectlyFormed measurer
-                    |> ensureAllElementsUnique measurer
                 | Some i ->
-                    AvlTree.join i result stream''
-                    |> ensureCorrectlyFormed measurer
-                    |> ensureAllElementsUnique measurer
+                    AvlDiet.join i result stream''
 
             #if DEBUG
-            let resultCount = count measurer result
+            let resultCount = count result
 //            let inputArr =
 //                if resultCount >= minPossibleResultCount then Array.empty
-//                else toArray measurer input
+//                else toArray input
 //            let streamArr =
 //                if resultCount >= minPossibleResultCount then Array.empty
-//                else toArray measurer stream
+//                else toArray stream
                     
             Debug.Assert (
                 resultCount >= minPossibleResultCount,
@@ -1135,113 +915,98 @@ module private Diet =
             result
 
     /// Computes the intersection of the two sets.
-    let rec intersect (measurer : IMeasurer<_>) (input : Diet<'T>) (stream : Diet<'T>) : Diet<'T> =
-        let inline compare a b =
-            measurer.Compare (a, b)
-
-        let rec inter' (input : Diet<_>) head (stream : Diet<_>) =
+    let rec intersect (input : CharDiet) (stream : CharDiet) : CharDiet =
+        let rec inter' (input : CharDiet) head (stream : CharDiet) =
             match head with
             | None ->
                 AvlTree.Empty, None, AvlTree.Empty
-            | Some (rangeXY : Range<_>) ->
+            | Some (x, y) ->
                 match input with
                 | AvlTree.Empty ->
                     AvlTree.Empty, head, stream
-                | AvlTree.Node (rangeAB, left, right, _) ->
+                | AvlTree.Node ((a, b), left, right, _) ->
                     let left, head, stream =
-                        if compare rangeXY.MinValue rangeAB.MinValue < 0 then
+                        if compare x a < 0 then
                             inter' left head stream
                         else
                             AvlTree.Empty, head, stream
-                    inter_help rangeAB right left head stream
 
-        and inter_help (rangeAB : Range<_>) (right : Diet<_>) (left : Diet<_>) head stream =
+                    inter_help (a, b) right left head stream
+
+        and inter_help (a, b) (right : CharDiet) (left : CharDiet) head stream =
             match head with
             | None ->
                 left, None, AvlTree.Empty
-            | Some (rangeXY : Range<_>) ->
-                if compare rangeXY.MaxValue rangeAB.MinValue < 0 then
+            | Some (x, y) ->
+                if compare y a < 0 then
                     if AvlTree.isEmpty stream then
                         (left, None, AvlTree.Empty)
                     else
-                        let head, stream = AvlTree.extractMin measurer stream
-                        inter_help rangeAB right left (Some head) stream
-                elif compare rangeAB.MaxValue rangeXY.MinValue < 0 then
+                        let head, stream = AvlTree.extractMin charComparer stream
+                        inter_help (a, b) right left (Some head) stream
+                elif compare b x < 0 then
                     let right, head, stream = inter' right head stream
-                    AvlTree.reroot measurer left right, head, stream
-                elif compare rangeXY.MaxValue (safe_pred measurer rangeXY.MaxValue rangeAB.MaxValue) >= 0 then
-                    let (right, head, stream) = inter' right head stream
-                    let newRange = Range (max measurer rangeXY.MinValue rangeAB.MinValue, min measurer rangeXY.MaxValue rangeAB.MaxValue)
-                    ((AvlTree.join newRange left right), head, stream)
+                    AvlDiet.reroot left right, head, stream
+                elif compare y (safe_pred y b) >= 0 then
+                    let right, head, stream = inter' right head stream
+                    (AvlDiet.join (max x a, min y b) left right), head, stream
                 else
-                    let left =
-                        let newRange = Range (max measurer rangeXY.MinValue rangeAB.MinValue, rangeXY.MaxValue)
-                        addRange measurer newRange left
-                    let newRange = Range (measurer.Next rangeXY.MaxValue, rangeAB.MaxValue)
-                    inter_help newRange right left head stream
+                    let left = addRange (max x a, y) left
+                    inter_help (succ y, b) right left head stream
 
         if AvlTree.height stream > AvlTree.height input then
-            intersect measurer stream input
+            intersect stream input
         elif AvlTree.isEmpty stream then
             AvlTree.Empty
         else
-            let head, stream = AvlTree.extractMin measurer stream
+            let head, stream = AvlTree.extractMin charComparer stream
             let result, _, _ = inter' input (Some head) stream
             result
 
     /// Returns a new set with the elements of the second set removed from the first.
-    let difference (measurer : IMeasurer<_>) (input : Diet<'T>) (stream : Diet<'T>) : Diet<'T> =
-        let inline compare a b =
-            measurer.Compare (a, b)
-
+    let difference (input : CharDiet) (stream : CharDiet) : CharDiet =
         let rec diff' input head stream =
             match head with
             | None ->
                 input, None, AvlTree.Empty
-            | Some (rangeXY : Range<_>) ->
+            | Some (x, y) ->
                 match input with
                 | AvlTree.Empty ->
-                    (AvlTree.Empty, head, stream)
-                | AvlTree.Node (rangeAB : Range<_>, left, right, _) ->
+                    AvlTree.Empty, head, stream
+                | AvlTree.Node ((a, b), left, right, _) ->
                     let left, head, stream =
-                        if compare rangeXY.MinValue rangeAB.MinValue < 0 then
+                        if compare x a < 0 then
                             diff' left head stream
                         else
                             left, head, stream
-                    diff_helper rangeAB right left head stream
+                    diff_helper (a, b) right left head stream
 
-        and diff_helper (rangeAB : Range<_>) (right : Diet<_>) (left : Diet<_>) head stream =
+        and diff_helper (a, b) (right : CharDiet) (left : CharDiet) head stream =
             match head with
             | None ->
-                AvlTree.join rangeAB left right,
-                None,
-                AvlTree.Empty
-            | Some (rangeXY : Range<_>) ->
-                if compare rangeXY.MaxValue rangeAB.MinValue < 0 then
+                AvlDiet.join (a, b) left right, None, AvlTree.Empty
+            | Some (x, y) ->
+                if compare y a < 0 then
                     // [x, y] and [a, b] are disjoint
-                    let head, stream = AvlTree.tryExtractMin measurer stream
-                    diff_helper rangeAB right left head stream
-                elif compare rangeAB.MaxValue rangeXY.MinValue < 0 then
+                    let head, stream = AvlTree.tryExtractMin charComparer stream
+                    diff_helper (a, b) right left head stream
+                elif compare b x < 0 then
                     // [a, b] and [x, y] are disjoint
-                    let (right, head, stream) = diff' right head stream
-                    (AvlTree.join rangeAB left right, head, stream)
-                elif compare rangeAB.MinValue rangeXY.MinValue < 0 then
+                    let right, head, stream = diff' right head stream
+                    AvlDiet.join (a, b) left right, head, stream
+                elif compare a x < 0 then
                     // [a, b] and [x, y] overlap
                     // a < x
-                    let rangeXB = Range (rangeXY.MinValue, rangeAB.MaxValue)
-                    let newRange = Range (rangeAB.MinValue, measurer.Previous rangeXY.MinValue)
-                    let newLeft = addRange measurer newRange left
-                    diff_helper rangeXB right newLeft head stream
-                elif compare rangeXY.MaxValue rangeAB.MaxValue < 0 then
+                    diff_helper (x, b) right ((addRange (a, pred x) left)) head stream
+                elif compare y b < 0 then
                     // [a, b] and [x, y] overlap
                     // y < b
-                    let (head, stream) = AvlTree.tryExtractMin measurer stream
-                    let newRange = Range (measurer.Next rangeXY.MaxValue, rangeAB.MaxValue)
-                    diff_helper newRange right left head stream
+                    let head, stream = AvlTree.tryExtractMin charComparer stream
+                    diff_helper (succ y, b) right left head stream
                 else
                     // [a, b] and [x, y] overlap
-                    let (right, head, stream) = diff' right head stream
-                    (AvlTree.reroot measurer left right, head, stream)
+                    let right, head, stream = diff' right head stream
+                    AvlDiet.reroot left right, head, stream
         
         if AvlTree.isEmpty stream then
             input
@@ -1249,16 +1014,16 @@ module private Diet =
             #if DEBUG
             /// The minimum possible number of elements in the resulting set.
             let minPossibleResultCount =
-                let inputCount = count measurer input
-                let streamCount = count measurer stream
+                let inputCount = count input
+                let streamCount = count stream
                 GenericMaximum 0 (inputCount - streamCount)
             #endif
 
-            let head, stream' = AvlTree.extractMin measurer stream
+            let head, stream' = AvlTree.extractMin charComparer stream
             let result, _, _ = diff' input (Some head) stream'
 
             #if DEBUG
-            let resultCount = count measurer result
+            let resultCount = count result
             Debug.Assert (
                 resultCount >= minPossibleResultCount,
                 sprintf "The result set should not contain fewer than %i elements, but it contains only %i elements."
@@ -1268,56 +1033,52 @@ module private Diet =
             result
 
     /// Comparison function for DIETs.
-    let rec compare (measurer : IMeasurer<_>) (t1 : Diet<'T>) (t2 : Diet<'T>) =
+    let rec comparison (t1 : CharDiet) (t2 : CharDiet) =
         match t1, t2 with
         | Node (_,_,_,_), Node (_,_,_,_) ->
-            let i1, r1 = AvlTree.extractMin measurer t1
-            let i2, r2 = AvlTree.extractMin measurer t2
+            let (ix1, iy1), r1 = AvlTree.extractMin charComparer t1
+            let (ix2, iy2), r2 = AvlTree.extractMin charComparer t2
             let c =
-                let d = measurer.Compare (i1.MinValue, i2.MinValue)
+                let d = compare ix1 ix2
                 if d <> 0 then -d
-                else measurer.Compare (i1.MaxValue, i2.MaxValue)
-
+                else compare iy1 iy2
             if c <> 0 then c
-            else compare measurer r1 r2
+            else comparison r1 r2
         
         | Node (_,_,_,_), Empty -> 1
         | Empty, Empty -> 0
         | Empty, Node (_,_,_,_) -> -1
 
     /// Equality function for DIETs.
-    let equal (measurer : IMeasurer<_>) (t1 : Diet<'T>) (t2 : Diet<'T>) =
-        compare measurer t1 t2 = 0
+    let equal (t1 : CharDiet) (t2 : CharDiet) =
+        comparison t1 t2 = 0
 
     //
-    let rec split (measurer : IMeasurer<_>) x (tree : Diet<'T>) =
-        let inline compare a b =
-            measurer.Compare (a, b)
-
+    let rec split x (tree : CharDiet) =
         match tree with
         | AvlTree.Empty ->
             AvlTree.Empty, false, AvlTree.Empty
-        | AvlTree.Node (rangeAB : Range<_>, l, r, _) ->
-            let cxa = compare x rangeAB.MinValue
+        | AvlTree.Node ((a, b), l, r, _) ->
+            let cxa = compare x a
             if cxa < 0 then
-                let ll, pres, rl = split measurer x l
-                ll, pres, AvlTree.join rangeAB rl r
+                let ll, pres, rl = split x l
+                ll, pres, AvlDiet.join (a, b) rl r
             else
-                let cbx = compare rangeAB.MaxValue x
+                let cbx = compare b x
                 if cbx < 0 then
-                    let lr, pres, rr = split measurer x r
-                    AvlTree.join rangeAB l lr, pres, rr
+                    let lr, pres, rr = split x r
+                    AvlDiet.join (a, b) l lr, pres, rr
                 else
-                    ((if cxa = 0 then l else addRange measurer (Range (rangeAB.MinValue, measurer.Previous x)) l),
-                       true,
-                       (if cbx = 0 then r else addRange measurer (Range (measurer.Next x, rangeAB.MaxValue)) r))
+                    (if cxa = 0 then l else addRange (a, pred x) l),
+                    true,
+                    (if cbx = 0 then r else addRange (succ x, b) r)
 
 
 /// Character set implementation based on a Discrete Interval Encoding Tree.
 /// This is faster and more efficient than the built-in F# Set<'T>,
 /// especially for dense sets.
 [<DebuggerDisplay("Count = {Count}, Intervals = {IntervalCount}")>]
-type CharSet private (dietSet : Diet<char>) =
+type CharSet private (dietSet : CharDiet) =
     //
     static let empty = CharSet (Diet.empty)
 
@@ -1326,29 +1087,17 @@ type CharSet private (dietSet : Diet<char>) =
         LanguagePrimitives.FastGenericComparer<char>
 
     //
-    static let charMeasurer = {
-        new IMeasurer<char> with
-            member __.Compare (x, y) =
-                charComparer.Compare (x, y)
-            member __.Previous x =
-                char <| (uint16 x) - 1us
-            member __.Next x =
-                char <| (uint16 x) + 1us
-            member __.Distance (x, y) =
-                int y - int x }
-
-    //
     static member Empty
         with get () = empty
     
     override __.GetHashCode () =
         // TODO : Come up with a better hashcode function.
-        (Diet.count charMeasurer dietSet) * (int <| AvlTree.height dietSet)
+        (Diet.count dietSet) * (int <| AvlTree.height dietSet)
     
     override __.Equals other =
         match other with
         | :? CharSet as other ->
-            Diet.equal charMeasurer dietSet other.DietSet
+            Diet.equal dietSet other.DietSet
         | _ ->
             false
 
@@ -1359,7 +1108,7 @@ type CharSet private (dietSet : Diet<char>) =
     //
     member __.Count
         with get () =
-            Diet.count charMeasurer dietSet
+            Diet.count dietSet
 
     //
     member __.IntervalCount
@@ -1391,19 +1140,19 @@ type CharSet private (dietSet : Diet<char>) =
     /// Returns a new set with an element added to the set.
     /// No exception is raised if the set already contains the given element.
     static member Add (value, charSet : CharSet) =
-        CharSet (Diet.add charMeasurer value charSet.DietSet)
+        CharSet (Diet.add value charSet.DietSet)
 
     //
     static member AddRange (lower, upper, charSet : CharSet) =
-        CharSet (Diet.addRange charMeasurer (Range (lower, upper)) charSet.DietSet)
+        CharSet (Diet.addRange (lower, upper) charSet.DietSet)
 
     //
     static member Remove (value, charSet : CharSet) =
-        CharSet (Diet.remove charMeasurer value charSet.DietSet)
+        CharSet (Diet.remove value charSet.DietSet)
 
     //
     static member Contains (value, charSet : CharSet) =
-        Diet.contains charMeasurer value charSet.DietSet
+        Diet.contains value charSet.DietSet
 
 //    //
 //    static member ToList (charSet : CharSet) =
@@ -1411,7 +1160,7 @@ type CharSet private (dietSet : Diet<char>) =
 
     //
     static member OfList list =
-        CharSet (Diet.ofList charMeasurer list)
+        CharSet (Diet.ofList list)
 
 //    //
 //    static member ToSet (charSet : CharSet) =
@@ -1419,7 +1168,7 @@ type CharSet private (dietSet : Diet<char>) =
 
 //    //
 //    static member OfSet set =
-//        CharSet (Diet.ofSet charMeasurer set)
+//        CharSet (Diet.ofSet set)
 
 //    //
 //    static member ToArray (charSet : CharSet) =
@@ -1427,7 +1176,7 @@ type CharSet private (dietSet : Diet<char>) =
     
     //
     static member OfArray array =
-        CharSet (Diet.ofArray charMeasurer array)
+        CharSet (Diet.ofArray array)
 
 //    //
 //    static member ToSequence (charSet : CharSet) =
@@ -1435,54 +1184,53 @@ type CharSet private (dietSet : Diet<char>) =
 
     //
     static member OfSequence sequence =
-        CharSet (Diet.ofSeq charMeasurer sequence)
+        CharSet (Diet.ofSeq sequence)
 
     //
     static member Difference (charSet1 : CharSet, charSet2 : CharSet) =
-        CharSet (Diet.difference charMeasurer charSet1.DietSet charSet2.DietSet)
+        CharSet (Diet.difference charSet1.DietSet charSet2.DietSet)
 
     //
     static member Intersect (charSet1 : CharSet, charSet2 : CharSet) =
-        CharSet (Diet.intersect charMeasurer charSet1.DietSet charSet2.DietSet)
+        CharSet (Diet.intersect charSet1.DietSet charSet2.DietSet)
 
     //
     static member Union (charSet1 : CharSet, charSet2 : CharSet) =
-        CharSet (Diet.union charMeasurer charSet1.DietSet charSet2.DietSet)
+        CharSet (Diet.union charSet1.DietSet charSet2.DietSet)
 
     //
     static member Fold (folder : 'State -> _ -> 'State, state, charSet : CharSet) =
-        Diet.fold folder charMeasurer state charSet.DietSet
+        Diet.fold folder state charSet.DietSet
 
     //
     static member FoldBack (folder : _ -> 'State -> 'State, state, charSet : CharSet) =
-        Diet.foldBack folder charMeasurer charSet.DietSet state
+        Diet.foldBack folder charSet.DietSet state
 
     //
     static member Forall (predicate, charSet : CharSet) =
-        Diet.forall predicate charMeasurer charSet.DietSet
+        Diet.forall predicate charSet.DietSet
 
     //
     static member IterateIntervals (action, charSet : CharSet) =
         let action = FSharpFunc<_,_,_>.Adapt action
         charSet.DietSet
-        |> AvlTree.iter (fun interval ->
-            action.Invoke (interval.MinValue, interval.MaxValue))
+        |> AvlTree.iter action.Invoke
 
     interface System.IComparable with
         member this.CompareTo other =
             match other with
             | :? CharSet as other ->
-                Diet.compare charMeasurer this.DietSet other.DietSet
+                Diet.comparison this.DietSet other.DietSet
             | _ ->
                 invalidArg "other" "The argument is not an instance of CharSet."
 
     interface System.IComparable<CharSet> with
         member this.CompareTo other =
-            Diet.compare charMeasurer dietSet other.DietSet
+            Diet.comparison dietSet other.DietSet
 
     interface System.IEquatable<CharSet> with
         member this.Equals other =
-            Diet.equal charMeasurer dietSet other.DietSet
+            Diet.equal dietSet other.DietSet
 
 
 /// Functional programming operators related to the CharSet type.
