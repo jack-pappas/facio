@@ -25,10 +25,10 @@ open LanguagePrimitives
 open ExtCore
 open ExtCore.Collections
 open ExtCore.Control
-open SpecializedCollections
-open Graph
-open Regex
-open Ast
+open FSharpLex.SpecializedCollections
+open FSharpLex.Graph
+open FSharpLex.Regex
+open FSharpLex.Ast
 
 
 /// DFA compilation state.

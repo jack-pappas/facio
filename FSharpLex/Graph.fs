@@ -21,7 +21,7 @@ module FSharpLex.Graph
 
 open System.Diagnostics
 open LanguagePrimitives
-open SpecializedCollections
+open FSharpLex.SpecializedCollections
 
 
 /// DFA state.

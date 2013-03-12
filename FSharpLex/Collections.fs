@@ -1,5 +1,6 @@
 ﻿(*
 
+Copyright 2010 Oliver Friedmann, Martin Lange
 Copyright 2012-2013 Jack Pappas
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +18,7 @@ limitations under the License.
 *)
 
 //
-[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module FSharpLex.SpecializedCollections
+namespace FSharpLex.SpecializedCollections
 
 open System.Diagnostics
 open OptimizedClosures
@@ -32,7 +32,11 @@ open ExtCore.Control
                 http://afp.sourceforge.net/entries/AVL-Trees.shtml
             using Isabelle/HOL 2012. The extracted code was adapted to F# (e.g., by adjusting
             the formatting, fixing incomplete pattern-matches), then the supporting functions
-            (e.g., 'fold', 'iter') were implemented. *)
+            (e.g., 'fold', 'iter') were implemented.
+            
+            The DIET code was ported from Friedmann and Lange's 'camldiets' code, which is
+            based on their paper "More on Balanced Diets". Their code was adapted to F# and
+            the AVL tree extracted from Isabelle/HOL, then specialized for the 'char' type. *)
 
 /// AVL Tree.
 [<NoEquality; NoComparison>]
@@ -596,11 +600,27 @@ module private Diet =
         
     /// Gets the maximum (greatest) value stored in the DIET.
     let maxElement (tree : CharDiet) : char =
-        snd <| AvlTree.maxElement tree
+        match tree with
+        | Empty ->
+            invalidArg "tree" "The tree is empty."
+        | tree ->
+            snd <| AvlTree.maxElement tree
     
     /// Gets the minimum (least) value stored in the DIET.
-    let minElement (tree : CharDiet) : char=
-        fst <| AvlTree.minElement tree
+    let minElement (tree : CharDiet) : char =
+        match tree with
+        | Empty ->
+            invalidArg "tree" "The tree is empty."
+        | tree ->
+            fst <| AvlTree.minElement tree
+
+    /// Gets the minimum (least) and maximum (greatest) values store in the DIET.
+    let bounds (tree : CharDiet) : char * char =
+        match tree with
+        | Empty ->
+            invalidArg "tree" "The tree is empty."
+        | tree ->
+            minElement tree, maxElement tree
 
     /// Creates a DIET containing the specified value.
     let singleton value : CharDiet =
@@ -724,34 +744,34 @@ module private Diet =
 
     /// Returns a new set with the specified value added to the set.
     /// No exception is thrown if the set already contains the value.
-    let rec add p (tree : CharDiet) : CharDiet =
+    let rec add value (tree : CharDiet) : CharDiet =
         match tree with
         | Empty ->
-            singleton p
+            singleton value
         | Node ((x, y), left, right, h) as t ->
-            if p >= x then
-                if p <= y then t
-                elif p > succ y then
-                    AvlDiet.join (x, y) left (add p right)
+            if value >= x then
+                if value <= y then t
+                elif value > succ y then
+                    AvlDiet.join (x, y) left (add value right)
                 elif AvlTree.isEmpty right then
-                    AvlTree.Node ((x, p), left, right, h)
+                    AvlTree.Node ((x, value), left, right, h)
                 else
                     let (u, v), r = AvlTree.extractMin right
-                    if pred u = p then
+                    if pred u = value then
                         AvlDiet.join (x, v) left r
                     else
-                        AvlTree.Node ((x, p), left, right, h)
+                        AvlTree.Node ((x, value), left, right, h)
 
-            elif p < pred x then
-                AvlDiet.join (x, y) (add p left) right
+            elif value < pred x then
+                AvlDiet.join (x, y) (add value left) right
             elif AvlTree.isEmpty left then
-                AvlTree.Node ((p, y), left, right, h)
+                AvlTree.Node ((value, y), left, right, h)
             else
                 let (u, v), l = AvlTree.extractMax left
-                if succ v = p then
+                if succ v = value then
                     AvlDiet.join (u, y) l right
                 else
-                    AvlTree.Node ((p, y), left, right, h)
+                    AvlTree.Node ((value, y), left, right, h)
 
     /// Builds a new DIET from the elements of a sequence.
     let ofSeq (sequence : seq<_>) : CharDiet =
@@ -800,18 +820,18 @@ module private Diet =
 
     /// Returns a new set with the given element removed.
     /// No exception is thrown if the set doesn't contain the specified element.
-    let rec remove z (tree : CharDiet) : CharDiet =
+    let rec remove value (tree : CharDiet) : CharDiet =
         match tree with
         | AvlTree.Empty ->
             AvlTree.Empty
         | AvlTree.Node ((x, y), left, right, h) ->
-            let czx = compare z x
+            let czx = compare value x
             if czx < 0 then
-                AvlDiet.join (x, y) (remove z left) right
+                AvlDiet.join (x, y) (remove value left) right
             else
-                let cyz = compare y z
+                let cyz = compare y value
                 if cyz < 0 then
-                    AvlDiet.join (x, y) left (remove z right)
+                    AvlDiet.join (x, y) left (remove value right)
                 elif cyz = 0 then
                     if czx = 0 then
                         AvlDiet.reroot left right
@@ -820,7 +840,7 @@ module private Diet =
                 elif czx = 0 then
                     AvlTree.Node ((succ x, y), left, right, h)
                 else
-                    addRange (succ z, y) (AvlTree.Node ((x, pred z), left, right, h))    
+                    addRange (succ value, y) (AvlTree.Node ((x, pred value), left, right, h))    
 
     /// Computes the union of the two sets.
     let rec union (input : CharDiet) (stream : CharDiet) : CharDiet =
@@ -1056,7 +1076,7 @@ module private Diet =
         comparison t1 t2 = 0
 
     //
-    let rec split x (tree : CharDiet) =
+    let rec split x (tree : CharDiet) : CharDiet * bool * CharDiet =
         match tree with
         | AvlTree.Empty ->
             AvlTree.Empty, false, AvlTree.Empty

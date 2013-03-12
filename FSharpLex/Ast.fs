@@ -21,8 +21,8 @@ module FSharpLex.Ast
 
 open System.Globalization
 open LanguagePrimitives
-open SpecializedCollections
-open Regex
+open FSharpLex.SpecializedCollections
+open FSharpLex.Regex
 
 (* TODO :   Add annotations for position information (i.e., position in the lexer
             definition file) to:

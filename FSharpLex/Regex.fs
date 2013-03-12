@@ -26,7 +26,7 @@ open ExtCore
 open ExtCore.Collections
 open ExtCore.Control
 open ExtCore.Control.Collections
-open SpecializedCollections
+open FSharpLex.SpecializedCollections
 
 (*  Turn off warning about uppercase variable identifiers;
     some variables in the code below are named using the
