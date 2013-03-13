@@ -981,8 +981,39 @@ module private Diet =
         elif AvlTree.isEmpty stream then
             AvlTree.Empty
         else
-            let head, stream = AvlTree.extractMin stream
-            let result, _, _ = inter' input (Some head) stream
+            #if DEBUG
+            let inputCount = count input
+            let streamCount = count stream
+            /// The minimum possible number of elements in the resulting set.
+            let minPossibleResultCount =
+                min inputCount streamCount
+            /// The maximum possible number of elements in the resulting set.
+            let maxPossibleResultCount =
+                inputCount + streamCount
+            #endif
+
+            let result, _, _ =
+                let head, stream = AvlTree.extractMin stream
+                inter' input (Some head) stream
+
+            #if DEBUG
+            let resultCount = count result
+//            let inputArr =
+//                if resultCount >= minPossibleResultCount then Array.empty
+//                else toArray input
+//            let streamArr =
+//                if resultCount >= minPossibleResultCount then Array.empty
+//                else toArray stream
+                    
+            Debug.Assert (
+                resultCount >= minPossibleResultCount,
+                sprintf "The result set should not contain fewer than %i elements, but it contains only %i elements."
+                    minPossibleResultCount resultCount)
+            Debug.Assert (
+                resultCount <= maxPossibleResultCount,
+                sprintf "The result set should not contain more than %i elements, but it contains %i elements."
+                    maxPossibleResultCount resultCount)
+            #endif
             result
 
     /// Returns a new set with the elements of the second set removed from the first.
