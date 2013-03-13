@@ -25,6 +25,7 @@ open LanguagePrimitives
 open ExtCore
 open ExtCore.Collections
 open ExtCore.Control
+open ExtCore.Control.Cps
 open FSharpLex.SpecializedCollections
 open FSharpLex.Graph
 open FSharpLex.Regex

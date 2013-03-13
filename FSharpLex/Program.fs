@@ -178,15 +178,15 @@ module Program =
 
         /// Command-line options.
         let usage =
-            [   ArgInfo ("-o", ArgType.String (fun s -> outputFile := Some s),
+            [|  ArgInfo.Create ("-o", ArgType.String (fun s -> outputFile := Some s),
                     "The path where the generated lexer source code will be written.");
-                ArgInfo ("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
+                ArgInfo.Create ("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
                     "Assume input lexer specification file is encoded with the given codepage.");
-                ArgInfo ("--lexlib", ArgType.String (fun s -> lexlib := s),
+                ArgInfo.Create ("--lexlib", ArgType.String (fun s -> lexlib := s),
                     sprintf "Specify the namespace for the implementation of the lexer table interpreter. \
                     The default is '%s'." defaultLexerInterpreterNamespace);
-                ArgInfo ("--unicode", ArgType.Set unicode,
-                    "Produce a lexer which supports 16-bit Unicode characters."); ]
+                ArgInfo.Create ("--unicode", ArgType.Set unicode,
+                    "Produce a lexer which supports 16-bit Unicode characters."); |]
 
         // Parses argument values which aren't specified by flags.
         let plainArgParser x =

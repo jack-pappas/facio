@@ -24,7 +24,7 @@ open System.Diagnostics
 open LanguagePrimitives
 open ExtCore
 open ExtCore.Collections
-open ExtCore.Control
+open ExtCore.Control.Cps
 open ExtCore.Control.Collections
 open FSharpLex.SpecializedCollections
 

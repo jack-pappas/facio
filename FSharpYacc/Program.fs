@@ -208,28 +208,28 @@ module Program =
 
         /// Command-line options.
         let usage =
-            [   ArgInfo("-o", ArgType.String (fun s -> outputPath := Some s),
+            [|  ArgInfo.Create ("-o", ArgType.String (fun s -> outputPath := Some s),
                     "The path where the output file will be written.");
-                ArgInfo("-v", ArgType.Unit (fun () -> createListing := true),
+                ArgInfo.Create ("-v", ArgType.Unit (fun () -> createListing := true),
                     "Produce a listing file.");
-                ArgInfo("--module", ArgType.String (fun s -> generatedModuleName := Some s),
+                ArgInfo.Create ("--module", ArgType.String (fun s -> generatedModuleName := Some s),
                     sprintf "The name to use for the F# module containing the generated parser. \
                      The default is '%s'." defaultParserModuleName);
-                ArgInfo("--internal", ArgType.Unit (fun () -> internalModule := true),
+                ArgInfo.Create ("--internal", ArgType.Unit (fun () -> internalModule := true),
                     "Generate an internal module");
-                ArgInfo("--open", ArgType.String openDeclarations.Add,
+                ArgInfo.Create ("--open", ArgType.String openDeclarations.Add,
                     "Add the given module to the list of those to open in both the generated signature and implementation.");
-//                ArgInfo("--ml-compatibility", ArgType.Set mlCompatible,
+//                ArgInfo.Create ("--ml-compatibility", ArgType.Set mlCompatible,
 //                    "Support the use of the global state from the 'Parsing' module in FSharp.Compatibility.OCaml.dll (available on NuGet).");
-                ArgInfo("--lexlib", ArgType.String (fun s -> lexerInterpreterNamespace := Some s),
+                ArgInfo.Create ("--lexlib", ArgType.String (fun s -> lexerInterpreterNamespace := Some s),
                     sprintf "Specify the namespace for the implementation of the lexer table interpreter. \
                      The default is '%s'." defaultLexerInterpreterNamespace);
-                ArgInfo("--parslib", ArgType.String (fun s -> parserInterpreterNamespace := Some s),
+                ArgInfo.Create ("--parslib", ArgType.String (fun s -> parserInterpreterNamespace := Some s),
                     sprintf "Specify the namespace for the implementation of the parser table interpreter. \
                      The default is '%s'." defaultParserInterpreterNamespace);
-//                ArgInfo("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
+//                ArgInfo.Create ("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
 //                    "Assume input lexer specification file is encoded with the given codepage.");
-                ]
+                |]
 
         // Parses argument values which aren't specified by flags.
         let plainArgParser x =
