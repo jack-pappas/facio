@@ -55,7 +55,7 @@ module private AvlTree =
     open OptimizedClosures
 
     /// An empty AVL tree.
-    let empty : AvlTree<'T> = AvlTree.Empty
+    let empty : AvlTree<'T> = Empty
 
     /// Returns the height of an AVL tree's root node.
     let inline height (tree : AvlTree<'T>) =
@@ -553,9 +553,9 @@ module private Diet =
     //
     let rec private find_del_left p (tree : CharDiet) =
         match tree with
-        | AvlTree.Empty ->
-            p, AvlTree.Empty
-        | AvlTree.Node ((x, y), left, right, _) ->
+        | Empty ->
+            p, Empty
+        | Node ((x, y), left, right, _) ->
             if p > succ y then
                 let p', right' = find_del_left p right
                 p', AvlDiet.join (x, y) left right'
@@ -567,9 +567,9 @@ module private Diet =
     //
     let rec private find_del_right p (tree : CharDiet) =
         match tree with
-        | AvlTree.Empty ->
-            p, AvlTree.Empty
-        | AvlTree.Node ((x, y), left, right, _) ->
+        | Empty ->
+            p, Empty
+        | Node ((x, y), left, right, _) ->
             if p < pred x then
                 let p', left' = find_del_right p left
                 p', AvlDiet.join (x, y) left' right
@@ -641,9 +641,9 @@ module private Diet =
         // OPTIMIZE : Modify this to use a mutable stack instead of an F# list.
         let rec cardinal_aux acc = function
             | [] -> acc
-            | AvlTree.Empty :: ts ->
+            | Empty :: ts ->
                 cardinal_aux acc ts
-            | AvlTree.Node ((x, y), left, right, _) :: ts ->
+            | Node ((x, y), left, right, _) :: ts ->
                 let d = dist x y
                 cardinal_aux (acc + d + 1) (left :: right :: ts)
         
@@ -654,9 +654,9 @@ module private Diet =
         // OPTIMIZE : Modify this to use a mutable stack instead of an F# list.
         let rec cardinal_aux acc = function
             | [] -> acc
-            | AvlTree.Empty :: ts ->
+            | Empty :: ts ->
                 cardinal_aux acc ts
-            | AvlTree.Node (_, left, right, _) :: ts ->
+            | Node (_, left, right, _) :: ts ->
                 cardinal_aux (acc + 1) (left :: right :: ts)
         
         cardinal_aux 0 [t]
@@ -754,24 +754,24 @@ module private Diet =
                 elif value > succ y then
                     AvlDiet.join (x, y) left (add value right)
                 elif AvlTree.isEmpty right then
-                    AvlTree.Node ((x, value), left, right, h)
+                    Node ((x, value), left, right, h)
                 else
                     let (u, v), r = AvlTree.extractMin right
                     if pred u = value then
                         AvlDiet.join (x, v) left r
                     else
-                        AvlTree.Node ((x, value), left, right, h)
+                        Node ((x, value), left, right, h)
 
             elif value < pred x then
                 AvlDiet.join (x, y) (add value left) right
             elif AvlTree.isEmpty left then
-                AvlTree.Node ((value, y), left, right, h)
+                Node ((value, y), left, right, h)
             else
                 let (u, v), l = AvlTree.extractMax left
                 if succ v = value then
                     AvlDiet.join (u, y) l right
                 else
-                    AvlTree.Node ((value, y), left, right, h)
+                    Node ((value, y), left, right, h)
 
     /// Builds a new DIET from the elements of a sequence.
     let ofSeq (sequence : seq<_>) : CharDiet =
@@ -801,9 +801,9 @@ module private Diet =
     /// No exception is thrown if any of the values are already contained in the set.
     let rec addRange (p, q) (tree : CharDiet) : CharDiet =
         match tree with
-        | AvlTree.Empty ->
+        | Empty ->
             AvlTree.singleton (p, q)
-        | AvlTree.Node ((x, y), left, right, _) ->
+        | Node ((x, y), left, right, _) ->
             if q < pred x then
                 AvlDiet.join (x, y) (addRange (p, q) left) right
             elif p > succ y then
@@ -822,9 +822,9 @@ module private Diet =
     /// No exception is thrown if the set doesn't contain the specified element.
     let rec remove value (tree : CharDiet) : CharDiet =
         match tree with
-        | AvlTree.Empty ->
-            AvlTree.Empty
-        | AvlTree.Node ((x, y), left, right, h) ->
+        | Empty ->
+            Empty
+        | Node ((x, y), left, right, h) ->
             let czx = compare value x
             if czx < 0 then
                 AvlDiet.join (x, y) (remove value left) right
@@ -836,23 +836,23 @@ module private Diet =
                     if czx = 0 then
                         AvlDiet.reroot left right
                     else
-                        AvlTree.Node ((x, pred y), left, right, h)
+                        Node ((x, pred y), left, right, h)
                 elif czx = 0 then
-                    AvlTree.Node ((succ x, y), left, right, h)
+                    Node ((succ x, y), left, right, h)
                 else
-                    addRange (succ value, y) (AvlTree.Node ((x, pred value), left, right, h))    
+                    addRange (succ value, y) (Node ((x, pred value), left, right, h))    
 
     /// Computes the union of the two sets.
     let rec union (input : CharDiet) (stream : CharDiet) : CharDiet =
         let rec union' (input : CharDiet) limit head (stream : CharDiet) =
             match head with
             | None ->
-                input, None, AvlTree.Empty
+                input, None, Empty
             | Some (x, y) ->
                 match input with
-                | AvlTree.Empty ->
-                    AvlTree.Empty, head, stream
-                | AvlTree.Node ((a, b), left, right, _) ->
+                | Empty ->
+                    Empty, head, stream
+                | Node ((a, b), left, right, _) ->
                     let left', head, stream =
                         if x < a then
                             union' left (Some <| pred a) head stream
@@ -863,7 +863,7 @@ module private Diet =
         and union_helper left (a, b) right limit head stream =
             match head with
             | None ->
-                AvlDiet.join (a, b) left right, None, AvlTree.Empty
+                AvlDiet.join (a, b) left right, None, Empty
             | Some (x, y) ->
                 let greater_limit z =
                     match limit with
@@ -941,28 +941,28 @@ module private Diet =
         let rec inter' (input : CharDiet) head (stream : CharDiet) =
             match head with
             | None ->
-                AvlTree.Empty, None, AvlTree.Empty
+                Empty, None, Empty
             | Some (x, y) ->
                 match input with
-                | AvlTree.Empty ->
-                    AvlTree.Empty, head, stream
-                | AvlTree.Node ((a, b), left, right, _) ->
+                | Empty ->
+                    Empty, head, stream
+                | Node ((a, b), left, right, _) ->
                     let left, head, stream =
                         if x < a then
                             inter' left head stream
                         else
-                            AvlTree.Empty, head, stream
+                            Empty, head, stream
 
                     inter_help (a, b) right left head stream
 
         and inter_help (a, b) (right : CharDiet) (left : CharDiet) head stream =
             match head with
             | None ->
-                left, None, AvlTree.Empty
+                left, None, Empty
             | Some (x, y) ->
                 if y < a then
                     if AvlTree.isEmpty stream then
-                        (left, None, AvlTree.Empty)
+                        (left, None, Empty)
                     else
                         let head, stream = AvlTree.extractMin stream
                         inter_help (a, b) right left (Some head) stream
@@ -979,7 +979,7 @@ module private Diet =
         if AvlTree.height stream > AvlTree.height input then
             intersect stream input
         elif AvlTree.isEmpty stream then
-            AvlTree.Empty
+            Empty
         else
             #if DEBUG
             let inputCount = count input
@@ -1021,12 +1021,12 @@ module private Diet =
         let rec diff' input head stream =
             match head with
             | None ->
-                input, None, AvlTree.Empty
+                input, None, Empty
             | Some (x, y) ->
                 match input with
-                | AvlTree.Empty ->
-                    AvlTree.Empty, head, stream
-                | AvlTree.Node ((a, b), left, right, _) ->
+                | Empty ->
+                    Empty, head, stream
+                | Node ((a, b), left, right, _) ->
                     let left, head, stream =
                         if x < a then
                             diff' left head stream
@@ -1037,7 +1037,7 @@ module private Diet =
         and diff_helper (a, b) (right : CharDiet) (left : CharDiet) head stream =
             match head with
             | None ->
-                AvlDiet.join (a, b) left right, None, AvlTree.Empty
+                AvlDiet.join (a, b) left right, None, Empty
             | Some (x, y) ->
                 if y < a then
                     // [x, y] and [a, b] are disjoint
@@ -1109,9 +1109,9 @@ module private Diet =
     //
     let rec split x (tree : CharDiet) : CharDiet * bool * CharDiet =
         match tree with
-        | AvlTree.Empty ->
-            AvlTree.Empty, false, AvlTree.Empty
-        | AvlTree.Node ((a, b), l, r, _) ->
+        | Empty ->
+            Empty, false, Empty
+        | Node ((a, b), l, r, _) ->
             let cxa = compare x a
             if cxa < 0 then
                 let ll, pres, rl = split x l
