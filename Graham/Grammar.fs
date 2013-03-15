@@ -213,15 +213,15 @@ and AugmentedGrammar<'Nonterminal, 'Terminal
     Grammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
 
 /// Active patterns which simplify pattern matching on augmented grammars.
-module AugmentedPatterns =
-    let inline internal (|Nonterminal|Start|) (augmentedNonterminal : AugmentedNonterminal<'Nonterminal>) =
+module internal AugmentedPatterns =
+    let inline (|Nonterminal|Start|) (augmentedNonterminal : AugmentedNonterminal<'Nonterminal>) =
         match augmentedNonterminal with
         | AugmentedNonterminal.Nonterminal nonterminal ->
             Nonterminal nonterminal
         | AugmentedNonterminal.Start ->
             Start
 
-    let inline internal (|Terminal|EndOfFile|) (augmentedTerminal : AugmentedTerminal<'Terminal>) =
+    let inline (|Terminal|EndOfFile|) (augmentedTerminal : AugmentedTerminal<'Terminal>) =
         match augmentedTerminal with
         | AugmentedTerminal.Terminal terminal ->
             Terminal terminal
