@@ -28,57 +28,87 @@ open Graham.Analysis
 open Graham.LR
 
 
+/// Helper functions for creating LR parser tables for tests.
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module private Table =
+    /// Add a terminal entry to the action table.
+    let term (parserStateId : int) (terminal : 'Terminal) action
+        (table : Map<TerminalTransition<AugmentedTerminal<'Terminal>>, LrParserActionSet>) =
+        /// The tagged parser state id.
+        let parserState = LanguagePrimitives.Int32WithMeasure<ParserStateIdentifier> parserStateId
+
+        table |> Map.add (parserState, AugmentedTerminal.Terminal terminal) action
+
+    /// Add an EOF entry to the action table.
+    let eof (parserStateId : int) action
+        (table : Map<TerminalTransition<AugmentedTerminal<'Terminal>>, LrParserActionSet>) =
+        /// The tagged parser state id.
+        let parserState = LanguagePrimitives.Int32WithMeasure<ParserStateIdentifier> parserStateId
+
+        table |> Map.add (parserState, AugmentedTerminal.EndOfFile) action
+
+    /// Add an entry to the GOTO table.
+    let nterm (sourceStateId : int) (nonterminal : 'Nonterminal) (targetStateId : int)
+        (table : Map<NonterminalTransition<AugmentedNonterminal<'Nonterminal>>, ParserStateId>) =
+        /// The tagged source state id.
+        let sourceState = LanguagePrimitives.Int32WithMeasure<ParserStateIdentifier> sourceStateId
+        /// The tagged target state id.
+        let targetState = LanguagePrimitives.Int32WithMeasure<ParserStateIdentifier> targetStateId
+
+        table |> Map.add (sourceState, AugmentedNonterminal.Nonterminal nonterminal) targetState
+
+
 [<TestCase>]
-let ``LR(0) table for Grammar 3.20`` () =
-    let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.20``
-    
-    let expectedActionTable : Map<TerminalTransition<AugmentedTerminal<string>>, LrParserActionSet> =
+let ``LR(0) table for Grammar 3.20`` () =    
+    let expectedActionTable =
         Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Shift 3<_>)
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 2<_>)
+        |> Table.term 1 "(" (Action <| Shift 3<_>)
+        |> Table.term 1 "x" (Action <| Shift 2<_>)
 
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Reduce 1<_>)
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal ")") (Action <| Reduce 1<_>)
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal ",") (Action <| Reduce 1<_>)
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 1<_>)
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
+        |> Table.term 2 "(" (Action <| Reduce 1<_>)
+        |> Table.term 2 ")" (Action <| Reduce 1<_>)
+        |> Table.term 2 "," (Action <| Reduce 1<_>)
+        |> Table.term 2 "x" (Action <| Reduce 1<_>)
+        |> Table.eof 2 (Action <| Reduce 1<_>)
 
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Shift 3<_>)
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 2<_>)
+        |> Table.term 3 "(" (Action <| Shift 3<_>)
+        |> Table.term 3 "x" (Action <| Shift 2<_>)
 
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action Accept)
+        |> Table.eof 4 (Action Accept)
 
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Reduce 2<_>)
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal ")") (Action <| Reduce 2<_>)
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal ",") (Action <| Reduce 2<_>)
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 2<_>)
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 2<_>)
+        |> Table.term 5 "(" (Action <| Reduce 2<_>)
+        |> Table.term 5 ")" (Action <| Reduce 2<_>)
+        |> Table.term 5 "," (Action <| Reduce 2<_>)
+        |> Table.term 5 "x" (Action <| Reduce 2<_>)
+        |> Table.eof 5 (Action <| Reduce 2<_>)
 
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.Terminal ")") (Action <| Shift 8<_>)
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.Terminal ",") (Action <| Shift 7<_>)
+        |> Table.term 6 ")" (Action <| Shift 8<_>)
+        |> Table.term 6 "," (Action <| Shift 7<_>)
 
-        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Shift 3<_>)
-        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 2<_>)
+        |> Table.term 7 "(" (Action <| Shift 3<_>)
+        |> Table.term 7 "x" (Action <| Shift 2<_>)
 
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Reduce 3<_>)
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal ")") (Action <| Reduce 3<_>)
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal ",") (Action <| Reduce 3<_>)
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 3<_>)
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 3<_>)
+        |> Table.term 8 "(" (Action <| Reduce 3<_>)
+        |> Table.term 8 ")" (Action <| Reduce 3<_>)
+        |> Table.term 8 "," (Action <| Reduce 3<_>)
+        |> Table.term 8 "x" (Action <| Reduce 3<_>)
+        |> Table.eof 8 (Action <| Reduce 3<_>)
 
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal "(") (Action <| Reduce 4<_>)
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal ")") (Action <| Reduce 4<_>)
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal ",") (Action <| Reduce 4<_>)
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 4<_>)
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 4<_>)
+        |> Table.term 9 "(" (Action <| Reduce 4<_>)
+        |> Table.term 9 ")" (Action <| Reduce 4<_>)
+        |> Table.term 9 "," (Action <| Reduce 4<_>)
+        |> Table.term 9 "x" (Action <| Reduce 4<_>)
+        |> Table.eof 9 (Action <| Reduce 4<_>)
 
     //
-    let expectedGotoTable : Map<NonterminalTransition<AugmentedNonterminal<char>>, ParserStateId> =
+    let expectedGotoTable =
         Map.empty
-        |> Map.add (1<_>, AugmentedNonterminal.Nonterminal 'S') 4<_>
-        |> Map.add (3<_>, AugmentedNonterminal.Nonterminal 'L') 6<_>
-        |> Map.add (3<_>, AugmentedNonterminal.Nonterminal 'S') 5<_>
-        |> Map.add (7<_>, AugmentedNonterminal.Nonterminal 'S') 9<_>
+        |> Table.nterm 1 'S' 4
+        |> Table.nterm 3 'S' 6
+        |> Table.nterm 3 'S' 5
+        |> Table.nterm 7 'S' 9
+
+    let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.20``
 
     // Verify the ACTION table.
     lr0ParserTable.ActionTable
@@ -90,36 +120,36 @@ let ``LR(0) table for Grammar 3.20`` () =
 
 [<TestCase>]
 let ``LR(0) table for Grammar 3.23`` () =
-    let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.23``
-    // table should have 6 states and 3 rules
-
     let expectedActionTable =
         Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 3<_>)
+        |> Table.term 1 "x" (Action <| Shift 3<_>)
 
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "+") (Conflict <| ShiftReduce (5<_>, 1<_>))
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 1<_>)
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
+        |> Table.term 2 "+" (Conflict <| ShiftReduce (5<_>, 1<_>))
+        |> Table.term 2 "x" (Action <| Reduce 1<_>)
+        |> Table.eof 2 (Action <| Reduce 1<_>)
 
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "+") (Action <| Reduce 2<_>)
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 2<_>)
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 2<_>)
+        |> Table.term 3 "+" (Action <| Reduce 2<_>)
+        |> Table.term 3 "x" (Action <| Reduce 2<_>)
+        |> Table.eof 3 (Action <| Reduce 2<_>)
 
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action Accept)
+        |> Table.eof 4 (Action Accept)
 
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 3<_>)
+        |> Table.term 5 "x" (Action <| Shift 3<_>)
 
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.Terminal "+") (Action <| Reduce 3<_>)
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Reduce 3<_>)
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 3<_>)
+        |> Table.term 6 "+" (Action <| Reduce 3<_>)
+        |> Table.term 6 "x" (Action <| Reduce 3<_>)
+        |> Table.eof 6 (Action <| Reduce 3<_>)
 
     //
     let expectedGotoTable =
         Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'E') 4<_>
-        |> Map.add (1<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'T') 2<_>
-        |> Map.add (5<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'E') 6<_>
-        |> Map.add (5<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'T') 2<_>
+        |> Table.nterm 1 'E' 4
+        |> Table.nterm 1 'T' 2
+        |> Table.nterm 5 'E' 6
+        |> Table.nterm 5 'T' 2
+
+    let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.23``
+    // table should have 6 states and 3 rules
 
     // Verify the ACTION table.
     lr0ParserTable.ActionTable
@@ -131,34 +161,34 @@ let ``LR(0) table for Grammar 3.23`` () =
 
 [<TestCase>]
 let ``SLR table for Grammar 3.23`` () =
+    let expectedActionTable =
+        Map.empty
+        |> Table.term 1 "x" (Action <| Shift 3<_>)
+
+        |> Table.term 2 "+" (Action <| Shift 5<_>)
+        |> Table.eof 2 (Action <| Reduce 1<_>)
+
+        |> Table.term 3 "+" (Action <| Reduce 2<_>)
+        |> Table.eof 3 (Action <| Reduce 2<_>)
+
+        |> Table.eof 4 (Action Accept)
+
+        |> Table.term 5 "x" (Action <| Shift 3<_>)
+
+        |> Table.eof 6 (Action <| Reduce 3<_>)
+
+    let expectedGotoTable =
+        Map.empty
+        |> Table.nterm 1 'E' 4
+        |> Table.nterm 1 'T' 2
+        |> Table.nterm 5 'E' 6
+        |> Table.nterm 5 'T' 2
+
     let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.23``
 
     let slr1ParserTable =
         let productionRuleIds = Grammar.ProductionRuleIds Appel.``Grammar 3.23``
         Slr1.upgrade (Appel.``Grammar 3.23``, lr0ParserTable, productionRuleIds)
-
-    let expectedActionTable =
-        Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 3<_>)
-
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "+") (Action <| Shift 5<_>)
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
-
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "+") (Action <| Reduce 2<_>)
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 2<_>)
-
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action Accept)
-
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 3<_>)
-
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 3<_>)
-
-    let expectedGotoTable =
-        Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'E') 4<_>
-        |> Map.add (1<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'T') 2<_>
-        |> Map.add (5<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'E') 6<_>
-        |> Map.add (5<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'T') 2<_>
 
     // Verify the ACTION table.
     slr1ParserTable.ActionTable
@@ -170,60 +200,60 @@ let ``SLR table for Grammar 3.23`` () =
 
 [<TestCase>]
 let ``LR(1) table for Grammar 3.26`` () =
-    let parserTable = Lr1.createTable Appel.``Grammar 3.26``
-
     let expectedActionTable =
         Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 5<_>)
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 4<_>)
+        |> Table.term 1 "*" (Action <| Shift 5<_>)
+        |> Table.term 1 "x" (Action <| Shift 4<_>)
 
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Shift 9<_>)
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
+        |> Table.term 2 "=" (Action <| Shift 9<_>)
+        |> Table.eof 2 (Action <| Reduce 1<_>)
 
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 2<_>)
+        |> Table.eof 3 (Action <| Reduce 2<_>)
 
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Reduce 3<_>)
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 3<_>)
+        |> Table.term 4 "=" (Action <| Reduce 3<_>)
+        |> Table.eof 4 (Action <| Reduce 3<_>)
 
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 5<_>)
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 4<_>)
+        |> Table.term 5 "*" (Action <| Shift 5<_>)
+        |> Table.term 5 "x" (Action <| Shift 4<_>)
 
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action Accept)
+        |> Table.eof 6 (Action Accept)
 
-        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Reduce 1<_>)
-        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
+        |> Table.term 7 "=" (Action <| Reduce 1<_>)
+        |> Table.eof 7 (Action <| Reduce 1<_>)
 
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Reduce 4<_>)
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 4<_>)
+        |> Table.term 8 "=" (Action <| Reduce 4<_>)
+        |> Table.eof 8 (Action <| Reduce 4<_>)
 
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 13<_>)
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 12<_>)
+        |> Table.term 9 "*" (Action <| Shift 13<_>)
+        |> Table.term 9 "x" (Action <| Shift 12<_>)
 
-        |> Map.add (10<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
+        |> Table.eof 10 (Action <| Reduce 1<_>)
 
-        |> Map.add (11<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 5<_>)
+        |> Table.eof 11 (Action <| Reduce 5<_>)
 
-        |> Map.add (12<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 3<_>)
+        |> Table.eof 12 (Action <| Reduce 3<_>)
 
-        |> Map.add (13<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 13<_>)
-        |> Map.add (13<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 12<_>)
+        |> Table.term 13 "*" (Action <| Shift 13<_>)
+        |> Table.term 13 "x" (Action <| Shift 12<_>)
         
-        |> Map.add (14<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 4<_>)
+        |> Table.eof 14 (Action <| Reduce 4<_>)
 
     let expectedGotoTable =
         Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'E') 3<_>
-        |> Map.add (1<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'S') 6<_>
-        |> Map.add (1<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'V') 2<_>
+        |> Table.nterm 1 'E' 3
+        |> Table.nterm 1 'S' 6
+        |> Table.nterm 1 'V' 2
+        
+        |> Table.nterm 5 'E' 8
+        |> Table.nterm 5 'V' 7
+        
+        |> Table.nterm 9 'E' 11
+        |> Table.nterm 9 'V' 10
 
-        |> Map.add (5<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'E') 8<_>
-        |> Map.add (5<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'V') 7<_>
+        |> Table.nterm 13 'E' 14
+        |> Table.nterm 13 'V' 10
 
-        |> Map.add (9<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'E') 11<_>
-        |> Map.add (9<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'V') 10<_>
-
-        |> Map.add (13<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'E') 14<_>
-        |> Map.add (13<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'V') 10<_>
+    let parserTable = Lr1.createTable Appel.``Grammar 3.26``
 
     // Verify the ACTION table.
     parserTable.ActionTable
@@ -235,6 +265,47 @@ let ``LR(1) table for Grammar 3.26`` () =
 
 [<TestCase>]
 let ``LALR(1) table for Grammar 3.26`` () =
+    let expectedActionTable =
+        Map.empty
+        |> Table.term 1 "*" (Action <| Shift 1<_>)
+        |> Table.term 1 "x" (Action <| Shift 8<_>)
+
+        |> Table.term 2 "*" (Action <| Shift 1<_>)
+        |> Table.term 2 "x" (Action <| Shift 8<_>)
+
+        |> Table.term 3 "*" (Action <| Shift 1<_>)
+        |> Table.term 3 "x" (Action <| Shift 8<_>)
+
+        |> Table.term 4 "=" (Action <| Reduce 1<_>)
+        |> Table.eof 4 (Action <| Reduce 1<_>)
+
+        |> Table.term 5 "=" (Action <| Shift 3<_>)
+        |> Table.eof 5 (Action <| Reduce 1<_>)
+
+        |> Table.eof 6 (Action <| Reduce 2<_>)
+
+        |> Table.eof 7 (Action <| Reduce 5<_>)
+
+        |> Table.term 8 "=" (Action <| Reduce 3<_>)
+        |> Table.eof 8 (Action <| Reduce 3<_>)
+
+        |> Table.term 9 "=" (Action <| Reduce 4<_>)
+        |> Table.eof 9 (Action <| Reduce 4<_>)
+
+        |> Table.eof 10 (Action Accept)
+
+    let expectedGotoTable =
+        Map.empty
+        |> Table.nterm 1 'E' 9
+        |> Table.nterm 1 'V' 4
+
+        |> Table.nterm 2 'E' 6
+        |> Table.nterm 2 'S' 10
+        |> Table.nterm 2 'V' 5
+
+        |> Table.nterm 3 'E' 7
+        |> Table.nterm 3 'V' 4
+
     let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.26``
 
     let lalr1ParserTable =
@@ -247,47 +318,6 @@ let ``LALR(1) table for Grammar 3.26`` () =
 
         | Choice1Of2 lookaheadSets ->
             Lalr1.upgrade (Appel.``Grammar 3.26``, lr0ParserTable, productionRuleIds, lookaheadSets)
-
-    let expectedActionTable =
-        Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 1<_>)
-        |> Map.add (1<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 8<_>)
-
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 1<_>)
-        |> Map.add (2<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 8<_>)
-
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "*") (Action <| Shift 1<_>)
-        |> Map.add (3<ParserStateIdentifier>, AugmentedTerminal.Terminal "x") (Action <| Shift 8<_>)
-
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Reduce 1<_>)
-        |> Map.add (4<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
-
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Shift 3<_>)
-        |> Map.add (5<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 1<_>)
-
-        |> Map.add (6<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 2<_>)
-
-        |> Map.add (7<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 5<_>)
-
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Reduce 3<_>)
-        |> Map.add (8<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 3<_>)
-
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.Terminal "=") (Action <| Reduce 4<_>)
-        |> Map.add (9<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action <| Reduce 4<_>)
-
-        |> Map.add (10<ParserStateIdentifier>, AugmentedTerminal.EndOfFile) (Action Accept)
-
-    let expectedGotoTable =
-        Map.empty
-        |> Map.add (1<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'E') 9<_>
-        |> Map.add (1<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'V') 4<_>
-
-        |> Map.add (2<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'E') 6<_>
-        |> Map.add (2<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'S') 10<_>
-        |> Map.add (2<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'V') 5<_>
-
-        |> Map.add (3<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'E') 7<_>
-        |> Map.add (3<ParserStateIdentifier>, AugmentedNonterminal.Nonterminal 'V') 4<_>
 
     // Verify the ACTION table.
     lalr1ParserTable.ActionTable
