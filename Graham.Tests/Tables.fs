@@ -267,48 +267,47 @@ let ``LR(1) table for Grammar 3.26`` () =
 let ``LALR(1) table for Grammar 3.26`` () =
     let expectedActionTable =
         Map.empty
-        |> Table.term 1 "*" (Action <| Shift 1<_>)
-        |> Table.term 1 "x" (Action <| Shift 8<_>)
+        |> Table.term 0 "x" (Action <| Shift 4<_>)
+        |> Table.term 0 "*" (Action <| Shift 5<_>)
 
-        |> Table.term 2 "*" (Action <| Shift 1<_>)
-        |> Table.term 2 "x" (Action <| Shift 8<_>)
+        |> Table.eof 1 (Action Accept)
 
-        |> Table.term 3 "*" (Action <| Shift 1<_>)
-        |> Table.term 3 "x" (Action <| Shift 8<_>)
+        |> Table.term 2 "=" (Action <| Shift 6<_>)
+        |> Table.eof 2 (Action <| Reduce 1<_>)
 
-        |> Table.term 4 "=" (Action <| Reduce 1<_>)
-        |> Table.eof 4 (Action <| Reduce 1<_>)
+        |> Table.eof 3 (Action <| Reduce 3<_>)
+        
+        |> Table.term 4 "=" (Action <| Reduce 4<_>)
+        |> Table.eof 4 (Action <| Reduce 4<_>)
 
-        |> Table.term 5 "=" (Action <| Shift 3<_>)
-        |> Table.eof 5 (Action <| Reduce 1<_>)
+        |> Table.term 5 "x" (Action <| Shift 4<_>)
+        |> Table.term 5 "*" (Action <| Shift 5<_>)
+        
+        |> Table.term 6 "x" (Action <| Shift 11<_>)
+        |> Table.term 6 "*" (Action <| Shift 12<_>)
+       
+        |> Table.term 8 "=" (Action <| Reduce 5<_>)
+        |> Table.eof 8 (Action <| Reduce 5<_>)
 
-        |> Table.eof 6 (Action <| Reduce 2<_>)
+        |> Table.term 9 "=" (Action <| Reduce 1<_>)
+        |> Table.eof 9 (Action <| Reduce 1<_>)
 
-        |> Table.eof 7 (Action <| Reduce 5<_>)
-
-        |> Table.term 8 "=" (Action <| Reduce 3<_>)
-        |> Table.eof 8 (Action <| Reduce 3<_>)
-
-        |> Table.term 9 "=" (Action <| Reduce 4<_>)
-        |> Table.eof 9 (Action <| Reduce 4<_>)
-
-        |> Table.eof 10 (Action Accept)
+        |> Table.eof 10 (Action <| Reduce 2<_>)
 
     let expectedGotoTable =
         Map.empty
-        |> Table.nterm 1 'E' 9
-        |> Table.nterm 1 'V' 4
+        |> Table.nterm 0 'S' 1
+        |> Table.nterm 0 'E' 3
+        |> Table.nterm 0 'V' 2
+        
+        |> Table.nterm 5 'E' 8
+        |> Table.nterm 5 'V' 9
 
-        |> Table.nterm 2 'E' 6
-        |> Table.nterm 2 'S' 10
-        |> Table.nterm 2 'V' 5
-
-        |> Table.nterm 3 'E' 7
-        |> Table.nterm 3 'V' 4
-
-    let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.26``
+        |> Table.nterm 6 'E' 10
+        |> Table.nterm 6 'V' 9
 
     let lalr1ParserTable =
+        let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.26``
         let productionRuleIds = Grammar.ProductionRuleIds Appel.``Grammar 3.26``
         match Lalr1.lookaheadSets (Appel.``Grammar 3.26``, lr0ParserTable) with
         | Choice2Of2 errMsg ->
