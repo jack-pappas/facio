@@ -122,31 +122,31 @@ let ``LR(0) table for Grammar 3.20`` () =
 let ``LR(0) table for Grammar 3.23`` () =
     let expectedActionTable =
         Map.empty
-        |> Table.term 1 "x" (Action <| Shift 3<_>)
+        |> Table.term 0 "x" (Action <| Shift 3<_>)
 
-        |> Table.term 2 "+" (Conflict <| ShiftReduce (5<_>, 1<_>))
-        |> Table.term 2 "x" (Action <| Reduce 1<_>)
-        |> Table.eof 2 (Action <| Reduce 1<_>)
+        |> Table.eof 1 (Action Accept)
 
-        |> Table.term 3 "+" (Action <| Reduce 2<_>)
-        |> Table.term 3 "x" (Action <| Reduce 2<_>)
-        |> Table.eof 3 (Action <| Reduce 2<_>)
+        |> Table.term 2 "x" (Action <| Reduce 2<_>)
+        |> Table.term 2 "+" (Conflict <| ShiftReduce (4<_>, 2<_>))
+        |> Table.eof 2 (Action <| Reduce 2<_>)
 
-        |> Table.eof 4 (Action Accept)
+        |> Table.term 3 "x" (Action <| Reduce 3<_>)
+        |> Table.term 3 "+" (Action <| Reduce 3<_>)
+        |> Table.eof 3 (Action <| Reduce 3<_>)
 
-        |> Table.term 5 "x" (Action <| Shift 3<_>)
+        |> Table.term 4 "x" (Action <| Shift 3<_>)
 
-        |> Table.term 6 "+" (Action <| Reduce 3<_>)
-        |> Table.term 6 "x" (Action <| Reduce 3<_>)
-        |> Table.eof 6 (Action <| Reduce 3<_>)
+        |> Table.term 5 "+" (Action <| Reduce 1<_>)
+        |> Table.term 5 "x" (Action <| Reduce 1<_>)
+        |> Table.eof 5 (Action <| Reduce 1<_>)
 
     //
     let expectedGotoTable =
         Map.empty
-        |> Table.nterm 1 'E' 4
-        |> Table.nterm 1 'T' 2
-        |> Table.nterm 5 'E' 6
-        |> Table.nterm 5 'T' 2
+        |> Table.nterm 0 'E' 1
+        |> Table.nterm 0 'T' 2
+        |> Table.nterm 4 'E' 5
+        |> Table.nterm 4 'T' 2
 
     let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.23``
     // table should have 6 states and 3 rules
@@ -163,30 +163,30 @@ let ``LR(0) table for Grammar 3.23`` () =
 let ``SLR table for Grammar 3.23`` () =
     let expectedActionTable =
         Map.empty
-        |> Table.term 1 "x" (Action <| Shift 3<_>)
+        |> Table.term 0 "x" (Action <| Shift 3<_>)
 
-        |> Table.term 2 "+" (Action <| Shift 5<_>)
-        |> Table.eof 2 (Action <| Reduce 1<_>)
+        |> Table.eof 1 (Action Accept)
 
-        |> Table.term 3 "+" (Action <| Reduce 2<_>)
-        |> Table.eof 3 (Action <| Reduce 2<_>)
+        |> Table.term 2 "+" (Action <| Shift 4<_>)
+        |> Table.eof 2 (Action <| Reduce 2<_>)
 
-        |> Table.eof 4 (Action Accept)
+        |> Table.term 3 "+" (Action <| Reduce 3<_>)
+        |> Table.eof 3 (Action <| Reduce 3<_>)
 
-        |> Table.term 5 "x" (Action <| Shift 3<_>)
+        |> Table.term 4 "x" (Action <| Shift 3<_>)
 
-        |> Table.eof 6 (Action <| Reduce 3<_>)
+        |> Table.eof 5 (Action <| Reduce 1<_>)
 
+    //
     let expectedGotoTable =
         Map.empty
-        |> Table.nterm 1 'E' 4
-        |> Table.nterm 1 'T' 2
-        |> Table.nterm 5 'E' 6
-        |> Table.nterm 5 'T' 2
-
-    let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.23``
+        |> Table.nterm 0 'E' 1
+        |> Table.nterm 0 'T' 2
+        |> Table.nterm 4 'E' 5
+        |> Table.nterm 4 'T' 2
 
     let slr1ParserTable =
+        let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.23``
         let productionRuleIds = Grammar.ProductionRuleIds Appel.``Grammar 3.23``
         Slr1.upgrade (Appel.``Grammar 3.23``, lr0ParserTable, productionRuleIds)
 
