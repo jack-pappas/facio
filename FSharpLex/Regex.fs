@@ -119,7 +119,7 @@ module private RegexPatterns =
 type Regex with
     //
     static member private IsNullableImpl regex =
-        Cps.cont {
+        cont {
         match regex with
         | Epsilon
         | Star _ ->
@@ -154,7 +154,7 @@ type Regex with
 
     /// Implementation of the canonicalization function.
     static member private CanonicalizeImpl (regex : Regex) =
-        Cps.cont {
+        cont {
         match regex with
         | Epsilon
         | Any as regex ->
@@ -319,7 +319,7 @@ type Regex with
 
     //
     static member private DerivativeImpl wrtSymbol regex =
-        Cps.cont {
+        cont {
         match regex with
         | Epsilon ->
             return Regex.empty
@@ -391,7 +391,7 @@ type DerivativeClasses = {
 type Regex with
     //
     static member private DerivativeClassesImpl regex =
-        Cps.cont {
+        cont {
         match regex with
         | Epsilon ->
             return DerivativeClasses.Universe

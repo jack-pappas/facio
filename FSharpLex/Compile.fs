@@ -771,7 +771,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
 //
 let private getAlphabet regex =
     let rec getAlphabet regex =
-        Cps.cont {
+        cont {
         match regex with
         | Regex.Any
         | Regex.Epsilon ->
@@ -798,7 +798,7 @@ let private getAlphabet regex =
 // In the future, it will be moved into the fslex-compatibility backend.
 let private rewriteNegatedCharSets universe regex =
     let rec rewriteNegatedCharSets regex =
-        Cps.cont {
+        cont {
         match regex with
         | Regex.Negate (Regex.CharacterSet charSet) ->
             return
