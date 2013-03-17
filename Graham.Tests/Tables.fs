@@ -283,16 +283,16 @@ let ``LALR(1) table for Grammar 3.26`` () =
         |> Table.term 5 "x" (Action <| Shift 4<_>)
         |> Table.term 5 "*" (Action <| Shift 5<_>)
         
-        |> Table.term 6 "x" (Action <| Shift 11<_>)
-        |> Table.term 6 "*" (Action <| Shift 12<_>)
+        |> Table.term 6 "x" (Action <| Shift 4<_>)
+        |> Table.term 6 "*" (Action <| Shift 5<_>)
+
+        |> Table.term 7 "=" (Action <| Reduce 1<_>)
+        |> Table.eof 7 (Action <| Reduce 1<_>)
        
         |> Table.term 8 "=" (Action <| Reduce 5<_>)
         |> Table.eof 8 (Action <| Reduce 5<_>)
 
-        |> Table.term 9 "=" (Action <| Reduce 1<_>)
-        |> Table.eof 9 (Action <| Reduce 1<_>)
-
-        |> Table.eof 10 (Action <| Reduce 2<_>)
+        |> Table.eof 9 (Action <| Reduce 2<_>)
 
     let expectedGotoTable =
         Map.empty
@@ -301,10 +301,10 @@ let ``LALR(1) table for Grammar 3.26`` () =
         |> Table.nterm 0 'V' 2
         
         |> Table.nterm 5 'E' 8
-        |> Table.nterm 5 'V' 9
+        |> Table.nterm 5 'V' 7
 
-        |> Table.nterm 6 'E' 10
-        |> Table.nterm 6 'V' 9
+        |> Table.nterm 6 'E' 9
+        |> Table.nterm 6 'V' 7
 
     let lalr1ParserTable =
         let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.26``
