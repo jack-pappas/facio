@@ -180,8 +180,7 @@ type Grammar<'Nonterminal, 'Terminal
             ||> Array.fold (fun productionRuleIds ruleRhs ->
                 /// The identifier for this production rule.
                 let productionRuleId : ProductionRuleId =
-                    Map.count productionRuleIds + 1
-                    |> Tag.ofInt
+                    Tag.ofInt <| Map.count productionRuleIds
 
                 // Add this identifier to the map.
                 Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
