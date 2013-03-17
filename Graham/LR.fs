@@ -172,6 +172,28 @@ type LrParserActionSet =
             | _ ->
                 Some actionSet
 
+    /// Determines if an LrParserActionSet contains the specified action.
+    static member Contains action actionSet =
+        match actionSet with
+        | Action action' ->
+            action = action'
+        | Conflict conflict ->
+            match action with
+            | Accept -> false
+            | Shift shiftStateId' ->
+                match conflict with
+                | ShiftReduce (shiftStateId, _) ->
+                    shiftStateId' = shiftStateId
+                | ReduceReduce (_,_) ->
+                    false
+            | Reduce reduceRuleId' ->
+                match conflict with
+                | ShiftReduce (_, reduceRuleId) ->
+                    reduceRuleId' = reduceRuleId
+                | ReduceReduce (reduceRuleId1, reduceRuleId2) ->
+                    reduceRuleId' = reduceRuleId1
+                    || reduceRuleId' = reduceRuleId2
+
 //
 type NonterminalTransition<'Nonterminal
     when 'Nonterminal : comparison> =
