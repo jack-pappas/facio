@@ -20,6 +20,8 @@ limitations under the License.
 namespace Graham.LR
 
 open LanguagePrimitives
+open ExtCore
+open ExtCore.Collections
 open Graham.Grammar
 open AugmentedPatterns
 open Graham.Analysis
@@ -197,7 +199,7 @@ module Lr1 =
             ((Set.empty, tableGenState), workSet)
             ||> Set.fold (fun workSet_tableGenState stateId ->
                 /// The set of parser items for this state.
-                let stateItems = Map.find stateId (snd tableGenState).ParserStates
+                let stateItems = TagBimap.find stateId (snd tableGenState).ParserStates
 
                 (workSet_tableGenState, stateItems)
                 ||> Set.fold (fun (workSet, tableGenState) item ->

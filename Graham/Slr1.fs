@@ -19,7 +19,8 @@ limitations under the License.
 //
 namespace Graham.LR
 
-open LanguagePrimitives
+open ExtCore
+open ExtCore.Collections
 open Graham.Grammar
 open AugmentedPatterns
 open Graham.Analysis
@@ -45,7 +46,7 @@ module Slr1 =
         // If the table has already been upgraded to SLR(1) (or something
         // more powerful, like LALR(1)), this has no effect.
         (lr0ParserTable, lr0ParserTable.ParserStates)
-        ||> Map.fold (fun parserTable stateId items ->
+        ||> TagBimap.fold (fun parserTable stateId items ->
             (parserTable, items)
             ||> Set.fold (fun parserTable item ->
                 // If the parser position is at the end of this item's production,

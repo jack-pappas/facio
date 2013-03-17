@@ -20,7 +20,8 @@ limitations under the License.
 namespace Graham.LR
 
 open System.Diagnostics
-open LanguagePrimitives
+open ExtCore
+open ExtCore.Collections
 open Graham.Grammar
 open AugmentedPatterns
 open Graham.Analysis
@@ -261,7 +262,7 @@ module Lalr1 =
         ((PartialFunction.empty, Relation.empty), nonterminalTransitions)
         ||> Set.fold (fun lookback_includes (stateId, nonterminal) ->
             //
-            let parserState = Map.find stateId lr0ParserTable.ParserStates
+            let parserState = TagBimap.find stateId lr0ParserTable.ParserStates
 
             // Fold over the LR(0) items in this parser state.
             (lookback_includes, parserState)
@@ -321,7 +322,7 @@ module Lalr1 =
                         else
                             // 'j' represents the final/last state of the path through the parser transition graph
                             // which describes the derivation of a rule (thereby producing a nonterminal).
-                            (lookback, Map.find j lr0ParserTable.ParserStates)
+                            (lookback, TagBimap.find j lr0ParserTable.ParserStates)
                             ||> Set.fold (fun lookback item' ->
                                 if item.Nonterminal = item'.Nonterminal
                                     && item.Production = item'.Production then
@@ -400,7 +401,7 @@ module Lalr1 =
 
         // Use the LALR(1) lookahead sets to resolve conflicts in the LR(0) parser table.
         (lr0ParserTable, lr0ParserTable.ParserStates)
-        ||> Map.fold (fun parserTable stateId items ->
+        ||> TagBimap.fold (fun parserTable stateId items ->
             (parserTable, items)
             ||> Set.fold (fun parserTable item ->
                 // If the parser position is at the end of this item's production,

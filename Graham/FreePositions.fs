@@ -19,7 +19,8 @@ limitations under the License.
 //
 namespace Graham.Analysis
 
-open LanguagePrimitives
+open ExtCore
+open ExtCore.Collections
 open Graham.Grammar
 open AugmentedPatterns
 open Graham.Graph
@@ -175,7 +176,7 @@ module FreePositions =
     let private statePositionGraphs (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) (parserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
         // Compute the State Position Graph for each parser state.
         (Map.empty, parserTable.ParserStates)
-        ||> Map.fold (fun statePositionGraphs parserStateId parserState ->
+        ||> TagBimap.fold (fun statePositionGraphs parserStateId parserState ->
             let spg = statePositionGraph grammar.Productions parserState
             Map.add parserStateId spg statePositionGraphs)
 
@@ -202,7 +203,7 @@ module FreePositions =
                     // Create the positions for this production...
                     let len = Array.length production
                     [| for i in 0 .. len ->
-                        productionRuleId, ((Int32WithMeasure i) : int<ParserPosition>) |]
+                        productionRuleId, Tag.ofInt<ParserPosition> i |]
                     |> Set.ofArray
                     //  ...then add them to the set of all positions.
                     |> Set.union positions))
@@ -282,7 +283,7 @@ module FreePositions =
                     /// The identifier for this production rule.
                     let productionRuleId : ProductionRuleId =
                         productionRuleIds.Count + 1
-                        |> Int32WithMeasure
+                        |> Tag.ofInt
 
                     // Add this identifier to the map.
                     Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))

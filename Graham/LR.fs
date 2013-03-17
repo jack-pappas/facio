@@ -21,7 +21,7 @@ namespace Graham.LR
 
 open System.Diagnostics
 open ExtCore
-//open LanguagePrimitives
+open ExtCore.Collections
 open Graham.Grammar
 open AugmentedPatterns
 open Graham.Analysis
@@ -192,8 +192,7 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
     and 'Terminal : comparison
     and 'Lookahead : comparison> = {
     //
-    // OPTIMIZE : Change this to an array 
-    ParserStates : Map<ParserStateId, LrParserState<'Nonterminal, 'Terminal, 'Lookahead>>;
+    ParserStates : TagBimap<ParserStateIdentifier, LrParserState<'Nonterminal, 'Terminal, 'Lookahead>>;
     //
     ParserTransitions : LabeledSparseDigraph<ParserStateId, Symbol<'Nonterminal, 'Terminal>>;
     //
@@ -219,7 +218,7 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
     member private this.ReduceStates
         with get () =
             (Map.empty, this.ParserStates)
-            ||> Map.fold (fun reduceStates stateId items ->
+            ||> TagBimap.fold (fun reduceStates stateId items ->
                 (reduceStates, items)
                 ||> Set.fold (fun reduceStates item ->
                     if int item.Position = Array.length item.Production then
@@ -313,7 +312,7 @@ module LrTableGenState =
         {   ParserStateIds = Map.empty;
             ProductionRuleIds = Map.empty; },
         // The empty parser table.
-        {   ParserStates = Map.empty;
+        {   ParserStates = TagBimap.empty;
             ParserTransitions = Graph.empty;
             ActionTable = Map.empty;
             GotoTable = Map.empty; }
@@ -384,7 +383,7 @@ module LrTableGenState =
                     ParserTransitions = Graph.addVertex parserStateId table.ParserTransitions;
                     // Add this state (by it's state-id) to the table.
                     ParserStates =
-                        Map.add parserStateId parserState table.ParserStates; }
+                        TagBimap.add parserStateId parserState table.ParserStates; }
 
             // Return the id, along with the updated table-generation state.
             (true, parserStateId), tableGenState
