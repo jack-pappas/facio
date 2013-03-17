@@ -202,56 +202,56 @@ let ``SLR table for Grammar 3.23`` () =
 let ``LR(1) table for Grammar 3.26`` () =
     let expectedActionTable =
         Map.empty
-        |> Table.term 1 "*" (Action <| Shift 5<_>)
-        |> Table.term 1 "x" (Action <| Shift 4<_>)
+        |> Table.term 0 "x" (Action <| Shift 4<_>)
+        |> Table.term 0 "*" (Action <| Shift 5<_>)
 
-        |> Table.term 2 "=" (Action <| Shift 9<_>)
+        |> Table.eof 1 (Action Accept)
+
+        |> Table.term 2 "=" (Action <| Shift 6<_>)
         |> Table.eof 2 (Action <| Reduce 1<_>)
 
-        |> Table.eof 3 (Action <| Reduce 2<_>)
+        |> Table.eof 3 (Action <| Reduce 3<_>)
+        
+        |> Table.term 4 "=" (Action <| Reduce 4<_>)
+        |> Table.eof 4 (Action <| Reduce 4<_>)
 
-        |> Table.term 4 "=" (Action <| Reduce 3<_>)
-        |> Table.eof 4 (Action <| Reduce 3<_>)
-
-        |> Table.term 5 "*" (Action <| Shift 5<_>)
         |> Table.term 5 "x" (Action <| Shift 4<_>)
-
-        |> Table.eof 6 (Action Accept)
-
+        |> Table.term 5 "*" (Action <| Shift 5<_>)
+        
+        |> Table.term 6 "x" (Action <| Shift 11<_>)
+        |> Table.term 6 "*" (Action <| Shift 12<_>)
+        
         |> Table.term 7 "=" (Action <| Reduce 1<_>)
         |> Table.eof 7 (Action <| Reduce 1<_>)
 
-        |> Table.term 8 "=" (Action <| Reduce 4<_>)
-        |> Table.eof 8 (Action <| Reduce 4<_>)
+        |> Table.term 8 "=" (Action <| Reduce 5<_>)
+        |> Table.eof 8 (Action <| Reduce 5<_>)
 
-        |> Table.term 9 "*" (Action <| Shift 13<_>)
-        |> Table.term 9 "x" (Action <| Shift 12<_>)
+        |> Table.eof 9 (Action <| Reduce 1<_>)        
 
-        |> Table.eof 10 (Action <| Reduce 1<_>)
+        |> Table.eof 10 (Action <| Reduce 2<_>)
 
-        |> Table.eof 11 (Action <| Reduce 5<_>)
+        |> Table.eof 11 (Action <| Reduce 4<_>)
 
-        |> Table.eof 12 (Action <| Reduce 3<_>)
+        |> Table.term 12 "x" (Action <| Shift 11<_>)
+        |> Table.term 12 "*" (Action <| Shift 12<_>)
 
-        |> Table.term 13 "*" (Action <| Shift 13<_>)
-        |> Table.term 13 "x" (Action <| Shift 12<_>)
-        
-        |> Table.eof 14 (Action <| Reduce 4<_>)
+        |> Table.eof 13 (Action <| Reduce 5<_>)
 
     let expectedGotoTable =
         Map.empty
-        |> Table.nterm 1 'E' 3
-        |> Table.nterm 1 'S' 6
-        |> Table.nterm 1 'V' 2
+        |> Table.nterm 0 'S' 1
+        |> Table.nterm 0 'E' 3
+        |> Table.nterm 0 'V' 2
         
         |> Table.nterm 5 'E' 8
         |> Table.nterm 5 'V' 7
-        
-        |> Table.nterm 9 'E' 11
-        |> Table.nterm 9 'V' 10
 
-        |> Table.nterm 13 'E' 14
-        |> Table.nterm 13 'V' 10
+        |> Table.nterm 6 'E' 10
+        |> Table.nterm 6 'V' 9
+
+        |> Table.nterm 12 'E' 13
+        |> Table.nterm 12 'V' 9
 
     let parserTable = Lr1.createTable Appel.``Grammar 3.26``
 
