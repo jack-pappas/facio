@@ -56,6 +56,7 @@
     <Compile Include="Lalr1.fs" />
     <Compile Include="FreePositions.fs" />
     <Compile Include="LeftCorner.fs" />
+    <Compile Include="Ielr.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExtCore">
