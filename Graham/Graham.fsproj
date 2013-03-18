@@ -47,6 +47,7 @@
     </Compile>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Graph.fs" />
+    <Compile Include="Relation.fs" />
     <Compile Include="Grammar.fs" />
     <Compile Include="Analysis.fs" />
     <Compile Include="LR.fs" />
