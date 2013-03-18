@@ -40,3 +40,22 @@
   - Incremental LR(1) -- "Celentano's Algorithm". This allows a file to be parsed incrementally,
     so instead of re-parsing the entire file when changes are made, only the changed portion needs
     to be parsed.
+
+
+---
+### Analyses
+
+- Transformations
+  - Remove epsilon-productions
+  - Normal forms: Chomsky, Greibach, Kuroda
+
+- Ambiguity analysis
+
+
+---
+### Interoperability
+
+- In a separate library (e.g., Graham.IO) implement parsers/unparsers for common language formats:
+  - BNF/EBNF
+  - ASF+SDF
+  - XML (define an XML schema which can be used to describe grammars in a format similar to EBNF).
