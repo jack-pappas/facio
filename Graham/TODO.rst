@@ -1,6 +1,8 @@
-## TODO (Graham)
+Graham TODO
+###########
 
-### General
+General
+-------
 
 - Use our earlier, "naive" implementation of the LALR(1) table generator (which computed
   the entire LR(1) table, then merged states together) to implement unit tests for
@@ -11,20 +13,26 @@
   should be identical.
 
 
----
-### Other Interesting Parsing Algorithms to Implement
+Parsing Algorithms
+------------------
 
 - Deterministic
+
   - IELR(1) -- Inadequacy Elimination LR(1)
-    - This algorithm is interesting because it provides some important advantages over
-      the Canonical LR(1) algorithm employed in Menhir, mainly:
-      - Provides more robust and accurate conflict resolution. Menhir uses Pager's algorithm
-        to avoid the *mysterious* conflicts which can arise when merging LR(1) states to
-        form LALR(1) states; however, Pager's algorithm fails to detect certain kinds of
-        mysterious conflicts while the IELR(1) algorithm is able to handle them correctly.
-      - Produces more efficient parsers.
+
+    This algorithm is interesting because it provides some important advantages over
+    the Canonical LR(1) algorithm employed in Menhir, mainly:
+
+    - Provides more robust and accurate conflict resolution. Menhir uses Pager's algorithm
+      to avoid the *mysterious* conflicts which can arise when merging LR(1) states to
+      form LALR(1) states; however, Pager's algorithm fails to detect certain kinds of
+      mysterious conflicts while the IELR(1) algorithm is able to handle them correctly.
+    - Produces more efficient parsers.
+
   - LLC(k) - Least Left-Corner
-    - Reference: *On LLC(k) Parsing Method of LR(k) Grammars* by Inoue and Fujiwara
+    
+    Reference: *On LLC(k) Parsing Method of LR(k) Grammars* by Inoue and Fujiwara
+  
   - SGLC -- Simple Generalized Left-Corner, accomodates SLR(1) grammars
   - XLC(1) -- eXtended generalized Left-Corner(1), accomodates LR(1) grammars
   - LAXLC(1) -- Look-Ahead eXtended generalized Left-Corner(1), accomodates LALR(1) grammars
@@ -32,30 +40,34 @@
   - BRC(2,1) -- Bounded Context (BRC = Bounded Right Context)
 
 - Nondeterministic
+  
   - GLR -- Generalized LR (perhaps as Scannerless GLR (SGLR))
   - GLC -- Generalized Left-Corner (see Nederhof, "Generalized Left-Corner Parsing")
 
 - Miscellaneous
+  
   - GPLR -- Generalized Piecewise LR
   - Incremental LR(1) -- "Celentano's Algorithm". This allows a file to be parsed incrementally,
     so instead of re-parsing the entire file when changes are made, only the changed portion needs
     to be parsed.
 
 
----
-### Analyses
+Analyses
+--------
 
 - Transformations
+
   - Remove epsilon-productions
   - Normal forms: Chomsky, Greibach, Kuroda
 
 - Ambiguity analysis
 
 
----
-### Interoperability
+Interoperability
+----------------
 
 - In a separate library (e.g., Graham.IO) implement parsers/unparsers for common language formats:
+
   - BNF/EBNF
   - ASF+SDF
   - XML (define an XML schema which can be used to describe grammars in a format similar to EBNF).
