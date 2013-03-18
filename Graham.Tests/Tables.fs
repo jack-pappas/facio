@@ -18,8 +18,6 @@ limitations under the License.
 
 module Graham.Tests.Tables
 
-open Grammars
-
 open NUnit.Framework
 open FsUnit
 
@@ -108,7 +106,7 @@ let ``LR(0) table for Grammar 3.20`` () =
         |> Table.nterm 3 'L' 5
         |> Table.nterm 6 'S' 8
 
-    let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.20``
+    let lr0ParserTable = Lr0.createTable Grammars.Appel.``Grammar 3.20``
 
     // Verify the ACTION table.
     lr0ParserTable.ActionTable
@@ -148,7 +146,7 @@ let ``LR(0) table for Grammar 3.23`` () =
         |> Table.nterm 4 'E' 5
         |> Table.nterm 4 'T' 2
 
-    let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.23``
+    let lr0ParserTable = Lr0.createTable Grammars.Appel.``Grammar 3.23``
     // table should have 6 states and 3 rules
 
     // Verify the ACTION table.
@@ -186,9 +184,9 @@ let ``SLR table for Grammar 3.23`` () =
         |> Table.nterm 4 'T' 2
 
     let slr1ParserTable =
-        let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.23``
-        let productionRuleIds = Grammar.ProductionRuleIds Appel.``Grammar 3.23``
-        Slr1.upgrade (Appel.``Grammar 3.23``, lr0ParserTable, productionRuleIds)
+        let lr0ParserTable = Lr0.createTable Grammars.Appel.``Grammar 3.23``
+        let productionRuleIds = Grammar.ProductionRuleIds Grammars.Appel.``Grammar 3.23``
+        Slr1.upgrade (Grammars.Appel.``Grammar 3.23``, lr0ParserTable, productionRuleIds)
 
     // Verify the ACTION table.
     slr1ParserTable.ActionTable
@@ -253,7 +251,7 @@ let ``LR(1) table for Grammar 3.26`` () =
         |> Table.nterm 12 'E' 13
         |> Table.nterm 12 'V' 9
 
-    let parserTable = Lr1.createTable Appel.``Grammar 3.26``
+    let parserTable = Lr1.createTable Grammars.Appel.``Grammar 3.26``
 
     // Verify the ACTION table.
     parserTable.ActionTable
@@ -307,16 +305,16 @@ let ``LALR(1) table for Grammar 3.26`` () =
         |> Table.nterm 6 'V' 7
 
     let lalr1ParserTable =
-        let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.26``
-        let productionRuleIds = Grammar.ProductionRuleIds Appel.``Grammar 3.26``
-        match Lalr1.lookaheadSets (Appel.``Grammar 3.26``, lr0ParserTable) with
+        let lr0ParserTable = Lr0.createTable Grammars.Appel.``Grammar 3.26``
+        let productionRuleIds = Grammar.ProductionRuleIds Grammars.Appel.``Grammar 3.26``
+        match Lalr1.lookaheadSets (Grammars.Appel.``Grammar 3.26``, lr0ParserTable) with
         | Choice2Of2 errMsg ->
             Assert.Fail errMsg
             // To satisfy F# type inference -- the test will actually fail on the Assert.Fail call.
             raise <| exn errMsg
 
         | Choice1Of2 lookaheadSets ->
-            Lalr1.upgrade (Appel.``Grammar 3.26``, lr0ParserTable, productionRuleIds, lookaheadSets)
+            Lalr1.upgrade (Grammars.Appel.``Grammar 3.26``, lr0ParserTable, productionRuleIds, lookaheadSets)
 
     // Verify the ACTION table.
     lalr1ParserTable.ActionTable
