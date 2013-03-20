@@ -1460,6 +1460,7 @@ module CharSet =
 [<DebuggerDisplay(
     "Count = {DebuggerElementCount}, \
      Intervals = {DebuggerIntervalCount}")>]
+[<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
 type CharSet =
     | Empty
     | Node of char * char * CharSet * CharSet
