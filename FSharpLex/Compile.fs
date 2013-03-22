@@ -859,8 +859,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         // NOTE : The ordering only matters when two or more clauses overlap,
         // because then the ordering is used to decide which action to execute.
         rule.Clauses
-        |> List.rev
-        |> List.toArray
+        |> List.revIntoArray
 
     // Extract any clauses which match the end-of-file pattern;
     // these are handled separately from the other patterns.
@@ -936,31 +935,20 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
     choice {
     // Validate and simplify the patterns of the rule clauses.
     let! ruleClauseRegexes =
-        let simplifiedRuleClausePatterns =
-            patterns
-            |> Array.map (fun (originalRuleClauseIndex, pattern) ->
-                // TODO : Simplify using Choice.Result.map
-                match validateAndSimplifyPattern pattern (macroEnv, badMacros, options) with
-                | Choice2Of2 errors ->
-                    Choice2Of2 errors
-                | Choice1Of2 pattern ->
-                    Choice1Of2 (originalRuleClauseIndex, pattern))
-
         // Put all of the "results" in one array and all of the "errors" in another.
-        let results = ResizeArray<_> (Array.length simplifiedRuleClausePatterns)
-        let errors = ResizeArray<_> (Array.length simplifiedRuleClausePatterns)
-        simplifiedRuleClausePatterns
-        |> Array.iter (function
-            | Choice2Of2 errorArr ->
-                errors.AddRange errorArr
-            | Choice1Of2 result ->
-                results.Add result)
+        let results, errors =
+            patterns
+            |> Array.mapPartition (fun (originalRuleClauseIndex, pattern) ->
+                validateAndSimplifyPattern pattern (macroEnv, badMacros, options)
+                |> Choice.map (fun pattern ->
+                    originalRuleClauseIndex, pattern))
 
-        // If there are any errors, return them; otherwise, return the results.
-        if errors.Count > 0 then
-            Choice2Of2 <| errors.ToArray ()
+        // If there are any errors return them; otherwise, return the results.
+        if Array.isEmpty errors then
+            Choice1Of2 results
         else
-            Choice1Of2 <| results.ToArray ()
+            // Flatten the error array.
+            Choice2Of2 <| Array.concat errors
 
     /// The DFA compiled from the rule clause patterns.
     let compiledPatternDfa =
@@ -1048,7 +1036,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             // transition edges to it from the initial state.
             if CharSet.isEmpty wildcardChars then
                 // TODO : Emit a warning to let the user know this pattern will never be matched.
-                Debug.WriteLine "Warning: Wildcard pattern in rule will never be matched."
+                Printf.dprintfn "Warning: Wildcard pattern in rule will never be matched."
 
                 compiledPatternDfa
             else
@@ -1071,8 +1059,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         Dfa = compiledPatternDfa;
         Parameters =
             // Reverse the list so it's in the correct left-to-right order.
-            List.rev rule.Parameters
-            |> List.toArray;
+            List.revIntoArray rule.Parameters;
         RuleClauseActions =
             ruleClauses
             |> Array.map (fun clause ->
@@ -1094,45 +1081,47 @@ type CompiledSpecification = {
 
 /// Creates pattern-matching DFAs from the lexer rules.
 let lexerSpec (spec : Specification) options =
+    choice {
     // Validate and simplify the macros to create the macro table/environment.
-    match preprocessMacros spec.Macros options with
-    | Choice2Of2 (macroEnv, badMacros, errors) ->
-        // TODO : Validate the rule clauses, but don't compile the rule DFAs.
-        // This way we can return all applicable errors instead of just those for the macros.
-        Choice2Of2 errors
-    | Choice1Of2 macroEnv ->
-        (* Compile the lexer rules *)
-        (* TODO :   Simplify the code below using monadic operators. *)
-        let ruleIdentifiers, rules =
-            let ruleCount = List.length spec.Rules
-            let ruleIdentifiers = Array.zeroCreate ruleCount
-            let rules = Array.zeroCreate ruleCount
+    let! macroEnv =
+        preprocessMacros spec.Macros options
+        |> Choice.mapError (fun (macroEnv, badMacros, errors) ->
+            // TODO : Validate the rule clauses, but don't compile the rule DFAs.
+            // This way we can return all applicable errors instead of just those for the macros.
+            errors)
+            
+    (* Compile the lexer rules *)
+    let ruleIdentifiers, rules =
+        let ruleCount = List.length spec.Rules
+        let ruleIdentifiers = Array.zeroCreate ruleCount
+        let rules = Array.zeroCreate ruleCount
 
-            // TODO : Check for duplicate rule identifiers
-            (ruleCount - 1, spec.Rules)
-            ||> List.fold (fun index (ruleId, rule) ->
-                ruleIdentifiers.[index] <- ruleId
-                rules.[index] <- rule
-                index - 1)
-            |> ignore
+        // TODO : Check for duplicate rule identifiers
+        (ruleCount - 1, spec.Rules)
+        ||> List.fold (fun index (ruleId, rule) ->
+            ruleIdentifiers.[index] <- ruleId
+            rules.[index] <- rule
+            index - 1)
+        |> ignore
 
-            ruleIdentifiers, rules
+        ruleIdentifiers, rules
 
-        let compiledRules, compilationErrors =
-            rules
-            |> Array.mapPartition (fun rule ->
-                compileRule rule options (macroEnv, Set.empty))
+    let compiledRules, compilationErrors =
+        rules
+        |> Array.mapPartition (fun rule ->
+            compileRule rule options (macroEnv, Set.empty))
 
-        // If there are errors, return them; otherwise, create a
-        // CompiledSpecification record from the compiled rules.
-        if Array.isEmpty compilationErrors then
-            Choice1Of2 {
-                Header = spec.Header;
-                Footer = spec.Footer;
-                CompiledRules =
-                    (Map.empty, ruleIdentifiers, compiledRules)
-                    |||> Array.fold2 (fun map (_, ruleId) compiledRule ->
-                        Map.add ruleId compiledRule map); }
-        else
-            Choice2Of2 <| Array.concat compilationErrors
+    // If there are any compilation errors, use them to set the
+    // error value of the computation expression.
+    if not <| Array.isEmpty compilationErrors then
+        do! Choice.setError <| Array.concat compilationErrors
 
+    // Return a CompiledSpecification record created from the compiled rules.
+    return {
+        Header = spec.Header;
+        Footer = spec.Footer;
+        CompiledRules =
+            (Map.empty, ruleIdentifiers, compiledRules)
+            |||> Array.fold2 (fun map (_, ruleId) compiledRule ->
+                Map.add ruleId compiledRule map); }
+    }
