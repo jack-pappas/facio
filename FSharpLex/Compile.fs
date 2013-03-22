@@ -22,8 +22,6 @@ module FSharpLex.Compile
 
 open System.Diagnostics
 open LanguagePrimitives
-open ExtCore
-open ExtCore.Collections
 open ExtCore.Control
 open ExtCore.Control.Cps
 open FSharpLex.SpecializedCollections
@@ -294,62 +292,66 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
     //
     // OPTIMIZE : Modify this function to use a LazyList to hold the errors
     // instead of an F# list to avoid the list concatenation overhead.
-    // OPTIMIZE : Simplify this function using the Cps.choice workflow from ExtCore.
-    let rec preprocessMacro pattern cont =
+    let rec preprocessMacro pattern =
+        cont {
         match pattern with
         | Pattern.Epsilon ->
-            Choice1Of2 Regex.Epsilon
+            return Choice1Of2 Regex.Epsilon
 
         | Pattern.Star r ->
-            preprocessMacro r <| fun rResult ->
-                match rResult with
-                | (Choice2Of2 _ as err) -> err
-                | Choice1Of2 r ->
+            let! rResult = preprocessMacro r
+            match rResult with
+            | Choice2Of2 _ as err ->
+                return err
+            | Choice1Of2 r ->
+                return
                     Regex.Star r
                     |> Choice1Of2
-                |> cont
 
         | Pattern.Concat (r, s) ->
-            preprocessMacro r <| fun rResult ->
-            preprocessMacro s <| fun sResult ->
-                match rResult, sResult with
-                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                    Choice2Of2 (rErrors @ sErrors)
-                | (Choice2Of2 _ as err), Choice1Of2 _
-                | Choice1Of2 _, (Choice2Of2 _ as err) ->
-                    err
-                | Choice1Of2 r, Choice1Of2 s ->
+            let! rResult = preprocessMacro r
+            let! sResult = preprocessMacro s
+
+            match rResult, sResult with
+            | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                return Choice2Of2 (rErrors @ sErrors)
+            | (Choice2Of2 _ as err), Choice1Of2 _
+            | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                return err
+            | Choice1Of2 r, Choice1Of2 s ->
+                return
                     Regex.Concat (r, s)
                     |> Choice1Of2
-                |> cont
 
         | Pattern.And (r, s) ->
-            preprocessMacro r <| fun rResult ->
-            preprocessMacro s <| fun sResult ->
-                match rResult, sResult with
-                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                    Choice2Of2 (rErrors @ sErrors)
-                | (Choice2Of2 _ as err), Choice1Of2 _
-                | Choice1Of2 _, (Choice2Of2 _ as err) ->
-                    err
-                | Choice1Of2 r, Choice1Of2 s ->
+            let! rResult = preprocessMacro r
+            let! sResult = preprocessMacro s
+
+            match rResult, sResult with
+            | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                return Choice2Of2 (rErrors @ sErrors)
+            | (Choice2Of2 _ as err), Choice1Of2 _
+            | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                return err
+            | Choice1Of2 r, Choice1Of2 s ->
+                return
                     Regex.And (r, s)
                     |> Choice1Of2
-                |> cont
 
         | Pattern.Or (r, s) ->
-            preprocessMacro r <| fun rResult ->
-            preprocessMacro s <| fun sResult ->
-                match rResult, sResult with
-                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                    Choice2Of2 (rErrors @ sErrors)
-                | (Choice2Of2 _ as err), Choice1Of2 _
-                | Choice1Of2 _, (Choice2Of2 _ as err) ->
-                    err
-                | Choice1Of2 r, Choice1Of2 s ->
+            let! rResult = preprocessMacro r
+            let! sResult = preprocessMacro s
+
+            match rResult, sResult with
+            | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                return Choice2Of2 (rErrors @ sErrors)
+            | (Choice2Of2 _ as err), Choice1Of2 _
+            | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                return err
+            | Choice1Of2 r, Choice1Of2 s ->
+                return
                     Regex.Or (r, s)
                     |> Choice1Of2
-                |> cont
 
         (*  Extended patterns are rewritten using the cases of Pattern
             which have corresponding cases in Regex. *)
@@ -359,7 +361,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                 Pattern.Concat (r, Pattern.Star r)
 
             // Process the rewritten expression.
-            preprocessMacro rewritten cont
+            return! preprocessMacro rewritten
 
         | Pattern.Optional r ->
             // Rewrite r? as (|r)
@@ -367,14 +369,14 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                 Pattern.Concat (Pattern.Epsilon, r)
 
             // Process the rewritten expression.
-            preprocessMacro rewritten cont
+            return! preprocessMacro rewritten
 
         | Pattern.Repetition (r, atLeast, atMost) ->
             match atLeast, atMost with
             | None, None ->
-                ["Invalid number of repetitions. Either the minimum or maximum (or both) number of repetitions must be specified."]
-                |> Choice2Of2
-                |> cont
+                return
+                    ["Invalid number of repetitions. Either the minimum or maximum (or both) number of repetitions must be specified."]
+                    |> Choice2Of2
 
             | None, Some atMost ->
                 // TODO : If 'atMost' = 0, emit a warning (not an error) message
@@ -384,36 +386,38 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                 let rewritten = Pattern.repeatAtMost atMost r
 
                 // Process the rewritten expression.
-                preprocessMacro rewritten cont
+                return! preprocessMacro rewritten
 
             | Some atLeast, None ->
                 /// Repeats the pattern at least the specified number of times.
                 let rewritten = Pattern.repeatAtLeast atLeast r
 
                 // Process the rewritten expression.
-                preprocessMacro rewritten cont
+                return! preprocessMacro rewritten
 
             | Some atLeast, Some atMost
                 when atLeast > atMost ->
-                ["Invalid number of repetitions. The lower value of the range is greater than the upper value of the range."]
-                |> Choice2Of2
-                |> cont
+                return
+                    ["Invalid number of repetitions. The lower value of the range is greater than the upper value of the range."]
+                    |> Choice2Of2
 
             | Some atLeast, Some atMost ->
                 /// Repeats the pattern at least 'atLeast' times and at most 'atMost' times.
                 let rewritten = Pattern.repeat atLeast atMost r
 
                 // Process the rewritten expression.
-                preprocessMacro rewritten cont
+                return! preprocessMacro rewritten
 
         | Pattern.Negate r ->
-            preprocessMacro r <| fun rResult ->
-                match rResult with
-                | (Choice2Of2 _ as err) -> err
-                | Choice1Of2 r ->
+            let! rResult = preprocessMacro r
+
+            match rResult with
+            | Choice2Of2 _ as err ->
+                return err
+            | Choice1Of2 r ->
+                return
                     Regex.Negate r
                     |> Choice1Of2
-                |> cont
 
         (* Macro patterns *)
         | Pattern.Macro nestedMacroId ->
@@ -422,9 +426,10 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
             // because we don't add macros to 'macroEnv' until they're successfully preprocessed;
             // however, this separate check allows us to provide a more specific error message.
             if macroId = nestedMacroId then
-                ["Recursive macro definitions are not allowed."]
-                |> Choice2Of2
-                |> cont
+                return
+                    ["Recursive macro definitions are not allowed."]
+                    |> Choice2Of2
+
             else
                 match Map.tryFind nestedMacroId macroEnv with
                 | None ->
@@ -433,67 +438,65 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                     if Set.contains nestedMacroId badMacros then
                         // We have to return something, so return Empty to take the place
                         // of this macro reference.
-                        Choice1Of2 Regex.empty
-                        |> cont
+                        return Choice1Of2 Regex.empty
                     else
-                        Choice2Of2 [ sprintf "The macro '%s' is not defined." nestedMacroId ]
-                        |> cont
+                        return Choice2Of2 [ sprintf "The macro '%s' is not defined." nestedMacroId ]
+
                 | Some nestedMacro ->
                     // Return the pattern for the nested macro so it'll be "inlined" into this pattern.
-                    Choice1Of2 nestedMacro
-                    |> cont
+                    return Choice1Of2 nestedMacro
 
         (* Characters and character sets *)
         | Pattern.Empty ->
-            Regex.empty
-            |> Choice1Of2
-            |> cont
+            return
+                Regex.empty
+                |> Choice1Of2
 
         | Pattern.Character c ->
             // Make sure the character is an ASCII character unless the 'Unicode' option is set.
             if options.Unicode || int c <= 255 then
-                Regex.ofChar c
-                |> Choice1Of2
-                |> cont
+                return
+                    Regex.ofChar c
+                    |> Choice1Of2
             else
-                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
-                |> Choice2Of2
-                |> cont
+                return
+                    ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                    |> Choice2Of2
 
         | Pattern.CharacterSet charSet ->
             // Make sure all of the characters in the set are ASCII characters unless the 'Unicode' option is set.
             if options.Unicode || CharSet.forall (fun c -> int c <= 255) charSet then
-                Regex.CharacterSet charSet
-                |> Choice1Of2
-                |> cont
+                return
+                    Regex.CharacterSet charSet
+                    |> Choice1Of2
             else
-                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
-                |> Choice2Of2
-                |> cont
+                return
+                    ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                    |> Choice2Of2
 
         | Pattern.UnicodeCategory abbrev ->
             if options.Unicode then
                 match UnicodeCharSet.ofAbbreviation abbrev with
                 | None ->
-                    [ sprintf "Unknown or invalid Unicode category specified. (Category = %s)" abbrev ]
-                    |> Choice2Of2
-                    |> cont
+                    return
+                        [ sprintf "Unknown or invalid Unicode category specified. (Category = %s)" abbrev ]
+                        |> Choice2Of2
                 | Some categoryCharSet ->
-                    categoryCharSet
-                    |> Regex.CharacterSet
-                    |> Choice1Of2
-                    |> cont
+                    return
+                        Regex.CharacterSet categoryCharSet
+                        |> Choice1Of2
             else
-                ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
-                |> Choice2Of2
-                |> cont
+                return
+                    ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
+                    |> Choice2Of2
 
         (* Wildcard pattern *)
         | Pattern.Any ->
             // Macros are not allowed to use the wildcard pattern.
-            ["The wildcard pattern cannot be used within macro definitions."]
-            |> Choice2Of2
-            |> cont
+            return
+                ["The wildcard pattern cannot be used within macro definitions."]
+                |> Choice2Of2
+        }
 
     /// Contains an error if a macro has already been defined with this name; otherwise, None.
     let duplicateNameError =
@@ -571,23 +574,22 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
     //
     // OPTIMIZE : Modify this function to use a LazyList to hold the errors
     // instead of an F# list to avoid the list concatenation overhead.
-    // OPTIMIZE : Simplify this function using the Cps.choice workflow from ExtCore.
-    let rec validateAndSimplify pattern cont =
+    let rec validateAndSimplify pattern =
+        cont {
         match pattern with
         | Pattern.Epsilon ->
-            Choice1Of2 Regex.Epsilon
-            |> cont
+            return Choice1Of2 Regex.Epsilon
 
         | Pattern.CharacterSet charSet ->
             // Make sure all of the characters in the set are ASCII characters unless the 'Unicode' option is set.
             if options.Unicode || CharSet.forall (fun c -> int c <= int System.Byte.MaxValue) charSet then
-                Regex.CharacterSet charSet
-                |> Choice1Of2
-                |> cont
+                return
+                    Regex.CharacterSet charSet
+                    |> Choice1Of2
             else
-                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
-                |> Choice2Of2
-                |> cont
+                return
+                    ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                    |> Choice2Of2
 
         | Pattern.Macro macroId ->
             match Map.tryFind macroId macroEnv with
@@ -597,114 +599,118 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 if Set.contains macroId badMacros then
                     // We have to return something, so return Empty to
                     // take the place of this macro reference.
-                    Choice1Of2 Regex.empty
-                    |> cont
+                    return Choice1Of2 Regex.empty
                 else
-                    Choice2Of2 [ sprintf "The macro '%s' is not defined." macroId ]
-                    |> cont
+                    return Choice2Of2 [ sprintf "The macro '%s' is not defined." macroId ]
             | Some nestedMacro ->
                 // Return the pattern for the nested macro so it'll be "inlined" into this pattern.
-                Choice1Of2 nestedMacro
-                |> cont
+                return Choice1Of2 nestedMacro
 
         | Pattern.UnicodeCategory abbrev ->
             if options.Unicode then
                 // Return the CharSet representing this UnicodeCategory.
                 match UnicodeCharSet.ofAbbreviation abbrev with
                 | None ->
-                    [ sprintf "Unknown or invalid Unicode category specified. (Category = %s)" abbrev ]
-                    |> Choice2Of2
-                    |> cont
+                    return
+                        [ sprintf "Unknown or invalid Unicode category specified. (Category = %s)" abbrev ]
+                        |> Choice2Of2
+
                 | Some charSet ->
-                    Regex.CharacterSet charSet
-                    |> Choice1Of2
-                    |> cont
+                    return
+                        Regex.CharacterSet charSet
+                        |> Choice1Of2
             else
-                ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
-                |> Choice2Of2
-                |> cont
+                return
+                    ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
+                    |> Choice2Of2
 
         | Pattern.Negate r ->
-            validateAndSimplify r <| fun rResult ->
-                match rResult with
-                | (Choice2Of2 _ as err) -> err
-                | Choice1Of2 r ->
+            let! rResult = validateAndSimplify r
+            
+            match rResult with
+            | Choice2Of2 _ as err ->
+                return err
+            | Choice1Of2 r ->
+                return
                     Regex.Negate r
                     |> Choice1Of2
-                |> cont
 
         | Pattern.Star r ->
-            validateAndSimplify r <| fun rResult ->
-                match rResult with
-                | (Choice2Of2 _ as err) -> err
-                | Choice1Of2 r ->
+            let! rResult = validateAndSimplify r
+            
+            match rResult with
+            | Choice2Of2 _ as err ->
+                return err
+            | Choice1Of2 r ->
+                return
                     Regex.Star r
                     |> Choice1Of2
-                |> cont
 
         | Pattern.Concat (r, s) ->
-            validateAndSimplify r <| fun rResult ->
-            validateAndSimplify s <| fun sResult ->
-                match rResult, sResult with
-                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                    Choice2Of2 (rErrors @ sErrors)
-                | (Choice2Of2 _ as err), Choice1Of2 _
-                | Choice1Of2 _, (Choice2Of2 _ as err) ->
-                    err
-                | Choice1Of2 r, Choice1Of2 s ->
+            let! rResult = validateAndSimplify r
+            let! sResult = validateAndSimplify s
+
+            match rResult, sResult with
+            | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                return Choice2Of2 (rErrors @ sErrors)
+            | (Choice2Of2 _ as err), Choice1Of2 _
+            | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                return err
+            | Choice1Of2 r, Choice1Of2 s ->
+                return
                     Regex.Concat (r, s)
                     |> Choice1Of2
-                |> cont
 
         | Pattern.And (r, s) ->
-            validateAndSimplify r <| fun rResult ->
-            validateAndSimplify s <| fun sResult ->
-                match rResult, sResult with
-                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                    Choice2Of2 (rErrors @ sErrors)
-                | (Choice2Of2 _ as err), Choice1Of2 _
-                | Choice1Of2 _, (Choice2Of2 _ as err) ->
-                    err
-                | Choice1Of2 r, Choice1Of2 s ->
+            let! rResult = validateAndSimplify r
+            let! sResult = validateAndSimplify s
+
+            match rResult, sResult with
+            | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                return Choice2Of2 (rErrors @ sErrors)
+            | (Choice2Of2 _ as err), Choice1Of2 _
+            | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                return err
+            | Choice1Of2 r, Choice1Of2 s ->
+                return
                     Regex.And (r, s)
                     |> Choice1Of2
-                |> cont
 
         | Pattern.Or (r, s) ->
-            validateAndSimplify r <| fun rResult ->
-            validateAndSimplify s <| fun sResult ->
-                match rResult, sResult with
-                | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                    Choice2Of2 (rErrors @ sErrors)
-                | (Choice2Of2 _ as err), Choice1Of2 _
-                | Choice1Of2 _, (Choice2Of2 _ as err) ->
-                    err
-                | Choice1Of2 r, Choice1Of2 s ->
+            let! rResult = validateAndSimplify r
+            let! sResult = validateAndSimplify s
+
+            match rResult, sResult with
+            | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                return Choice2Of2 (rErrors @ sErrors)
+            | (Choice2Of2 _ as err), Choice1Of2 _
+            | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                return err
+            | Choice1Of2 r, Choice1Of2 s ->
+                return
                     Regex.Or (r, s)
                     |> Choice1Of2
-                |> cont
 
         (*  Extended patterns are rewritten using the cases of Pattern
             which have corresponding cases in Regex. *)
         | Pattern.Empty ->
-            Regex.empty
-            |> Choice1Of2
-            |> cont
+            return
+                Regex.empty
+                |> Choice1Of2
         
         | Pattern.Any ->
-            Choice1Of2 Regex.Any
-            |> cont
+            return Choice1Of2 Regex.Any
 
         | Pattern.Character c ->
             // Make sure the character is an ASCII character unless the 'Unicode' option is set.
             if options.Unicode || int c <= 255 then
-                Regex.ofChar c
-                |> Choice1Of2
-                |> cont
+                return
+                    Regex.ofChar c
+                    |> Choice1Of2
             else
-                ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
-                |> Choice2Of2
-                |> cont
+                return
+                    ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                    |> Choice2Of2
 
         | Pattern.OneOrMore r ->
             // Rewrite r+ as rr*
@@ -712,7 +718,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 Pattern.Concat (r, Pattern.Star r)
 
             // Process the rewritten expression.
-            validateAndSimplify rewritten cont
+            return! validateAndSimplify rewritten
 
         | Pattern.Optional r ->
             // Rewrite r? as (|r)
@@ -720,14 +726,14 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 Pattern.Or (Pattern.Epsilon, r)
 
             // Process the rewritten expression.
-            validateAndSimplify rewritten cont
+            return! validateAndSimplify rewritten
 
         | Pattern.Repetition (r, atLeast, atMost) ->
             match atLeast, atMost with
             | None, None ->
-                ["Invalid number of repetitions. Either the minimum or maximum (or both) number of repetitions must be specified."]
-                |> Choice2Of2
-                |> cont
+                return
+                    ["Invalid number of repetitions. Either the minimum or maximum (or both) number of repetitions must be specified."]
+                    |> Choice2Of2
 
             | None, Some atMost ->
                 // TODO : If 'atMost' = 0, emit a warning (not an error) message
@@ -737,27 +743,28 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 let rewritten = Pattern.repeatAtMost atMost r
 
                 // Process the rewritten expression.
-                validateAndSimplify rewritten cont
+                return! validateAndSimplify rewritten
 
             | Some atLeast, None ->
                 /// Repeats the pattern at least the specified number of times.
                 let rewritten = Pattern.repeatAtLeast atLeast r
 
                 // Process the rewritten expression.
-                validateAndSimplify rewritten cont
+                return! validateAndSimplify rewritten
 
             | Some atLeast, Some atMost
                 when atLeast > atMost ->
-                ["Invalid number of repetitions. The lower value of the range is greater than the upper value of the range."]
-                |> Choice2Of2
-                |> cont
+                return
+                    ["Invalid number of repetitions. The lower value of the range is greater than the upper value of the range."]
+                    |> Choice2Of2
 
             | Some atLeast, Some atMost ->
                 /// Repeats the pattern at least 'atLeast' times and at most 'atMost' times.
                 let rewritten = Pattern.repeat atLeast atMost r
 
                 // Process the rewritten expression.
-                validateAndSimplify rewritten cont
+                return! validateAndSimplify rewritten
+        }
 
     // Call the function which traverses the pattern to validate/preprocess it.
     validateAndSimplify pattern <| function
@@ -852,8 +859,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         // NOTE : The ordering only matters when two or more clauses overlap,
         // because then the ordering is used to decide which action to execute.
         rule.Clauses
-        |> List.rev
-        |> List.toArray
+        |> List.revIntoArray
 
     // Extract any clauses which match the end-of-file pattern;
     // these are handled separately from the other patterns.
@@ -929,31 +935,20 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
     choice {
     // Validate and simplify the patterns of the rule clauses.
     let! ruleClauseRegexes =
-        let simplifiedRuleClausePatterns =
-            patterns
-            |> Array.map (fun (originalRuleClauseIndex, pattern) ->
-                // TODO : Simplify using Choice.Result.map
-                match validateAndSimplifyPattern pattern (macroEnv, badMacros, options) with
-                | Choice2Of2 errors ->
-                    Choice2Of2 errors
-                | Choice1Of2 pattern ->
-                    Choice1Of2 (originalRuleClauseIndex, pattern))
-
         // Put all of the "results" in one array and all of the "errors" in another.
-        let results = ResizeArray<_> (Array.length simplifiedRuleClausePatterns)
-        let errors = ResizeArray<_> (Array.length simplifiedRuleClausePatterns)
-        simplifiedRuleClausePatterns
-        |> Array.iter (function
-            | Choice2Of2 errorArr ->
-                errors.AddRange errorArr
-            | Choice1Of2 result ->
-                results.Add result)
+        let results, errors =
+            patterns
+            |> Array.mapPartition (fun (originalRuleClauseIndex, pattern) ->
+                validateAndSimplifyPattern pattern (macroEnv, badMacros, options)
+                |> Choice.map (fun pattern ->
+                    originalRuleClauseIndex, pattern))
 
-        // If there are any errors, return them; otherwise, return the results.
-        if errors.Count > 0 then
-            Choice2Of2 <| errors.ToArray ()
+        // If there are any errors return them; otherwise, return the results.
+        if Array.isEmpty errors then
+            Choice1Of2 results
         else
-            Choice1Of2 <| results.ToArray ()
+            // Flatten the error array.
+            Choice2Of2 <| Array.concat errors
 
     /// The DFA compiled from the rule clause patterns.
     let compiledPatternDfa =
@@ -1041,7 +1036,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             // transition edges to it from the initial state.
             if CharSet.isEmpty wildcardChars then
                 // TODO : Emit a warning to let the user know this pattern will never be matched.
-                Debug.WriteLine "Warning: Wildcard pattern in rule will never be matched."
+                Printf.dprintfn "Warning: Wildcard pattern in rule will never be matched."
 
                 compiledPatternDfa
             else
@@ -1064,8 +1059,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         Dfa = compiledPatternDfa;
         Parameters =
             // Reverse the list so it's in the correct left-to-right order.
-            List.rev rule.Parameters
-            |> List.toArray;
+            List.revIntoArray rule.Parameters;
         RuleClauseActions =
             ruleClauses
             |> Array.map (fun clause ->
@@ -1087,45 +1081,47 @@ type CompiledSpecification = {
 
 /// Creates pattern-matching DFAs from the lexer rules.
 let lexerSpec (spec : Specification) options =
+    choice {
     // Validate and simplify the macros to create the macro table/environment.
-    match preprocessMacros spec.Macros options with
-    | Choice2Of2 (macroEnv, badMacros, errors) ->
-        // TODO : Validate the rule clauses, but don't compile the rule DFAs.
-        // This way we can return all applicable errors instead of just those for the macros.
-        Choice2Of2 errors
-    | Choice1Of2 macroEnv ->
-        (* Compile the lexer rules *)
-        (* TODO :   Simplify the code below using monadic operators. *)
-        let ruleIdentifiers, rules =
-            let ruleCount = List.length spec.Rules
-            let ruleIdentifiers = Array.zeroCreate ruleCount
-            let rules = Array.zeroCreate ruleCount
+    let! macroEnv =
+        preprocessMacros spec.Macros options
+        |> Choice.mapError (fun (macroEnv, badMacros, errors) ->
+            // TODO : Validate the rule clauses, but don't compile the rule DFAs.
+            // This way we can return all applicable errors instead of just those for the macros.
+            errors)
+            
+    (* Compile the lexer rules *)
+    let ruleIdentifiers, rules =
+        let ruleCount = List.length spec.Rules
+        let ruleIdentifiers = Array.zeroCreate ruleCount
+        let rules = Array.zeroCreate ruleCount
 
-            // TODO : Check for duplicate rule identifiers
-            (ruleCount - 1, spec.Rules)
-            ||> List.fold (fun index (ruleId, rule) ->
-                ruleIdentifiers.[index] <- ruleId
-                rules.[index] <- rule
-                index - 1)
-            |> ignore
+        // TODO : Check for duplicate rule identifiers
+        (ruleCount - 1, spec.Rules)
+        ||> List.fold (fun index (ruleId, rule) ->
+            ruleIdentifiers.[index] <- ruleId
+            rules.[index] <- rule
+            index - 1)
+        |> ignore
 
-            ruleIdentifiers, rules
+        ruleIdentifiers, rules
 
-        let compiledRules, compilationErrors =
-            rules
-            |> Array.mapPartition (fun rule ->
-                compileRule rule options (macroEnv, Set.empty))
+    let compiledRules, compilationErrors =
+        rules
+        |> Array.mapPartition (fun rule ->
+            compileRule rule options (macroEnv, Set.empty))
 
-        // If there are errors, return them; otherwise, create a
-        // CompiledSpecification record from the compiled rules.
-        if Array.isEmpty compilationErrors then
-            Choice1Of2 {
-                Header = spec.Header;
-                Footer = spec.Footer;
-                CompiledRules =
-                    (Map.empty, ruleIdentifiers, compiledRules)
-                    |||> Array.fold2 (fun map (_, ruleId) compiledRule ->
-                        Map.add ruleId compiledRule map); }
-        else
-            Choice2Of2 <| Array.concat compilationErrors
+    // If there are any compilation errors, use them to set the
+    // error value of the computation expression.
+    if not <| Array.isEmpty compilationErrors then
+        do! Choice.setError <| Array.concat compilationErrors
 
+    // Return a CompiledSpecification record created from the compiled rules.
+    return {
+        Header = spec.Header;
+        Footer = spec.Footer;
+        CompiledRules =
+            (Map.empty, ruleIdentifiers, compiledRules)
+            |||> Array.fold2 (fun map (_, ruleId) compiledRule ->
+                Map.add ruleId compiledRule map); }
+    }
