@@ -350,9 +350,10 @@ type Regex with
             return Negate r'
         | CharacterSet charSet ->
             return
-                if CharSet.contains wrtSymbol charSet
-                then Epsilon
-                else Regex.empty
+                if CharSet.contains wrtSymbol charSet then
+                    Epsilon
+                else
+                    Regex.empty
         }
 
     /// Computes the derivative of a Regex with respect to a specified symbol.
@@ -437,11 +438,7 @@ module RegularVector =
     /// Compute the derivative of a regular vector
     /// with respect to the given symbol.
     let inline derivative symbol (regVec : RegularVector) : RegularVector =
-        #if PARALLEL_FX
-        Array.Parallel.map (Regex.Derivative symbol) regVec
-        #else
         Array.map (Regex.Derivative symbol) regVec
-        #endif
 
     /// Determines if the regular vector is nullable,
     /// i.e., it accepts the empty string (epsilon).
@@ -453,16 +450,13 @@ module RegularVector =
     /// The indices of the element expressions (if any)
     /// that accept the empty string (epsilon).
     let acceptingElements (regVec : RegularVector) =
-        /// The indices of the expressions accepting the empty string.
-        let mutable accepting = Set.empty
-
-        let len = Array.length regVec
-        for i = 0 to len - 1 do
-            if Regex.IsNullable regVec.[i] then
-                accepting <- Set.add i accepting
-
-        // Return the computed set of indices.
-        accepting
+        // Find the indices of the expressions accepting the empty string.
+        (Set.empty, regVec)
+        ||> Array.foldi (fun i accepting regex ->
+            if Regex.IsNullable regex then
+                Set.add i accepting
+            else
+                accepting)
 
     /// Determines if a regular vector is an empty vector. Note that an
     /// empty regular vector is *not* the same thing as an empty array.
