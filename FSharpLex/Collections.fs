@@ -844,7 +844,8 @@ module private Diet =
 
     /// Computes the union of the two sets.
     let rec union (input : CharDiet) (stream : CharDiet) : CharDiet =
-        let rec union' (input : CharDiet) limit head (stream : CharDiet) =
+        let rec union' (input : CharDiet) limit head (stream : CharDiet)
+            : CharDiet * (char * char) option * CharDiet =
             match head with
             | None ->
                 input, None, Empty
@@ -860,7 +861,7 @@ module private Diet =
                             left, head, stream
                     union_helper left' (a, b) right limit head stream
 
-        and union_helper left (a, b) right limit head stream =
+        and union_helper left (a, b) (right : CharDiet) limit head stream =
             match head with
             | None ->
                 AvlDiet.join (a, b) left right, None, Empty
@@ -938,7 +939,7 @@ module private Diet =
 
     /// Computes the intersection of the two sets.
     let rec intersect (input : CharDiet) (stream : CharDiet) : CharDiet =
-        let rec inter' (input : CharDiet) head (stream : CharDiet) =
+        let rec inter' (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
             match head with
             | None ->
                 Empty, None, Empty
@@ -1018,7 +1019,7 @@ module private Diet =
 
     /// Returns a new set with the elements of the second set removed from the first.
     let difference (input : CharDiet) (stream : CharDiet) : CharDiet =
-        let rec diff' input head stream =
+        let rec diff' (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
             match head with
             | None ->
                 input, None, Empty
