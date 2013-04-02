@@ -550,7 +550,7 @@ module private FsYacc =
                         Map.add key productionRuleIndices.Count productionRuleIndices))
 
             let parserStates =
-                Map.toArray parserTable.ParserStates
+                TagBimap.toArray parserTable.ParserStates
 
             let stateToProdIdxsTableElements =
                 // Initialize to a reasonable size to avoid small re-allocations.
@@ -596,7 +596,7 @@ module private FsYacc =
 
         (* _fsyacc_action_rows *)
         intLiteralDecl ("_fsyacc_action_rows", false,
-            parserTable.ParserStates.Count) writer
+            TagBimap.count parserTable.ParserStates) writer
 
 
         (* _fsyacc_actionTableElements *)
@@ -835,7 +835,7 @@ module private FsYacc =
             // is at the end of the production rule, a Reduce or Accept will be
             // executed immediately upon entering the state.
             // NOTE : The length of this array should be equal to the number of parser states.
-            let immediateActions = Array.zeroCreate parserTable.ParserStates.Count
+            let immediateActions = Array.zeroCreate <| TagBimap.count parserTable.ParserStates
 
             // TEMP : Remove this once we rewrite the rest of this code to work with
             // an augmented grammar instead of the "raw" grammar.
@@ -851,7 +851,7 @@ module private FsYacc =
                 |> fst
 
             parserTable.ParserStates
-            |> Map.iter (fun parserStateId items ->
+            |> TagBimap.iter (fun parserStateId items ->
                 // Set the array element corresponding to this parser state.
                 immediateActions.[int parserStateId] <-
                     // Does this state contain just one (1) item?
