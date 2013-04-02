@@ -452,7 +452,7 @@ module RegularVector =
     let acceptingElements (regVec : RegularVector) =
         // Find the indices of the expressions accepting the empty string.
         (Set.empty, regVec)
-        ||> Array.foldi (fun i accepting regex ->
+        ||> Array.foldi (fun accepting i regex ->
             if Regex.IsNullable regex then
                 Set.add i accepting
             else
