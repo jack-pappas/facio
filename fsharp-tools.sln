@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpLex", "FSharpLex\FSharpLex.fsproj", "{F9F750FB-2817-4559-BD0A-BE5402102D37}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpLex", "FSharpLex\fsharplex.fsproj", "{F9F750FB-2817-4559-BD0A-BE5402102D37}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{E0ED8004-9C63-4BA4-987C-EE634B39B881}"
 	ProjectSection(SolutionItems) = preProject

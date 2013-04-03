@@ -58,7 +58,7 @@
     <Reference Include="System" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\FSharpLex\FSharpLex.fsproj">
+    <ProjectReference Include="..\FSharpLex\fsharplex.fsproj">
       <Name>fsharplex</Name>
       <Project>{f9f750fb-2817-4559-bd0a-be5402102d37}</Project>
       <Private>True</Private>
