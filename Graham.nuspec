@@ -2,9 +2,9 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
     <metadata>
         <id>Graham</id>
-        <version>0.8.0</version>
+        <version>0.8.1</version>
         <dependencies>
-			<dependency id="ExtCore" version="0.8.2" />
+			<dependency id="ExtCore" version="0.8.13" />
         </dependencies>
         <title>Graham</title>
         <authors>Jack Pappas</authors>
@@ -13,7 +13,7 @@
         <projectUrl>https://github.com/jack-pappas/fsharp-tools</projectUrl>
         <requireLicenseAcceptance>false</requireLicenseAcceptance>
         <description>A library for creating and analyzing context-free grammars (CFGs) and implementing parser-generators.</description>
-        <tags>fsharp yacc fsyacc lex fslex grammar parser lexer irony dsl</tags>
+        <tags>f# fsharp yacc fsyacc lex fslex grammar parser lexer irony dsl parsec fparsec</tags>
     </metadata>
     <files>
         <file src="_NuGetBuild\net40\Graham.XML" target="lib\net40\Graham.XML" />
