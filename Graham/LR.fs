@@ -329,7 +329,10 @@ module LrTableGenState =
 
     /// Returns an empty LrTableGenState with the given
     /// nonterminal and terminal types.
-    let empty : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
+    let empty<'Nonterminal, 'Terminal, 'Lookahead
+        when 'Nonterminal : comparison
+        and 'Terminal : comparison
+        and 'Lookahead : comparison> : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
         // The empty table-gen environment.
         {   ParserStateIds = Map.empty;
             ProductionRuleIds = Map.empty; },
