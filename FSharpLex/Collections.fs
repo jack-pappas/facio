@@ -885,36 +885,43 @@ module private Diet =
     open System.Collections.Generic
     open LanguagePrimitives
 
-    //
+    (* TODO :   Perhaps define a function, 'adjacent', which determines if
+                two points are adjacent via the 'dist' function. It should check if
+                the distance is 1 or -1.
+                Instead of using 'pred' and 'succ', we could define 'isPred' and 'isSucc'
+                functions which also use the 'dist' function. If it's feasible to modify
+                the algorithm to use these instead, then we'd only need the type to provide
+                the 'dist' function -- we could derive all of the other operations from it. *)
+
+    /// Character interval comparer.
+    let private comparer =
+        LanguagePrimitives.FastGenericComparer<char * char>
+
+    /// Returns the predecessor of the given value.
     let inline private pred (c : char) : char =
         char (int c - 1)
     
-    //
+    /// Returns the successor of the given value.
     let inline private succ (c : char) : char =
         char (int c + 1)
 
-    //
+    /// Returns the distance between two values -- in other words,
+    /// the number of distinct values within the interval defined
+    /// by the specified endpoints.
     let inline private dist (x : char) (y : char) : int =
         int y - int x
 
-    //
-    let inline private safe_pred (limit : char) (c : char) =
-        if limit < c then
+    /// Similar to 'pred', but clamps the value to a specified lower limit.
+    let inline private clampedPred (lowerBound : char) (c : char) =
+        if lowerBound < c then
             char (int c - 1)
         else c
 
-    //
-    let inline private safe_succ (limit : char) (c : char) =
-        if limit > c then
-            char (int c + 1)
-        else c
-
-    //
-    let inline height (t : CharDiet) =
-        AvlTree.Height t
-
-    /// Character interval comparer.
-    let private comparer = LanguagePrimitives.FastGenericComparer<char * char>
+//    /// Similar to 'succ', but clamps the value to a specified upper limit.
+//    let inline private clampedSucc (upperBound : char) (c : char) =
+//        if upperBound > c then
+//            char (int c + 1)
+//        else c
 
     //
     let rec private find_del_left p (tree : CharDiet) =
@@ -1060,22 +1067,22 @@ module private Diet =
 
     /// Returns a new set with the specified range of values added to the set.
     /// No exception is thrown if any of the values are already contained in the set.
-    let rec addRange (p, q) (tree : CharDiet) : CharDiet =
+    let rec addRange (a, b) (tree : CharDiet) : CharDiet =
         match tree with
         | Empty ->
-            AvlTree.Singleton (p, q)
+            AvlTree.Singleton (a, b)
         | Node (left, right, (x, y), _) ->
-            if q < pred x then
-                AvlTree.Join comparer (x, y) (addRange (p, q) left) right
-            elif p > succ y then
-                AvlTree.Join comparer (x, y) left (addRange (p, q) right)
+            if b < pred x then
+                AvlTree.Join comparer (x, y) (addRange (a, b) left) right
+            elif a > succ y then
+                AvlTree.Join comparer (x, y) left (addRange (a, b) right)
             else
                 let x', left' =
-                    if p >= x then x, left
-                    else find_del_left p left
+                    if a >= x then x, left
+                    else find_del_left a left
                 let y', right' =
-                    if q <= y then y, right
-                    else find_del_right q right
+                    if b <= y then y, right
+                    else find_del_right b right
 
                 AvlTree.Join comparer (x', y') left' right'
 
@@ -1088,10 +1095,12 @@ module private Diet =
         | Node (left, right, (x, y), h) ->
             let czx = compare value x
             if czx < 0 then
+                // value < x, so recurse down the left subtree.
                 AvlTree.Join comparer (x, y) (remove value left) right
             else
                 let cyz = compare y value
                 if cyz < 0 then
+                    // y < value, so recurse down the right subtree.
                     AvlTree.Join comparer (x, y) left (remove value right)
                 elif cyz = 0 then
                     if czx = 0 then
@@ -1103,23 +1112,29 @@ module private Diet =
                 else
                     addRange (succ value, y) (Node (left, right, (x, pred value), h))
 
+    /// Determines if a value is greater than or equal to a given
+    /// limit value if one is specified.
+    let greater_limit limit value =
+        match limit with
+        | None -> false
+        | Some limit ->
+            value >= limit
+
     /// Helper function for computing the union of two sets.
     let rec private union' (input : CharDiet) limit head (stream : CharDiet)
         : CharDiet * (char * char) option * CharDiet =
-        match head with
-        | None ->
+        match head, input with
+        | None, _ ->
             input, None, Empty
-        | Some (x, y) ->
-            match input with
-            | Empty ->
-                Empty, head, stream
-            | Node (left, right, (a, b), _) ->
-                let left', head, stream =
-                    if x < a then
-                        union' left (Some <| pred a) head stream
-                    else
-                        left, head, stream
-                union_helper left' (a, b) right limit head stream
+        | _, Empty ->
+            Empty, head, stream
+        | Some (x, y), Node (left, right, (a, b), _) ->
+            let left', head, stream =
+                if x < a then
+                    union' left (Some <| pred a) head stream
+                else
+                    left, head, stream
+            union_helper left' (a, b) right limit head stream
 
     /// Helper function for computing the union of two sets.
     and private union_helper left (a, b) (right : CharDiet) limit head stream =
@@ -1127,12 +1142,6 @@ module private Diet =
         | None ->
             AvlTree.Join comparer (a, b) left right, None, Empty
         | Some (x, y) ->
-            let greater_limit z =
-                match limit with
-                | None -> false
-                | Some u ->
-                    z >= u
-
             if y < a && y < pred a then
                 let left' = addRange (x, y) left
                 let head, stream = AvlTree.TryExtractMin stream
@@ -1146,7 +1155,7 @@ module private Diet =
                 let head, stream = AvlTree.TryExtractMin stream
                 union_helper left (min a x, b) right limit head stream
 
-            elif greater_limit y then
+            elif greater_limit limit y then
                 left, Some (min a x, y), stream
 
             else
@@ -1202,21 +1211,19 @@ module private Diet =
 
     /// Helper function for computing the intersection of two sets.
     let rec private inter' (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
-        match head with
-        | None ->
+        match head, input with
+        | None, _ ->
             Empty, None, Empty
-        | Some (x, y) ->
-            match input with
-            | Empty ->
-                Empty, head, stream
-            | Node (left, right, (a, b), _) ->
-                let left, head, stream =
-                    if x < a then
-                        inter' left head stream
-                    else
-                        Empty, head, stream
+        | _, Empty ->
+            Empty, head, stream
+        | Some (x, y), Node (left, right, (a, b), _) ->
+            let left, head, stream =
+                if x < a then
+                    inter' left head stream
+                else
+                    Empty, head, stream
 
-                inter_helper (a, b) right left head stream
+            inter_helper (a, b) right left head stream
 
     /// Helper function for computing the intersection of two sets.
     and private inter_helper (a, b) (right : CharDiet) (left : CharDiet) head stream =
@@ -1226,16 +1233,17 @@ module private Diet =
         | Some (x, y) ->
             if y < a then
                 if AvlTree.IsEmptyTree stream then
-                    (left, None, Empty)
+                    left, None, Empty
                 else
                     let head, stream = AvlTree.ExtractMin stream
                     inter_helper (a, b) right left (Some head) stream
             elif b < x then
                 let right, head, stream = inter' right head stream
                 AvlTree.Reroot comparer left right, head, stream
-            elif y >= safe_pred y b then
+            elif y >= clampedPred y b then
                 let right, head, stream = inter' right head stream
-                (AvlTree.Join comparer (max x a, min y b) left right), head, stream
+                let right' = AvlTree.Join comparer (max x a, min y b) left right
+                right', head, stream
             else
                 let left = addRange (max x a, y) left
                 inter_helper (succ y, b) right left head stream
@@ -1284,20 +1292,18 @@ module private Diet =
 
     /// Helper function for computing the difference of two sets.
     let rec private diff' (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
-        match head with
-        | None ->
+        match head, input with
+        | None, _->
             input, None, Empty
-        | Some (x, y) ->
-            match input with
-            | Empty ->
-                Empty, head, stream
-            | Node (left, right, (a, b), _) ->
-                let left, head, stream =
-                    if x < a then
-                        diff' left head stream
-                    else
-                        left, head, stream
-                diff_helper (a, b) right left head stream
+        | _, Empty ->
+            Empty, head, stream
+        | Some (x, y), Node (left, right, (a, b), _) ->
+            let left, head, stream =
+                if x < a then
+                    diff' left head stream
+                else
+                    left, head, stream
+            diff_helper (a, b) right left head stream
 
     /// Helper function for computing the difference of two sets.
     and private diff_helper (a, b) (right : CharDiet) (left : CharDiet) head stream =
@@ -1340,8 +1346,9 @@ module private Diet =
                 GenericMaximum 0 (inputCount - streamCount)
             #endif
 
-            let head, stream' = AvlTree.ExtractMin stream
-            let result, _, _ = diff' input (Some head) stream'
+            let result, _, _ =
+                let head, stream' = AvlTree.ExtractMin stream    
+                diff' input (Some head) stream'
 
             #if DEBUG
             let resultCount = count result
@@ -1356,6 +1363,9 @@ module private Diet =
     /// Comparison function for DIETs.
     let rec comparison (t1 : CharDiet) (t2 : CharDiet) =
         match t1, t2 with
+        | Node (_,_,_,_), Empty -> 1
+        | Empty, Empty -> 0
+        | Empty, Node (_,_,_,_) -> -1
         | Node (_,_,_,_), Node (_,_,_,_) ->
             let (ix1, iy1), r1 = AvlTree.ExtractMin t1
             let (ix2, iy2), r2 = AvlTree.ExtractMin t2
@@ -1365,10 +1375,6 @@ module private Diet =
                 else compare iy1 iy2
             if c <> 0 then c
             else comparison r1 r2
-        
-        | Node (_,_,_,_), Empty -> 1
-        | Empty, Empty -> 0
-        | Empty, Node (_,_,_,_) -> -1
 
     /// Equality function for DIETs.
     let equal (t1 : CharDiet) (t2 : CharDiet) =
