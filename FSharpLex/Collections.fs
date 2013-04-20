@@ -57,25 +57,17 @@ type internal AvlTree<'T when 'T : comparison> =
     // Left-Child, Right-Child, Value, Height
     | Node of AvlTree<'T> * AvlTree<'T> * 'T * uint32
 
-    /// Implementation. Returns the height of a AvlTree.
-    static member private ComputeHeightRec (tree : AvlTree<'T>) cont =
-        match tree with
-        | Empty ->
-            cont 0u
-        | Node (l, r, _, _) ->
-            AvlTree.ComputeHeightRec l <| fun height_l ->
-            AvlTree.ComputeHeightRec r <| fun height_r ->
-                (max height_l height_r) + 1u
-                |> cont
-
     /// Returns the height of a AvlTree.
     static member private ComputeHeight (tree : AvlTree<'T>) =
-        AvlTree.ComputeHeightRec tree id
+        match tree with
+        | Empty -> 0u
+        | Node (l, r, _, _) ->
+            1u + max (AvlTree.ComputeHeight l) (AvlTree.ComputeHeight r)
         
     /// Determines if a AvlTree is correctly formed.
     /// It isn't necessary to call this at run-time, though it may be useful for asserting
     /// the correctness of functions which weren't extracted from the Isabelle/HOL theory.
-    static member private AvlInvariant (tree : AvlTree<'T>) =
+    static member internal AvlInvariant (tree : AvlTree<'T>) =
         match tree with
         | Empty -> true
         | Node (l, r, x, h) ->
@@ -748,7 +740,7 @@ type internal AvlTree<'T when 'T : comparison> =
     /// The resulting tree may be unbalanced.
         // NOTE : Are we sure about this? It looks like the resulting tree will _always_
         // be balanced in this implementation.
-    static member Join comparer root l (r : AvlTree<'T>) =
+    static member Join (comparer, l, r : AvlTree<'T>, root) : AvlTree<'T> =
         match l, r with
         | Empty, Empty ->
             AvlTree.Singleton root
@@ -758,16 +750,16 @@ type internal AvlTree<'T when 'T : comparison> =
             AvlTree.Insert (comparer, l, root)
         | Node (ll, lr, lx, lh), Node (rl, rr, rx, rh) ->
             if lh > rh + balanceTolerance then
-                AvlTree.Balance (comparer, ll, AvlTree.Join comparer root lr r, lx)
+                AvlTree.Balance (comparer, ll, AvlTree.Join (comparer, lr, r, root), lx)
             else if rh > lh + balanceTolerance then
-                AvlTree.Balance (comparer, AvlTree.Join comparer root l rl, rr, rx)
+                AvlTree.Balance (comparer, AvlTree.Join (comparer, l, rl, root), rr, rx)
             else
                 AvlTree.Create (root, l, r)
 
     /// Reroot of balanced trees.
     /// Takes two trees representing disjoint sets and combines them, returning
     /// a new balanced tree representing the union of the two sets.
-    static member Reroot comparer l (r : AvlTree<'T>) =
+    static member Reroot (comparer, l, r : AvlTree<'T>) : AvlTree<'T> =
         match l, r with
         | Empty, Empty ->
             Empty
@@ -777,29 +769,21 @@ type internal AvlTree<'T when 'T : comparison> =
         | Node (_,_,_,lh), Node (_,_,_,rh) ->
             if lh > rh then
                 let root, l' = AvlTree.ExtractMax l
-                AvlTree.Join comparer root l' r
+                AvlTree.Join (comparer, l', r, root)
             else
                 let root, r' = AvlTree.ExtractMin r
-                AvlTree.Join comparer root l r'
-
+                AvlTree.Join (comparer, l, r', root)
+                
 
 /// A Discrete Interval Encoding Tree (DIET) specialized to the 'char' type.
 /// This is abbreviated in our documentation as a 'char-DIET'.
-type private CharDiet = AvlTree<char * char>
+type internal CharDiet = AvlTree<char * char>
 
 /// Functional operations for char-DIETs.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module private CharDiet =
+module internal CharDiet =
     open System.Collections.Generic
     open LanguagePrimitives
-
-    (* TODO :   Perhaps define a function, 'adjacent', which determines if
-                two points are adjacent via the 'dist' function. It should check if
-                the distance is 1 or -1.
-                Instead of using 'pred' and 'succ', we could define 'isPred' and 'isSucc'
-                functions which also use the 'dist' function. If it's feasible to modify
-                the algorithm to use these instead, then we'd only need the type to provide
-                the 'dist' function -- we could derive all of the other operations from it. *)
 
     /// Character interval comparer.
     let private comparer =
@@ -825,11 +809,11 @@ module private CharDiet =
             char (int c - 1)
         else c
 
-//    /// Similar to 'succ', but clamps the value to a specified upper limit.
-//    let inline private clampedSucc (upperBound : char) (c : char) =
-//        if upperBound > c then
-//            char (int c + 1)
-//        else c
+    /// Similar to 'succ', but clamps the value to a specified upper limit.
+    let inline private clampedSucc (upperBound : char) (c : char) =
+        if upperBound > c then
+            char (int c + 1)
+        else c
 
     //
     let rec private find_del_left p (tree : CharDiet) =
@@ -839,7 +823,7 @@ module private CharDiet =
         | Node (left, right, (x, y), _) ->
             if p > succ y then
                 let p', right' = find_del_left p right
-                p', AvlTree.Join comparer (x, y) left right'
+                p', AvlTree.Join (comparer, left, right', (x, y))
             elif p < x then
                 find_del_left p left
             else
@@ -853,7 +837,7 @@ module private CharDiet =
         | Node (left, right, (x, y), _) ->
             if p < pred x then
                 let p', left' = find_del_right p left
-                p', AvlTree.Join comparer (x, y) left' right
+                p', AvlTree.Join (comparer, left', right, (x, y))
             elif p > y then
                 find_del_right p right
             else
@@ -958,7 +942,7 @@ module private CharDiet =
                     // The value is above the interval and is not adjacent
                     // to it, so recurse down the right subtree to add the value
                     // then join the result with the left subtree.
-                    AvlTree.Join comparer (x, y) left (add value right)
+                    AvlTree.Join (comparer, left, add value right, (x, y))
                 else
                     match right with
                     | Empty ->
@@ -966,12 +950,12 @@ module private CharDiet =
                     | _ ->
                         let (u, v), r = AvlTree.ExtractMin right
                         if pred u = value then
-                            AvlTree.Join comparer (x, v) left r
+                            AvlTree.Join (comparer, left, r, (x, v))
                         else
                             Node (left, right, (x, value), h)
 
             elif value < pred x then
-                AvlTree.Join comparer (x, y) (add value left) right
+                AvlTree.Join (comparer, add value left, right, (x, y))
             else
                 match left with
                 | Empty ->
@@ -979,7 +963,7 @@ module private CharDiet =
                 | _ ->
                     let (u, v), l = AvlTree.ExtractMax left
                     if succ v = value then
-                        AvlTree.Join comparer (u, y) l right
+                        AvlTree.Join (comparer, l, right, (u, y))
                     else
                         Node (left, right, (value, y), h)
 
@@ -991,9 +975,9 @@ module private CharDiet =
             AvlTree.Singleton (a, b)
         | Node (left, right, (x, y), _) ->
             if b < pred x then
-                AvlTree.Join comparer (x, y) (addRange (a, b) left) right
+                AvlTree.Join (comparer, addRange (a, b) left, right, (x, y))
             elif a > succ y then
-                AvlTree.Join comparer (x, y) left (addRange (a, b) right)
+                AvlTree.Join (comparer, left, addRange (a, b) right, (x, y))
             else
                 // Now, we know the interval (a, b) being inserted either overlaps or is
                 // adjancent to the current inverval (x, y), so we merge them.
@@ -1004,7 +988,7 @@ module private CharDiet =
                     if b <= y then y, right
                     else find_del_right b right
 
-                AvlTree.Join comparer (x', y') left' right'
+                AvlTree.Join (comparer, left', right', (x', y'))
 
     /// Returns a new set with the given element removed.
     /// No exception is thrown if the set doesn't contain the specified element.
@@ -1016,15 +1000,15 @@ module private CharDiet =
             let czx = compare value x
             if czx < 0 then
                 // value < x, so recurse down the left subtree.
-                AvlTree.Join comparer (x, y) (remove value left) right
+                AvlTree.Join (comparer, remove value left, right, (x, y))
             else
                 let cyz = compare y value
                 if cyz < 0 then
                     // y < value, so recurse down the right subtree.
-                    AvlTree.Join comparer (x, y) left (remove value right)
+                    AvlTree.Join (comparer, left, remove value right, (x, y))
                 elif cyz = 0 then
                     if czx = 0 then
-                        AvlTree.Reroot comparer left right
+                        AvlTree.Reroot (comparer, left, right)
                     else
                         Node (left, right, (x, pred y), h)
                 elif czx = 0 then
@@ -1060,7 +1044,7 @@ module private CharDiet =
     and private union_helper left (a, b) (right : CharDiet) limit head stream =
         match head with
         | None ->
-            AvlTree.Join comparer (a, b) left right, None, Empty
+            AvlTree.Join (comparer, left, right, (a, b)), None, Empty
         | Some (x, y) ->
             if y < a && y < pred a then
                 let left' = addRange (x, y) left
@@ -1069,7 +1053,7 @@ module private CharDiet =
 
             elif x > b && x > succ b then
                 let right', head, stream = union' right limit head stream
-                AvlTree.Join comparer (a, b) left right', head, stream
+                AvlTree.Join (comparer, left, right', (a, b)), head, stream
 
             elif b >= y then
                 AvlTree.TryExtractMin stream
@@ -1080,7 +1064,7 @@ module private CharDiet =
 
             else
                 let right', head, stream = union' right limit (Some (min a x, y)) stream
-                AvlTree.Reroot comparer left right', head, stream
+                AvlTree.Reroot (comparer, left, right'), head, stream
 
     /// Computes the union of the two sets.
     let rec union (input : CharDiet) (stream : CharDiet) : CharDiet =
@@ -1165,10 +1149,10 @@ module private CharDiet =
                     inter_helper (a, b) right left (Some head) stream
             elif b < x then
                 let right, head, stream = inter' right head stream
-                AvlTree.Reroot comparer left right, head, stream
+                AvlTree.Reroot (comparer, left, right), head, stream
             elif y >= clampedPred y b then
                 let right, head, stream = inter' right head stream
-                let right' = AvlTree.Join comparer (max x a, min y b) left right
+                let right' = AvlTree.Join (comparer, left, right, (max x a, min y b))
                 right', head, stream
             else
                 let left = addRange (max x a, y) left
@@ -1236,7 +1220,7 @@ module private CharDiet =
     and private diff_helper (a, b) (right : CharDiet) (left : CharDiet) head stream =
         match head with
         | None ->
-            AvlTree.Join comparer (a, b) left right, None, Empty
+            AvlTree.Join (comparer, left, right, (a, b)), None, Empty
         | Some (x, y) ->
             if y < a then
                 // [x, y] and [a, b] are disjoint
@@ -1245,7 +1229,7 @@ module private CharDiet =
             elif b < x then
                 // [a, b] and [x, y] are disjoint
                 let right, head, stream = diff' right head stream
-                AvlTree.Join comparer (a, b) left right, head, stream
+                AvlTree.Join (comparer, left, right, (a, b)), head, stream
             elif a < x then
                 // [a, b] and [x, y] overlap
                 // a < x
@@ -1258,7 +1242,7 @@ module private CharDiet =
             else
                 // [a, b] and [x, y] overlap
                 let right, head, stream = diff' right head stream
-                AvlTree.Reroot comparer left right, head, stream
+                AvlTree.Reroot (comparer, left, right), head, stream
 
     /// Returns a new set with the elements of the second set removed from the first.
     let difference (input : CharDiet) (stream : CharDiet) : CharDiet =
@@ -1293,11 +1277,12 @@ module private CharDiet =
             let (ix1, iy1), r1 = AvlTree.ExtractMin t1
             let (ix2, iy2), r2 = AvlTree.ExtractMin t2
             let c =
-                let d = compare ix1 ix2
-                if d <> 0 then -d
-                else compare iy1 iy2
-            if c <> 0 then c
-            else comparison r1 r2
+                match compare ix1 ix2 with
+                | 0 -> compare iy1 iy2
+                | d -> -d
+            match c with
+            | 0 -> comparison r1 r2
+            | c -> c
 
     /// Equality function for DIETs.
     let equal (t1 : CharDiet) (t2 : CharDiet) =
