@@ -1395,26 +1395,6 @@ module private Diet =
     let equal (t1 : CharDiet) (t2 : CharDiet) =
         comparison t1 t2 = 0
 
-    //
-    let rec split x (tree : CharDiet) : CharDiet * bool * CharDiet =
-        match tree with
-        | Empty ->
-            Empty, false, Empty
-        | Node (l, r, (a, b), _) ->
-            let cxa = compare x a
-            if cxa < 0 then
-                let ll, pres, rl = split x l
-                ll, pres, AvlTree.Join comparer (a, b) rl r
-            else
-                let cbx = compare b x
-                if cbx < 0 then
-                    let lr, pres, rr = split x r
-                    AvlTree.Join comparer (a, b) l lr, pres, rr
-                else
-                    (if cxa = 0 then l else addRange (a, pred x) l),
-                    true,
-                    (if cbx = 0 then r else addRange (succ x, b) r)
-
     /// Applies the given accumulating function to all elements in a DIET.
     let fold (folder : 'State -> char -> 'State) (state : 'State) (tree : CharDiet) =
         // Preconditions
