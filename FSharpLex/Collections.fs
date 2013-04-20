@@ -621,11 +621,14 @@ type internal AvlTree<'T when 'T : comparison> =
         else
             AvlTree.Create (k, t1, t2)
 
-    //
+    // Given t1 < k < t2 where t1 and t2 are "balanced",
+    // return a balanced tree for <t1,k,t2>.
+    // Recall: balance means subtrees heights differ by at most "tolerance"
     static member Balance (comparer : IComparer<'T>, t1, t2, k) =
-        // Given t1 < k < t2 where t1 and t2 are "balanced",
-        // return a balanced tree for <t1,k,t2>.
-        // Recall: balance means subtrees heights differ by at most "tolerance"
+        // Preconditions
+        assert (AvlTree.AvlInvariant t1)
+        assert (AvlTree.AvlInvariant t2)
+
         match t1, t2 with
         // TODO : The first two patterns can be merged to use the same handler.
         | Empty, t2 ->
@@ -719,6 +722,10 @@ type internal AvlTree<'T when 'T : comparison> =
         // NOTE : Are we sure about this? It looks like the resulting tree will _always_
         // be balanced in this implementation.
     static member Join (comparer, l, r : AvlTree<'T>, root) : AvlTree<'T> =
+        // Preconditions
+        assert (AvlTree.AvlInvariant l)
+        assert (AvlTree.AvlInvariant r)
+
         match l, r with
         | Empty, Empty ->
             AvlTree.Singleton root
@@ -738,6 +745,10 @@ type internal AvlTree<'T when 'T : comparison> =
     /// Takes two trees representing disjoint sets and combines them, returning
     /// a new balanced tree representing the union of the two sets.
     static member Reroot (comparer, l, r : AvlTree<'T>) : AvlTree<'T> =
+        // Preconditions
+        assert (AvlTree.AvlInvariant l)
+        assert (AvlTree.AvlInvariant r)
+
         match l, r with
         | Empty, Empty ->
             Empty
@@ -795,12 +806,16 @@ module internal CharDiet =
 
     //
     let rec internal (*private*) find_del_left p (tree : CharDiet) : char * CharDiet =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             p, Empty
         | Node (left, right, (x, y), _) ->
             if p > succ y then
                 let p', right' = find_del_left p right
+                assert (AvlTree.AvlInvariant right')
                 p', AvlTree.Join (comparer, left, right', (x, y))
             elif p < x then
                 find_del_left p left
@@ -809,12 +824,16 @@ module internal CharDiet =
 
     //
     let rec internal (*private*) find_del_right p (tree : CharDiet) : char * CharDiet =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             p, Empty
         | Node (left, right, (x, y), _) ->
             if p < pred x then
                 let p', left' = find_del_right p left
+                assert (AvlTree.AvlInvariant left')
                 p', AvlTree.Join (comparer, left', right, (x, y))
             elif p > y then
                 find_del_right p right
@@ -831,6 +850,9 @@ module internal CharDiet =
 
     /// Determines if a DIET contains a specified value.
     let rec contains value (tree : CharDiet) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             false
@@ -843,6 +865,9 @@ module internal CharDiet =
         
     /// Gets the maximum (greatest) value stored in the DIET.
     let maxElement (tree : CharDiet) : char =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             invalidArg "tree" "The tree is empty."
@@ -851,6 +876,9 @@ module internal CharDiet =
     
     /// Gets the minimum (least) value stored in the DIET.
     let minElement (tree : CharDiet) : char =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             invalidArg "tree" "The tree is empty."
@@ -859,6 +887,9 @@ module internal CharDiet =
 
     /// Gets the minimum (least) and maximum (greatest) values store in the DIET.
     let bounds (tree : CharDiet) : char * char =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             invalidArg "tree" "The tree is empty."
@@ -887,7 +918,10 @@ module internal CharDiet =
         comparison t1 t2 = 0
 
     /// Returns the number of elements in the set.
-    let count (t : CharDiet) =
+    let count (tree : CharDiet) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         // OPTIMIZE : Modify this to use a mutable stack instead of an F# list.
         let rec cardinal_aux acc = function
             | [] -> acc
@@ -897,10 +931,13 @@ module internal CharDiet =
                 let d = dist x y
                 cardinal_aux (acc + d + 1) (left :: right :: ts)
         
-        cardinal_aux 0 [t]
+        cardinal_aux 0 [tree]
 
     /// Returns the number of intervals in the set.
-    let intervalCount (t : CharDiet) =
+    let intervalCount (tree : CharDiet) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         // OPTIMIZE : Modify this to use a mutable stack instead of an F# list.
         let rec cardinal_aux acc = function
             | [] -> acc
@@ -909,7 +946,7 @@ module internal CharDiet =
             | Node (left, right, _, _) :: ts ->
                 cardinal_aux (acc + 1) (left :: right :: ts)
         
-        cardinal_aux 0 [t]
+        cardinal_aux 0 [tree]
 
     /// Creates a DIET containing the specified value.
     let singleton value : CharDiet =
@@ -928,6 +965,9 @@ module internal CharDiet =
     /// Returns a new set with the specified value added to the set.
     /// No exception is thrown if the set already contains the value.
     let rec add value (tree : CharDiet) : CharDiet =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             AvlTree.Singleton (value, value)
@@ -969,14 +1009,21 @@ module internal CharDiet =
     /// Returns a new set with the specified range of values added to the set.
     /// No exception is thrown if any of the values are already contained in the set.
     let rec addRange (a, b) (tree : CharDiet) : CharDiet =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             AvlTree.Singleton (a, b)
         | Node (left, right, (x, y), _) ->
             if b < pred x then
-                AvlTree.Join (comparer, addRange (a, b) left, right, (x, y))
+                let left' = addRange (a, b) left
+                assert (AvlTree.AvlInvariant left')
+                AvlTree.Join (comparer, left', right, (x, y))
             elif a > succ y then
-                AvlTree.Join (comparer, left, addRange (a, b) right, (x, y))
+                let right' = addRange (a, b) right
+                assert (AvlTree.AvlInvariant right')
+                AvlTree.Join (comparer, left, right', (x, y))
             else
                 // Now, we know the interval (a, b) being inserted either overlaps or is
                 // adjancent to the current inverval (x, y), so we merge them.
@@ -987,11 +1034,16 @@ module internal CharDiet =
                     if b <= y then y, right
                     else find_del_right b right
 
+                assert (AvlTree.AvlInvariant left')
+                assert (AvlTree.AvlInvariant right')
                 AvlTree.Join (comparer, left', right', (x', y'))
 
     /// Returns a new set with the given element removed.
     /// No exception is thrown if the set doesn't contain the specified element.
     let rec remove value (tree : CharDiet) : CharDiet =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             Empty
@@ -1027,6 +1079,11 @@ module internal CharDiet =
     /// Helper function for computing the union of two sets.
     let rec private union' (input : CharDiet) limit head (stream : CharDiet)
         : CharDiet * (char * char) option * CharDiet =
+        // Preconditions
+        assert (AvlTree.Height input >= AvlTree.Height stream)
+        assert (AvlTree.AvlInvariant input)
+        assert (AvlTree.AvlInvariant stream)
+
         match head, input with
         | None, _ ->
             input, None, Empty
@@ -1042,6 +1099,11 @@ module internal CharDiet =
 
     /// Helper function for computing the union of two sets.
     and private union_helper left (a, b) (right : CharDiet) limit head stream =
+        // Preconditions
+        assert (AvlTree.AvlInvariant left)
+        assert (AvlTree.AvlInvariant right)
+        assert (AvlTree.AvlInvariant stream)
+
         match head with
         | None ->
             AvlTree.Join (comparer, left, right, (a, b)), None, Empty
@@ -1068,9 +1130,18 @@ module internal CharDiet =
 
     /// Computes the union of the two sets.
     let rec union (input : CharDiet) (stream : CharDiet) : CharDiet =
-        if AvlTree.Height stream > AvlTree.Height input then
+        // Preconditions
+        assert (AvlTree.AvlInvariant input)
+        assert (AvlTree.AvlInvariant stream)
+
+        match input, stream with
+        | Empty, set
+        | set, Empty ->
+            set
+        | Node (_,_,_,inputHeight), Node (_,_,_,streamHeight)
+            when streamHeight > inputHeight ->
             union stream input
-        else
+        | _, _ ->
             #if DEBUG
             let inputCount = count input
             let streamCount = count stream
@@ -1097,15 +1168,10 @@ module internal CharDiet =
 //                | Some i ->
 //                    AvlTree.Join comparer i result stream''
 
+            assert (AvlTree.AvlInvariant result)
+
             #if DEBUG
             let resultCount = count result
-//            let inputArr =
-//                if resultCount >= minPossibleResultCount then Array.empty
-//                else toArray input
-//            let streamArr =
-//                if resultCount >= minPossibleResultCount then Array.empty
-//                else toArray stream
-                    
             Debug.Assert (
                 resultCount >= minPossibleResultCount,
                 sprintf "The result set should not contain fewer than %i elements, but it contains only %i elements."
@@ -1119,6 +1185,11 @@ module internal CharDiet =
 
     /// Helper function for computing the intersection of two sets.
     let rec private inter' (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
+        // Preconditions
+        assert (AvlTree.Height input >= AvlTree.Height stream)
+        assert (AvlTree.AvlInvariant input)
+        assert (AvlTree.AvlInvariant stream)
+
         match head, input with
         | None, _ ->
             Empty, None, Empty
@@ -1135,6 +1206,11 @@ module internal CharDiet =
 
     /// Helper function for computing the intersection of two sets.
     and private inter_helper (a, b) (right : CharDiet) (left : CharDiet) head stream =
+        // Preconditions
+        assert (AvlTree.AvlInvariant left)
+        assert (AvlTree.AvlInvariant right)
+        assert (AvlTree.AvlInvariant stream)
+
         match head with
         | None ->
             left, None, Empty
@@ -1144,8 +1220,8 @@ module internal CharDiet =
                 | Empty ->
                     left, None, Empty
                 | _ ->
-                    let head, stream = AvlTree.ExtractMin stream
-                    inter_helper (a, b) right left (Some head) stream
+                    AvlTree.TryExtractMin stream
+                    ||> inter_helper (a, b) right left
             elif b < x then
                 let right, head, stream = inter' right head stream
                 AvlTree.Reroot (comparer, left, right), head, stream
@@ -1159,12 +1235,18 @@ module internal CharDiet =
 
     /// Computes the intersection of the two sets.
     let rec intersect (input : CharDiet) (stream : CharDiet) : CharDiet =
-        if AvlTree.Height stream > AvlTree.Height input then
+        // Preconditions
+        assert (AvlTree.AvlInvariant input)
+        assert (AvlTree.AvlInvariant stream)
+
+        match input, stream with
+        | Empty, _
+        | _, Empty ->
+            Empty
+        | Node (_,_,_,inputHeight), Node(_,_,_,streamHeight)
+            when streamHeight > inputHeight ->
             intersect stream input
-        else
-        match stream with
-        | Empty -> Empty
-        | _ ->
+        | _, _ ->
             #if DEBUG
             let inputCount = count input
             let streamCount = count stream
@@ -1177,8 +1259,9 @@ module internal CharDiet =
             #endif
 
             let result, _, _ =
-                let head, stream = AvlTree.ExtractMin stream
-                inter' input (Some head) stream
+                AvlTree.TryExtractMin stream
+                ||> inter' input
+            assert (AvlTree.AvlInvariant result)
 
             #if DEBUG
             let resultCount = count result
@@ -1202,6 +1285,11 @@ module internal CharDiet =
 
     /// Helper function for computing the difference of two sets.
     let rec private diff' (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
+        // Preconditions
+        assert (AvlTree.Height input >= AvlTree.Height stream)
+        assert (AvlTree.AvlInvariant input)
+        assert (AvlTree.AvlInvariant stream)
+
         match head, input with
         | None, _->
             input, None, Empty
@@ -1217,14 +1305,19 @@ module internal CharDiet =
 
     /// Helper function for computing the difference of two sets.
     and private diff_helper (a, b) (right : CharDiet) (left : CharDiet) head stream =
+        // Preconditions
+        assert (AvlTree.AvlInvariant left)
+        assert (AvlTree.AvlInvariant right)
+        assert (AvlTree.AvlInvariant stream)
+
         match head with
         | None ->
             AvlTree.Join (comparer, left, right, (a, b)), None, Empty
         | Some (x, y) ->
             if y < a then
                 // [x, y] and [a, b] are disjoint
-                let head, stream = AvlTree.TryExtractMin stream
-                diff_helper (a, b) right left head stream
+                AvlTree.TryExtractMin stream
+                ||> diff_helper (a, b) right left
             elif b < x then
                 // [a, b] and [x, y] are disjoint
                 let right, head, stream = diff' right head stream
@@ -1236,8 +1329,8 @@ module internal CharDiet =
             elif y < b then
                 // [a, b] and [x, y] overlap
                 // y < b
-                let head, stream = AvlTree.TryExtractMin stream
-                diff_helper (succ y, b) right left head stream
+                AvlTree.TryExtractMin stream
+                ||> diff_helper (succ y, b) right left
             else
                 // [a, b] and [x, y] overlap
                 let right, head, stream = diff' right head stream
@@ -1245,17 +1338,25 @@ module internal CharDiet =
 
     /// Returns a new set with the elements of the second set removed from the first.
     let difference (input : CharDiet) (stream : CharDiet) : CharDiet =
-        match stream with
-        | Empty -> input
-        | _ ->
+        // Preconditions
+        assert (AvlTree.AvlInvariant input)
+        assert (AvlTree.AvlInvariant stream)
+
+        match input, stream with
+        | Empty, _ ->
+            Empty
+        | _, Empty ->
+            input
+        | _, _ ->
             #if DEBUG
             /// The maximum possible number of elements in the resulting set.
             let maxPossibleResultCount = count input
             #endif
 
             let result, _, _ =
-                AvlTree.TryExtractMin stream    
+                AvlTree.TryExtractMin stream
                 ||> diff' input
+            assert (AvlTree.AvlInvariant result)
 
             #if DEBUG
             let resultCount = count result
@@ -1269,7 +1370,7 @@ module internal CharDiet =
     /// Applies the given accumulating function to all elements in a DIET.
     let fold (folder : 'State -> char -> 'State) (state : 'State) (tree : CharDiet) =
         // Preconditions
-        // NONE -- Skip null check because the Empty tree is represented as null.
+        assert (AvlTree.AvlInvariant tree)
 
         let folder = FSharpFunc<_,_,_>.Adapt folder
 
@@ -1285,7 +1386,7 @@ module internal CharDiet =
     /// Applies the given accumulating function to all elements in a DIET.
     let foldBack (folder : char -> 'State -> 'State) (tree : CharDiet) (state : 'State) =
         // Preconditions
-        // NONE -- Skip null check because the Empty tree is represented as null.
+        assert (AvlTree.AvlInvariant tree)
 
         let folder = FSharpFunc<_,_,_>.Adapt folder
 
@@ -1301,7 +1402,7 @@ module internal CharDiet =
     /// Applies the given function to all elements in a DIET.
     let iter (action : char -> unit) (tree : CharDiet) =
         // Preconditions
-        // NONE -- Skip null check because the Empty tree is represented as null.
+        assert (AvlTree.AvlInvariant tree)
 
         /// Applies the action to all values within an interval.
         let intervalApplicator (lo, hi) =
@@ -1311,23 +1412,32 @@ module internal CharDiet =
         AvlTree.Iter intervalApplicator tree
 
     //
-    let forall (predicate : char -> bool) (t : CharDiet) =
+    let forall (predicate : char -> bool) (tree : CharDiet) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         // OPTIMIZE : Rewrite this to short-circuit and return early
         // if we find a non-matching element.
-        (true, t)
+        (true, tree)
         ||> fold (fun state el ->
             state && predicate el)
 
     //
-    let exists (predicate : char -> bool) (t : CharDiet) =
+    let exists (predicate : char -> bool) (tree : CharDiet) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         // OPTIMIZE : Rewrite this to short-circuit and return early
         // if we find a non-matching element.
-        (false, t)
+        (false, tree)
         ||> fold (fun state el ->
             state || predicate el)
 
     //
     let rec toSeq (tree : CharDiet) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         seq {
         match tree with
         | Empty -> ()
@@ -1339,18 +1449,27 @@ module internal CharDiet =
 
     //
     let toList (tree : CharDiet) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         ([], tree)
         ||> fold (fun list el ->
             el :: list)
 
     //
     let toArray (tree : CharDiet) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         let elements = ResizeArray ()
         iter elements.Add tree
         elements.ToArray ()
 
     //
     let toSet (tree : CharDiet) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         (Set.empty, tree)
         ||> fold (fun set el ->
             Set.add el set)
@@ -1612,14 +1731,14 @@ type CharSet private (tree : CharDiet) =
 
         CharDiet.forall predicate charSet.Tree
 
-    //
+    /// Applies the given accumulating function to all elements in a DIET.
     static member Fold (folder : 'State -> _ -> 'State, state, charSet : CharSet) : 'State =
         // Preconditions
         checkNonNull "charSet" charSet
 
         CharDiet.fold folder state charSet.Tree
 
-    //
+    /// Applies the given accumulating function to all elements in a DIET.
     static member FoldBack (folder : _ -> 'State -> 'State, state, charSet : CharSet) : 'State =
         // Preconditions
         checkNonNull "charSet" charSet
