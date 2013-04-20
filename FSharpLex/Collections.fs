@@ -834,45 +834,45 @@ type internal AvlTree<'T when 'T : comparison> =
         | _ ->
             AvlTree<'T>.CompareStacks (comparer, [s1], [s2])
 
-    //
-    static member private myadd comparer left x (right : AvlTree<'T>) =
-        match right with
-        | Empty ->
-            Node (Empty, Empty, x, 1u)
-        | Node (l, r, vx, _) ->
-            if left then
-                AvlTree.Balance (comparer, AvlTree.myadd comparer left x l, r, vx)
-            else
-                AvlTree.Balance (comparer, l, AvlTree.myadd comparer left x r, vx)
-
-    /// Join two trees together at a pivot point.
+    /// Join two trees together with the specified root element.
+    /// Takes two trees representing disjoint sets and combines them, returning
+    /// a new balanced tree representing the union of the two sets and the given root element.
     /// The resulting tree may be unbalanced.
-    static member Join comparer (v : 'T) l (r : AvlTree<'T>) =
+        // NOTE : Are we sure about this? It looks like the resulting tree will _always_
+        // be balanced in this implementation.
+    static member Join comparer root l (r : AvlTree<'T>) =
         match l, r with
+        | Empty, Empty ->
+            AvlTree.Singleton root
         | Empty, _ ->
-            AvlTree.myadd comparer true v r
+            AvlTree.Insert (comparer, r, root)
         | _, Empty ->
-            AvlTree.myadd comparer false v l
+            AvlTree.Insert (comparer, l, root)
         | Node (ll, lr, lx, lh), Node (rl, rr, rx, rh) ->
             if lh > rh + 2u then
-                AvlTree.Balance (comparer, ll, AvlTree.Join comparer v lr r, lx)
+                AvlTree.Balance (comparer, ll, AvlTree.Join comparer root lr r, lx)
             else if rh > lh + 2u then
-                AvlTree.Balance (comparer, AvlTree.Join comparer v l rl, rr, rx)
+                AvlTree.Balance (comparer, AvlTree.Join comparer root l rl, rr, rx)
             else
-                AvlTree.Create (v, l, r)
+                AvlTree.Create (root, l, r)
 
     /// Reroot of balanced trees.
+    /// Takes two trees representing disjoint sets and combines them, returning
+    /// a new balanced tree representing the union of the two sets.
     static member Reroot comparer l (r : AvlTree<'T>) =
-        if AvlTree.Height l > AvlTree.Height r then
-            let i, l' = AvlTree.ExtractMax l
-            AvlTree.Join comparer i l' r
-        else
-            match r with
-            | Empty -> Empty
-            | Node (_,_,_,_) ->
-                let i, r' = AvlTree.ExtractMin r
-                AvlTree.Join comparer i l r'
-
+        match l, r with
+        | Empty, Empty ->
+            Empty
+        | set, Empty
+        | Empty, set ->
+            set
+        | Node (_,_,_,lh), Node (_,_,_,rh) ->
+            if lh > rh then
+                let root, l' = AvlTree.ExtractMax l
+                AvlTree.Join comparer root l' r
+            else
+                let root, r' = AvlTree.ExtractMin r
+                AvlTree.Join comparer root l r'
 
 
 /// A Discrete Interval Encoding Tree (DIET) specialized to the 'char' type.
@@ -1040,30 +1040,40 @@ module private Diet =
         match tree with
         | Empty ->
             AvlTree.Singleton (value, value)
-        | Node (left, right, (x, y), h) as tree ->
+        | Node (left, right, (x, y), h) ->
             if value >= x then
-                if value <= y then tree
+                if value <= y then
+                    // The value is already in [x, y] so the tree
+                    // does not need to be modified.
+                    tree
                 elif value > succ y then
+                    // The value is above the interval and is not adjacent
+                    // to it, so recurse down the right subtree to add the value
+                    // then join the result with the left subtree.
                     AvlTree.Join comparer (x, y) left (add value right)
-                elif AvlTree.IsEmptyTree right then
-                    Node (left, right, (x, value), h)
                 else
-                    let (u, v), r = AvlTree.ExtractMin right
-                    if pred u = value then
-                        AvlTree.Join comparer (x, v) left r
-                    else
+                    match right with
+                    | Empty ->
                         Node (left, right, (x, value), h)
+                    | _ ->
+                        let (u, v), r = AvlTree.ExtractMin right
+                        if pred u = value then
+                            AvlTree.Join comparer (x, v) left r
+                        else
+                            Node (left, right, (x, value), h)
 
             elif value < pred x then
                 AvlTree.Join comparer (x, y) (add value left) right
-            elif AvlTree.IsEmptyTree left then
-                Node (left, right, (value, y), h)
             else
-                let (u, v), l = AvlTree.ExtractMax left
-                if succ v = value then
-                    AvlTree.Join comparer (u, y) l right
-                else
+                match left with
+                | Empty ->
                     Node (left, right, (value, y), h)
+                | _ ->
+                    let (u, v), l = AvlTree.ExtractMax left
+                    if succ v = value then
+                        AvlTree.Join comparer (u, y) l right
+                    else
+                        Node (left, right, (value, y), h)
 
     /// Returns a new set with the specified range of values added to the set.
     /// No exception is thrown if any of the values are already contained in the set.
@@ -1077,6 +1087,8 @@ module private Diet =
             elif a > succ y then
                 AvlTree.Join comparer (x, y) left (addRange (a, b) right)
             else
+                // Now, we know the interval (a, b) being inserted either overlaps or is
+                // adjancent to the current inverval (x, y), so we merge them.
                 let x', left' =
                     if a >= x then x, left
                     else find_del_left a left
@@ -1144,16 +1156,16 @@ module private Diet =
         | Some (x, y) ->
             if y < a && y < pred a then
                 let left' = addRange (x, y) left
-                let head, stream = AvlTree.TryExtractMin stream
-                union_helper left' (a, b) right limit head stream
+                AvlTree.TryExtractMin stream
+                ||> union_helper left' (a, b) right limit
 
             elif x > b && x > succ b then
                 let right', head, stream = union' right limit head stream
                 AvlTree.Join comparer (a, b) left right', head, stream
 
             elif b >= y then
-                let head, stream = AvlTree.TryExtractMin stream
-                union_helper left (min a x, b) right limit head stream
+                AvlTree.TryExtractMin stream
+                ||> union_helper left (min a x, b) right limit
 
             elif greater_limit limit y then
                 left, Some (min a x, y), stream
@@ -1178,16 +1190,21 @@ module private Diet =
                 inputCount + streamCount
             #endif
 
-            let result =
-                let result, head', stream'' =
-                    let head, stream' = AvlTree.TryExtractMin stream
-                    union' input None head stream'
+            // TEMP : This is a naive implementation of the union operation --
+            // we only use it here to help track down the bug in the union operation
+            // and to test that the rest of the code works correctly.
+            let result = AvlTree.FoldBack addRange stream input
 
-                match head' with
-                | None ->
-                    result
-                | Some i ->
-                    AvlTree.Join comparer i result stream''
+//            let result =
+//                let result, head', stream'' =
+//                    AvlTree.TryExtractMin stream
+//                    ||> union' input None
+//
+//                match head' with
+//                | None ->
+//                    result
+//                | Some i ->
+//                    AvlTree.Join comparer i result stream''
 
             #if DEBUG
             let resultCount = count result
@@ -1232,9 +1249,10 @@ module private Diet =
             left, None, Empty
         | Some (x, y) ->
             if y < a then
-                if AvlTree.IsEmptyTree stream then
+                match stream with
+                | Empty ->
                     left, None, Empty
-                else
+                | _ ->
                     let head, stream = AvlTree.ExtractMin stream
                     inter_helper (a, b) right left (Some head) stream
             elif b < x then
@@ -1252,9 +1270,10 @@ module private Diet =
     let rec intersect (input : CharDiet) (stream : CharDiet) : CharDiet =
         if AvlTree.Height stream > AvlTree.Height input then
             intersect stream input
-        elif AvlTree.IsEmptyTree stream then
-            Empty
         else
+        match stream with
+        | Empty -> Empty
+        | _ ->
             #if DEBUG
             let inputCount = count input
             let streamCount = count stream
@@ -1335,15 +1354,12 @@ module private Diet =
 
     /// Returns a new set with the elements of the second set removed from the first.
     let difference (input : CharDiet) (stream : CharDiet) : CharDiet =
-        if AvlTree.IsEmptyTree stream then
-            input
-        else
+        match stream with
+        | Empty -> input
+        | _ ->
             #if DEBUG
-            /// The minimum possible number of elements in the resulting set.
-            let minPossibleResultCount =
-                let inputCount = count input
-                let streamCount = count stream
-                GenericMaximum 0 (inputCount - streamCount)
+            /// The maximum possible number of elements in the resulting set.
+            let maxPossibleResultCount = count input
             #endif
 
             let result, _, _ =
@@ -1353,11 +1369,10 @@ module private Diet =
             #if DEBUG
             let resultCount = count result
             Debug.Assert (
-                resultCount >= minPossibleResultCount,
-                sprintf "The result set should not contain fewer than %i elements, but it contains only %i elements."
-                    minPossibleResultCount resultCount)
+                resultCount <= maxPossibleResultCount,
+                sprintf "The result set should not contain more than %i elements, but it contains %i elements."
+                    maxPossibleResultCount resultCount)
             #endif
-
             result
 
     /// Comparison function for DIETs.
