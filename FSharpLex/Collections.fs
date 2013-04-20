@@ -811,7 +811,7 @@ type private CharDiet = AvlTree<char * char>
 
 /// Functional operations for char-DIETs.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module private Diet =
+module private CharDiet =
     open System.Collections.Generic
     open LanguagePrimitives
 
@@ -1445,7 +1445,7 @@ module private Diet =
 [<DebuggerDisplay("Count = {Count}, Intervals = {IntervalCount}")>]
 type CharSet private (dietSet : CharDiet) =
     //
-    static let empty = CharSet (Diet.empty)
+    static let empty = CharSet (CharDiet.empty)
 
     //
     static member Empty
@@ -1453,12 +1453,12 @@ type CharSet private (dietSet : CharDiet) =
     
     override __.GetHashCode () =
         // TODO : Come up with a better hashcode function.
-        (Diet.count dietSet) * (int <| AvlTree.Height dietSet)
+        (CharDiet.count dietSet) * (int <| AvlTree.Height dietSet)
     
     override __.Equals other =
         match other with
         | :? CharSet as other ->
-            Diet.equal dietSet other.DietSet
+            CharDiet.equal dietSet other.DietSet
         | _ ->
             false
 
@@ -1469,51 +1469,51 @@ type CharSet private (dietSet : CharDiet) =
     //
     member __.Count
         with get () =
-            Diet.count dietSet
+            CharDiet.count dietSet
 
     //
     member __.IntervalCount
         with get () =
-            Diet.intervalCount dietSet
+            CharDiet.intervalCount dietSet
 
     //
     member __.MaxElement
         with get () =
-            Diet.maxElement dietSet
+            CharDiet.maxElement dietSet
 
     //
     member __.MinElement
         with get () =
-            Diet.minElement dietSet
+            CharDiet.minElement dietSet
 
     /// The set containing the given element.
     static member FromElement value =
-        CharSet (Diet.singleton value)
+        CharSet (CharDiet.singleton value)
 
     /// The set containing the elements in the given range.
     static member FromRange (lowerBound, upperBound) =
-        CharSet (Diet.ofRange lowerBound upperBound)
+        CharSet (CharDiet.ofRange lowerBound upperBound)
 
     //
     static member IsEmpty (charSet : CharSet) =
-        Diet.isEmpty charSet.DietSet
+        CharDiet.isEmpty charSet.DietSet
 
     /// Returns a new set with an element added to the set.
     /// No exception is raised if the set already contains the given element.
     static member Add (value, charSet : CharSet) =
-        CharSet (Diet.add value charSet.DietSet)
+        CharSet (CharDiet.add value charSet.DietSet)
 
     //
     static member AddRange (lower, upper, charSet : CharSet) =
-        CharSet (Diet.addRange (lower, upper) charSet.DietSet)
+        CharSet (CharDiet.addRange (lower, upper) charSet.DietSet)
 
     //
     static member Remove (value, charSet : CharSet) =
-        CharSet (Diet.remove value charSet.DietSet)
+        CharSet (CharDiet.remove value charSet.DietSet)
 
     //
     static member Contains (value, charSet : CharSet) =
-        Diet.contains value charSet.DietSet
+        CharDiet.contains value charSet.DietSet
 
 //    //
 //    static member ToList (charSet : CharSet) =
@@ -1521,7 +1521,7 @@ type CharSet private (dietSet : CharDiet) =
 
     //
     static member OfList list =
-        CharSet (Diet.ofList list)
+        CharSet (CharDiet.ofList list)
 
 //    //
 //    static member ToSet (charSet : CharSet) =
@@ -1537,7 +1537,7 @@ type CharSet private (dietSet : CharDiet) =
     
     //
     static member OfArray array =
-        CharSet (Diet.ofArray array)
+        CharSet (CharDiet.ofArray array)
 
 //    //
 //    static member ToSequence (charSet : CharSet) =
@@ -1545,31 +1545,31 @@ type CharSet private (dietSet : CharDiet) =
 
     //
     static member OfSequence sequence =
-        CharSet (Diet.ofSeq sequence)
+        CharSet (CharDiet.ofSeq sequence)
 
     //
     static member Difference (charSet1 : CharSet, charSet2 : CharSet) =
-        CharSet (Diet.difference charSet1.DietSet charSet2.DietSet)
+        CharSet (CharDiet.difference charSet1.DietSet charSet2.DietSet)
 
     //
     static member Intersect (charSet1 : CharSet, charSet2 : CharSet) =
-        CharSet (Diet.intersect charSet1.DietSet charSet2.DietSet)
+        CharSet (CharDiet.intersect charSet1.DietSet charSet2.DietSet)
 
     //
     static member Union (charSet1 : CharSet, charSet2 : CharSet) =
-        CharSet (Diet.union charSet1.DietSet charSet2.DietSet)
+        CharSet (CharDiet.union charSet1.DietSet charSet2.DietSet)
 
     //
     static member Fold (folder : 'State -> _ -> 'State, state, charSet : CharSet) =
-        Diet.fold folder state charSet.DietSet
+        CharDiet.fold folder state charSet.DietSet
 
     //
     static member FoldBack (folder : _ -> 'State -> 'State, state, charSet : CharSet) =
-        Diet.foldBack folder charSet.DietSet state
+        CharDiet.foldBack folder charSet.DietSet state
 
     //
     static member Forall (predicate, charSet : CharSet) =
-        Diet.forall predicate charSet.DietSet
+        CharDiet.forall predicate charSet.DietSet
 
     //
     static member IterateIntervals (action, charSet : CharSet) =
@@ -1580,17 +1580,17 @@ type CharSet private (dietSet : CharDiet) =
         member this.CompareTo other =
             match other with
             | :? CharSet as other ->
-                Diet.comparison this.DietSet other.DietSet
+                CharDiet.comparison this.DietSet other.DietSet
             | _ ->
                 invalidArg "other" "The argument is not an instance of CharSet."
 
     interface System.IComparable<CharSet> with
         member this.CompareTo other =
-            Diet.comparison dietSet other.DietSet
+            CharDiet.comparison dietSet other.DietSet
 
     interface System.IEquatable<CharSet> with
         member this.Equals other =
-            Diet.equal dietSet other.DietSet
+            CharDiet.equal dietSet other.DietSet
 
 
 /// Functional programming operators related to the CharSet type.
