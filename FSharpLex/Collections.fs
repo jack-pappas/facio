@@ -1443,7 +1443,7 @@ module private CharDiet =
 /// This is faster and more efficient than the built-in F# Set<'T>,
 /// especially for dense sets.
 [<DebuggerDisplay("Count = {Count}, Intervals = {IntervalCount}")>]
-type CharSet private (dietSet : CharDiet) =
+type CharSet private (tree : CharDiet) =
     //
     static let empty = CharSet (CharDiet.empty)
 
@@ -1453,144 +1453,164 @@ type CharSet private (dietSet : CharDiet) =
     
     override __.GetHashCode () =
         // TODO : Come up with a better hashcode function.
-        (CharDiet.count dietSet) * (int <| AvlTree.Height dietSet)
+        (CharDiet.count tree) * (int <| AvlTree.Height tree)
     
     override __.Equals other =
         match other with
         | :? CharSet as other ->
-            CharDiet.equal dietSet other.DietSet
+            CharDiet.equal tree other.Tree
         | _ ->
             false
 
     //
-    member private __.DietSet
-        with get () = dietSet
+    member private __.Tree
+        with get () = tree
 
     //
     member __.Count
         with get () =
-            CharDiet.count dietSet
+            CharDiet.count tree
 
     //
     member __.IntervalCount
         with get () =
-            CharDiet.intervalCount dietSet
+            CharDiet.intervalCount tree
 
     //
     member __.MaxElement
         with get () =
-            CharDiet.maxElement dietSet
+            CharDiet.maxElement tree
 
     //
     member __.MinElement
         with get () =
-            CharDiet.minElement dietSet
+            CharDiet.minElement tree
 
     /// The set containing the given element.
-    static member FromElement value =
+    static member FromElement value : CharSet =
         CharSet (CharDiet.singleton value)
 
     /// The set containing the elements in the given range.
-    static member FromRange (lowerBound, upperBound) =
+    static member FromRange (lowerBound, upperBound) : CharSet =
         CharSet (CharDiet.ofRange lowerBound upperBound)
 
     //
-    static member IsEmpty (charSet : CharSet) =
-        CharDiet.isEmpty charSet.DietSet
+    static member IsEmpty (charSet : CharSet) : bool =
+        CharDiet.isEmpty charSet.Tree
 
     /// Returns a new set with an element added to the set.
     /// No exception is raised if the set already contains the given element.
-    static member Add (value, charSet : CharSet) =
-        CharSet (CharDiet.add value charSet.DietSet)
+    static member Add (value, charSet : CharSet) : CharSet =
+        CharSet (CharDiet.add value charSet.Tree)
 
     //
-    static member AddRange (lower, upper, charSet : CharSet) =
-        CharSet (CharDiet.addRange (lower, upper) charSet.DietSet)
+    static member AddRange (lower, upper, charSet : CharSet) : CharSet =
+        CharSet (CharDiet.addRange (lower, upper) charSet.Tree)
 
     //
-    static member Remove (value, charSet : CharSet) =
-        CharSet (CharDiet.remove value charSet.DietSet)
+    static member Remove (value, charSet : CharSet) : CharSet =
+        CharSet (CharDiet.remove value charSet.Tree)
 
     //
-    static member Contains (value, charSet : CharSet) =
-        CharDiet.contains value charSet.DietSet
-
-//    //
-//    static member ToList (charSet : CharSet) =
-//        Diet.toList charSet.DietSet
+    static member Contains (value, charSet : CharSet) : bool =
+        CharDiet.contains value charSet.Tree
 
     //
-    static member OfList list =
-        CharSet (CharDiet.ofList list)
-
-//    //
-//    static member ToSet (charSet : CharSet) =
-//        Diet.toSet charSet.DietSet
-
-//    //
-//    static member OfSet set =
-//        CharSet (Diet.ofSet set)
-
-//    //
-//    static member ToArray (charSet : CharSet) =
-//        Diet.toArray charSet.DietSet
-    
-    //
-    static member OfArray array =
-        CharSet (CharDiet.ofArray array)
-
-//    //
-//    static member ToSequence (charSet : CharSet) =
-//        Diet.toSeq charSet.DietSet
-
-    //
-    static member OfSequence sequence =
+    static member OfSeq (sequence : seq<char>) : CharSet =
         CharSet (CharDiet.ofSeq sequence)
 
     //
-    static member Difference (charSet1 : CharSet, charSet2 : CharSet) =
-        CharSet (CharDiet.difference charSet1.DietSet charSet2.DietSet)
+    static member OfList (list : char list) : CharSet =
+        CharSet (CharDiet.ofList list)
 
     //
-    static member Intersect (charSet1 : CharSet, charSet2 : CharSet) =
-        CharSet (CharDiet.intersect charSet1.DietSet charSet2.DietSet)
+    static member OfArray (array : char[]) : CharSet =
+        CharSet (CharDiet.ofArray array)
 
     //
-    static member Union (charSet1 : CharSet, charSet2 : CharSet) =
-        CharSet (CharDiet.union charSet1.DietSet charSet2.DietSet)
+    static member OfSet (set : Set<char>) : CharSet =
+        CharSet (CharDiet.ofSet set)
 
     //
-    static member Fold (folder : 'State -> _ -> 'State, state, charSet : CharSet) =
-        CharDiet.fold folder state charSet.DietSet
+    static member ToSeq (charSet : CharSet) : seq<char> =
+        CharDiet.toSeq charSet.Tree
 
     //
-    static member FoldBack (folder : _ -> 'State -> 'State, state, charSet : CharSet) =
-        CharDiet.foldBack folder charSet.DietSet state
+    static member ToList (charSet : CharSet) : char list =
+        CharDiet.toList charSet.Tree
 
     //
-    static member Forall (predicate, charSet : CharSet) =
-        CharDiet.forall predicate charSet.DietSet
+    static member ToArray (charSet : CharSet) : char[] =
+        CharDiet.toArray charSet.Tree
 
     //
-    static member IterateIntervals (action, charSet : CharSet) =
+    static member ToSet (charSet : CharSet) : Set<char> =
+        CharDiet.toSet charSet.Tree
+
+    //
+    static member Difference (charSet1 : CharSet, charSet2 : CharSet) : CharSet =
+        CharSet (CharDiet.difference charSet1.Tree charSet2.Tree)
+
+    //
+    static member Intersect (charSet1 : CharSet, charSet2 : CharSet) : CharSet =
+        CharSet (CharDiet.intersect charSet1.Tree charSet2.Tree)
+
+    //
+    static member Union (charSet1 : CharSet, charSet2 : CharSet) : CharSet =
+        CharSet (CharDiet.union charSet1.Tree charSet2.Tree)
+
+    //
+    static member Exists (predicate, charSet : CharSet) : bool =
+        CharDiet.exists predicate charSet.Tree
+
+    //
+    static member Forall (predicate, charSet : CharSet) : bool =
+        CharDiet.forall predicate charSet.Tree
+
+    //
+    static member Fold (folder : 'State -> _ -> 'State, state, charSet : CharSet) : 'State =
+        CharDiet.fold folder state charSet.Tree
+
+    //
+    static member FoldBack (folder : _ -> 'State -> 'State, state, charSet : CharSet) : 'State =
+        CharDiet.foldBack folder charSet.Tree state
+
+    //
+    static member Iter (action, charSet : CharSet) : unit =
+        CharDiet.iter action charSet.Tree
+
+    //
+    static member IterIntervals (action, charSet : CharSet) : unit =
         let action = FSharpFunc<_,_,_>.Adapt action
-        charSet.DietSet |> AvlTree.Iter action.Invoke
+        charSet.Tree |> AvlTree.Iter action.Invoke
+
+    //
+    static member Map (mapping : char -> char, charSet : CharSet) : CharSet =
+        notImpl "CharSet.Map"
+
+    //
+    static member Filter (predicate : char -> bool, charSet : CharSet) : CharSet =
+        notImpl "CharSet.Filter"
+
+    //
+    static member Partition (predicate : char -> bool, charSet : CharSet) : CharSet * CharSet =
+        notImpl "CharSet.Partition"
 
     interface System.IComparable with
         member this.CompareTo other =
             match other with
             | :? CharSet as other ->
-                CharDiet.comparison this.DietSet other.DietSet
+                CharDiet.comparison this.Tree other.Tree
             | _ ->
                 invalidArg "other" "The argument is not an instance of CharSet."
 
     interface System.IComparable<CharSet> with
         member this.CompareTo other =
-            CharDiet.comparison dietSet other.DietSet
+            CharDiet.comparison tree other.Tree
 
     interface System.IEquatable<CharSet> with
         member this.Equals other =
-            CharDiet.equal dietSet other.DietSet
+            CharDiet.equal tree other.Tree
 
 
 /// Functional programming operators related to the CharSet type.
@@ -1600,7 +1620,7 @@ module CharSet =
     let empty = CharSet.Empty
 
     /// Returns 'true' if the set is empty.
-    let isEmpty charSet =
+    let inline isEmpty charSet =
         CharSet.IsEmpty charSet
 
     /// The set containing the given element.
@@ -1624,7 +1644,8 @@ module CharSet =
     let inline add value charSet =
         CharSet.Add (value, charSet)
 
-    //
+    /// Returns a new set with a range of elements added to the set.
+    /// No exception is raised if the set already contains any of the elements.
     let inline addRange lower upper charSet =
         CharSet.AddRange (lower, upper, charSet)
 
@@ -1645,33 +1666,27 @@ module CharSet =
     let inline foldBack (folder : char -> 'State -> 'State) charSet (state : 'State) =
         CharSet.FoldBack (folder, state, charSet)
 
-//    /// Returns a new set containing the results of applying the given function to each element of the input set.
-//    let map (mapping : char -> char) charSet =
-//        (empty, charSet)
-//        ||> fold (fun set el ->
-//            add (mapping el) set)
-//
-//    /// Returns a new set containing only the elements of the collection for which the given predicate returns true.
-//    let filter (predicate : char -> bool) charSet =
-//        (empty, charSet)
-//        ||> fold (fun set el ->
-//            if predicate el then
-//                add el set
-//            else set)
-//
-//    /// Applies the given function to each element of the set, in order from least to greatest.
-//    let iter (action : char -> unit) charSet =
-//        iterImpl action charSet id
+    /// Returns a new set containing the results of applying the given function to each element of the input set.
+    let map (mapping : char -> char) charSet =
+        CharSet.Map (mapping, charSet)
+
+    /// Returns a new set containing only the elements of the collection for which the given predicate returns true.
+    let inline filter (predicate : char -> bool) charSet =
+        CharSet.Filter (predicate, charSet)
+
+    /// Applies the given function to each element of the set, in order from least to greatest.
+    let inline iter (action : char -> unit) charSet =
+        CharSet.Iter (action, charSet)
 
     /// Applies the given function to each element of the set, in order from least to greatest.
     let inline iterIntervals action charSet =
-        CharSet.IterateIntervals (action, charSet)
+        CharSet.IterIntervals (action, charSet)
 
-//    /// Tests if any element of the collection satisfies the given predicate.
-//    /// If the input function is <c>predicate</c> and the elements are <c>i0...iN</c>,
-//    /// then this function computes predicate <c>i0 or ... or predicate iN</c>.
-//    let exists (predicate : char -> bool) charSet =
-//        existsImpl predicate charSet id
+    /// Tests if any element of the collection satisfies the given predicate.
+    /// If the input function is <c>predicate</c> and the elements are <c>i0...iN</c>,
+    /// then this function computes predicate <c>i0 or ... or predicate iN</c>.
+    let inline exists (predicate : char -> bool) charSet =
+        CharSet.Exists (predicate, charSet)
 
     /// Tests if all elements of the collection satisfy the given predicate.
     /// If the input function is <c>p</c> and the elements are <c>i0...iN</c>,
@@ -1679,57 +1694,37 @@ module CharSet =
     let inline forall (predicate : char -> bool) charSet =
         CharSet.Forall (predicate, charSet)
 
-//    /// Creates a list that contains the elements of the set in order.
-//    let inline toList charSet =
-//        // Fold backwards so we don't need to reverse the list.
-//        (tree, [])
-//        ||> foldBack (fun i lst ->
-//            i :: lst)
+    /// Creates a list that contains the elements of the set in order.
+    let inline toList charSet =
+        CharSet.ToList charSet
 
     /// Creates a set that contains the same elements as the given list.
     let inline ofList list =
         CharSet.OfList list
 
-//    /// Creates a Set that contains the same elements as the given CharSet.
-//    let toSet charSet =
-//        (Set.empty, tree)
-//        ||> fold (fun set el ->
-//            Set.add el set)
-//
-//    /// Creates a CharSet that contains the same elements as the given Set.
-//    let ofSet set =
-//        (empty, set)
-//        ||> Set.fold (fun tree el ->
-//            add el tree)
+    /// Creates a Set that contains the same elements as the given CharSet.
+    let inline toSet charSet =
+        CharSet.ToSet charSet
 
-//    /// Creates an array that contains the elements of the set in order.
-//    let toArray charSet =
-//        let resizeArr = ResizeArray<_> ()
-//        iter resizeArr.Add tree
-//        resizeArr.ToArray ()
+    /// Creates a CharSet that contains the same elements as the given Set.
+    let inline ofSet set =
+        CharSet.OfSet set
+
+    /// Creates an array that contains the elements of the set in order.
+    let inline toArray charSet =
+        CharSet.ToArray
 
     /// Creates a set that contains the same elements as the given array.
     let inline ofArray array =
         CharSet.OfArray array
 
-//    /// Returns an ordered view of the set as an enumerable object.
-//    let rec toSeq charSet =
-//        seq {
-//        match tree with
-//        | Empty -> ()
-//        | Node (lowerBound, upperBound, left, right) ->
-//            // Produce the sequence for the left subtree.
-//            yield! toSeq left
-//
-//            // Produce the sequence of values in this interval.
-//            yield! { lowerBound .. upperBound }
-//
-//            // Produce the sequence for the right subtree.
-//            yield! toSeq right }
+    /// Returns an ordered view of the set as an enumerable object.
+    let inline toSeq charSet =
+        CharSet.ToSeq charSet
 
     /// Creates a new set from the given enumerable object.
     let inline ofSeq seq =
-        CharSet.OfSequence seq
+        CharSet.OfSeq seq
 
     /// Returns the highest (greatest) value in the set.
     let inline maxElement (charSet : CharSet) =
@@ -1739,17 +1734,10 @@ module CharSet =
     let inline minElement (charSet : CharSet) =
         charSet.MinElement
 
-//    /// Splits the set into two sets containing the elements for which
-//    /// the given predicate returns true and false respectively.
-//    let partition predicate charSet =
-//        ((empty, empty), set)
-//        ||> fold (fun (trueSet, falseSet) el ->
-//            if predicate el then
-//                add el trueSet,
-//                falseSet
-//            else
-//                trueSet,
-//                add el falseSet)
+    /// Splits the set into two sets containing the elements for which
+    /// the given predicate returns true and false respectively.
+    let inline partition predicate charSet =
+        CharSet.Partition (predicate, charSet)
 
     /// Returns a new set with the elements of the second set removed from the first.
     let inline difference set1 set2 =
