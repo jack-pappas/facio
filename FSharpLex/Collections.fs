@@ -556,39 +556,17 @@ type internal AvlTree<'T when 'T : comparison> =
             // Return the value indicating if all elements matched the predicate.
             allElementsMatch
 
-    /// Builds a new AvlTree from the elements of a sequence.
-    static member OfSeq (comparer : IComparer<'T>, sequence : seq<'T>) : AvlTree<'T> =
-        (Empty, sequence)
-        ||> Seq.fold (fun tree el ->
-            AvlTree.Insert (comparer, tree, el))
-
-    /// Builds a new AvlTree from the elements of an list.
-    static member OfList (comparer : IComparer<'T>, list : 'T list) : AvlTree<'T> =
-        (Empty, list)
-        ||> List.fold (fun tree el ->
-            AvlTree.Insert (comparer, tree, el))
-
-    /// Builds a new AvlTree from the elements of an array.
-    static member OfArray (comparer : IComparer<'T>, array : 'T[]) : AvlTree<'T> =
-        (Empty, array)
-        ||> Array.fold (fun tree el ->
-            AvlTree.Insert (comparer, tree, el))
-
-    (* NOTE : This works, but has been disabled for now because the existing F# Set
-                implementation uses a custom IEnumerator implementation which has different
-                characteristics; the unit tests expect to see these, so that implementation
-                is used instead of this one (at least for now). *)
-//    /// Returns a sequence containing the elements stored
-//    /// in a AvlTree, ordered from least to greatest.
-//    static member ToSeq (tree : AvlTree<'T>) =
-//        seq {
-//        match tree with
-//        | Empty -> ()
-//        | Node (l, r, n, _) ->
-//            yield! AvlTree.ToSeq l
-//            yield n
-//            yield! AvlTree.ToSeq r
-//        }
+    /// Returns a sequence containing the elements stored
+    /// in a AvlTree, ordered from least to greatest.
+    static member ToSeq (tree : AvlTree<'T>) =
+        seq {
+        match tree with
+        | Empty -> ()
+        | Node (l, r, n, _) ->
+            yield! AvlTree.ToSeq l
+            yield n
+            yield! AvlTree.ToSeq r
+        }
 
     /// Returns a list containing the elements stored in
     /// a AvlTree, ordered from least to greatest. 
