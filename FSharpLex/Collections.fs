@@ -661,28 +661,6 @@ type internal AvlTree<'T when 'T : comparison> =
                 AvlTree.Create (k, t1, t2)
 
     //
-    static member Split (comparer : IComparer<'T>, t, pivot) : AvlTree<'T> * bool * AvlTree<'T> =
-        // Given a pivot and a set t
-        // Return { x in t s.t. x < pivot }, pivot in t? , { x in t s.t. x > pivot }
-        match t with
-        | Empty  ->
-            Empty, false, Empty
-        | Node (Empty, Empty, k1, _) ->
-            let c = comparer.Compare (k1, pivot)
-            if   c < 0 then t    ,false,Empty // singleton under pivot
-            elif c = 0 then Empty,true ,Empty // singleton is    pivot
-            else            Empty,false,t     // singleton over  pivot
-        | Node (t11, t12, k1, _) ->
-            let c = comparer.Compare (pivot, k1)
-            if   c < 0 then // pivot t1
-                let t11Lo, havePivot, t11Hi = AvlTree.Split (comparer, t11, pivot)
-                t11Lo, havePivot, AvlTree.Balance (comparer, t11Hi, t12, k1)
-            elif c = 0 then // pivot is k1
-                t11,true,t12
-            else            // pivot t2
-                let t12Lo, havePivot, t12Hi = AvlTree.Split (comparer, t12, pivot)
-                AvlTree.Balance (comparer, t11, t12Lo, k1), havePivot, t12Hi
-
     static member private CompareStacks (comparer : IComparer<'T>, l1 : AvlTree<'T> list, l2 : AvlTree<'T> list) : int =
         match l1, l2 with
         | [], [] -> 0
@@ -816,7 +794,7 @@ module internal CharDiet =
         else c
 
     //
-    let rec private find_del_left p (tree : CharDiet) =
+    let rec internal (*private*) find_del_left p (tree : CharDiet) : char * CharDiet =
         match tree with
         | Empty ->
             p, Empty
@@ -830,7 +808,7 @@ module internal CharDiet =
                 x, left
 
     //
-    let rec private find_del_right p (tree : CharDiet) =
+    let rec internal (*private*) find_del_right p (tree : CharDiet) : char * CharDiet =
         match tree with
         | Empty ->
             p, Empty
@@ -887,19 +865,26 @@ module internal CharDiet =
         | tree ->
             minElement tree, maxElement tree
 
-    /// Creates a DIET containing the specified value.
-    let singleton value : CharDiet =
-        AvlTree.Singleton (value, value)
+    /// Comparison function for DIETs.
+    let rec comparison (t1 : CharDiet) (t2 : CharDiet) =
+        match t1, t2 with
+        | Node (_,_,_,_), Empty -> 1
+        | Empty, Empty -> 0
+        | Empty, Node (_,_,_,_) -> -1
+        | Node (_,_,_,_), Node (_,_,_,_) ->
+            let (ix1, iy1), r1 = AvlTree.ExtractMin t1
+            let (ix2, iy2), r2 = AvlTree.ExtractMin t2
+            let c =
+                match compare ix1 ix2 with
+                | 0 -> compare iy1 iy2
+                | d -> -d
+            match c with
+            | 0 -> comparison r1 r2
+            | c -> c
 
-    /// Creates a DIET containing the specified range of values.
-    let ofRange minValue maxValue : CharDiet =
-        // For compatibility with the F# range operator,
-        // when minValue > minValue it's just considered
-        // to be an empty range.
-        if minValue >= maxValue then
-            empty
-        else
-            AvlTree.Singleton (minValue, maxValue)
+    /// Equality function for DIETs.
+    let equal (t1 : CharDiet) (t2 : CharDiet) =
+        comparison t1 t2 = 0
 
     /// Returns the number of elements in the set.
     let count (t : CharDiet) =
@@ -925,6 +910,20 @@ module internal CharDiet =
                 cardinal_aux (acc + 1) (left :: right :: ts)
         
         cardinal_aux 0 [t]
+
+    /// Creates a DIET containing the specified value.
+    let singleton value : CharDiet =
+        AvlTree.Singleton (value, value)
+
+    /// Creates a DIET containing the specified range of values.
+    let ofRange minValue maxValue : CharDiet =
+        // For compatibility with the F# range operator,
+        // when minValue > minValue it's just considered
+        // to be an empty range.
+        if minValue >= maxValue then
+            empty
+        else
+            AvlTree.Singleton (minValue, maxValue)
 
     /// Returns a new set with the specified value added to the set.
     /// No exception is thrown if the set already contains the value.
@@ -1087,7 +1086,6 @@ module internal CharDiet =
             // we only use it here to help track down the bug in the union operation
             // and to test that the rest of the code works correctly.
             let result = AvlTree.FoldBack addRange stream input
-
 //            let result =
 //                let result, head', stream'' =
 //                    AvlTree.TryExtractMin stream
@@ -1268,27 +1266,6 @@ module internal CharDiet =
             #endif
             result
 
-    /// Comparison function for DIETs.
-    let rec comparison (t1 : CharDiet) (t2 : CharDiet) =
-        match t1, t2 with
-        | Node (_,_,_,_), Empty -> 1
-        | Empty, Empty -> 0
-        | Empty, Node (_,_,_,_) -> -1
-        | Node (_,_,_,_), Node (_,_,_,_) ->
-            let (ix1, iy1), r1 = AvlTree.ExtractMin t1
-            let (ix2, iy2), r2 = AvlTree.ExtractMin t2
-            let c =
-                match compare ix1 ix2 with
-                | 0 -> compare iy1 iy2
-                | d -> -d
-            match c with
-            | 0 -> comparison r1 r2
-            | c -> c
-
-    /// Equality function for DIETs.
-    let equal (t1 : CharDiet) (t2 : CharDiet) =
-        comparison t1 t2 = 0
-
     /// Applies the given accumulating function to all elements in a DIET.
     let fold (folder : 'State -> char -> 'State) (state : 'State) (tree : CharDiet) =
         // Preconditions
@@ -1378,30 +1355,6 @@ module internal CharDiet =
         ||> fold (fun set el ->
             Set.add el set)
 
-    /// Builds a new DIET from the elements of a sequence.
-    let ofSeq (sequence : seq<_>) : CharDiet =
-        (Empty, sequence)
-        ||> Seq.fold (fun tree el ->
-            add el tree)
-
-    /// Builds a new DIET from the elements of an F# list.
-    let ofList (list : _ list) : CharDiet =
-        (Empty, list)
-        ||> List.fold (fun tree el ->
-            add el tree)
-
-    /// Builds a new DIET from the elements of an array.
-    let ofArray (array : _[]) : CharDiet =
-        (Empty, array)
-        ||> Array.fold (fun tree el ->
-            add el tree)
-
-    /// Builds a new DIET from an F# Set.
-    let ofSet (set : Set<_>) : CharDiet =
-        (Empty, set)
-        ||> Set.fold (fun tree el ->
-            add el tree)
-
 
 /// Character set implementation based on a Discrete Interval Encoding Tree.
 /// This is faster and more efficient than the built-in F# Set<'T>,
@@ -1456,108 +1409,273 @@ type CharSet private (tree : CharDiet) =
 
     /// The set containing the elements in the given range.
     static member FromRange (lowerBound, upperBound) : CharSet =
-        CharSet (CharDiet.ofRange lowerBound upperBound)
+        // For compatibility with the F# range operator, return an empty
+        // set for an inverted range (i.e., when lowerBound > upperBound).
+        if lowerBound > upperBound then empty
+        elif lowerBound = upperBound then
+            // This is a single-element range.
+            CharSet.FromElement lowerBound
+        else
+            CharSet (CharDiet.ofRange lowerBound upperBound)
 
     //
     static member IsEmpty (charSet : CharSet) : bool =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         CharDiet.isEmpty charSet.Tree
 
     /// Returns a new set with an element added to the set.
     /// No exception is raised if the set already contains the given element.
     static member Add (value, charSet : CharSet) : CharSet =
-        CharSet (CharDiet.add value charSet.Tree)
+        // Preconditions
+        checkNonNull "charSet" charSet
+
+        // OPTIMIZATION : If the resulting tree is the same as the original, return
+        // the input set instead of creating a new set.
+        let result = CharDiet.add value charSet.Tree
+        if charSet.Tree === result then charSet
+        else CharSet (result)
 
     //
     static member AddRange (lower, upper, charSet : CharSet) : CharSet =
-        CharSet (CharDiet.addRange (lower, upper) charSet.Tree)
+        // Preconditions
+        checkNonNull "charSet" charSet
+
+        // For compatibility with the F# range operator, we don't raise
+        // an exception if lower > upper; that is considered an empty range,
+        // so here we just return the input set without modifying it.
+        if lower > upper then charSet
+        elif lower = upper then
+            // Add the single value to the tree.
+            CharSet.Add (lower, charSet)
+        else
+            // lower < upper
+            // OPTIMIZATION : If the resulting tree is the same as the original,
+            // return the input set instead of creating a new set.
+            let result = CharDiet.addRange (lower, upper) charSet.Tree
+            if charSet.Tree === result then charSet
+            else CharSet (result)
 
     //
     static member Remove (value, charSet : CharSet) : CharSet =
-        CharSet (CharDiet.remove value charSet.Tree)
+        // Preconditions
+        checkNonNull "charSet" charSet
+
+        // OPTIMIZATION : If the resulting tree is the same as the original,
+        // return the input set instead of creating a new set.
+        let result = CharDiet.remove value charSet.Tree
+        if charSet.Tree === result then charSet
+        else CharSet (result)
 
     //
     static member Contains (value, charSet : CharSet) : bool =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         CharDiet.contains value charSet.Tree
 
     //
     static member OfSeq (sequence : seq<char>) : CharSet =
-        CharSet (CharDiet.ofSeq sequence)
+        // Preconditions
+        checkNonNull "sequence" sequence
+
+        // If the sequence is empty, return immediately.
+        if Seq.isEmpty sequence then empty
+        else
+            let tree =
+                (Empty, sequence)
+                ||> Seq.fold (fun tree el ->
+                    CharDiet.add el tree)
+            CharSet (tree)
 
     //
     static member OfList (list : char list) : CharSet =
-        CharSet (CharDiet.ofList list)
+        // Preconditions
+        checkNonNull "list" list
+
+        // If the list is empty, return immediately.
+        if List.isEmpty list then empty
+        else
+            let tree =
+                (Empty, list)
+                ||> List.fold (fun tree el ->
+                    CharDiet.add el tree)
+            CharSet (tree)
 
     //
     static member OfArray (array : char[]) : CharSet =
-        CharSet (CharDiet.ofArray array)
+        // Preconditions
+        checkNonNull "array" array
+
+        // If the array is empty, return immediately.
+        if Array.isEmpty array then empty
+        else
+            let tree =
+                (Empty, array)
+                ||> Array.fold (fun tree el ->
+                    CharDiet.add el tree)
+            CharSet (tree)
 
     //
     static member OfSet (set : Set<char>) : CharSet =
-        CharSet (CharDiet.ofSet set)
+        // Preconditions
+        checkNonNull "set" set
+
+        // If the set is empty, return immediately.
+        if Set.isEmpty set then empty
+        else
+            let tree =
+                (Empty, set)
+                ||> Set.fold (fun tree el ->
+                    CharDiet.add el tree)
+            CharSet (tree)
 
     //
     static member ToSeq (charSet : CharSet) : seq<char> =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         CharDiet.toSeq charSet.Tree
 
     //
     static member ToList (charSet : CharSet) : char list =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         CharDiet.toList charSet.Tree
 
     //
     static member ToArray (charSet : CharSet) : char[] =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         CharDiet.toArray charSet.Tree
 
     //
     static member ToSet (charSet : CharSet) : Set<char> =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         CharDiet.toSet charSet.Tree
 
     //
     static member Difference (charSet1 : CharSet, charSet2 : CharSet) : CharSet =
-        CharSet (CharDiet.difference charSet1.Tree charSet2.Tree)
+        // Preconditions
+        checkNonNull "charSet1" charSet1
+        checkNonNull "charSet2" charSet2
+
+        // OPTIMIZATION : If the result is the same as either input set's tree,
+        // return that set instead of creating a new one.
+        let result = CharDiet.difference charSet1.Tree charSet2.Tree
+        if charSet1.Tree === result then charSet1
+        elif charSet2.Tree === result then charSet2
+        else CharSet (result)
 
     //
     static member Intersect (charSet1 : CharSet, charSet2 : CharSet) : CharSet =
-        CharSet (CharDiet.intersect charSet1.Tree charSet2.Tree)
+        // Preconditions
+        checkNonNull "charSet1" charSet1
+        checkNonNull "charSet2" charSet2
+
+        // OPTIMIZATION : If the result is the same as either input set's tree,
+        // return that set instead of creating a new one.
+        let result = CharDiet.intersect charSet1.Tree charSet2.Tree
+        if charSet1.Tree === result then charSet1
+        elif charSet2.Tree === result then charSet2
+        else CharSet (result)
 
     //
     static member Union (charSet1 : CharSet, charSet2 : CharSet) : CharSet =
-        CharSet (CharDiet.union charSet1.Tree charSet2.Tree)
+        // Preconditions
+        checkNonNull "charSet1" charSet1
+        checkNonNull "charSet2" charSet2
+
+        // OPTIMIZATION : If the result is the same as either input set's tree,
+        // return that set instead of creating a new one.
+        let result = CharDiet.union charSet1.Tree charSet2.Tree
+        if charSet1.Tree === result then charSet1
+        elif charSet2.Tree === result then charSet2
+        else CharSet (result)
 
     //
     static member Exists (predicate, charSet : CharSet) : bool =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         CharDiet.exists predicate charSet.Tree
 
     //
     static member Forall (predicate, charSet : CharSet) : bool =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         CharDiet.forall predicate charSet.Tree
 
     //
     static member Fold (folder : 'State -> _ -> 'State, state, charSet : CharSet) : 'State =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         CharDiet.fold folder state charSet.Tree
 
     //
     static member FoldBack (folder : _ -> 'State -> 'State, state, charSet : CharSet) : 'State =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         CharDiet.foldBack folder charSet.Tree state
 
     //
     static member Iter (action, charSet : CharSet) : unit =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         CharDiet.iter action charSet.Tree
 
     //
     static member IterIntervals (action, charSet : CharSet) : unit =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         let action = FSharpFunc<_,_,_>.Adapt action
         charSet.Tree |> AvlTree.Iter action.Invoke
 
     //
     static member Map (mapping : char -> char, charSet : CharSet) : CharSet =
-        notImpl "CharSet.Map"
+        // Preconditions
+        checkNonNull "charSet" charSet
+
+        let mappedTree =
+            (CharDiet.empty, charSet.Tree)
+            ||> CharDiet.fold (fun mappedTree ch ->
+                CharDiet.add (mapping ch) mappedTree)
+
+        CharSet (mappedTree)
 
     //
     static member Filter (predicate : char -> bool, charSet : CharSet) : CharSet =
-        notImpl "CharSet.Filter"
+        // Preconditions
+        checkNonNull "charSet" charSet
+
+        let filteredTree =
+            (charSet.Tree, charSet.Tree)
+            ||> CharDiet.fold (fun filteredTree ch ->
+                if predicate ch then
+                    filteredTree
+                else
+                    CharDiet.remove ch filteredTree)
+
+        // OPTIMIZATION : If the filtered tree is the same as the input set's tree,
+        // return the input set instead of creating a new CharSet with the same tree.
+        if charSet.Tree === filteredTree then charSet
+        else CharSet (filteredTree)
 
     //
     static member Partition (predicate : char -> bool, charSet : CharSet) : CharSet * CharSet =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
         notImpl "CharSet.Partition"
 
     interface System.IComparable with
