@@ -32,6 +32,8 @@ open ExtCore.Control
 module internal Constants =
     //
     let [<Literal>] defaultStackCapacity = 16
+    //
+    let [<Literal>] balanceTolerance = 2u   //1u
 
 
 (*  NOTE :  The core functions implementing the AVL tree algorithm were extracted into OCaml
@@ -107,7 +109,7 @@ type internal AvlTree<'T when 'T : comparison> =
         AvlTree.Create (value, Empty, Empty)
 
     static member private mkt_bal_l (n, l, r : AvlTree<'T>) =
-        if AvlTree.Height l = AvlTree.Height r + 2u then
+        if AvlTree.Height l = AvlTree.Height r + balanceTolerance then
             match l with
             | Empty ->
                 failwith "mkt_bal_l"
@@ -124,7 +126,7 @@ type internal AvlTree<'T when 'T : comparison> =
             AvlTree.Create (n, l, r)
 
     static member private mkt_bal_r (n, l, r : AvlTree<'T>) =
-        if AvlTree.Height r = AvlTree.Height l + 2u then
+        if AvlTree.Height r = AvlTree.Height l + balanceTolerance then
             match r with
             | Empty ->
                 failwith "mkt_bal_r"
@@ -607,7 +609,7 @@ type internal AvlTree<'T when 'T : comparison> =
     static member Rebalance (t1, t2, k) : AvlTree<'T> =
         let t1h = AvlTree.Height t1
         let t2h = AvlTree.Height t2
-        if t2h > t1h + 2u then // right is heavier than left
+        if t2h > t1h + balanceTolerance then // right is heavier than left
             match t2 with
             | Node (t2l, t2r, t2k, _) ->
                 // one of the nodes must have height > height t1 + 1
@@ -626,7 +628,7 @@ type internal AvlTree<'T when 'T : comparison> =
                         t2r)
             | _ -> failwith "rebalance"
 
-        elif t1h > t2h + 2u then // left is heavier than right
+        elif t1h > t2h + balanceTolerance then // left is heavier than right
             match t1 with
             | Node (t1l, t1r, t1k, _) ->
                 // one of the nodes must have height > height t2 + 1
@@ -676,11 +678,11 @@ type internal AvlTree<'T when 'T : comparison> =
             // Either (a) h1,h2 differ by at most 2 - no rebalance needed.
             //        (b) h1 too small, i.e. h1+2 < h2
             //        (c) h2 too small, i.e. h2+2 < h1
-            if   h1+2u < h2 then
+            if   h1+balanceTolerance < h2 then
                 // case: b, h1 too small
                 // push t1 into low side of t2, may increase height by 1 so rebalance
                 AvlTree.Rebalance (AvlTree.Balance (comparer, t1, t21, k), t22, k2)
-            elif h2+2u < h1 then
+            elif h2+balanceTolerance < h1 then
                 // case: c, h2 too small
                 // push t2 into high side of t1, may increase height by 1 so rebalance
                 AvlTree.Rebalance (t11, AvlTree.Balance (comparer, t12, t2, k), k1)
@@ -849,9 +851,9 @@ type internal AvlTree<'T when 'T : comparison> =
         | _, Empty ->
             AvlTree.Insert (comparer, l, root)
         | Node (ll, lr, lx, lh), Node (rl, rr, rx, rh) ->
-            if lh > rh + 2u then
+            if lh > rh + balanceTolerance then
                 AvlTree.Balance (comparer, ll, AvlTree.Join comparer root lr r, lx)
-            else if rh > lh + 2u then
+            else if rh > lh + balanceTolerance then
                 AvlTree.Balance (comparer, AvlTree.Join comparer root l rl, rr, rx)
             else
                 AvlTree.Create (root, l, r)
@@ -1054,7 +1056,7 @@ module private Diet =
                 else
                     match right with
                     | Empty ->
-                        Node (left, right, (x, value), h)
+                        Node (left, Empty, (x, value), h)
                     | _ ->
                         let (u, v), r = AvlTree.ExtractMin right
                         if pred u = value then
@@ -1067,7 +1069,7 @@ module private Diet =
             else
                 match left with
                 | Empty ->
-                    Node (left, right, (value, y), h)
+                    Node (Empty, right, (value, y), h)
                 | _ ->
                     let (u, v), l = AvlTree.ExtractMax left
                     if succ v = value then
@@ -1363,8 +1365,8 @@ module private Diet =
             #endif
 
             let result, _, _ =
-                let head, stream' = AvlTree.ExtractMin stream    
-                diff' input (Some head) stream'
+                AvlTree.TryExtractMin stream    
+                ||> diff' input
 
             #if DEBUG
             let resultCount = count result
