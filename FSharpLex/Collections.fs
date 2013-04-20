@@ -1617,138 +1617,169 @@ type CharSet private (tree : CharDiet) =
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module CharSet =
     /// The empty set.
+    [<CompiledName("Empty")>]
     let empty = CharSet.Empty
 
     /// Returns 'true' if the set is empty.
+    [<CompiledName("IsEmpty")>]
     let inline isEmpty charSet =
         CharSet.IsEmpty charSet
 
-    /// The set containing the given element.
-    let inline singleton c =
-        CharSet.FromElement c
-
-    /// The set containing the elements in the given range.
-    let inline ofRange lowerBound upperBound =
-        CharSet.FromRange (lowerBound, upperBound)
-
     /// Returns the number of elements in the set.
+    [<CompiledName("Count")>]
     let inline count (charset : CharSet) =
         charset.Count
 
     /// Returns the number of intervals in the set.
+    [<CompiledName("IntervalCount")>]
     let inline intervalCount (charset : CharSet) =
         charset.IntervalCount
 
+    /// Returns the highest (greatest) value in the set.
+    [<CompiledName("MaxElement")>]
+    let inline maxElement (charSet : CharSet) =
+        charSet.MaxElement
+
+    /// Returns the lowest (least) value in the set.
+    [<CompiledName("MinElement")>]
+    let inline minElement (charSet : CharSet) =
+        charSet.MinElement
+
+    /// The set containing the given element.
+    [<CompiledName("Singleton")>]
+    let inline singleton c =
+        CharSet.FromElement c
+
+    /// Evaluates to 'true' if the given element is in the given set.
+    [<CompiledName("Contains")>]
+    let inline contains value charSet =
+        CharSet.Contains (value, charSet)
+
     /// Returns a new set with an element added to the set.
     /// No exception is raised if the set already contains the given element.
+    [<CompiledName("Add")>]
     let inline add value charSet =
         CharSet.Add (value, charSet)
 
     /// Returns a new set with a range of elements added to the set.
     /// No exception is raised if the set already contains any of the elements.
+    [<CompiledName("AddRange")>]
     let inline addRange lower upper charSet =
         CharSet.AddRange (lower, upper, charSet)
 
     /// Returns a new set with the given element removed.
     /// No exception is raised if the set doesn't contain the given element.
+    [<CompiledName("Remove")>]
     let inline remove value charSet =
         CharSet.Remove (value, charSet)
-
-    /// Evaluates to 'true' if the given element is in the given set.
-    let inline contains value charSet =
-        CharSet.Contains (value, charSet)
-
-    /// Applies the given accumulating function to all the elements of the set.
-    let inline fold (folder : 'State -> char -> 'State) (state : 'State) charSet =
-        CharSet.Fold (folder, state, charSet)
-
-    /// Applies the given accumulating function to all the elements of the set.
-    let inline foldBack (folder : char -> 'State -> 'State) charSet (state : 'State) =
-        CharSet.FoldBack (folder, state, charSet)
-
-    /// Returns a new set containing the results of applying the given function to each element of the input set.
-    let map (mapping : char -> char) charSet =
-        CharSet.Map (mapping, charSet)
-
-    /// Returns a new set containing only the elements of the collection for which the given predicate returns true.
-    let inline filter (predicate : char -> bool) charSet =
-        CharSet.Filter (predicate, charSet)
-
-    /// Applies the given function to each element of the set, in order from least to greatest.
-    let inline iter (action : char -> unit) charSet =
-        CharSet.Iter (action, charSet)
-
-    /// Applies the given function to each element of the set, in order from least to greatest.
-    let inline iterIntervals action charSet =
-        CharSet.IterIntervals (action, charSet)
 
     /// Tests if any element of the collection satisfies the given predicate.
     /// If the input function is <c>predicate</c> and the elements are <c>i0...iN</c>,
     /// then this function computes predicate <c>i0 or ... or predicate iN</c>.
+    [<CompiledName("Exists")>]
     let inline exists (predicate : char -> bool) charSet =
         CharSet.Exists (predicate, charSet)
 
     /// Tests if all elements of the collection satisfy the given predicate.
     /// If the input function is <c>p</c> and the elements are <c>i0...iN</c>,
     /// then this function computes <c>p i0 && ... && p iN</c>.
+    [<CompiledName("Forall")>]
     let inline forall (predicate : char -> bool) charSet =
         CharSet.Forall (predicate, charSet)
 
-    /// Creates a list that contains the elements of the set in order.
-    let inline toList charSet =
-        CharSet.ToList charSet
+    /// Applies the given function to each element of the set, in order from least to greatest.
+    [<CompiledName("Iter")>]
+    let inline iter (action : char -> unit) charSet =
+        CharSet.Iter (action, charSet)
 
-    /// Creates a set that contains the same elements as the given list.
-    let inline ofList list =
-        CharSet.OfList list
+    /// Applies the given function to each element of the set, in order from least to greatest.
+    [<CompiledName("IterIntervals")>]
+    let inline iterIntervals action charSet =
+        CharSet.IterIntervals (action, charSet)
+    
+    /// Applies the given accumulating function to all the elements of the set.
+    [<CompiledName("Fold")>]
+    let inline fold (folder : 'State -> char -> 'State) (state : 'State) charSet =
+        CharSet.Fold (folder, state, charSet)
 
-    /// Creates a Set that contains the same elements as the given CharSet.
-    let inline toSet charSet =
-        CharSet.ToSet charSet
+    /// Applies the given accumulating function to all the elements of the set.
+    [<CompiledName("FoldBack")>]
+    let inline foldBack (folder : char -> 'State -> 'State) charSet (state : 'State) =
+        CharSet.FoldBack (folder, state, charSet)
 
-    /// Creates a CharSet that contains the same elements as the given Set.
-    let inline ofSet set =
-        CharSet.OfSet set
+    /// Returns a new set containing the results of applying the given function to each element of the input set.
+    [<CompiledName("Map")>]
+    let map (mapping : char -> char) charSet =
+        CharSet.Map (mapping, charSet)
 
-    /// Creates an array that contains the elements of the set in order.
-    let inline toArray charSet =
-        CharSet.ToArray
+    /// Returns a new set containing only the elements of the collection for which the given predicate returns true.
+    [<CompiledName("Filter")>]
+    let inline filter (predicate : char -> bool) charSet =
+        CharSet.Filter (predicate, charSet)
 
-    /// Creates a set that contains the same elements as the given array.
-    let inline ofArray array =
-        CharSet.OfArray array
-
-    /// Returns an ordered view of the set as an enumerable object.
-    let inline toSeq charSet =
-        CharSet.ToSeq charSet
+    /// The set containing the elements in the given range.
+    [<CompiledName("OfRange")>]
+    let inline ofRange lowerBound upperBound =
+        CharSet.FromRange (lowerBound, upperBound)
 
     /// Creates a new set from the given enumerable object.
+    [<CompiledName("OfSeq")>]
     let inline ofSeq seq =
         CharSet.OfSeq seq
 
-    /// Returns the highest (greatest) value in the set.
-    let inline maxElement (charSet : CharSet) =
-        charSet.MaxElement
+    /// Creates a set that contains the same elements as the given list.
+    [<CompiledName("OfList")>]
+    let inline ofList list =
+        CharSet.OfList list
 
-    /// Returns the lowest (least) value in the set.
-    let inline minElement (charSet : CharSet) =
-        charSet.MinElement
+    /// Creates a set that contains the same elements as the given array.
+    [<CompiledName("OfArray")>]
+    let inline ofArray array =
+        CharSet.OfArray array
 
-    /// Splits the set into two sets containing the elements for which
-    /// the given predicate returns true and false respectively.
-    let inline partition predicate charSet =
-        CharSet.Partition (predicate, charSet)
+    /// Creates a CharSet that contains the same elements as the given Set.
+    [<CompiledName("OfSet")>]
+    let inline ofSet set =
+        CharSet.OfSet set
+
+    /// Returns an ordered view of the set as an enumerable object.
+    [<CompiledName("ToSeq")>]
+    let inline toSeq charSet =
+        CharSet.ToSeq charSet
+
+    /// Creates a list that contains the elements of the set in order.
+    [<CompiledName("ToList")>]
+    let inline toList charSet =
+        CharSet.ToList charSet
+
+    /// Creates an array that contains the elements of the set in order.
+    [<CompiledName("ToArray")>]
+    let inline toArray charSet =
+        CharSet.ToArray
+
+    /// Creates a Set that contains the same elements as the given CharSet.
+    [<CompiledName("ToSet")>]
+    let inline toSet charSet =
+        CharSet.ToSet charSet
 
     /// Returns a new set with the elements of the second set removed from the first.
+    [<CompiledName("Difference")>]
     let inline difference set1 set2 =
         CharSet.Difference (set1, set2)
 
     /// Computes the intersection of the two sets.
+    [<CompiledName("Intersect")>]
     let inline intersect set1 set2 =
         CharSet.Intersect (set1, set2)
 
     /// Computes the union of the two sets.
+    [<CompiledName("Union")>]
     let inline union set1 set2 =
         CharSet.Union (set1, set2)
 
+    /// Splits the set into two sets containing the elements for which
+    /// the given predicate returns true and false respectively.
+    [<CompiledName("Partition")>]
+    let inline partition predicate charSet =
+        CharSet.Partition (predicate, charSet)
 
