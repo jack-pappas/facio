@@ -946,26 +946,26 @@ module internal CharDiet =
                 else
                     match right with
                     | Empty ->
-                        Node (left, Empty, (x, value), h)
+                        AvlTree.Create ((x, value), left, Empty)
                     | _ ->
                         let (u, v), r = AvlTree.ExtractMin right
                         if pred u = value then
                             AvlTree.Join (comparer, left, r, (x, v))
                         else
-                            Node (left, right, (x, value), h)
+                            AvlTree.Create ((x, value), left, right)
 
             elif value < pred x then
                 AvlTree.Join (comparer, add value left, right, (x, y))
             else
                 match left with
                 | Empty ->
-                    Node (Empty, right, (value, y), h)
+                    AvlTree.Create ((value, y), Empty, right)
                 | _ ->
                     let (u, v), l = AvlTree.ExtractMax left
                     if succ v = value then
                         AvlTree.Join (comparer, l, right, (u, y))
                     else
-                        Node (left, right, (value, y), h)
+                        AvlTree.Create ((value, y), left, right)
 
     /// Returns a new set with the specified range of values added to the set.
     /// No exception is thrown if any of the values are already contained in the set.
@@ -1010,11 +1010,12 @@ module internal CharDiet =
                     if czx = 0 then
                         AvlTree.Reroot (comparer, left, right)
                     else
-                        Node (left, right, (x, pred y), h)
+                        AvlTree.Create ((x, pred y), left, right)
                 elif czx = 0 then
-                    Node (left, right, (succ x, y), h)
+                    AvlTree.Create ((succ x, y), left, right)
                 else
-                    addRange (succ value, y) (Node (left, right, (x, pred value), h))
+                    AvlTree.Create ((x, pred value), left, right)
+                    |> addRange (succ value, y)
 
     /// Determines if a value is greater than or equal to a given
     /// limit value if one is specified.
