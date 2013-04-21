@@ -111,7 +111,7 @@ type internal AvlTree<'T when 'T : comparison> =
         | _ ->
             AvlTree<'T>.CompareStacks (comparer, [s1], [s2])
 
-    /// Returns the height of a AvlTree.
+    /// Computes the height of a AvlTree (rather than returning the height value stored in it's root).
     [<Pure>]
     static member private ComputeHeight (tree : AvlTree<'T>) =
         match tree with
@@ -141,6 +141,7 @@ type internal AvlTree<'T when 'T : comparison> =
         | Node (_,_,_,h) -> h
 
     /// Returns the absolute difference in heights between two AvlTrees.
+    [<Pure>]
     static member private HeightDiff (t1, t2 : AvlTree<'T>) =
         (max (AvlTree.Height t1) (AvlTree.Height t2)) - (min (AvlTree.Height t1) (AvlTree.Height t2))
 
@@ -172,6 +173,7 @@ type internal AvlTree<'T when 'T : comparison> =
             AvlTree.MinElement left
 
     /// Determines if a AvlTree contains a specified value.
+    [<Pure>]
     static member Contains (comparer : IComparer<'T>, tree : AvlTree<'T>, value : 'T) =
         match tree with
         | Empty ->
@@ -255,7 +257,7 @@ type internal AvlTree<'T when 'T : comparison> =
             n, l
         | Node (left, r, n, _) ->
             let na, l = AvlTree.DeleteMin left
-            na, AvlTree.mkt_bal_r (n, left, r)
+            na, AvlTree.mkt_bal_r (n, l, r)
 
     /// Removes the maximum (greatest) value from an AvlTree,
     /// returning the value along with the updated tree.
@@ -278,31 +280,43 @@ type internal AvlTree<'T when 'T : comparison> =
         | Node (Empty, r, _, _) -> r
         | Node (left, Empty, _, _) ->
             left
-        | Node (left, right, _, _) ->
-            let new_n, l = AvlTree.DeleteMax left
-            AvlTree.mkt_bal_r (new_n, l, right)
+        | Node (left, r, _, _) ->
+            let root, l = AvlTree.DeleteMax left
+            AvlTree.mkt_bal_r (root, l, r)
 
     /// Removes the minimum (least) value from a AvlTree,
     /// returning the value along with the updated tree.
     /// No exception is thrown if the tree is empty.
     static member TryDeleteMin (tree : AvlTree<'T>) =
-        // Is the tree empty?
-        if AvlTree.IsEmptyTree tree then
+        match tree with
+        | Empty ->
             None, tree
-        else
-            let minElement, tree = AvlTree.DeleteMin tree
-            Some minElement, tree
+        | Node (l, Empty, n, _) ->
+            Some n, l
+        | Node (left, r, n, _) ->
+            let na, l = AvlTree.TryDeleteMin left
+            match na with
+            | None ->
+                na, l
+            | Some _ ->
+                na, AvlTree.mkt_bal_r (n, l, r)
 
     /// Removes the maximum (greatest) value from a AvlTree,
     /// returning the value along with the updated tree.
     /// No exception is thrown if the tree is empty.
     static member TryDeleteMax (tree : AvlTree<'T>) =
-        // Is the tree empty?
-        if AvlTree.IsEmptyTree tree then
+        match tree with
+        | Empty ->
             None, tree
-        else
-            let maxElement, tree = AvlTree.DeleteMax tree
-            Some maxElement, tree
+        | Node (l, Empty, n, _) ->
+            Some n, l
+        | Node (l, right, n, _) ->
+            let na, r = AvlTree.TryDeleteMax right
+            match na with
+            | None ->
+                na, l
+            | Some _ ->
+                na, AvlTree.mkt_bal_l (n, l, r)
 
     /// Removes the specified value from the tree.
     /// If the tree doesn't contain the value, no exception is thrown;
@@ -313,14 +327,23 @@ type internal AvlTree<'T when 'T : comparison> =
             Empty
         | Node (l, r, n, _) ->
             let comparison = comparer.Compare (value, n)
-            if comparison = 0 then              // x = n
+            if comparison = 0 then
+                // x = n
                 AvlTree.DeleteRoot tree
-            elif comparison < 0 then            // x < n
-                let la = AvlTree.Delete (comparer, l, value)
-                AvlTree.mkt_bal_r (n, la, r)
-            else                                // x > n
-                let a = AvlTree.Delete (comparer, r, value)
-                AvlTree.mkt_bal_l (n, l, a)
+            elif comparison < 0 then
+                // x < n
+                let l' = AvlTree.Delete (comparer, l, value)
+
+                // Only rebalance the tree if an element was actually deleted.
+                if l' === l then l
+                else AvlTree.mkt_bal_r (n, l', r)
+            else
+                // x > n
+                let r' = AvlTree.Delete (comparer, r, value)
+                
+                // Only rebalance the tree if an element was actually deleted.
+                if r' === r then r
+                else AvlTree.mkt_bal_l (n, l, r')
 
     /// Adds a value to a AvlTree.
     /// If the tree already contains the value, no exception is thrown;
@@ -331,14 +354,23 @@ type internal AvlTree<'T when 'T : comparison> =
             Node (Empty, Empty, value, 1u)
         | Node (l, r, n, _) ->
             let comparison = comparer.Compare (value, n)
-            if comparison = 0 then                              // x = n
+            if comparison = 0 then
+                // x = n
                 tree
-            elif comparison < 0 then                            // x < n
+            elif comparison < 0 then
+                // x < n
                 let l' = AvlTree.Insert (comparer, l, value)
-                AvlTree.mkt_bal_l (n, l', r)
-            else                                                // x > n
+
+                // Only rebalance the tree if an element was actually inserted.
+                if l' === l then l
+                else AvlTree.mkt_bal_l (n, l', r)
+            else
+                // x > n
                 let r' = AvlTree.Insert (comparer, r, value)
-                AvlTree.mkt_bal_r (n, l, r')
+                
+                // Only rebalance the tree if an element was actually inserted.
+                if r' === r then r
+                else AvlTree.mkt_bal_r (n, l, r')
 
     /// Counts the number of elements in the tree.
     static member Count (tree : AvlTree<'T>) =
