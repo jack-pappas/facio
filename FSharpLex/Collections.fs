@@ -731,7 +731,7 @@ type internal AvlTree<'T when 'T : comparison> =
                 let root, l' = AvlTree.DeleteMax l
                 AvlTree.Join (comparer, l', r, root)
             else
-                let root, r' = AvlTree.DeleteMax r
+                let root, r' = AvlTree.DeleteMin r
                 AvlTree.Join (comparer, l, r', root)
                 
 
