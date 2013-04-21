@@ -637,7 +637,7 @@ type internal AvlTree<'T when 'T : comparison> =
 
     //
     // TODO : This could be replaced by 'mkt_bal_l' and 'mkt_bal_r'.
-    static member Balance (l, r, n) : AvlTree<'T> =
+    static member private Balance (l, r, n) : AvlTree<'T> =
         // Preconditions
         assert (AvlTree.AvlInvariant l)
         assert (AvlTree.AvlInvariant r)
@@ -691,6 +691,7 @@ type internal AvlTree<'T when 'T : comparison> =
                             AvlTree.Create (rn, rlr, rr))
         else
             AvlTree.Create (n, l, r)
+            |> tap (fun x -> assert (AvlTree.AvlInvariant x))
 
     /// Join two trees together with the specified root element.
     /// Takes two trees representing disjoint sets and combines them, returning
@@ -711,11 +712,22 @@ type internal AvlTree<'T when 'T : comparison> =
             AvlTree.Insert (comparer, l, root)
         | Node (ll, lr, ln, lh), Node (rl, rr, rn, rh) ->
             if lh > rh + balanceTolerance then
-                AvlTree.Balance (ll, AvlTree.Join (comparer, lr, r, root), ln)
-            else if rh > lh + balanceTolerance then
-                AvlTree.Balance (AvlTree.Join (comparer, l, rl, root), rr, rn)
+                let r' =
+                    AvlTree.Join (comparer, lr, r, root)
+                    |> tap (fun x -> assert (AvlTree.AvlInvariant x))
+
+                AvlTree.Balance (ll, r', ln)
+                |> tap (fun x -> assert (AvlTree.AvlInvariant x))
+            elif rh > lh + balanceTolerance then
+                let l' =
+                    AvlTree.Join (comparer, l, rl, root)
+                    |> tap (fun x -> assert (AvlTree.AvlInvariant x))
+
+                AvlTree.Balance (l', rr, rn)
+                |> tap (fun x -> assert (AvlTree.AvlInvariant x))
             else
                 AvlTree.Create (root, l, r)
+                |> tap (fun x -> assert (AvlTree.AvlInvariant x))
 
     /// Reroot of balanced trees.
     /// Takes two trees representing disjoint sets and combines them, returning
@@ -840,11 +852,6 @@ module internal CharDiet =
             // Check that the intervals are disjoint and correctly ordered.
             && (intervalsDisjointAndCorrectlyOrdered tree Set.empty |> fst)
 
-    /// Determines if a DIET is correctly formed.
-    let private tapInvariant (tree : CharDiet) =
-        assert (dietInvariant tree)
-        tree
-
     //
     let rec internal (*private*) find_del_left p (tree : CharDiet) : char * CharDiet =
         // Preconditions
@@ -857,7 +864,7 @@ module internal CharDiet =
             if p > succ y then
                 let p', right' = find_del_left p right
                 assert (dietInvariant right')
-                p', tapInvariant <| CharDiet.Join (comparer, left, right', (x, y))
+                p', tap (fun x -> assert (dietInvariant x)) <| CharDiet.Join (comparer, left, right', (x, y))
             elif p < x then
                 find_del_left p left
             else
@@ -875,7 +882,7 @@ module internal CharDiet =
             if p < pred x then
                 let p', left' = find_del_right p left
                 assert (dietInvariant left')
-                p', tapInvariant <| CharDiet.Join (comparer, left', right, (x, y))
+                p', tap (fun x -> assert (dietInvariant x)) <| CharDiet.Join (comparer, left', right, (x, y))
             elif p > y then
                 find_del_right p right
             else
@@ -1009,50 +1016,50 @@ module internal CharDiet =
         match tree with
         | Empty ->
             singleton value
-            |> tapInvariant
+            |> tap (fun x -> assert (dietInvariant x))
         | Node (left, right, (x, y), h) ->
             if value >= x then
                 if value <= y then
                     // The value is already in [x, y] so the tree
                     // does not need to be modified.
                     tree
-                    |> tapInvariant
+                    |> tap (fun x -> assert (dietInvariant x))
                 elif value > succ y then
                     // The value is above the interval and is not adjacent
                     // to it, so recurse down the right subtree to add the value
                     // then join the result with the left subtree.
                     CharDiet.Join (comparer, left, add value right, (x, y))
-                    |> tapInvariant
+                    |> tap (fun x -> assert (dietInvariant x))
                 else
                     match right with
                     | Empty ->
                         CharDiet.Create ((x, value), left, Empty)
-                        |> tapInvariant
+                        |> tap (fun x -> assert (dietInvariant x))
                     | _ ->
                         let (u, v), r = CharDiet.DeleteMin right
                         if pred u = value then
                             CharDiet.Join (comparer, left, r, (x, v))
-                            |> tapInvariant
+                            |> tap (fun x -> assert (dietInvariant x))
                         else
                             CharDiet.Create ((x, value), left, right)
-                            |> tapInvariant
+                            |> tap (fun x -> assert (dietInvariant x))
 
             elif value < pred x then
                 CharDiet.Join (comparer, add value left, right, (x, y))
-                |> tapInvariant
+                |> tap (fun x -> assert (dietInvariant x))
             else
                 match left with
                 | Empty ->
                     CharDiet.Create ((value, y), Empty, right)
-                    |> tapInvariant
+                    |> tap (fun x -> assert (dietInvariant x))
                 | _ ->
                     let (u, v), l = CharDiet.DeleteMax left
                     if succ v = value then
                         CharDiet.Join (comparer, l, right, (u, y))
-                        |> tapInvariant
+                        |> tap (fun x -> assert (dietInvariant x))
                     else
                         CharDiet.Create ((value, y), left, right)
-                        |> tapInvariant
+                        |> tap (fun x -> assert (dietInvariant x))
 
     /// Returns a new set with the specified range of values added to the set.
     /// No exception is thrown if any of the values are already contained in the set.
@@ -1065,18 +1072,19 @@ module internal CharDiet =
         match tree with
         | Empty ->
             CharDiet.Singleton (a, b)
-            |> tapInvariant
+            |> tap (fun x -> assert (dietInvariant x))
         | Node (left, right, (x, y), _) ->
             if b < pred x then
                 let left' = addRange (a, b) left
                 assert (dietInvariant left')
                 CharDiet.Join (comparer, left', right, (x, y))
-                |> tapInvariant
+
+                |> tap (fun x -> assert (dietInvariant x))
             elif a > succ y then
                 let right' = addRange (a, b) right
                 assert (dietInvariant right')
                 CharDiet.Join (comparer, left, right', (x, y))
-                |> tapInvariant
+                |> tap (fun x -> assert (dietInvariant x))
             else
                 // Now, we know the interval (a, b) being inserted either overlaps or is
                 // adjancent to the current inverval (x, y), so we merge them.
@@ -1090,7 +1098,7 @@ module internal CharDiet =
                 assert (dietInvariant left')
                 assert (dietInvariant right')
                 CharDiet.Join (comparer, left', right', (x', y'))
-                |> tapInvariant
+                |> tap (fun x -> assert (dietInvariant x))
 
     /// Returns a new set with the given element removed.
     /// No exception is thrown if the set doesn't contain the specified element.
@@ -1149,7 +1157,7 @@ module internal CharDiet =
                     union' left (Some <| pred a) head stream
                 else
                     left, head, stream
-            union_helper (tapInvariant left') (a, b) right limit head (tapInvariant stream')
+            union_helper ((tap (fun x -> assert (dietInvariant x))) left') (a, b) right limit head ((tap (fun x -> assert (dietInvariant x))) stream')
 
     /// Helper function for computing the union of two sets.
     and private union_helper left (a, b) (right : CharDiet) limit head stream =
@@ -1162,7 +1170,7 @@ module internal CharDiet =
 
         match head with
         | None ->
-            (tapInvariant <| CharDiet.Join (comparer, left, right, (a, b))), None, Empty
+            (tap (fun x -> assert (dietInvariant x)) <| CharDiet.Join (comparer, left, right, (a, b))), None, Empty
         | Some (x, y) ->
             if y < a && y < pred a then
                 let left' = addRange (x, y) left
@@ -1171,7 +1179,7 @@ module internal CharDiet =
 
             elif x > b && x > succ b then
                 let right', head, stream = union' right limit head stream
-                (tapInvariant <| CharDiet.Join (comparer, left, right', (a, b))), head, stream
+                (tap (fun x -> assert (dietInvariant x)) <| CharDiet.Join (comparer, left, right', (a, b))), head, stream
 
             elif b >= y then
                 CharDiet.TryDeleteMin stream
@@ -1182,7 +1190,7 @@ module internal CharDiet =
 
             else
                 let right', head, stream = union' right limit (Some (min a x, y)) stream
-                (tapInvariant <| CharDiet.Reroot (comparer, left, right')), head, stream
+                (tap (fun x -> assert (dietInvariant x)) <| CharDiet.Reroot (comparer, left, right')), head, stream
 
     /// Computes the union of the two sets.
     let rec union (input : CharDiet) (stream : CharDiet) : CharDiet =
@@ -1258,7 +1266,7 @@ module internal CharDiet =
                 else
                     Empty, head, stream
 
-            inter_helper (a, b) right (tapInvariant left') head (tapInvariant stream')
+            inter_helper (a, b) right (tap (fun x -> assert (dietInvariant x)) <| left') head (tap (fun x -> assert (dietInvariant x)) <| stream')
 
     /// Helper function for computing the intersection of two sets.
     and private inter_helper (a, b) (right : CharDiet) (left : CharDiet) head stream =
@@ -1282,17 +1290,17 @@ module internal CharDiet =
                     ||> inter_helper (a, b) right left
             elif b < x then
                 let right, head, stream = inter' right head stream
-                (tapInvariant <| CharDiet.Reroot (comparer, left, right)), head, stream
+                (tap (fun x -> assert (dietInvariant x)) <| CharDiet.Reroot (comparer, left, right)), head, stream
             elif y >= clampedPred y b then
                 let right, head, stream = inter' right head stream
                 let right' =
                     CharDiet.Join (comparer, left, right, (max x a, min y b))
-                    |> tapInvariant
+                    |> tap (fun x -> assert (dietInvariant x))
                 right', head, stream
             else
                 let left =
                     addRange (max x a, y) left
-                    |> tapInvariant
+                    |> tap (fun x -> assert (dietInvariant x))
                 inter_helper (succ y, b) right left head stream
 
     /// Computes the intersection of the two sets.
