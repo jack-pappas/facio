@@ -101,6 +101,7 @@ type internal AvlTree<'T when 'T : comparison> =
         | _, (Node (n2l, n2r, n2k, _) :: t2) ->
             AvlTree.CompareStacks (comparer, l1, n2l :: Node (Empty, n2r, n2k, 0u) :: t2)
                 
+    //
     static member Compare (comparer : IComparer<'T>, s1 : AvlTree<'T>, s2 : AvlTree<'T>) : int =
         match s1, s2 with
         | Empty, Empty -> 0
@@ -147,6 +148,40 @@ type internal AvlTree<'T when 'T : comparison> =
         | Empty -> true
         | Node (_,_,_,_) -> false
 
+    /// Gets the maximum (greatest) value stored in the AvlTree.
+    static member MaxElement (tree : AvlTree<'T>) =
+        match tree with
+        | Empty ->
+            invalidArg "tree" "The tree is empty."
+        | Node (_, Empty, n, _) ->
+            n
+        | Node (_, right, _, _) ->
+            AvlTree.MaxElement right
+
+    /// Gets the minimum (least) value stored in the AvlTree.
+    static member MinElement (tree : AvlTree<'T>) =
+        match tree with
+        | Empty ->
+            invalidArg "tree" "The tree is empty."
+        | Node (Empty, _, n, _) ->
+            n
+        | Node (left, _, _, _) ->
+            AvlTree.MinElement left
+
+    /// Determines if a AvlTree contains a specified value.
+    static member Contains (comparer : IComparer<'T>, tree : AvlTree<'T>, value : 'T) =
+        match tree with
+        | Empty ->
+            false
+        | Node (l, r, n, _) ->
+            let comparison = comparer.Compare (value, n)
+            if comparison = 0 then      // value = n
+                true
+            elif comparison < 0 then    // value < n
+                AvlTree.Contains (comparer, l, value)
+            else                        // value > n
+                AvlTree.Contains (comparer, r, value)
+
     /// Creates a AvlTree whose root node holds the specified value
     /// and the specified left and right subtrees.
     static member inline Create (value, l, r : AvlTree<'T>) =
@@ -159,7 +194,13 @@ type internal AvlTree<'T when 'T : comparison> =
     static member Singleton value : AvlTree<'T> =
         AvlTree.Create (value, Empty, Empty)
 
+    //
     static member private mkt_bal_l (n, l, r : AvlTree<'T>) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant l)
+        assert (AvlTree.AvlInvariant r)
+        assert (AvlTree.Height l <= AvlTree.Height r + balanceTolerance)
+
         if AvlTree.Height l = AvlTree.Height r + balanceTolerance then
             match l with
             | Empty ->
@@ -176,7 +217,13 @@ type internal AvlTree<'T when 'T : comparison> =
         else
             AvlTree.Create (n, l, r)
 
+    //
     static member private mkt_bal_r (n, l, r : AvlTree<'T>) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant l)
+        assert (AvlTree.AvlInvariant r)
+        assert (AvlTree.Height r <= AvlTree.Height l + balanceTolerance)
+
         if AvlTree.Height r = AvlTree.Height l + balanceTolerance then
             match r with
             | Empty ->
@@ -193,40 +240,64 @@ type internal AvlTree<'T when 'T : comparison> =
         else
             AvlTree.Create (n, l, r)
 
+    /// Removes the minimum (least) value from an AvlTree,
+    /// returning the value along with the updated tree.
+    static member DeleteMin (tree : AvlTree<'T>) =
+        match tree with
+        | Empty ->
+            invalidArg "tree" "Cannot delete the minimum value from an empty tree."
+        | Node (l, Empty, n, _) ->
+            n, l
+        | Node (left, r, n, _) ->
+            let na, l = AvlTree.DeleteMin left
+            na, AvlTree.mkt_bal_r (n, left, r)
+
+    /// Removes the maximum (greatest) value from an AvlTree,
+    /// returning the value along with the updated tree.
     static member DeleteMax (tree : AvlTree<'T>) =
         match tree with
         | Empty ->
             invalidArg "tree" "Cannot delete the maximum value from an empty tree."
         | Node (l, Empty, n, _) ->
             n, l
-        | Node (l, (Node (_,_,_,_) as right), n, _) ->
+        | Node (l, right, n, _) ->
             let na, r = AvlTree.DeleteMax right
             na, AvlTree.mkt_bal_l (n, l, r)
 
+    /// Removes the root (median) value from an AvlTree,
+    /// returning the value along with the updated tree.
     static member DeleteRoot (tree : AvlTree<'T>) =
         match tree with
         | Empty ->
             invalidArg "tree" "Cannot delete the root of an empty tree."
         | Node (Empty, r, _, _) -> r
-        | Node ((Node (_,_,_,_) as left), Empty, _, _) ->
+        | Node (left, Empty, _, _) ->
             left
-        | Node ((Node (_,_,_,_) as left), (Node (_,_,_,_) as right), _, _) ->
+        | Node (left, right, _, _) ->
             let new_n, l = AvlTree.DeleteMax left
             AvlTree.mkt_bal_r (new_n, l, right)
 
-    /// Determines if a AvlTree contains a specified value.
-    static member Contains (comparer : IComparer<'T>, tree : AvlTree<'T>, value : 'T) =
-        match tree with
-        | Empty ->
-            false
-        | Node (l, r, n, _) ->
-            let comparison = comparer.Compare (value, n)
-            if comparison = 0 then      // value = n
-                true
-            elif comparison < 0 then    // value < n
-                AvlTree.Contains (comparer, l, value)
-            else                        // value > n
-                AvlTree.Contains (comparer, r, value)
+    /// Removes the minimum (least) value from a AvlTree,
+    /// returning the value along with the updated tree.
+    /// No exception is thrown if the tree is empty.
+    static member TryDeleteMin (tree : AvlTree<'T>) =
+        // Is the tree empty?
+        if AvlTree.IsEmptyTree tree then
+            None, tree
+        else
+            let minElement, tree = AvlTree.DeleteMin tree
+            Some minElement, tree
+
+    /// Removes the maximum (greatest) value from a AvlTree,
+    /// returning the value along with the updated tree.
+    /// No exception is thrown if the tree is empty.
+    static member TryDeleteMax (tree : AvlTree<'T>) =
+        // Is the tree empty?
+        if AvlTree.IsEmptyTree tree then
+            None, tree
+        else
+            let maxElement, tree = AvlTree.DeleteMax tree
+            Some maxElement, tree
 
     /// Removes the specified value from the tree.
     /// If the tree doesn't contain the value, no exception is thrown;
@@ -263,80 +334,6 @@ type internal AvlTree<'T when 'T : comparison> =
             else                                                // x > n
                 let r' = AvlTree.Insert (comparer, r, value)
                 AvlTree.mkt_bal_r (n, l, r')
-
-    /// Gets the maximum (greatest) value stored in the AvlTree.
-    static member MaxElement (tree : AvlTree<'T>) =
-        match tree with
-        | Empty ->
-            invalidArg "tree" "The tree is empty."
-        | Node (_, Empty, n, _) ->
-            n
-        | Node (_, right, _, _) ->
-            AvlTree.MaxElement right
-
-    /// Gets the minimum (least) value stored in the AvlTree.
-    static member MinElement (tree : AvlTree<'T>) =
-        match tree with
-        | Empty ->
-            invalidArg "tree" "The tree is empty."
-        | Node (Empty, _, n, _) ->
-            n
-        | Node (left, _, _, _) ->
-            AvlTree.MinElement left
-
-    /// Extracts the minimum (least) value from a AvlTree,
-    /// returning the value along with the updated tree.
-    static member ExtractMin (tree : AvlTree<'T>) =
-        match tree with
-        | Empty ->
-            invalidArg "tree" "The tree is empty."
-        | Node (Empty, r, n, _) ->
-            n, r
-        | Node (Node (left, mid, a, _), r, x, _) ->
-            // Rebalance the tree at the same time we're traversing downwards
-            // to find the minimum value. This avoids the need to perform a
-            // second traversal to remove the element once it's found.
-            let n = AvlTree.Create (x, mid, r)
-            AvlTree.Create (a, left, n)
-            |> AvlTree.ExtractMin
-
-    /// Extracts the minimum (least) value from a AvlTree,
-    /// returning the value along with the updated tree.
-    /// No exception is thrown if the tree is empty.
-    static member TryExtractMin (tree : AvlTree<'T>) =
-        // Is the tree empty?
-        if AvlTree.IsEmptyTree tree then
-            None, tree
-        else
-            let minElement, tree = AvlTree.ExtractMin tree
-            Some minElement, tree
-
-    /// Extracts the maximum (greatest) value from a AvlTree,
-    /// returning the value along with the updated tree.
-    static member ExtractMax (tree : AvlTree<'T>) =
-        match tree with
-        | Empty ->
-            invalidArg "tree" "The tree is empty."
-        | Node (l, Empty, n, _) ->
-            n, l
-        | Node (l, Node (mid, right, a, _), x, _) ->
-            // Rebalance the tree at the same time we're traversing downwards
-            // to find the maximum value. This avoids the need to perform a
-            // second traversal to remove the element once it's found.
-            let n = AvlTree.Create (x, l, mid)
-            AvlTree.Create (a, n, right)
-            |> AvlTree.ExtractMax
-
-    /// Extracts the maximum (greatest) value from a AvlTree,
-    /// returning the value along with the updated tree.
-    /// No exception is thrown if the tree is empty.
-    static member TryExtractMax (tree : AvlTree<'T>) =
-        // Is the tree empty?
-        if AvlTree.IsEmptyTree tree then
-            None, tree
-        else
-            let maxElement, tree = AvlTree.ExtractMax tree
-            Some maxElement, tree
 
     /// Counts the number of elements in the tree.
     static member Count (tree : AvlTree<'T>) =
@@ -635,7 +632,7 @@ type internal AvlTree<'T when 'T : comparison> =
 
     //
     // TODO : This could be replaced by 'mkt_bal_l' and 'mkt_bal_r'.
-    static member Balance (l, r, x) : AvlTree<'T> =
+    static member Balance (l, r, n) : AvlTree<'T> =
         // Preconditions
         assert (AvlTree.AvlInvariant l)
         assert (AvlTree.AvlInvariant r)
@@ -647,60 +644,58 @@ type internal AvlTree<'T when 'T : comparison> =
             match l with
             | Empty ->
                 failwith "rebalance"
-            | Node (ll, lr, lx, _) ->
+            | Node (ll, lr, ln, _) ->
                 // one of the nodes must have height > height r + 1
                 if AvlTree.Height ll > AvlTree.Height lr then
                     AvlTree.Create (
-                        lx,
+                        ln,
                         ll,
-                        AvlTree.Create (x, lr, r))
+                        AvlTree.Create (n, lr, r))
                 else
                     // balance right: combination
                     match lr with
                     | Empty ->
                         failwith "rebalance"
-                    | Node (lrl, lrr, lrx, _) ->
+                    | Node (lrl, lrr, lrn, _) ->
                         AvlTree.Create (
-                            lrx,
-                            AvlTree.Create (lx, ll, lrl),
-                            AvlTree.Create (x, lrr, r))
+                            lrn,
+                            AvlTree.Create (ln, ll, lrl),
+                            AvlTree.Create (n, lrr, r))
                     
         elif hr > hl + balanceTolerance then // right is heavier than left
             match r with
             | Empty ->
                 failwith "rebalance"
-            | Node (rl, rr, rx, _) ->
+            | Node (rl, rr, rn, _) ->
                 // one of the nodes must have height > height t1 + 1
                 if AvlTree.Height rr > AvlTree.Height rl then
                     // rotate left
                     AvlTree.Create (
-                        rx,
-                        AvlTree.Create (x, l, rl),
+                        rn,
+                        AvlTree.Create (n, l, rl),
                         rr)
                 else
                     // balance left: combination
                     match rl with
                     | Empty ->
                         failwith "rebalance"
-                    | Node (rll, rlr, rlx, _) ->
+                    | Node (rll, rlr, rln, _) ->
                         AvlTree.Create (
-                            rlx,
-                            AvlTree.Create (x, l, rll),
-                            AvlTree.Create (rx, rlr, rr))
+                            rln,
+                            AvlTree.Create (n, l, rll),
+                            AvlTree.Create (rn, rlr, rr))
         else
-            AvlTree.Create (x, l, r)
+            AvlTree.Create (n, l, r)
 
     /// Join two trees together with the specified root element.
     /// Takes two trees representing disjoint sets and combines them, returning
     /// a new balanced tree representing the union of the two sets and the given root element.
-    /// The resulting tree may be unbalanced.
-        // NOTE : Are we sure about this? It looks like the resulting tree will _always_
-        // be balanced in this implementation.
+    /// This is essentially a recursive version of Balance which can handle
+    /// any difference in height between the trees.
     static member Join (comparer, l, r : AvlTree<'T>, root) : AvlTree<'T> =
         // Preconditions
         assert (AvlTree.AvlInvariant l)
         assert (AvlTree.AvlInvariant r)
-        assert (AvlTree.HeightDiff (l, r) <= (balanceTolerance + 1u))
 
         match l, r with
         | Empty, Empty ->
@@ -709,11 +704,11 @@ type internal AvlTree<'T when 'T : comparison> =
             AvlTree.Insert (comparer, r, root)
         | _, Empty ->
             AvlTree.Insert (comparer, l, root)
-        | Node (ll, lr, lx, lh), Node (rl, rr, rx, rh) ->
+        | Node (ll, lr, ln, lh), Node (rl, rr, rn, rh) ->
             if lh > rh + balanceTolerance then
-                AvlTree.Balance (ll, AvlTree.Join (comparer, lr, r, root), lx)
+                AvlTree.Balance (ll, AvlTree.Join (comparer, lr, r, root), ln)
             else if rh > lh + balanceTolerance then
-                AvlTree.Balance (AvlTree.Join (comparer, l, rl, root), rr, rx)
+                AvlTree.Balance (AvlTree.Join (comparer, l, rl, root), rr, rn)
             else
                 AvlTree.Create (root, l, r)
 
@@ -733,10 +728,10 @@ type internal AvlTree<'T when 'T : comparison> =
             set
         | Node (_,_,_,lh), Node (_,_,_,rh) ->
             if lh > rh then
-                let root, l' = AvlTree.ExtractMax l
+                let root, l' = AvlTree.DeleteMax l
                 AvlTree.Join (comparer, l', r, root)
             else
-                let root, r' = AvlTree.ExtractMin r
+                let root, r' = AvlTree.DeleteMax r
                 AvlTree.Join (comparer, l, r', root)
                 
 
@@ -940,8 +935,8 @@ module internal CharDiet =
         | Empty, Empty -> 0
         | Empty, Node (_,_,_,_) -> -1
         | Node (_,_,_,_), Node (_,_,_,_) ->
-            let (ix1, iy1), r1 = AvlTree.ExtractMin t1
-            let (ix2, iy2), r2 = AvlTree.ExtractMin t2
+            let (ix1, iy1), r1 = AvlTree.DeleteMin t1
+            let (ix2, iy2), r2 = AvlTree.DeleteMin t2
             let c =
                 match compare ix1 ix2 with
                 | 0 -> compare iy1 iy2
@@ -1021,7 +1016,7 @@ module internal CharDiet =
                     | Empty ->
                         AvlTree.Create ((x, value), left, Empty)
                     | _ ->
-                        let (u, v), r = AvlTree.ExtractMin right
+                        let (u, v), r = AvlTree.DeleteMin right
                         if pred u = value then
                             AvlTree.Join (comparer, left, r, (x, v))
                         else
@@ -1034,7 +1029,7 @@ module internal CharDiet =
                 | Empty ->
                     AvlTree.Create ((value, y), Empty, right)
                 | _ ->
-                    let (u, v), l = AvlTree.ExtractMax left
+                    let (u, v), l = AvlTree.DeleteMax left
                     if succ v = value then
                         AvlTree.Join (comparer, l, right, (u, y))
                     else
@@ -1148,7 +1143,7 @@ module internal CharDiet =
         | Some (x, y) ->
             if y < a && y < pred a then
                 let left' = addRange (x, y) left
-                AvlTree.TryExtractMin stream
+                AvlTree.TryDeleteMin stream
                 ||> union_helper left' (a, b) right limit
 
             elif x > b && x > succ b then
@@ -1156,7 +1151,7 @@ module internal CharDiet =
                 AvlTree.Join (comparer, left, right', (a, b)), head, stream
 
             elif b >= y then
-                AvlTree.TryExtractMin stream
+                AvlTree.TryDeleteMin stream
                 ||> union_helper left (min a x, b) right limit
 
             elif greater_limit limit y then
@@ -1260,7 +1255,7 @@ module internal CharDiet =
                 | Empty ->
                     left, None, Empty
                 | _ ->
-                    AvlTree.TryExtractMin stream
+                    AvlTree.TryDeleteMin stream
                     ||> inter_helper (a, b) right left
             elif b < x then
                 let right, head, stream = inter' right head stream
@@ -1299,7 +1294,7 @@ module internal CharDiet =
             #endif
 
             let result, _, _ =
-                AvlTree.TryExtractMin stream
+                AvlTree.TryDeleteMin stream
                 ||> inter' input
             assert (dietInvariant result)
 
@@ -1358,7 +1353,7 @@ module internal CharDiet =
         | Some (x, y) ->
             if y < a then
                 // [x, y] and [a, b] are disjoint
-                AvlTree.TryExtractMin stream
+                AvlTree.TryDeleteMin stream
                 ||> diff_helper (a, b) right left
             elif b < x then
                 // [a, b] and [x, y] are disjoint
@@ -1371,7 +1366,7 @@ module internal CharDiet =
             elif y < b then
                 // [a, b] and [x, y] overlap
                 // y < b
-                AvlTree.TryExtractMin stream
+                AvlTree.TryDeleteMin stream
                 ||> diff_helper (succ y, b) right left
             else
                 // [a, b] and [x, y] overlap
@@ -1396,7 +1391,7 @@ module internal CharDiet =
             #endif
 
             let result, _, _ =
-                AvlTree.TryExtractMin stream
+                AvlTree.TryDeleteMin stream
                 ||> diff' input
             assert (dietInvariant result)
 
