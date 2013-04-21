@@ -335,14 +335,14 @@ type internal AvlTree<'T when 'T : comparison> =
                 let l' = AvlTree.Delete (comparer, l, value)
 
                 // Only rebalance the tree if an element was actually deleted.
-                if l' === l then l
+                if l' === l then tree
                 else AvlTree.mkt_bal_r (n, l', r)
             else
                 // x > n
                 let r' = AvlTree.Delete (comparer, r, value)
                 
                 // Only rebalance the tree if an element was actually deleted.
-                if r' === r then r
+                if r' === r then tree
                 else AvlTree.mkt_bal_l (n, l, r')
 
     /// Adds a value to a AvlTree.
@@ -362,14 +362,14 @@ type internal AvlTree<'T when 'T : comparison> =
                 let l' = AvlTree.Insert (comparer, l, value)
 
                 // Only rebalance the tree if an element was actually inserted.
-                if l' === l then l
+                if l' === l then tree
                 else AvlTree.mkt_bal_l (n, l', r)
             else
                 // x > n
                 let r' = AvlTree.Insert (comparer, r, value)
                 
                 // Only rebalance the tree if an element was actually inserted.
-                if r' === r then r
+                if r' === r then tree
                 else AvlTree.mkt_bal_r (n, l, r')
 
     /// Counts the number of elements in the tree.
