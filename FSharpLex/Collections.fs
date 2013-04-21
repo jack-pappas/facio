@@ -22,6 +22,7 @@ namespace FSharpLex.SpecializedCollections
 open System
 open System.Collections.Generic
 open System.Diagnostics
+open System.Diagnostics.Contracts
 open OptimizedClosures
 open ExtCore
 open ExtCore.Collections
@@ -58,6 +59,7 @@ type internal AvlTree<'T when 'T : comparison> =
     | Node of AvlTree<'T> * AvlTree<'T> * 'T * uint32
 
     /// Returns the height of a AvlTree.
+    [<Pure>]
     static member private ComputeHeight (tree : AvlTree<'T>) =
         match tree with
         | Empty -> 0u
@@ -65,8 +67,7 @@ type internal AvlTree<'T when 'T : comparison> =
             1u + max (AvlTree.ComputeHeight l) (AvlTree.ComputeHeight r)
         
     /// Determines if a AvlTree is correctly formed.
-    /// It isn't necessary to call this at run-time, though it may be useful for asserting
-    /// the correctness of functions which weren't extracted from the Isabelle/HOL theory.
+    [<Pure>]
     static member internal AvlInvariant (tree : AvlTree<'T>) =
         match tree with
         | Empty -> true
@@ -80,12 +81,14 @@ type internal AvlTree<'T when 'T : comparison> =
             && AvlTree.AvlInvariant r
 
     /// Returns the height of a AvlTree.
+    [<Pure>]
     static member inline Height (tree : AvlTree<'T>) =
         match tree with
         | Empty -> 0u
         | Node (_,_,_,h) -> h
 
     /// Determines if a AvlTree is empty.
+    [<Pure>]
     static member inline IsEmptyTree (tree : AvlTree<'T>) =
         match tree with
         | Empty -> true
@@ -93,10 +96,12 @@ type internal AvlTree<'T when 'T : comparison> =
 
     /// Creates a AvlTree whose root node holds the specified value
     /// and the specified left and right subtrees.
+    [<Pure>]
     static member inline Create (value, l, r : AvlTree<'T>) =
         Node (l, r, value, (max (AvlTree.Height l) (AvlTree.Height r)) + 1u)
 
     /// Creates a AvlTree containing the specified value.
+    [<Pure>]
     static member Singleton value : AvlTree<'T> =
         AvlTree.Create (value, Empty, Empty)
 
@@ -156,6 +161,7 @@ type internal AvlTree<'T when 'T : comparison> =
             AvlTree.mkt_bal_r (new_n, l, right)
 
     /// Determines if a AvlTree contains a specified value.
+    [<Pure>]
     static member Contains (comparer : IComparer<'T>, tree : AvlTree<'T>, value : 'T) =
         match tree with
         | Empty ->
@@ -561,7 +567,7 @@ type internal AvlTree<'T when 'T : comparison> =
         }
 
     /// Returns a list containing the elements stored in
-    /// a AvlTree, ordered from least to greatest. 
+    /// a AvlTree, ordered from least to greatest.
     static member ToList (tree : AvlTree<'T>) =
         ([], tree)
         ||> AvlTree.FoldBack (fun el lst ->
@@ -664,6 +670,7 @@ type internal AvlTree<'T when 'T : comparison> =
                 AvlTree.Create (k, t1, t2)
 
     //
+    [<Pure>]
     static member private CompareStacks (comparer : IComparer<'T>, l1 : AvlTree<'T> list, l2 : AvlTree<'T> list) : int =
         match l1, l2 with
         | [], [] -> 0
@@ -707,6 +714,8 @@ type internal AvlTree<'T when 'T : comparison> =
         | _, (Node (n2l, n2r, n2k, _) :: t2) ->
             AvlTree.CompareStacks (comparer, l1, n2l :: Node (Empty, n2r, n2k, 0u) :: t2)
                 
+
+    [<Pure>]
     static member Compare (comparer : IComparer<'T>, s1 : AvlTree<'T>, s2 : AvlTree<'T>) : int =
         match s1, s2 with
         | Empty, Empty -> 0
@@ -864,6 +873,10 @@ module internal CharDiet =
             // Check that the intervals are disjoint and correctly ordered.
             && (intervalsDisjointAndCorrectlyOrdered tree Set.empty |> fst)
 
+    /// Determines if a DIET is correctly formed.
+    let private tapInvariant (tree : CharDiet) =
+        assert (dietInvariant tree)
+        tree
 
     //
     let rec internal (*private*) find_del_left p (tree : CharDiet) : char * CharDiet =
@@ -877,7 +890,7 @@ module internal CharDiet =
             if p > succ y then
                 let p', right' = find_del_left p right
                 assert (dietInvariant right')
-                p', AvlTree.Join (comparer, left, right', (x, y))
+                p', tapInvariant <| CharDiet.Join (comparer, left, right', (x, y))
             elif p < x then
                 find_del_left p left
             else
@@ -895,7 +908,7 @@ module internal CharDiet =
             if p < pred x then
                 let p', left' = find_del_right p left
                 assert (dietInvariant left')
-                p', AvlTree.Join (comparer, left', right, (x, y))
+                p', tapInvariant <| CharDiet.Join (comparer, left', right, (x, y))
             elif p > y then
                 find_del_right p right
             else
@@ -903,11 +916,11 @@ module internal CharDiet =
 
     /// An empty DIET.
     let empty : CharDiet =
-        AvlTree.Empty
+        CharDiet.Empty
 
     /// Determines if a DIET is empty.
     let inline isEmpty (tree : CharDiet) =
-        AvlTree.IsEmptyTree tree
+        CharDiet.IsEmptyTree tree
 
     /// Determines if a DIET contains a specified value.
     let rec contains value (tree : CharDiet) =
@@ -933,7 +946,7 @@ module internal CharDiet =
         | Empty ->
             invalidArg "tree" "The tree is empty."
         | tree ->
-            snd <| AvlTree.MaxElement tree
+            snd <| CharDiet.MaxElement tree
     
     /// Gets the minimum (least) value stored in the DIET.
     let minElement (tree : CharDiet) : char =
@@ -944,7 +957,7 @@ module internal CharDiet =
         | Empty ->
             invalidArg "tree" "The tree is empty."
         | tree ->
-            fst <| AvlTree.MinElement tree
+            fst <| CharDiet.MinElement tree
 
     /// Gets the minimum (least) and maximum (greatest) values store in the DIET.
     let bounds (tree : CharDiet) : char * char =
@@ -964,8 +977,8 @@ module internal CharDiet =
         | Empty, Empty -> 0
         | Empty, Node (_,_,_,_) -> -1
         | Node (_,_,_,_), Node (_,_,_,_) ->
-            let (ix1, iy1), r1 = AvlTree.ExtractMin t1
-            let (ix2, iy2), r2 = AvlTree.ExtractMin t2
+            let (ix1, iy1), r1 = CharDiet.ExtractMin t1
+            let (ix2, iy2), r2 = CharDiet.ExtractMin t2
             let c =
                 match compare ix1 ix2 with
                 | 0 -> compare iy1 iy2
@@ -1011,14 +1024,14 @@ module internal CharDiet =
 
     /// Creates a DIET containing the specified value.
     let singleton value : CharDiet =
-        AvlTree.Singleton (value, value)
+        CharDiet.Singleton (value, value)
 
     /// Creates a DIET containing the specified range of values.
     let ofRange (a, b) : CharDiet =
         if a > b then
             invalidArg "b" "The upper bound of the interval is less than the lower bound."
 
-        AvlTree.Singleton (a, b)
+        CharDiet.Singleton (a, b)
 
     /// Returns a new set with the specified value added to the set.
     /// No exception is thrown if the set already contains the value.
@@ -1028,41 +1041,51 @@ module internal CharDiet =
 
         match tree with
         | Empty ->
-            AvlTree.Singleton (value, value)
+            singleton value
+            |> tapInvariant
         | Node (left, right, (x, y), h) ->
             if value >= x then
                 if value <= y then
                     // The value is already in [x, y] so the tree
                     // does not need to be modified.
                     tree
+                    |> tapInvariant
                 elif value > succ y then
                     // The value is above the interval and is not adjacent
                     // to it, so recurse down the right subtree to add the value
                     // then join the result with the left subtree.
-                    AvlTree.Join (comparer, left, add value right, (x, y))
+                    CharDiet.Join (comparer, left, add value right, (x, y))
+                    |> tapInvariant
                 else
                     match right with
                     | Empty ->
-                        AvlTree.Create ((x, value), left, Empty)
+                        CharDiet.Create ((x, value), left, Empty)
+                        |> tapInvariant
                     | _ ->
-                        let (u, v), r = AvlTree.ExtractMin right
+                        let (u, v), r = CharDiet.ExtractMin right
                         if pred u = value then
-                            AvlTree.Join (comparer, left, r, (x, v))
+                            CharDiet.Join (comparer, left, r, (x, v))
+                            |> tapInvariant
                         else
-                            AvlTree.Create ((x, value), left, right)
+                            CharDiet.Create ((x, value), left, right)
+                            |> tapInvariant
 
             elif value < pred x then
-                AvlTree.Join (comparer, add value left, right, (x, y))
+                CharDiet.Join (comparer, add value left, right, (x, y))
+                |> tapInvariant
             else
                 match left with
                 | Empty ->
-                    AvlTree.Create ((value, y), Empty, right)
+                    CharDiet.Create ((value, y), Empty, right)
+                    |> tapInvariant
                 | _ ->
-                    let (u, v), l = AvlTree.ExtractMax left
+                    let (u, v), l = CharDiet.ExtractMax left
                     if succ v = value then
-                        AvlTree.Join (comparer, l, right, (u, y))
+                        CharDiet.Join (comparer, l, right, (u, y))
+                        |> tapInvariant
                     else
-                        AvlTree.Create ((value, y), left, right)
+                        CharDiet.Create ((value, y), left, right)
+                        |> tapInvariant
 
     /// Returns a new set with the specified range of values added to the set.
     /// No exception is thrown if any of the values are already contained in the set.
@@ -1074,16 +1097,19 @@ module internal CharDiet =
 
         match tree with
         | Empty ->
-            AvlTree.Singleton (a, b)
+            CharDiet.Singleton (a, b)
+            |> tapInvariant
         | Node (left, right, (x, y), _) ->
             if b < pred x then
                 let left' = addRange (a, b) left
                 assert (dietInvariant left')
-                AvlTree.Join (comparer, left', right, (x, y))
+                CharDiet.Join (comparer, left', right, (x, y))
+                |> tapInvariant
             elif a > succ y then
                 let right' = addRange (a, b) right
                 assert (dietInvariant right')
-                AvlTree.Join (comparer, left, right', (x, y))
+                CharDiet.Join (comparer, left, right', (x, y))
+                |> tapInvariant
             else
                 // Now, we know the interval (a, b) being inserted either overlaps or is
                 // adjancent to the current inverval (x, y), so we merge them.
@@ -1096,7 +1122,8 @@ module internal CharDiet =
 
                 assert (dietInvariant left')
                 assert (dietInvariant right')
-                AvlTree.Join (comparer, left', right', (x', y'))
+                CharDiet.Join (comparer, left', right', (x', y'))
+                |> tapInvariant
 
     /// Returns a new set with the given element removed.
     /// No exception is thrown if the set doesn't contain the specified element.
@@ -1111,21 +1138,21 @@ module internal CharDiet =
             let czx = compare value x
             if czx < 0 then
                 // value < x, so recurse down the left subtree.
-                AvlTree.Join (comparer, remove value left, right, (x, y))
+                CharDiet.Join (comparer, remove value left, right, (x, y))
             else
                 let cyz = compare y value
                 if cyz < 0 then
                     // y < value, so recurse down the right subtree.
-                    AvlTree.Join (comparer, left, remove value right, (x, y))
+                    CharDiet.Join (comparer, left, remove value right, (x, y))
                 elif cyz = 0 then
                     if czx = 0 then
-                        AvlTree.Reroot (comparer, left, right)
+                        CharDiet.Reroot (comparer, left, right)
                     else
-                        AvlTree.Create ((x, pred y), left, right)
+                        CharDiet.Create ((x, pred y), left, right)
                 elif czx = 0 then
-                    AvlTree.Create ((succ x, y), left, right)
+                    CharDiet.Create ((succ x, y), left, right)
                 else
-                    AvlTree.Create ((x, pred value), left, right)
+                    CharDiet.Create ((x, pred value), left, right)
                     |> addRange (succ value, y)
 
     /// Determines if a value is greater than or equal to a given
@@ -1140,7 +1167,7 @@ module internal CharDiet =
     let rec private union' (input : CharDiet) limit head (stream : CharDiet)
         : CharDiet * (char * char) option * CharDiet =
         // Preconditions
-        assert (AvlTree.Height input >= AvlTree.Height stream)
+        assert (CharDiet.Height input >= CharDiet.Height stream)
         assert (dietInvariant input)
         assert (dietInvariant stream)
 
@@ -1150,12 +1177,12 @@ module internal CharDiet =
         | _, Empty ->
             Empty, head, stream
         | Some (x, y), Node (left, right, (a, b), _) ->
-            let left', head, stream =
+            let left', head, stream' =
                 if x < a then
                     union' left (Some <| pred a) head stream
                 else
                     left, head, stream
-            union_helper left' (a, b) right limit head stream
+            union_helper (tapInvariant left') (a, b) right limit head (tapInvariant stream')
 
     /// Helper function for computing the union of two sets.
     and private union_helper left (a, b) (right : CharDiet) limit head stream =
@@ -1168,19 +1195,19 @@ module internal CharDiet =
 
         match head with
         | None ->
-            AvlTree.Join (comparer, left, right, (a, b)), None, Empty
+            (tapInvariant <| CharDiet.Join (comparer, left, right, (a, b))), None, Empty
         | Some (x, y) ->
             if y < a && y < pred a then
                 let left' = addRange (x, y) left
-                AvlTree.TryExtractMin stream
+                CharDiet.TryExtractMin stream
                 ||> union_helper left' (a, b) right limit
 
             elif x > b && x > succ b then
                 let right', head, stream = union' right limit head stream
-                AvlTree.Join (comparer, left, right', (a, b)), head, stream
+                (tapInvariant <| CharDiet.Join (comparer, left, right', (a, b))), head, stream
 
             elif b >= y then
-                AvlTree.TryExtractMin stream
+                CharDiet.TryExtractMin stream
                 ||> union_helper left (min a x, b) right limit
 
             elif greater_limit limit y then
@@ -1188,7 +1215,7 @@ module internal CharDiet =
 
             else
                 let right', head, stream = union' right limit (Some (min a x, y)) stream
-                AvlTree.Reroot (comparer, left, right'), head, stream
+                (tapInvariant <| CharDiet.Reroot (comparer, left, right')), head, stream
 
     /// Computes the union of the two sets.
     let rec union (input : CharDiet) (stream : CharDiet) : CharDiet =
@@ -1218,17 +1245,17 @@ module internal CharDiet =
             // TEMP : This is a naive implementation of the union operation --
             // we only use it here to help track down the bug in the union operation
             // and to test that the rest of the code works correctly.
-            let result = AvlTree.FoldBack addRange stream input
+            let result = CharDiet.FoldBack addRange stream input
 //            let result =
 //                let result, head', stream'' =
-//                    AvlTree.TryExtractMin stream
+//                    CharDiet.TryExtractMin stream
 //                    ||> union' input None
 //
 //                match head' with
 //                | None ->
 //                    result
 //                | Some i ->
-//                    AvlTree.Join comparer i result stream''
+//                    CharDiet.Join comparer i result stream''
 
             assert (dietInvariant result)
 
@@ -1248,7 +1275,7 @@ module internal CharDiet =
     /// Helper function for computing the intersection of two sets.
     let rec private inter' (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
         // Preconditions
-        assert (AvlTree.Height input >= AvlTree.Height stream)
+        assert (CharDiet.Height input >= CharDiet.Height stream)
         assert (dietInvariant input)
         assert (dietInvariant stream)
 
@@ -1258,13 +1285,13 @@ module internal CharDiet =
         | _, Empty ->
             Empty, head, stream
         | Some (x, y), Node (left, right, (a, b), _) ->
-            let left, head, stream =
+            let left', head, stream' =
                 if x < a then
                     inter' left head stream
                 else
                     Empty, head, stream
 
-            inter_helper (a, b) right left head stream
+            inter_helper (a, b) right (tapInvariant left') head (tapInvariant stream')
 
     /// Helper function for computing the intersection of two sets.
     and private inter_helper (a, b) (right : CharDiet) (left : CharDiet) head stream =
@@ -1284,17 +1311,21 @@ module internal CharDiet =
                 | Empty ->
                     left, None, Empty
                 | _ ->
-                    AvlTree.TryExtractMin stream
+                    CharDiet.TryExtractMin stream
                     ||> inter_helper (a, b) right left
             elif b < x then
                 let right, head, stream = inter' right head stream
-                AvlTree.Reroot (comparer, left, right), head, stream
+                (tapInvariant <| CharDiet.Reroot (comparer, left, right)), head, stream
             elif y >= clampedPred y b then
                 let right, head, stream = inter' right head stream
-                let right' = AvlTree.Join (comparer, left, right, (max x a, min y b))
+                let right' =
+                    CharDiet.Join (comparer, left, right, (max x a, min y b))
+                    |> tapInvariant
                 right', head, stream
             else
-                let left = addRange (max x a, y) left
+                let left =
+                    addRange (max x a, y) left
+                    |> tapInvariant
                 inter_helper (succ y, b) right left head stream
 
     /// Computes the intersection of the two sets.
@@ -1323,7 +1354,7 @@ module internal CharDiet =
             #endif
 
             let result, _, _ =
-                AvlTree.TryExtractMin stream
+                CharDiet.TryExtractMin stream
                 ||> inter' input
             assert (dietInvariant result)
 
@@ -1350,7 +1381,7 @@ module internal CharDiet =
     /// Helper function for computing the difference of two sets.
     let rec private diff' (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
         // Preconditions
-        assert (AvlTree.Height input >= AvlTree.Height stream)
+        assert (CharDiet.Height input >= CharDiet.Height stream)
         assert (dietInvariant input)
         assert (dietInvariant stream)
 
@@ -1378,16 +1409,16 @@ module internal CharDiet =
 
         match head with
         | None ->
-            AvlTree.Join (comparer, left, right, (a, b)), None, Empty
+            CharDiet.Join (comparer, left, right, (a, b)), None, Empty
         | Some (x, y) ->
             if y < a then
                 // [x, y] and [a, b] are disjoint
-                AvlTree.TryExtractMin stream
+                CharDiet.TryExtractMin stream
                 ||> diff_helper (a, b) right left
             elif b < x then
                 // [a, b] and [x, y] are disjoint
                 let right, head, stream = diff' right head stream
-                AvlTree.Join (comparer, left, right, (a, b)), head, stream
+                CharDiet.Join (comparer, left, right, (a, b)), head, stream
             elif a < x then
                 // [a, b] and [x, y] overlap
                 // a < x
@@ -1395,12 +1426,12 @@ module internal CharDiet =
             elif y < b then
                 // [a, b] and [x, y] overlap
                 // y < b
-                AvlTree.TryExtractMin stream
+                CharDiet.TryExtractMin stream
                 ||> diff_helper (succ y, b) right left
             else
                 // [a, b] and [x, y] overlap
                 let right, head, stream = diff' right head stream
-                AvlTree.Reroot (comparer, left, right), head, stream
+                CharDiet.Reroot (comparer, left, right), head, stream
 
     /// Returns a new set with the elements of the second set removed from the first.
     let difference (input : CharDiet) (stream : CharDiet) : CharDiet =
@@ -1420,7 +1451,7 @@ module internal CharDiet =
             #endif
 
             let result, _, _ =
-                AvlTree.TryExtractMin stream
+                CharDiet.TryExtractMin stream
                 ||> diff' input
             assert (dietInvariant result)
 
@@ -1447,7 +1478,7 @@ module internal CharDiet =
                 state <- folder.Invoke (state, char x)
             state
 
-        AvlTree.Fold rangeFolder state tree
+        CharDiet.Fold rangeFolder state tree
 
     /// Applies the given accumulating function to all elements in a DIET.
     let foldBack (folder : char -> 'State -> 'State) (tree : CharDiet) (state : 'State) =
@@ -1463,7 +1494,7 @@ module internal CharDiet =
                 state <- folder.Invoke (char x, state)
             state
 
-        AvlTree.FoldBack rangeFolder state tree
+        CharDiet.FoldBack rangeFolder state tree
 
     /// Applies the given function to all elements in a DIET.
     let iter (action : char -> unit) (tree : CharDiet) =
@@ -1475,7 +1506,7 @@ module internal CharDiet =
             for x = int lo to int hi do
                 action (char x)
 
-        AvlTree.Iter intervalApplicator tree
+        CharDiet.Iter intervalApplicator tree
 
     //
     let forall (predicate : char -> bool) (tree : CharDiet) =
@@ -1590,7 +1621,9 @@ type CharSet private (tree : CharDiet) =
 
     /// The set containing the given element.
     static member FromElement value : CharSet =
-        CharSet (CharDiet.singleton value)
+        let result = CharDiet.singleton value
+        assert (CharDiet.dietInvariant result)
+        CharSet (result)
 
     /// The set containing the elements in the given range.
     static member FromRange (lowerBound, upperBound) : CharSet =
@@ -1609,6 +1642,7 @@ type CharSet private (tree : CharDiet) =
     static member IsEmpty (charSet : CharSet) : bool =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         CharDiet.isEmpty charSet.Tree
 
@@ -1617,6 +1651,7 @@ type CharSet private (tree : CharDiet) =
     static member Add (value, charSet : CharSet) : CharSet =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         // OPTIMIZATION : If the resulting tree is the same as the original, return
         // the input set instead of creating a new set.
@@ -1629,6 +1664,7 @@ type CharSet private (tree : CharDiet) =
     static member AddRange (lower, upper, charSet : CharSet) : CharSet =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         // For compatibility with the F# range operator, we don't raise
         // an exception if lower > upper; that is considered an empty range,
@@ -1650,6 +1686,7 @@ type CharSet private (tree : CharDiet) =
     static member Remove (value, charSet : CharSet) : CharSet =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         // OPTIMIZATION : If the resulting tree is the same as the original,
         // return the input set instead of creating a new set.
@@ -1662,6 +1699,7 @@ type CharSet private (tree : CharDiet) =
     static member Contains (value, charSet : CharSet) : bool =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         CharDiet.contains value charSet.Tree
 
@@ -1677,6 +1715,7 @@ type CharSet private (tree : CharDiet) =
                 (Empty, sequence)
                 ||> Seq.fold (fun tree el ->
                     CharDiet.add el tree)
+            assert (CharDiet.dietInvariant tree)
             CharSet (tree)
 
     //
@@ -1691,6 +1730,7 @@ type CharSet private (tree : CharDiet) =
                 (Empty, list)
                 ||> List.fold (fun tree el ->
                     CharDiet.add el tree)
+            assert (CharDiet.dietInvariant tree)
             CharSet (tree)
 
     //
@@ -1705,6 +1745,7 @@ type CharSet private (tree : CharDiet) =
                 (Empty, array)
                 ||> Array.fold (fun tree el ->
                     CharDiet.add el tree)
+            assert (CharDiet.dietInvariant tree)
             CharSet (tree)
 
     //
@@ -1719,12 +1760,14 @@ type CharSet private (tree : CharDiet) =
                 (Empty, set)
                 ||> Set.fold (fun tree el ->
                     CharDiet.add el tree)
+            assert (CharDiet.dietInvariant tree)
             CharSet (tree)
 
     //
     static member ToSeq (charSet : CharSet) : seq<char> =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         CharDiet.toSeq charSet.Tree
 
@@ -1732,6 +1775,7 @@ type CharSet private (tree : CharDiet) =
     static member ToList (charSet : CharSet) : char list =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         CharDiet.toList charSet.Tree
 
@@ -1739,6 +1783,7 @@ type CharSet private (tree : CharDiet) =
     static member ToArray (charSet : CharSet) : char[] =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         CharDiet.toArray charSet.Tree
 
@@ -1746,6 +1791,7 @@ type CharSet private (tree : CharDiet) =
     static member ToSet (charSet : CharSet) : Set<char> =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         CharDiet.toSet charSet.Tree
 
@@ -1754,6 +1800,8 @@ type CharSet private (tree : CharDiet) =
         // Preconditions
         checkNonNull "charSet1" charSet1
         checkNonNull "charSet2" charSet2
+        assert (CharDiet.dietInvariant charSet1.Tree)
+        assert (CharDiet.dietInvariant charSet2.Tree)
 
         // OPTIMIZATION : If the result is the same as either input set's tree,
         // return that set instead of creating a new one.
@@ -1768,6 +1816,8 @@ type CharSet private (tree : CharDiet) =
         // Preconditions
         checkNonNull "charSet1" charSet1
         checkNonNull "charSet2" charSet2
+        assert (CharDiet.dietInvariant charSet1.Tree)
+        assert (CharDiet.dietInvariant charSet2.Tree)
 
         // OPTIMIZATION : If the result is the same as either input set's tree,
         // return that set instead of creating a new one.
@@ -1782,6 +1832,8 @@ type CharSet private (tree : CharDiet) =
         // Preconditions
         checkNonNull "charSet1" charSet1
         checkNonNull "charSet2" charSet2
+        assert (CharDiet.dietInvariant charSet1.Tree)
+        assert (CharDiet.dietInvariant charSet2.Tree)
 
         // OPTIMIZATION : If the result is the same as either input set's tree,
         // return that set instead of creating a new one.
@@ -1795,6 +1847,7 @@ type CharSet private (tree : CharDiet) =
     static member Exists (predicate, charSet : CharSet) : bool =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         CharDiet.exists predicate charSet.Tree
 
@@ -1802,6 +1855,7 @@ type CharSet private (tree : CharDiet) =
     static member Forall (predicate, charSet : CharSet) : bool =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         CharDiet.forall predicate charSet.Tree
 
@@ -1809,6 +1863,7 @@ type CharSet private (tree : CharDiet) =
     static member Fold (folder : 'State -> _ -> 'State, state, charSet : CharSet) : 'State =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         CharDiet.fold folder state charSet.Tree
 
@@ -1816,6 +1871,7 @@ type CharSet private (tree : CharDiet) =
     static member FoldBack (folder : _ -> 'State -> 'State, state, charSet : CharSet) : 'State =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         CharDiet.foldBack folder charSet.Tree state
 
@@ -1823,6 +1879,7 @@ type CharSet private (tree : CharDiet) =
     static member Iter (action, charSet : CharSet) : unit =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         CharDiet.iter action charSet.Tree
 
@@ -1830,6 +1887,7 @@ type CharSet private (tree : CharDiet) =
     static member IterIntervals (action, charSet : CharSet) : unit =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         let action = FSharpFunc<_,_,_>.Adapt action
         charSet.Tree |> AvlTree.Iter action.Invoke
@@ -1838,6 +1896,7 @@ type CharSet private (tree : CharDiet) =
     static member Map (mapping : char -> char, charSet : CharSet) : CharSet =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         let mappedTree =
             (CharDiet.empty, charSet.Tree)
@@ -1850,6 +1909,7 @@ type CharSet private (tree : CharDiet) =
     static member Filter (predicate : char -> bool, charSet : CharSet) : CharSet =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         let filteredTree =
             (charSet.Tree, charSet.Tree)
@@ -1868,6 +1928,7 @@ type CharSet private (tree : CharDiet) =
     static member Partition (predicate : char -> bool, charSet : CharSet) : CharSet * CharSet =
         // Preconditions
         checkNonNull "charSet" charSet
+        assert (CharDiet.dietInvariant charSet.Tree)
 
         notImpl "CharSet.Partition"
 
