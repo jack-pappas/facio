@@ -1,5 +1,9 @@
-﻿(*
+﻿//
+module internal FSharpLex.Lexer
 
+(*
+
+Copyright 2005-2008 Microsoft Corporation
 Copyright 2012-2013 Jack Pappas
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,13 +19,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 *)
-
-//
-module internal FSharpLex.Lexer
-
-(* NOTE :   The code below is adapted from the 'fslex' grammar, which is
-            (c) Microsoft Corporation 2005-2008 and covered under the
-            Apache 2.0 license. *)
 
 open FSharpLex.Ast
 open FSharpLex.Parser
