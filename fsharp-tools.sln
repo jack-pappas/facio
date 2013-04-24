@@ -1,8 +1,6 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2010
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "fsharplex", "FSharpLex\fsharplex.fsproj", "{F9F750FB-2817-4559-BD0A-BE5402102D37}"
-EndProject
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{E0ED8004-9C63-4BA4-987C-EE634B39B881}"
 	ProjectSection(SolutionItems) = preProject
 		.nuget\NuGet.Config = .nuget\NuGet.Config
@@ -10,16 +8,18 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{E0ED80
 		.nuget\NuGet.targets = .nuget\NuGet.targets
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{0F12E0D6-7576-4C95-BE56-5C48BA792032}"
+	ProjectSection(SolutionItems) = preProject
+		Common\CommonAssemblyInfo.fs = Common\CommonAssemblyInfo.fs
+	EndProjectSection
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "fsharplex", "FSharpLex\fsharplex.fsproj", "{F9F750FB-2817-4559-BD0A-BE5402102D37}"
+EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpLex.Tests", "FSharpLex.Tests\FSharpLex.Tests.fsproj", "{F7E7C726-A9E3-4DCE-BEF7-6694310E4B21}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpYacc", "FSharpYacc\FSharpYacc.fsproj", "{1A562247-7B57-45DF-9BAB-CDFA6202A6B4}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpYacc.Tests", "FSharpYacc.Tests\FSharpYacc.Tests.fsproj", "{64594E06-1750-4472-BBB0-299C4D39CD10}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{0F12E0D6-7576-4C95-BE56-5C48BA792032}"
-	ProjectSection(SolutionItems) = preProject
-		Common\CommonAssemblyInfo.fs = Common\CommonAssemblyInfo.fs
-	EndProjectSection
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Graham", "Graham\Graham.fsproj", "{AB802CFD-4EA9-4F11-ADE3-F2F5518BFD52}"
 EndProject
