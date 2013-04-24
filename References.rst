@@ -16,6 +16,8 @@ FSharpLex
 =========
 
 Owens, Scott, John Reppy, and Aaron Turon. "Regular-expression derivatives re-examined." J. Funct. Program 19, no. 2 (2009): 173-190.
+	
+Friedmann, Oliver, and Martin Lange. "More on balanced diets." Journal of Functional Programming 21, no. 2 (2011): 135-157.
 
 
 Graham
