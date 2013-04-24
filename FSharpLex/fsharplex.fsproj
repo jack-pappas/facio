@@ -65,12 +65,14 @@
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\LegacyInterpreters\LegacyInterpreters.fsproj">
+      <Name>LegacyInterpreters</Name>
+      <Project>{cedb1c58-a44c-4a65-b5fa-7bc0ef54d6b6}</Project>
+      <Private>True</Private>
+    </ProjectReference>
     <Reference Include="ExtCore">
       <HintPath>..\packages\ExtCore.0.8.15\lib\net40\ExtCore.dll</HintPath>
       <Private>True</Private>
-    </Reference>
-    <Reference Include="FSharp.PowerPack">
-      <HintPath>bin\Debug\FSharp.PowerPack.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core" />

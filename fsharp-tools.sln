@@ -29,6 +29,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Graham.Tests", "Graham.Test
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BackendUtils", "BackendUtils\BackendUtils.fsproj", "{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "LegacyInterpreters", "LegacyInterpreters\LegacyInterpreters.fsproj", "{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -72,6 +74,12 @@ Global
 		{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}.Release|Any CPU.Build.0 = Release|Any CPU
 		{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}.Testing|Any CPU.ActiveCfg = Release|Any CPU
 		{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}.Testing|Any CPU.Build.0 = Release|Any CPU
+		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Testing|Any CPU.ActiveCfg = Release|Any CPU
+		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Testing|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
