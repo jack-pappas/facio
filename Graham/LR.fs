@@ -127,9 +127,9 @@ type LrParserConflict =
     override this.ToString () =
         match this with
         | ShiftReduce (shiftStateId, productionRuleId) ->
-            sprintf "s%i/r%i" (Tag.toInt shiftStateId) (Tag.toInt productionRuleId)
+            sprintf "s%i/r%i" (untag shiftStateId) (untag productionRuleId)
         | ReduceReduce (productionRuleId1, productionRuleId2) ->
-            sprintf "r%i/r%i" (Tag.toInt productionRuleId1) (Tag.toInt productionRuleId2)
+            sprintf "r%i/r%i" (untag productionRuleId1) (untag productionRuleId2)
 
 /// A non-empty set of LrParserActions representing the
 /// action(s) to take for a specific parser state.
@@ -357,7 +357,7 @@ module LrTableGenState =
                 ||> Array.fold (fun productionRuleIds ruleRhs ->
                     /// The identifier for this production rule.
                     let productionRuleId : ProductionRuleId =
-                        Tag.ofInt productionRuleIds.Count
+                        tag productionRuleIds.Count
 
                     // Add this identifier to the map.
                     Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
@@ -395,7 +395,7 @@ module LrTableGenState =
         | None ->
             // Create a new ID for this state.
             let parserStateId =
-                Tag.ofInt env.ParserStateIds.Count
+                tag env.ParserStateIds.Count
 
             // Update the table-generation state.
             let tableGenState =
