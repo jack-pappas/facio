@@ -256,9 +256,9 @@ type internal AvlTree<'T when 'T : comparison> =
             invalidArg "tree" "Cannot delete the minimum value from an empty tree."
         | Node (Empty, r, n, _) ->
             n, r
-        | Node (left, r, n, _) ->
-            let na, l = AvlTree.DeleteMin left
-            na, AvlTree.mkt_bal_r (n, l, r)
+        | Node (l, r, n, _) ->
+            let n', l' = AvlTree.DeleteMin l
+            n', AvlTree.mkt_bal_r (n, l', r)
 
     /// Removes the maximum (greatest) value from an AvlTree,
     /// returning the value along with the updated tree.
@@ -268,9 +268,9 @@ type internal AvlTree<'T when 'T : comparison> =
             invalidArg "tree" "Cannot delete the maximum value from an empty tree."
         | Node (l, Empty, n, _) ->
             n, l
-        | Node (l, right, n, _) ->
-            let na, r = AvlTree.DeleteMax right
-            na, AvlTree.mkt_bal_l (n, l, r)
+        | Node (l, r, n, _) ->
+            let n', r' = AvlTree.DeleteMax r
+            n', AvlTree.mkt_bal_l (n, l, r')
 
     /// Removes the root (median) value from an AvlTree,
     /// returning the value along with the updated tree.
@@ -292,15 +292,11 @@ type internal AvlTree<'T when 'T : comparison> =
         match tree with
         | Empty ->
             None, tree
-        | Node (l, Empty, n, _) ->
-            Some n, l
-        | Node (left, r, n, _) ->
-            let na, l = AvlTree.TryDeleteMin left
-            match na with
-            | None ->
-                na, l
-            | Some _ ->
-                na, AvlTree.mkt_bal_r (n, l, r)
+        | Node (Empty, r, n, _) ->
+            Some n, r
+        | Node (l, r, n, _) ->
+            let n', l' = AvlTree.DeleteMin l
+            Some n', l'
 
     /// Removes the maximum (greatest) value from a AvlTree,
     /// returning the value along with the updated tree.
@@ -311,13 +307,9 @@ type internal AvlTree<'T when 'T : comparison> =
             None, tree
         | Node (l, Empty, n, _) ->
             Some n, l
-        | Node (l, right, n, _) ->
-            let na, r = AvlTree.TryDeleteMax right
-            match na with
-            | None ->
-                na, l
-            | Some _ ->
-                na, AvlTree.mkt_bal_l (n, l, r)
+        | Node (l, r, n, _) ->
+            let n', r' = AvlTree.DeleteMax r
+            Some n', r'
 
     /// Removes the specified value from the tree.
     /// If the tree doesn't contain the value, no exception is thrown;
@@ -1436,7 +1428,13 @@ module internal CharDiet =
             let result, _, _ =
                 CharDiet.TryDeleteMin stream
                 ||> inter' input
-            assert (dietInvariant result)
+            
+            Debug.Assert (
+                dietInvariant result,
+                "The DIET invariant does not hold for the result.")
+            Debug.Assert (
+                fst <| intervalsDisjoint result Set.empty,
+                "The intervals in the DIET are not disjoint.")
 
             #if DEBUG
             let resultCount = count result
@@ -1464,6 +1462,8 @@ module internal CharDiet =
         assert (CharDiet.Height input >= CharDiet.Height stream)
         assert (dietInvariant input)
         assert (dietInvariant stream)
+//        assert (fst <| intervalsDisjoint input Set.empty)
+//        assert (fst <| intervalsDisjoint stream Set.empty)
 
         match head, input with
         | None, _->
@@ -1533,7 +1533,13 @@ module internal CharDiet =
             let result, _, _ =
                 CharDiet.TryDeleteMin stream
                 ||> diff' input
-            assert (dietInvariant result)
+            
+            Debug.Assert (
+                dietInvariant result,
+                "The DIET invariant does not hold for the result.")
+            Debug.Assert (
+                fst <| intervalsDisjoint result Set.empty,
+                "The intervals in the DIET are not disjoint.")
 
             #if DEBUG
             let resultCount = count result
