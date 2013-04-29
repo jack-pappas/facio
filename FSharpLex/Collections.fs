@@ -875,8 +875,9 @@ module internal CharDiet =
             // Check the standard AVL invariant first.
             let height_l = computeHeight l
             let height_r = computeHeight r
-            height_l = height_r
-            || (height_l = (1u + height_r) || height_r = (1u + height_l))
+            let height_diff = (max height_l height_r) - (min height_l height_r)
+            
+            height_diff <= balanceTolerance
             && h = ((max height_l height_r) + 1u)
             && dietInvariant l
             && dietInvariant r
