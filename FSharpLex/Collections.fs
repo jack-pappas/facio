@@ -127,8 +127,9 @@ type internal AvlTree<'T when 'T : comparison> =
         | Node (l, r, x, h) ->
             let height_l = AvlTree.ComputeHeight l
             let height_r = AvlTree.ComputeHeight r
-            height_l = height_r
-            || (height_l = (1u + height_r) || height_r = (1u + height_l))
+            let height_diff = (max height_l height_r) - (min height_l height_r)
+            
+            height_diff <= balanceTolerance
             && h = ((max height_l height_r) + 1u)
             && AvlTree.AvlInvariant l
             && AvlTree.AvlInvariant r
@@ -675,15 +676,15 @@ type internal AvlTree<'T when 'T : comparison> =
         assert (AvlTree.AvlInvariant r)
         assert (AvlTree.HeightDiff (l, r) <= (balanceTolerance + 1u))
 
-        let hl = AvlTree.Height l
-        let hr = AvlTree.Height r
-        if hl > hr + balanceTolerance then // left is heavier than right
+        let lh = AvlTree.Height l
+        let rh = AvlTree.Height r
+        if lh > rh + balanceTolerance then // left is heavier than right
             match l with
             | Empty ->
                 failwith "rebalance"
             | Node (ll, lr, ln, _) ->
                 // one of the nodes must have height > height r + 1
-                if AvlTree.Height ll > AvlTree.Height lr then
+                if AvlTree.Height ll >= AvlTree.Height lr then
                     AvlTree.Create (
                         ln,
                         ll,
@@ -699,13 +700,13 @@ type internal AvlTree<'T when 'T : comparison> =
                             AvlTree.Create (ln, ll, lrl),
                             AvlTree.Create (n, lrr, r))
                     
-        elif hr > hl + balanceTolerance then // right is heavier than left
+        elif rh > lh + balanceTolerance then // right is heavier than left
             match r with
             | Empty ->
                 failwith "rebalance"
             | Node (rl, rr, rn, _) ->
                 // one of the nodes must have height > height t1 + 1
-                if AvlTree.Height rr > AvlTree.Height rl then
+                if AvlTree.Height rr >= AvlTree.Height rl then
                     // rotate left
                     AvlTree.Create (
                         rn,
