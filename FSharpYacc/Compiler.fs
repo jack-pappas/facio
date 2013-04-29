@@ -555,7 +555,7 @@ let private precedenceSettings (processedSpec : ProcessedSpecification<Nontermin
                         Some impersonatedTerminal
                     | None ->
                         // The precedence of a rule is the precedence of it's last (right-most) terminal.
-                        match System.Array.FindLastIndex (rule.Symbols, (function Terminal _ -> true | Nonterminal _ -> false)) with
+                        match System.Array.FindLastIndex (rule.Symbols, System.Predicate (function Terminal _ -> true | Nonterminal _ -> false)) with
                         //match System.Array.FindIndex (rule.Symbols, (function Terminal _ -> true | Nonterminal _ -> false)) with
                         | -1 ->
                             // This rule does not contain any terminals, so it is not assigned a precedence.
