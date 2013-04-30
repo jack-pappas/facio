@@ -21,6 +21,7 @@ namespace FSharpLex.SpecializedCollections
 
 open System
 open System.Collections.Generic
+open System.CodeDom.Compiler
 open System.Diagnostics
 open System.Diagnostics.Contracts
 open OptimizedClosures
@@ -51,8 +52,9 @@ module internal Constants =
 
 /// AVL Tree.
 [<NoEquality; NoComparison>]
+[<StructuredFormatDisplay("{DisplayFormatted}")>]
 [<DebuggerTypeProxy(typedefof<AvlTreeDebuggerProxy<int>>)>]
-[<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
+//[<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
 type internal AvlTree<'T when 'T : comparison> =
     /// Empty tree.
     | Empty
@@ -193,7 +195,7 @@ type internal AvlTree<'T when 'T : comparison> =
     /// Creates a AvlTree whose root node holds the specified value
     /// and the specified left and right subtrees.
     [<Pure>]
-    static member inline (*private*) Create (l, r : AvlTree<'T>, value) =
+    static member inline private Create (l, r : AvlTree<'T>, value) =
         //assert (AvlTree.AvlInvariant l)
         //assert (AvlTree.AvlInvariant r)
         assert (AvlTree.HeightDiff (l, r) <= balanceTolerance)
@@ -209,7 +211,7 @@ type internal AvlTree<'T when 'T : comparison> =
         // Preconditions
         //assert (AvlTree.AvlInvariant l)
         //assert (AvlTree.AvlInvariant r)
-        //assert (AvlTree.Height l <= AvlTree.Height r + balanceTolerance)
+        assert (AvlTree.Height l <= AvlTree.Height r + balanceTolerance)
 
         if AvlTree.Height l = AvlTree.Height r + balanceTolerance then
             match l with
@@ -235,7 +237,7 @@ type internal AvlTree<'T when 'T : comparison> =
         // Preconditions
         //assert (AvlTree.AvlInvariant l)
         //assert (AvlTree.AvlInvariant r)
-        //assert (AvlTree.Height r <= AvlTree.Height l + balanceTolerance)
+        assert (AvlTree.Height r <= AvlTree.Height l + balanceTolerance)
 
         if AvlTree.Height r = AvlTree.Height l + balanceTolerance then
             match r with
@@ -259,6 +261,9 @@ type internal AvlTree<'T when 'T : comparison> =
     /// Removes the minimum (least) value from an AvlTree,
     /// returning the value along with the updated tree.
     static member DeleteMin (tree : AvlTree<'T>) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             invalidArg "tree" "Cannot delete the minimum value from an empty tree."
@@ -271,6 +276,9 @@ type internal AvlTree<'T when 'T : comparison> =
     /// Removes the maximum (greatest) value from an AvlTree,
     /// returning the value along with the updated tree.
     static member DeleteMax (tree : AvlTree<'T>) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             invalidArg "tree" "Cannot delete the maximum value from an empty tree."
@@ -283,20 +291,25 @@ type internal AvlTree<'T when 'T : comparison> =
     /// Removes the root (median) value from an AvlTree,
     /// returning the value along with the updated tree.
     static member DeleteRoot (tree : AvlTree<'T>) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             invalidArg "tree" "Cannot delete the root of an empty tree."
         | Node (Empty, r, _, _) -> r
-        | Node (left, Empty, _, _) ->
-            left
-        | Node (left, r, _, _) ->
-            let root, l = AvlTree.DeleteMax left
-            AvlTree.mkt_bal_r (root, l, r)
+        | Node (l, Empty, _, _) -> l
+        | Node (l, r, _, _) ->
+            let root, l' = AvlTree.DeleteMax l
+            AvlTree.mkt_bal_r (root, l', r)
 
     /// Removes the minimum (least) value from a AvlTree,
     /// returning the value along with the updated tree.
     /// No exception is thrown if the tree is empty.
     static member TryDeleteMin (tree : AvlTree<'T>) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             None, tree
@@ -310,6 +323,9 @@ type internal AvlTree<'T when 'T : comparison> =
     /// returning the value along with the updated tree.
     /// No exception is thrown if the tree is empty.
     static member TryDeleteMax (tree : AvlTree<'T>) =
+        // Preconditions
+        assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             None, tree
@@ -323,6 +339,9 @@ type internal AvlTree<'T when 'T : comparison> =
     /// If the tree doesn't contain the value, no exception is thrown;
     /// the tree will be returned without modification.
     static member Delete (comparer : IComparer<'T>, tree : AvlTree<'T>, value : 'T) =
+        // Preconditions
+        //assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             Empty
@@ -350,6 +369,9 @@ type internal AvlTree<'T when 'T : comparison> =
     /// If the tree already contains the value, no exception is thrown;
     /// the tree will be returned without modification.
     static member Insert (comparer : IComparer<'T>, tree : AvlTree<'T>, value : 'T) =
+        // Preconditions
+        //assert (AvlTree.AvlInvariant tree)
+
         match tree with
         | Empty ->
             Node (Empty, Empty, value, 1u)
@@ -675,6 +697,8 @@ type internal AvlTree<'T when 'T : comparison> =
         //assert (AvlTree.AvlInvariant l)
         //assert (AvlTree.AvlInvariant r)
         assert (AvlTree.HeightDiff (l, r) <= (balanceTolerance + 1u))
+        // TODO : Assert all values in 'l' are less than all values in 'r', and also less than 'n'.
+        //        Assert 'n' is less than all values in 'r'.
 
         let lh = AvlTree.Height l
         let rh = AvlTree.Height r
@@ -734,6 +758,7 @@ type internal AvlTree<'T when 'T : comparison> =
         // Preconditions
         //assert (AvlTree.AvlInvariant l)
         //assert (AvlTree.AvlInvariant r)
+        // TODO : Assert all values in 'l' are less than all values in 'r'.
 
         match l, r with
         | Empty, Empty ->
@@ -760,6 +785,7 @@ type internal AvlTree<'T when 'T : comparison> =
         // Preconditions
         //assert (AvlTree.AvlInvariant l)
         //assert (AvlTree.AvlInvariant r)
+        // TODO : Assert all values in 'l' are less than all values in 'r'.
 
         match l, r with
         | Empty, Empty ->
@@ -774,6 +800,64 @@ type internal AvlTree<'T when 'T : comparison> =
             else
                 let root, r' = AvlTree.DeleteMin r
                 AvlTree.Join (comparer, l, r', root)
+
+    /// Internal. Only for use with [<StructuredFormatDisplay>].
+    member private this.DisplayFormatted
+        with get () = AvlTree.ToCodeString this
+
+    /// Prints a tree as F# code which, when executed, will re-create the tree.
+    static member internal ToCodeString (tree : AvlTree<'T>) : string =
+        /// Holds the printed code.
+        let sb = System.Text.StringBuilder ()
+
+        // Create an IndentedTextWriter which will write to the StringBuilder.
+        using (new IndentedTextWriter (new System.IO.StringWriter (sb), "    ")) <| fun indentedWriter ->
+            // Traverse the tree and write the code into the StringBuilder.
+            AvlTree.ToCodeStringImpl (tree, indentedWriter)
+
+            // Flush the writer's buffer to make sure everything has been written into
+            // the StringBuilder, then return the code string.
+            indentedWriter.Flush ()
+            sb.ToString ()
+
+    /// Prints a tree as F# code which, when executed, will re-create the tree.
+    static member private ToCodeStringImpl (tree : AvlTree<'T>, indentedWriter : IndentedTextWriter) : unit =
+        match tree with
+        | Empty ->
+            Printf.fprintf indentedWriter "Empty"
+        
+        | Node (l, r, n, h) ->
+            // Write the constructor for this Node.
+            Printf.fprintf indentedWriter "Node ("
+
+            // Increase the indentation level _before_ writing the constructor arguments.
+            // This ensures the new indentation level will be used when printing the first argument's value.
+            let originalIndent = indentedWriter.Indent
+            indentedWriter.Indent <- originalIndent + 1
+            indentedWriter.WriteLine ()
+
+            // Print the left subtree.
+            AvlTree.ToCodeStringImpl (l, indentedWriter)
+            indentedWriter.WriteLine ","
+
+            // Print the right subtree.
+            AvlTree.ToCodeStringImpl (r, indentedWriter)
+            indentedWriter.WriteLine ","
+
+            // Print the value carried within this Node.
+            Printf.fprintf indentedWriter "%A" n
+            indentedWriter.WriteLine ","
+
+            // Print the height of this Node.
+            Printf.fprintf indentedWriter "%uu" h
+
+            // Decrease the indentation level _before_ writing the constructor arguments.
+            // This ensures the indentation level will be back to it's original value when this function returns.
+            indentedWriter.Indent <- originalIndent
+
+            // Close the constructor.
+            // Don't write a newline here -- it'll be written when this function returns.
+            indentedWriter.Write ")"
 
 //
 and [<Sealed>]
@@ -1107,26 +1191,30 @@ module internal CharDiet =
                 else
                     match right with
                     | Empty ->
-                        CharDiet.Create (left, Empty, (x, value))
+                        //CharDiet.Create (left, Empty, (x, value))
+                        CharDiet.Join (comparer, left, Empty, (x, value))
                     | _ ->
                         let (u, v), r = CharDiet.DeleteMin right
                         if safePred u = value then
                             CharDiet.Join (comparer, left, r, (x, v))
                         else
-                            CharDiet.Create (left, right, (x, value))
+                            //CharDiet.Create (left, right, (x, value))
+                            CharDiet.Join (comparer, left, right, (x, value))
 
             elif value < safePred x then
                 CharDiet.Join (comparer, add value left, right, (x, y))
             else
                 match left with
                 | Empty ->
-                    CharDiet.Create (Empty, right, (value, y))
+                    //CharDiet.Create (Empty, right, (value, y))
+                    CharDiet.Join (comparer, Empty, right, (value, y))
                 | _ ->
                     let (u, v), l = CharDiet.DeleteMax left
                     if safeSucc v = value then
                         CharDiet.Join (comparer, l, right, (u, y))
                     else
-                        CharDiet.Create (left, right, (value, y))
+                        //CharDiet.Create (left, right, (value, y))
+                        CharDiet.Join (comparer, left, right, (value, y))
 
     /// Returns a new set with the specified range of values added to the set.
     /// No exception is thrown if any of the values are already contained in the set.
@@ -1185,11 +1273,14 @@ module internal CharDiet =
                     if czx = 0 then
                         CharDiet.Reroot (comparer, left, right)
                     else
-                        CharDiet.Create (left, right, (x, safePred y))
+                        //CharDiet.Create (left, right, (x, safePred y))
+                        CharDiet.Join (comparer, left, right, (x, safePred y))
                 elif czx = 0 then
-                    CharDiet.Create (left, right, (safeSucc x, y))
+                    //CharDiet.Create (left, right, (safeSucc x, y))
+                    CharDiet.Join (comparer, left, right, (safeSucc x, y))
                 else
-                    CharDiet.Create (left, right, (x, safePred value))
+                    //CharDiet.Create (left, right, (x, safePred value))
+                    CharDiet.Join (comparer, left, right, (x, safePred value))
                     |> addRange (safeSucc value, y)
 
     /// Determines if a value is greater than or equal to a given
