@@ -674,7 +674,7 @@ type internal AvlTree<'T when 'T : comparison> =
         if lh > rh + balanceTolerance then // left is heavier than right
             match l with
             | Empty ->
-                failwith "rebalance"
+                failwith "Balance"
             | Node (ll, lr, ln, _) ->
                 // one of the nodes must have height > height r + 1
                 if AvlTree.Height ll >= AvlTree.Height lr then
@@ -686,7 +686,7 @@ type internal AvlTree<'T when 'T : comparison> =
                     // balance right: combination
                     match lr with
                     | Empty ->
-                        failwith "rebalance"
+                        failwith "Balance"
                     | Node (lrl, lrr, lrn, _) ->
                         AvlTree.Create (
                             lrn,
@@ -696,7 +696,7 @@ type internal AvlTree<'T when 'T : comparison> =
         elif rh > lh + balanceTolerance then // right is heavier than left
             match r with
             | Empty ->
-                failwith "rebalance"
+                failwith "Balance"
             | Node (rl, rr, rn, _) ->
                 // one of the nodes must have height > height t1 + 1
                 if AvlTree.Height rr >= AvlTree.Height rl then
@@ -709,7 +709,7 @@ type internal AvlTree<'T when 'T : comparison> =
                     // balance left: combination
                     match rl with
                     | Empty ->
-                        failwith "rebalance"
+                        failwith "Balance"
                     | Node (rll, rlr, rln, _) ->
                         AvlTree.Create (
                             rln,
