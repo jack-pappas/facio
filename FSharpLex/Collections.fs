@@ -50,6 +50,7 @@ module internal Constants =
 
 /// AVL Tree.
 [<NoEquality; NoComparison>]
+[<DebuggerTypeProxy(typedefof<AvlTreeDebuggerProxy<int>>)>]
 [<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
 type internal AvlTree<'T when 'T : comparison> =
     /// Empty tree.
@@ -294,8 +295,8 @@ type internal AvlTree<'T when 'T : comparison> =
             None, tree
         | Node (Empty, r, n, _) ->
             Some n, r
-        | Node (l, r, n, _) ->
-            let n', l' = AvlTree.DeleteMin l
+        | tree ->
+            let n', l' = AvlTree.DeleteMin tree
             Some n', l'
 
     /// Removes the maximum (greatest) value from a AvlTree,
@@ -307,8 +308,8 @@ type internal AvlTree<'T when 'T : comparison> =
             None, tree
         | Node (l, Empty, n, _) ->
             Some n, l
-        | Node (l, r, n, _) ->
-            let n', r' = AvlTree.DeleteMax r
+        | tree ->
+            let n', r' = AvlTree.DeleteMax tree
             Some n', r'
 
     /// Removes the specified value from the tree.
@@ -775,6 +776,15 @@ type internal AvlTree<'T when 'T : comparison> =
             else
                 let root, r' = AvlTree.DeleteMin r
                 AvlTree.Join (comparer, l, r', root)
+
+//
+and [<Sealed>]
+    internal AvlTreeDebuggerProxy<'T when 'T : comparison> (avlTree : AvlTree<'T>) =
+
+    [<DebuggerBrowsable(DebuggerBrowsableState.RootHidden)>]
+    member __.Items
+        with get () : 'T[] =
+            AvlTree.ToArray avlTree
                 
 
 /// A Discrete Interval Encoding Tree (DIET) specialized to the 'char' type.
@@ -829,6 +839,14 @@ module internal CharDiet =
             succ c
         else c
 
+    /// Similar to 'pred', but does not allow the value to underflow.
+    let inline private safePred (c : char) =
+        clampedPred System.Char.MinValue c
+
+    /// Similar to 'succ', but does not allow the value to overflow.
+    let inline private safeSucc (c : char) =
+        clampedSucc System.Char.MaxValue c
+
     /// Returns the height of a CharDiet.
     let rec private computeHeight (tree : CharDiet) =
         match tree with
@@ -847,7 +865,7 @@ module internal CharDiet =
                 false, elements
             | true, elements ->
                 // Check that this interval (a, b) is disjoint from the other elements seen so far.
-                let disjoint = Set.isEmpty elements || (Set.maxElement elements < pred a)
+                let disjoint = Set.isEmpty elements || (Set.maxElement elements < safePred a)
 
                 // Make sure none of the values in this interval have been seen already.
                 let disjointSet = not <| Range.exists (fun x -> Set.contains x elements) a b
@@ -891,7 +909,7 @@ module internal CharDiet =
         | Empty ->
             p, Empty
         | Node (left, right, (x, y), _) ->
-            if p > succ y then
+            if p > safeSucc y then
                 let p', right' = find_del_left p right
                 assert (dietInvariant right')
                 assert (fst <| intervalsDisjoint right' Set.empty)
@@ -915,7 +933,7 @@ module internal CharDiet =
         | Empty ->
             p, Empty
         | Node (left, right, (x, y), _) ->
-            if p < pred x then
+            if p < safePred x then
                 let p', left' = find_del_right p left
                 assert (dietInvariant left')
                 assert (fst <| intervalsDisjoint left' Set.empty)
@@ -1077,7 +1095,7 @@ module internal CharDiet =
                     |> tap (fun x ->
                         assert (dietInvariant x)
                         assert (fst <| intervalsDisjoint x Set.empty))
-                elif value > succ y then
+                elif value > safeSucc y then
                     // The value is above the interval and is not adjacent
                     // to it, so recurse down the right subtree to add the value
                     // then join the result with the left subtree.
@@ -1094,7 +1112,7 @@ module internal CharDiet =
                             assert (fst <| intervalsDisjoint x Set.empty))
                     | _ ->
                         let (u, v), r = CharDiet.DeleteMin right
-                        if pred u = value then
+                        if safePred u = value then
                             CharDiet.Join (comparer, left, r, (x, v))
                             |> tap (fun x ->
                                 assert (dietInvariant x)
@@ -1105,7 +1123,7 @@ module internal CharDiet =
                                 assert (dietInvariant x)
                                 assert (fst <| intervalsDisjoint x Set.empty))
 
-            elif value < pred x then
+            elif value < safePred x then
                 CharDiet.Join (comparer, add value left, right, (x, y))
                 |> tap (fun x ->
                     assert (dietInvariant x)
@@ -1119,7 +1137,7 @@ module internal CharDiet =
                         assert (fst <| intervalsDisjoint x Set.empty))
                 | _ ->
                     let (u, v), l = CharDiet.DeleteMax left
-                    if succ v = value then
+                    if safeSucc v = value then
                         CharDiet.Join (comparer, l, right, (u, y))
                         |> tap (fun x ->
                             assert (dietInvariant x)
@@ -1146,7 +1164,7 @@ module internal CharDiet =
                 assert (dietInvariant x)
                 assert (fst <| intervalsDisjoint x Set.empty))
         | Node (left, right, (x, y), _) ->
-            if b < clampedPred System.Char.MinValue x then
+            if b < safePred x then
                 let left' = addRange (a, b) left
                 
                 assert (dietInvariant left')
@@ -1155,15 +1173,9 @@ module internal CharDiet =
 
                 CharDiet.Join (comparer, left', right, (x, y))
                 |> tap (fun x ->
-                    //assert (dietInvariant x)
-                    match intervalsDisjoint x Set.empty with
-                    | true, _ -> ()
-                    | false, elements ->
-                        let kmsdm = Set.add 1 Set.empty
-
-                        assert (false)
-                        )
-            elif a > clampedSucc System.Char.MaxValue y then
+                    assert (dietInvariant x)
+                    assert (fst <| intervalsDisjoint x Set.empty))
+            elif a > safeSucc y then
                 let right' = addRange (a, b) right
                 
                 assert (dietInvariant right')
@@ -1215,12 +1227,12 @@ module internal CharDiet =
                     if czx = 0 then
                         CharDiet.Reroot (comparer, left, right)
                     else
-                        CharDiet.Create ((x, pred y), left, right)
+                        CharDiet.Create ((x, safePred y), left, right)
                 elif czx = 0 then
-                    CharDiet.Create ((succ x, y), left, right)
+                    CharDiet.Create ((safeSucc x, y), left, right)
                 else
-                    CharDiet.Create ((x, pred value), left, right)
-                    |> addRange (succ value, y)
+                    CharDiet.Create ((x, safePred value), left, right)
+                    |> addRange (safeSucc value, y)
 
     /// Determines if a value is greater than or equal to a given
     /// limit value if one is specified.
@@ -1246,7 +1258,7 @@ module internal CharDiet =
         | Some (x, y), Node (left, right, (a, b), _) ->
             let left', head, stream' =
                 if x < a then
-                    union' left (Some <| pred a) head stream
+                    union' left (Some <| safePred a) head stream
                 else
                     left, head, stream
             union_helper ((tap (fun x -> assert (dietInvariant x))) left') (a, b) right limit head ((tap (fun x -> assert (dietInvariant x))) stream')
@@ -1264,12 +1276,12 @@ module internal CharDiet =
         | None ->
             (tap (fun x -> assert (dietInvariant x)) <| CharDiet.Join (comparer, left, right, (a, b))), None, Empty
         | Some (x, y) ->
-            if y < a && y < pred a then
+            if y < a && y < safePred a then
                 let left' = addRange (x, y) left
                 CharDiet.TryDeleteMin stream
                 ||> union_helper left' (a, b) right limit
 
-            elif x > b && x > succ b then
+            elif x > b && x > safeSucc b then
                 let right', head, stream = union' right limit head stream
                 (tap (fun x -> assert (dietInvariant x)) <| CharDiet.Join (comparer, left, right', (a, b))), head, stream
 
@@ -1398,7 +1410,7 @@ module internal CharDiet =
                 let left =
                     addRange (max x a, y) left
                     |> tap (fun x -> assert (dietInvariant x))
-                inter_helper (succ y, b) right left head stream
+                inter_helper (safeSucc y, b) right left head stream
 
     /// Computes the intersection of the two sets.
     let rec intersect (input : CharDiet) (stream : CharDiet) : CharDiet =
@@ -1462,8 +1474,8 @@ module internal CharDiet =
         assert (CharDiet.Height input >= CharDiet.Height stream)
         assert (dietInvariant input)
         assert (dietInvariant stream)
-//        assert (fst <| intervalsDisjoint input Set.empty)
-//        assert (fst <| intervalsDisjoint stream Set.empty)
+        assert (fst <| intervalsDisjoint input Set.empty)
+        assert (fst <| intervalsDisjoint stream Set.empty)
 
         match head, input with
         | None, _->
@@ -1486,6 +1498,9 @@ module internal CharDiet =
         assert (dietInvariant left)
         assert (dietInvariant right)
         assert (dietInvariant stream)
+        assert (fst <| intervalsDisjoint left Set.empty)
+        assert (fst <| intervalsDisjoint right Set.empty)
+        assert (fst <| intervalsDisjoint stream Set.empty)
 
         match head with
         | None ->
@@ -1502,12 +1517,12 @@ module internal CharDiet =
             elif a < x then
                 // [a, b] and [x, y] overlap
                 // a < x
-                diff_helper (x, b) right ((addRange (a, pred x) left)) head stream
+                diff_helper (x, b) right ((addRange (a, safePred x) left)) head stream
             elif y < b then
                 // [a, b] and [x, y] overlap
                 // y < b
                 CharDiet.TryDeleteMin stream
-                ||> diff_helper (succ y, b) right left
+                ||> diff_helper (safeSucc y, b) right left
             else
                 // [a, b] and [x, y] overlap
                 let right, head, stream = diff' right head stream
@@ -1518,6 +1533,8 @@ module internal CharDiet =
         // Preconditions
         assert (dietInvariant input)
         assert (dietInvariant stream)
+        assert (fst <| intervalsDisjoint input Set.empty)
+        assert (fst <| intervalsDisjoint stream Set.empty)
 
         match input, stream with
         | Empty, _ ->
@@ -1531,8 +1548,12 @@ module internal CharDiet =
             #endif
 
             let result, _, _ =
-                CharDiet.TryDeleteMin stream
-                ||> diff' input
+                let min, stream' = CharDiet.TryDeleteMin stream
+
+                assert (dietInvariant stream')
+                assert (fst <| intervalsDisjoint stream' Set.empty)
+                
+                diff' input min stream'
             
             Debug.Assert (
                 dietInvariant result,
