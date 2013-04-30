@@ -193,16 +193,16 @@ type internal AvlTree<'T when 'T : comparison> =
     /// Creates a AvlTree whose root node holds the specified value
     /// and the specified left and right subtrees.
     [<Pure>]
-    static member inline Create (value, l, r : AvlTree<'T>) =
+    static member inline (*private*) Create (l, r : AvlTree<'T>, value) =
         //assert (AvlTree.AvlInvariant l)
         //assert (AvlTree.AvlInvariant r)
-        //assert (AvlTree.HeightDiff (l, r) <= balanceTolerance)
+        assert (AvlTree.HeightDiff (l, r) <= balanceTolerance)
         Node (l, r, value, (max (AvlTree.Height l) (AvlTree.Height r)) + 1u)
 
     /// Creates a AvlTree containing the specified value.
     [<Pure>]
     static member Singleton value : AvlTree<'T> =
-        AvlTree.Create (value, Empty, Empty)
+        AvlTree.Create (Empty, Empty, value)
 
     //
     static member private mkt_bal_l (n, l, r : AvlTree<'T>) =
@@ -221,11 +221,14 @@ type internal AvlTree<'T when 'T : comparison> =
                     | Empty ->
                         failwith "mkt_bal_l"
                     | Node (lrl, lrr, lrn, _) ->
-                        AvlTree.Create (lrn, AvlTree.Create (ln, ll, lrl), AvlTree.Create (n, lrr, r))
+                        AvlTree.Create (
+                            AvlTree.Create (ll, lrl, ln),
+                            AvlTree.Create (lrr, r, n),
+                            lrn)
                 else
-                    AvlTree.Create (ln, ll, AvlTree.Create (n, lr, r))
+                    AvlTree.Create (ll, AvlTree.Create (lr, r, n), ln)
         else
-            AvlTree.Create (n, l, r)
+            AvlTree.Create (l, r, n)
 
     //
     static member private mkt_bal_r (n, l, r : AvlTree<'T>) =
@@ -244,11 +247,14 @@ type internal AvlTree<'T when 'T : comparison> =
                     | Empty ->
                         failwith "mkt_bal_r"
                     | Node (rll, rlr, rln, _) ->
-                        AvlTree.Create (rln, AvlTree.Create (n, l, rll), AvlTree.Create (rn, rlr, rr))
+                        AvlTree.Create (
+                            AvlTree.Create (l, rll, n),
+                            AvlTree.Create (rlr, rr, rn),
+                            rln)
                 else
-                    AvlTree.Create (rn, AvlTree.Create (n, l, rl), rr)
+                    AvlTree.Create (AvlTree.Create (l, rl, n), rr, rn)
         else
-            AvlTree.Create (n, l, r)
+            AvlTree.Create (l, r, n)
 
     /// Removes the minimum (least) value from an AvlTree,
     /// returning the value along with the updated tree.
@@ -668,7 +674,7 @@ type internal AvlTree<'T when 'T : comparison> =
         // Preconditions
         //assert (AvlTree.AvlInvariant l)
         //assert (AvlTree.AvlInvariant r)
-        //assert (AvlTree.HeightDiff (l, r) <= (balanceTolerance + 1u))
+        assert (AvlTree.HeightDiff (l, r) <= (balanceTolerance + 1u))
 
         let lh = AvlTree.Height l
         let rh = AvlTree.Height r
@@ -680,9 +686,9 @@ type internal AvlTree<'T when 'T : comparison> =
                 // one of the nodes must have height > height r + 1
                 if AvlTree.Height ll >= AvlTree.Height lr then
                     AvlTree.Create (
-                        ln,
                         ll,
-                        AvlTree.Create (n, lr, r))
+                        AvlTree.Create (lr, r, n),
+                        ln)
                 else
                     // balance right: combination
                     match lr with
@@ -690,9 +696,9 @@ type internal AvlTree<'T when 'T : comparison> =
                         failwith "Balance"
                     | Node (lrl, lrr, lrn, _) ->
                         AvlTree.Create (
-                            lrn,
-                            AvlTree.Create (ln, ll, lrl),
-                            AvlTree.Create (n, lrr, r))
+                            AvlTree.Create (ll, lrl, ln),
+                            AvlTree.Create (lrr, r, n),
+                            lrn)
                     
         elif rh > lh + balanceTolerance then // right is heavier than left
             match r with
@@ -703,9 +709,9 @@ type internal AvlTree<'T when 'T : comparison> =
                 if AvlTree.Height rr >= AvlTree.Height rl then
                     // rotate left
                     AvlTree.Create (
-                        rn,
-                        AvlTree.Create (n, l, rl),
-                        rr)
+                        AvlTree.Create (l, rl, n),
+                        rr,
+                        rn)
                 else
                     // balance left: combination
                     match rl with
@@ -713,11 +719,11 @@ type internal AvlTree<'T when 'T : comparison> =
                         failwith "Balance"
                     | Node (rll, rlr, rln, _) ->
                         AvlTree.Create (
-                            rln,
-                            AvlTree.Create (n, l, rll),
-                            AvlTree.Create (rn, rlr, rr))
+                            AvlTree.Create (l, rll, n),
+                            AvlTree.Create (rlr, rr, rn),
+                            rln)
         else
-            AvlTree.Create (n, l, r)
+            AvlTree.Create (l, r, n)
 
     /// Join two trees together with the specified root element.
     /// Takes two trees representing disjoint sets and combines them, returning
@@ -744,7 +750,8 @@ type internal AvlTree<'T when 'T : comparison> =
                 let l' = AvlTree.Join (comparer, l, rl, root)
                 AvlTree.Balance (l', rr, rn)
             else
-                AvlTree.Create (root, l, r)
+                //AvlTree.Create (root, l, r)
+                AvlTree.Balance (l, r, root)
 
     /// Reroot of balanced trees.
     /// Takes two trees representing disjoint sets and combines them, returning
@@ -914,6 +921,7 @@ module internal CharDiet =
             //&& (intervalsDisjoint tree Set.empty |> fst)
 
     //
+    // NOTE : This function is only called by 'addRange'.
     let rec internal (*private*) find_del_left p (tree : CharDiet) : char * CharDiet =
         // Preconditions
         assert (dietInvariant tree)
@@ -932,6 +940,7 @@ module internal CharDiet =
                 x, left
 
     //
+    // NOTE : This function is only called by 'addRange'.
     let rec internal (*private*) find_del_right p (tree : CharDiet) : char * CharDiet =
         // Preconditions
         assert (dietInvariant tree)
@@ -1098,26 +1107,26 @@ module internal CharDiet =
                 else
                     match right with
                     | Empty ->
-                        CharDiet.Create ((x, value), left, Empty)
+                        CharDiet.Create (left, Empty, (x, value))
                     | _ ->
                         let (u, v), r = CharDiet.DeleteMin right
                         if safePred u = value then
                             CharDiet.Join (comparer, left, r, (x, v))
                         else
-                            CharDiet.Create ((x, value), left, right)
+                            CharDiet.Create (left, right, (x, value))
 
             elif value < safePred x then
                 CharDiet.Join (comparer, add value left, right, (x, y))
             else
                 match left with
                 | Empty ->
-                    CharDiet.Create ((value, y), Empty, right)
+                    CharDiet.Create (Empty, right, (value, y))
                 | _ ->
                     let (u, v), l = CharDiet.DeleteMax left
                     if safeSucc v = value then
                         CharDiet.Join (comparer, l, right, (u, y))
                     else
-                        CharDiet.Create ((value, y), left, right)
+                        CharDiet.Create (left, right, (value, y))
 
     /// Returns a new set with the specified range of values added to the set.
     /// No exception is thrown if any of the values are already contained in the set.
@@ -1176,11 +1185,11 @@ module internal CharDiet =
                     if czx = 0 then
                         CharDiet.Reroot (comparer, left, right)
                     else
-                        CharDiet.Create ((x, safePred y), left, right)
+                        CharDiet.Create (left, right, (x, safePred y))
                 elif czx = 0 then
-                    CharDiet.Create ((safeSucc x, y), left, right)
+                    CharDiet.Create (left, right, (safeSucc x, y))
                 else
-                    CharDiet.Create ((x, safePred value), left, right)
+                    CharDiet.Create (left, right, (x, safePred value))
                     |> addRange (safeSucc value, y)
 
     /// Determines if a value is greater than or equal to a given
@@ -1207,6 +1216,11 @@ module internal CharDiet =
         | _, Empty ->
             Empty, head, stream
         | Some (x, y), Node (left, right, (a, b), _) ->
+            assert (dietInvariant left)
+            assert (dietInvariant right)
+            assert (intervalsDisjoint left)
+            assert (intervalsDisjoint right)
+
             let left', head, stream' =
                 if x < a then
                     unionImpl left (Some <| safePred a) head stream
@@ -1279,8 +1293,12 @@ module internal CharDiet =
 
             let result =
                 let result, head', stream'' =
-                    CharDiet.TryDeleteMin stream
-                    ||> unionImpl input None
+                    let min, stream' = CharDiet.TryDeleteMin stream
+                    
+                    assert (dietInvariant stream')
+                    assert (intervalsDisjoint stream')
+                    
+                    unionImpl input None min stream'
 
                 match head' with
                 | None ->
