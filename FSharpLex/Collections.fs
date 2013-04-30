@@ -51,10 +51,13 @@ module internal Constants =
             the AVL tree extracted from Isabelle/HOL, then specialized for the 'char' type. *)
 
 /// AVL Tree.
-[<NoEquality; NoComparison>]
+#if DEBUG
 [<StructuredFormatDisplay("{DisplayFormatted}")>]
+#else
+[<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
+#endif
+[<NoEquality; NoComparison>]
 [<DebuggerTypeProxy(typedefof<AvlTreeDebuggerProxy<int>>)>]
-//[<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
 type internal AvlTree<'T when 'T : comparison> =
     /// Empty tree.
     | Empty
@@ -68,42 +71,44 @@ type internal AvlTree<'T when 'T : comparison> =
         | [], [] -> 0
         | [], _ -> -1
         | _, [] -> 1
-        | (Empty :: t1), (Empty :: t2) ->
+
+        | Empty :: t1, Empty :: t2 ->
             AvlTree.CompareStacks (comparer, t1, t2)
-        | (Node (Empty, Empty, n1k, _) :: t1), (Node (Empty, Empty, n2k, _) :: t2) ->
+
+        | Node (Empty, Empty, n1k, _) :: t1, Node (Empty, Empty, n2k, _) :: t2 ->
             match comparer.Compare (n1k, n2k) with
             | 0 ->
                 AvlTree.CompareStacks (comparer, t1, t2)
             | c -> c
 
-        | (Node (Empty, Empty, n1k, _) :: t1), (Node (Empty, n2r, n2k, _) :: t2) ->
+        | Node (Empty, Empty, n1k, _) :: t1, Node (Empty, n2r, n2k, _) :: t2 ->
             match comparer.Compare (n1k, n2k) with
             | 0 ->
                 AvlTree.CompareStacks (comparer, Empty :: t1, n2r :: t2)
             | c -> c
 
-        | (Node (Empty, n1r, n1k, _) :: t1), (Node (Empty, Empty, n2k, _) :: t2) ->
+        | Node (Empty, n1r, n1k, _) :: t1, Node (Empty, Empty, n2k, _) :: t2 ->
             match comparer.Compare (n1k, n2k) with
             | 0 ->
                 AvlTree.CompareStacks (comparer, n1r :: t1, Empty :: t2)
             | c -> c
 
-        | (Node (Empty, n1r, n1k, _) :: t1), (Node (Empty, n2r, n2k, _) :: t2) ->
+        | Node (Empty, n1r, n1k, _) :: t1, Node (Empty, n2r, n2k, _) :: t2 ->
             match comparer.Compare (n1k, n2k) with
             | 0 ->
                 AvlTree.CompareStacks (comparer, n1r :: t1, n2r :: t2)
             | c -> c
 
-        | ((Node (Empty, Empty, n1k, _) :: t1) as l1), _ ->
+        | Node (Empty, Empty, _, _) :: _, _ ->
             AvlTree.CompareStacks (comparer, Empty :: l1, l2)
         
-        | (Node (n1l, n1r, n1k, _) :: t1), _ ->
+        | Node (n1l, n1r, n1k, _) :: t1, _ ->
             AvlTree.CompareStacks (comparer, n1l :: Node (Empty, n1r, n1k, 0u) :: t1, l2)
         
-        | _, ((Node (Empty, Empty, n2k, _) :: t2) as l2) ->
+        | _, Node (Empty, Empty, _, _) :: _ ->
             AvlTree.CompareStacks (comparer, l1, Empty :: l2)
         
-        | _, (Node (n2l, n2r, n2k, _) :: t2) ->
+        | _, Node (n2l, n2r, n2k, _) :: t2 ->
             AvlTree.CompareStacks (comparer, l1, n2l :: Node (Empty, n2r, n2k, 0u) :: t2)
                 
     //
@@ -801,10 +806,6 @@ type internal AvlTree<'T when 'T : comparison> =
                 let root, r' = AvlTree.DeleteMin r
                 AvlTree.Join (comparer, l, r', root)
 
-    /// Internal. Only for use with [<StructuredFormatDisplay>].
-    member private this.DisplayFormatted
-        with get () = AvlTree.ToCodeString this
-
     /// Prints a tree as F# code which, when executed, will re-create the tree.
     static member internal ToCodeString (tree : AvlTree<'T>) : string =
         /// Holds the printed code.
@@ -858,6 +859,19 @@ type internal AvlTree<'T when 'T : comparison> =
             // Close the constructor.
             // Don't write a newline here -- it'll be written when this function returns.
             indentedWriter.Write ")"
+
+    #if DEBUG
+    /// Internal. Only for use with [<StructuredFormatDisplay>].
+    member private this.DisplayFormatted
+        with get () = AvlTree.ToCodeString this
+    #endif
+
+    /// <inherit />
+    override this.ToString () =
+        let str = AvlTree.ToCodeString this
+
+        // Flatten the string for better printing.
+        str.Replace (System.Environment.NewLine, "")
 
 //
 and [<Sealed>]
