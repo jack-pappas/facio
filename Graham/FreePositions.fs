@@ -203,7 +203,7 @@ module FreePositions =
                     // Create the positions for this production...
                     let len = Array.length production
                     [| for i in 0 .. len ->
-                        productionRuleId, Tag.ofInt<ParserPosition> i |]
+                        productionRuleId, tag<ParserPosition> i |]
                     |> Set.ofArray
                     //  ...then add them to the set of all positions.
                     |> Set.union positions))
@@ -282,8 +282,7 @@ module FreePositions =
                 ||> Array.fold (fun productionRuleIds ruleRhs ->
                     /// The identifier for this production rule.
                     let productionRuleId : ProductionRuleId =
-                        productionRuleIds.Count + 1
-                        |> Tag.ofInt
+                        tag <| productionRuleIds.Count + 1
 
                     // Add this identifier to the map.
                     Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
