@@ -19,7 +19,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <Tailcalls>false</Tailcalls>
+    <Tailcalls>true</Tailcalls>
     <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
@@ -27,7 +27,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <WarningsAsErrors>25</WarningsAsErrors>
-    <StartArguments>--unicode -o "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\FSharpLex\LexerGenerated.fs" "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\FSharpLex\Lexer.fsl"</StartArguments>
+    <StartArguments>--unicode -o "C:\Users\Jack\Desktop\fsharp-tools-test\Lexer.fs" "C:\Users\Jack\Desktop\fsharp-tools-test\lex.fsl"</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
