@@ -25,6 +25,7 @@ open System.Diagnostics
 open System.Diagnostics.Contracts
 open OptimizedClosures
 open ExtCore
+open ExtCore.Printf
 open ExtCore.Collections
 open ExtCore.Control
 
@@ -852,6 +853,7 @@ module internal CharDiet =
         | Node (l, r, (a, b), _) ->
             match intervalsDisjointImpl l elements with
             | false, elements ->
+                tprintfn "DIET invariant failed: the intervals in the DIET are not disjoint."
                 false, elements
             | true, elements ->
                 // Check that this interval (a, b) is disjoint from the other elements seen so far.
@@ -861,6 +863,7 @@ module internal CharDiet =
                 let disjointSet = not <| Range.exists (fun x -> Set.contains x elements) a b
 
                 if not disjoint || not disjointSet then
+                    tprintfn "DIET invariant failed: the intervals in the DIET are not disjoint."
                     false, elements
                 else
                     // Add the elements from this interval to the set.
@@ -883,13 +886,30 @@ module internal CharDiet =
             let height_l = computeHeight l
             let height_r = computeHeight r
             let height_diff = (max height_l height_r) - (min height_l height_r)
-            
-            height_diff <= balanceTolerance
-            && h = ((max height_l height_r) + 1u)
-            && dietInvariant l
-            && dietInvariant r
+
+            // Is the node balanced (within the allowed tolerance)?
+            if height_diff > balanceTolerance then
+                tprintfn "DIET invariant failed: the height difference between the subtrees is invalid."
+                tprintfn "    Height Difference: %i" height_diff
+                tprintfn "    Balance Tolerance: %u" balanceTolerance
+                false
+
+            // Is the height stored in this node correct?
+            elif h <> ((max height_l height_r) + 1u) then
+                tprintfn "DIET invariant failed: the height of the node is not set to the correct value."
+                tprintfn "    Node Height: %u (Expected = %u)" h ((max height_l height_r) + 1u)
+                tprintfn "    Left Subtree Height:  %u" height_l
+                tprintfn "    Right Subtree Height: %u" height_r
+                false
+
             // Check that the interval is correctly directed.
-            && a <= b
+            elif a > b then
+                tprintfn "DIET invariant failed: the DIET contains an incorrectly-directed interval (0x%04x, 0x%04x)." (uint32 a) (uint32 b)
+                false
+            else
+            // Check the subtrees.
+            dietInvariant l
+            && dietInvariant r
             // Check that the intervals are disjoint.
             //&& (intervalsDisjoint tree Set.empty |> fst)
 
