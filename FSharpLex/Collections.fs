@@ -844,13 +844,13 @@ module internal CharDiet =
         | Node (l, r, _, _) ->
             1u + max (computeHeight l) (computeHeight r)
 
-    //
-    let rec private intervalsDisjoint (tree : CharDiet) (elements : Set<char>) =
+    /// Determines if the intervals in a DIET are disjoint.
+    let rec intervalsDisjointImpl (tree : CharDiet) (elements : Set<char>) =
         match tree with
         | Empty ->
             true, elements
         | Node (l, r, (a, b), _) ->
-            match intervalsDisjoint l elements with
+            match intervalsDisjointImpl l elements with
             | false, elements ->
                 false, elements
             | true, elements ->
@@ -868,7 +868,11 @@ module internal CharDiet =
                     |||> Range.fold (fun elements x ->
                         Set.add x elements)
                     // Check the right subtree.
-                    |> intervalsDisjoint r
+                    |> intervalsDisjointImpl r
+
+    /// Determines if the intervals in a DIET are disjoint.
+    let intervalsDisjoint (tree : CharDiet) : bool =
+        fst <| intervalsDisjointImpl tree Set.empty
         
     /// Determines if a DIET is correctly formed.
     let rec dietInvariant (tree : CharDiet) =
@@ -892,8 +896,8 @@ module internal CharDiet =
     //
     let rec internal (*private*) find_del_left p (tree : CharDiet) : char * CharDiet =
         // Preconditions
-        //assert (dietInvariant tree)
-        //assert (fst <| intervalsDisjoint tree Set.empty)
+        assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         match tree with
         | Empty ->
@@ -910,8 +914,8 @@ module internal CharDiet =
     //
     let rec internal (*private*) find_del_right p (tree : CharDiet) : char * CharDiet =
         // Preconditions
-        //assert (dietInvariant tree)
-        //assert (fst <| intervalsDisjoint tree Set.empty)
+        assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         match tree with
         | Empty ->
@@ -936,8 +940,8 @@ module internal CharDiet =
     /// Determines if a DIET contains a specified value.
     let rec contains value (tree : CharDiet) =
         // Preconditions
-        //assert (dietInvariant tree)
-        //assert (fst <| intervalsDisjoint tree Set.empty)
+        assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         match tree with
         | Empty ->
@@ -952,8 +956,8 @@ module internal CharDiet =
     /// Gets the maximum (greatest) value stored in the DIET.
     let maxElement (tree : CharDiet) : char =
         // Preconditions
-        //assert (dietInvariant tree)
-        //assert (fst <| intervalsDisjoint tree Set.empty)
+        assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         match tree with
         | Empty ->
@@ -964,8 +968,8 @@ module internal CharDiet =
     /// Gets the minimum (least) value stored in the DIET.
     let minElement (tree : CharDiet) : char =
         // Preconditions
-        //assert (dietInvariant tree)
-        //assert (fst <| intervalsDisjoint tree Set.empty)
+        assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         match tree with
         | Empty ->
@@ -976,8 +980,8 @@ module internal CharDiet =
     /// Gets the minimum (least) and maximum (greatest) values store in the DIET.
     let bounds (tree : CharDiet) : char * char =
         // Preconditions
-        //assert (dietInvariant tree)
-        //assert (fst <| intervalsDisjoint tree Set.empty)
+        assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         match tree with
         | Empty ->
@@ -1009,8 +1013,8 @@ module internal CharDiet =
     /// Returns the number of elements in the set.
     let count (tree : CharDiet) =
         // Preconditions
-        //assert (dietInvariant tree)
-        //assert (fst <| intervalsDisjoint tree Set.empty)
+        assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         // OPTIMIZE : Modify this to use a mutable stack instead of an F# list.
         let rec cardinal_aux acc = function
@@ -1026,8 +1030,8 @@ module internal CharDiet =
     /// Returns the number of intervals in the set.
     let intervalCount (tree : CharDiet) =
         // Preconditions
-        //assert (dietInvariant tree)
-        //assert (fst <| intervalsDisjoint tree Set.empty)
+        assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         // OPTIMIZE : Modify this to use a mutable stack instead of an F# list.
         let rec cardinal_aux acc = function
@@ -1054,8 +1058,8 @@ module internal CharDiet =
     /// No exception is thrown if the set already contains the value.
     let rec add value (tree : CharDiet) : CharDiet =
         // Preconditions
-        //assert (dietInvariant tree)
-        //assert (fst <| intervalsDisjoint tree Set.empty)
+        assert (dietInvariant tree)
+        //assert (intervalsDisjoint tree)
 
         match tree with
         | Empty ->
@@ -1101,8 +1105,8 @@ module internal CharDiet =
         // Preconditions
         if a > b then
             invalidArg "b" "The upper bound of the interval is less than the lower bound."
-        //assert (dietInvariant tree)
-        //assert (fst <| intervalsDisjoint tree Set.empty)
+        assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         match tree with
         | Empty ->
@@ -1132,8 +1136,8 @@ module internal CharDiet =
     /// No exception is thrown if the set doesn't contain the specified element.
     let rec remove value (tree : CharDiet) : CharDiet =
         // Preconditions
-        //assert (dietInvariant tree)
-        //assert (fst <| intervalsDisjoint tree Set.empty)
+        assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         match tree with
         | Empty ->
@@ -1167,15 +1171,15 @@ module internal CharDiet =
         | Some limit ->
             value >= limit
 
-    /// Helper function for computing the union of two sets.
-    let rec private union' (input : CharDiet) limit head (stream : CharDiet)
+    /// Recursive implementation function for computing the union of two sets.
+    let rec private unionImpl (input : CharDiet) limit head (stream : CharDiet)
         : CharDiet * (char * char) option * CharDiet =
         // Preconditions
         //assert (CharDiet.Height input >= CharDiet.Height stream)  // Keep this!
-        //assert (dietInvariant input)
-        //assert (fst <| intervalsDisjoint input Set.empty)
-        //assert (dietInvariant stream)
-        //assert (fst <| intervalsDisjoint stream Set.empty)
+        assert (dietInvariant input)
+        assert (dietInvariant stream)
+        assert (intervalsDisjoint input)
+        assert (intervalsDisjoint stream)
 
         match head, input with
         | None, _ ->
@@ -1185,19 +1189,22 @@ module internal CharDiet =
         | Some (x, y), Node (left, right, (a, b), _) ->
             let left', head, stream' =
                 if x < a then
-                    union' left (Some <| safePred a) head stream
+                    unionImpl left (Some <| safePred a) head stream
                 else
                     left, head, stream
-            union_helper left' (a, b) right limit head stream'
+            unionHelper left' (a, b) right limit head stream'
 
     /// Helper function for computing the union of two sets.
-    and private union_helper left (a, b) (right : CharDiet) limit head stream =
+    and private unionHelper left (a, b) (right : CharDiet) limit head stream =
         // Preconditions
         if a > b then
             invalidArg "b" "The upper bound of the interval is less than the lower bound."
-        //assert (dietInvariant left)
-        //assert (dietInvariant right)
-        //assert (dietInvariant stream)
+        assert (dietInvariant left)
+        assert (dietInvariant right)
+        assert (dietInvariant stream)
+        assert (intervalsDisjoint left)
+        assert (intervalsDisjoint right)
+        assert (intervalsDisjoint stream)
 
         match head with
         | None ->
@@ -1206,28 +1213,30 @@ module internal CharDiet =
             if y < a && y < safePred a then
                 let left' = addRange (x, y) left
                 CharDiet.TryDeleteMin stream
-                ||> union_helper left' (a, b) right limit
+                ||> unionHelper left' (a, b) right limit
 
             elif x > b && x > safeSucc b then
-                let right', head, stream = union' right limit head stream
+                let right', head, stream = unionImpl right limit head stream
                 CharDiet.Join (comparer, left, right', (a, b)), head, stream
 
             elif b >= y then
                 CharDiet.TryDeleteMin stream
-                ||> union_helper left (min a x, b) right limit
+                ||> unionHelper left (min a x, b) right limit
 
             elif greater_limit limit y then
                 left, Some (min a x, y), stream
 
             else
-                let right', head, stream = union' right limit (Some (min a x, y)) stream
+                let right', head, stream = unionImpl right limit (Some (min a x, y)) stream
                 CharDiet.Reroot (comparer, left, right'), head, stream
 
     /// Computes the union of the two sets.
     let rec union (input : CharDiet) (stream : CharDiet) : CharDiet =
         // Preconditions
-        //assert (dietInvariant input)
-        //assert (dietInvariant stream)
+        assert (dietInvariant input)
+        assert (dietInvariant stream)
+        assert (intervalsDisjoint input)
+        assert (intervalsDisjoint stream)
 
         match input, stream with
         | Empty, set
@@ -1251,7 +1260,7 @@ module internal CharDiet =
             let result =
                 let result, head', stream'' =
                     CharDiet.TryDeleteMin stream
-                    ||> union' input None
+                    ||> unionImpl input None
 
                 match head' with
                 | None ->
@@ -1263,7 +1272,7 @@ module internal CharDiet =
                 dietInvariant result,
                 "The DIET invariant does not hold for the result.")
             Debug.Assert (
-                fst <| intervalsDisjoint result Set.empty,
+                intervalsDisjoint result,
                 "The intervals in the DIET are not disjoint.")
 
             #if DEBUG
@@ -1279,12 +1288,14 @@ module internal CharDiet =
             #endif
             result
 
-    /// Helper function for computing the intersection of two sets.
-    let rec private inter' (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
+    /// Recursive implementation function for computing the intersection of two sets.
+    let rec private intersectImpl (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
         // Preconditions
         //assert (CharDiet.Height input >= CharDiet.Height stream)  // Should we keep this?
-        //assert (dietInvariant input)
-        //assert (dietInvariant stream)
+        assert (dietInvariant input)
+        assert (dietInvariant stream)
+        assert (intervalsDisjoint input)
+        assert (intervalsDisjoint stream)
 
         match head, input with
         | None, _ ->
@@ -1294,20 +1305,23 @@ module internal CharDiet =
         | Some (x, y), Node (left, right, (a, b), _) ->
             let left', head, stream' =
                 if x < a then
-                    inter' left head stream
+                    intersectImpl left head stream
                 else
                     Empty, head, stream
 
-            inter_helper (a, b) right left' head stream'
+            intersectHelper (a, b) right left' head stream'
 
     /// Helper function for computing the intersection of two sets.
-    and private inter_helper (a, b) (right : CharDiet) (left : CharDiet) head stream =
+    and private intersectHelper (a, b) (right : CharDiet) (left : CharDiet) head stream =
         // Preconditions
         if a > b then
             invalidArg "b" "The upper bound of the interval is less than the lower bound."
-        //assert (dietInvariant left)
-        //assert (dietInvariant right)
-        //assert (dietInvariant stream)
+        assert (dietInvariant left)
+        assert (dietInvariant right)
+        assert (dietInvariant stream)
+        assert (intervalsDisjoint left)
+        assert (intervalsDisjoint right)
+        assert (intervalsDisjoint stream)
 
         match head with
         | None ->
@@ -1320,26 +1334,28 @@ module internal CharDiet =
                     left, None, Empty
                 | _ ->
                     CharDiet.TryDeleteMin stream
-                    ||> inter_helper (a, b) right left
+                    ||> intersectHelper (a, b) right left
 
             elif b < x then
-                let right, head, stream = inter' right head stream
+                let right, head, stream = intersectImpl right head stream
                 CharDiet.Reroot (comparer, left, right), head, stream
 
             elif y >= clampedPred y b then
-                let right, head, stream = inter' right head stream
+                let right, head, stream = intersectImpl right head stream
                 let right' = CharDiet.Join (comparer, left, right, (max x a, min y b))
                 right', head, stream
 
             else
                 let left = addRange (max x a, y) left
-                inter_helper (safeSucc y, b) right left head stream
+                intersectHelper (safeSucc y, b) right left head stream
 
     /// Computes the intersection of the two sets.
     let rec intersect (input : CharDiet) (stream : CharDiet) : CharDiet =
         // Preconditions
-        //assert (dietInvariant input)
-        //assert (dietInvariant stream)
+        assert (dietInvariant input)
+        assert (dietInvariant stream)
+        assert (intervalsDisjoint input)
+        assert (intervalsDisjoint stream)
 
         match input, stream with
         | Empty, _
@@ -1362,13 +1378,13 @@ module internal CharDiet =
 
             let result, _, _ =
                 CharDiet.TryDeleteMin stream
-                ||> inter' input
+                ||> intersectImpl input
             
             Debug.Assert (
                 dietInvariant result,
                 "The DIET invariant does not hold for the result.")
             Debug.Assert (
-                fst <| intervalsDisjoint result Set.empty,
+                intervalsDisjoint result,
                 "The intervals in the DIET are not disjoint.")
 
             #if DEBUG
@@ -1391,13 +1407,13 @@ module internal CharDiet =
             #endif
             result
 
-    /// Helper function for computing the difference of two sets.
-    let rec private diff' (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
+    /// Recursive implementation function for computing the difference of two sets.
+    let rec private diffImpl (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
         // Preconditions
-        //assert (dietInvariant input)
-        //assert (dietInvariant stream)
-        //assert (fst <| intervalsDisjoint input Set.empty)
-        //assert (fst <| intervalsDisjoint stream Set.empty)
+        assert (dietInvariant input)
+        assert (dietInvariant stream)
+        assert (intervalsDisjoint input)
+        assert (intervalsDisjoint stream)
 
         match head, input with
         | None, _->
@@ -1407,22 +1423,22 @@ module internal CharDiet =
         | Some (x, y), Node (left, right, (a, b), _) ->
             let left, head, stream =
                 if x < a then
-                    diff' left head stream
+                    diffImpl left head stream
                 else
                     left, head, stream
-            diff_helper (a, b) right left head stream
+            diffHelper (a, b) right left head stream
 
     /// Helper function for computing the difference of two sets.
-    and private diff_helper (a, b) (right : CharDiet) (left : CharDiet) head stream =
+    and private diffHelper (a, b) (right : CharDiet) (left : CharDiet) head stream =
         // Preconditions
         if a > b then
             invalidArg "b" "The upper bound of the interval is less than the lower bound."
-        //assert (dietInvariant left)
-        //assert (dietInvariant right)
-        //assert (dietInvariant stream)
-        //assert (fst <| intervalsDisjoint left Set.empty)
-        //assert (fst <| intervalsDisjoint right Set.empty)
-        //assert (fst <| intervalsDisjoint stream Set.empty)
+        assert (dietInvariant left)
+        assert (dietInvariant right)
+        assert (dietInvariant stream)
+        assert (intervalsDisjoint left)
+        assert (intervalsDisjoint right)
+        assert (intervalsDisjoint stream)
 
         match head with
         | None ->
@@ -1431,32 +1447,32 @@ module internal CharDiet =
             if y < a then
                 // [x, y] and [a, b] are disjoint
                 CharDiet.TryDeleteMin stream
-                ||> diff_helper (a, b) right left
+                ||> diffHelper (a, b) right left
             elif b < x then
                 // [a, b] and [x, y] are disjoint
-                let right, head, stream = diff' right head stream
+                let right, head, stream = diffImpl right head stream
                 CharDiet.Join (comparer, left, right, (a, b)), head, stream
             elif a < x then
                 // [a, b] and [x, y] overlap
                 // a < x
-                diff_helper (x, b) right ((addRange (a, safePred x) left)) head stream
+                diffHelper (x, b) right ((addRange (a, safePred x) left)) head stream
             elif y < b then
                 // [a, b] and [x, y] overlap
                 // y < b
                 CharDiet.TryDeleteMin stream
-                ||> diff_helper (safeSucc y, b) right left
+                ||> diffHelper (safeSucc y, b) right left
             else
                 // [a, b] and [x, y] overlap
-                let right, head, stream = diff' right head stream
+                let right, head, stream = diffImpl right head stream
                 CharDiet.Reroot (comparer, left, right), head, stream
 
     /// Returns a new set with the elements of the second set removed from the first.
     let difference (input : CharDiet) (stream : CharDiet) : CharDiet =
         // Preconditions
-        //assert (dietInvariant input)
-        //assert (dietInvariant stream)
-        //assert (fst <| intervalsDisjoint input Set.empty)
-        //assert (fst <| intervalsDisjoint stream Set.empty)
+        assert (dietInvariant input)
+        assert (dietInvariant stream)
+        assert (intervalsDisjoint input)
+        assert (intervalsDisjoint stream)
 
         match input, stream with
         | Empty, _ ->
@@ -1471,13 +1487,13 @@ module internal CharDiet =
 
             let result, _, _ =
                 CharDiet.TryDeleteMin stream
-                ||> diff' input
+                ||> diffImpl input
             
             Debug.Assert (
                 dietInvariant result,
                 "The DIET invariant does not hold for the result.")
             Debug.Assert (
-                fst <| intervalsDisjoint result Set.empty,
+                intervalsDisjoint result,
                 "The intervals in the DIET are not disjoint.")
 
             #if DEBUG
@@ -1493,6 +1509,7 @@ module internal CharDiet =
     let fold (folder : 'State -> char -> 'State) (state : 'State) (tree : CharDiet) =
         // Preconditions
         assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         let folder = FSharpFunc<_,_,_>.Adapt folder
 
@@ -1509,6 +1526,7 @@ module internal CharDiet =
     let foldBack (folder : char -> 'State -> 'State) (tree : CharDiet) (state : 'State) =
         // Preconditions
         assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         let folder = FSharpFunc<_,_,_>.Adapt folder
 
@@ -1525,6 +1543,7 @@ module internal CharDiet =
     let iter (action : char -> unit) (tree : CharDiet) =
         // Preconditions
         assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         /// Applies the action to all values within an interval.
         let intervalApplicator (lo, hi) =
@@ -1537,6 +1556,7 @@ module internal CharDiet =
     let forall (predicate : char -> bool) (tree : CharDiet) =
         // Preconditions
         assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         // OPTIMIZE : Rewrite this to short-circuit and return early
         // if we find a non-matching element.
@@ -1548,6 +1568,7 @@ module internal CharDiet =
     let exists (predicate : char -> bool) (tree : CharDiet) =
         // Preconditions
         assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         // OPTIMIZE : Rewrite this to short-circuit and return early
         // if we find a non-matching element.
@@ -1559,6 +1580,7 @@ module internal CharDiet =
     let rec toSeq (tree : CharDiet) =
         // Preconditions
         assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         seq {
         match tree with
@@ -1573,6 +1595,7 @@ module internal CharDiet =
     let toList (tree : CharDiet) =
         // Preconditions
         assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         ([], tree)
         ||> fold (fun list el ->
@@ -1582,6 +1605,7 @@ module internal CharDiet =
     let toArray (tree : CharDiet) =
         // Preconditions
         assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         let elements = ResizeArray ()
         iter elements.Add tree
@@ -1591,6 +1615,7 @@ module internal CharDiet =
     let toSet (tree : CharDiet) =
         // Preconditions
         assert (dietInvariant tree)
+        assert (intervalsDisjoint tree)
 
         (Set.empty, tree)
         ||> fold (fun set el ->
@@ -1648,6 +1673,7 @@ type CharSet private (tree : CharDiet) =
     static member FromElement value : CharSet =
         let result = CharDiet.singleton value
         assert (CharDiet.dietInvariant result)
+        assert (CharDiet.intervalsDisjoint result)
         CharSet (result)
 
     /// The set containing the elements in the given range.
