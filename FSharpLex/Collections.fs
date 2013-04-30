@@ -193,9 +193,9 @@ type internal AvlTree<'T when 'T : comparison> =
     /// and the specified left and right subtrees.
     [<Pure>]
     static member inline Create (value, l, r : AvlTree<'T>) =
-        assert (AvlTree.AvlInvariant l)
-        assert (AvlTree.AvlInvariant r)
-        assert (AvlTree.HeightDiff (l, r) <= balanceTolerance)
+        //assert (AvlTree.AvlInvariant l)
+        //assert (AvlTree.AvlInvariant r)
+        //assert (AvlTree.HeightDiff (l, r) <= balanceTolerance)
         Node (l, r, value, (max (AvlTree.Height l) (AvlTree.Height r)) + 1u)
 
     /// Creates a AvlTree containing the specified value.
@@ -206,9 +206,9 @@ type internal AvlTree<'T when 'T : comparison> =
     //
     static member private mkt_bal_l (n, l, r : AvlTree<'T>) =
         // Preconditions
-        assert (AvlTree.AvlInvariant l)
-        assert (AvlTree.AvlInvariant r)
-        assert (AvlTree.Height l <= AvlTree.Height r + balanceTolerance)
+        //assert (AvlTree.AvlInvariant l)
+        //assert (AvlTree.AvlInvariant r)
+        //assert (AvlTree.Height l <= AvlTree.Height r + balanceTolerance)
 
         if AvlTree.Height l = AvlTree.Height r + balanceTolerance then
             match l with
@@ -229,9 +229,9 @@ type internal AvlTree<'T when 'T : comparison> =
     //
     static member private mkt_bal_r (n, l, r : AvlTree<'T>) =
         // Preconditions
-        assert (AvlTree.AvlInvariant l)
-        assert (AvlTree.AvlInvariant r)
-        assert (AvlTree.Height r <= AvlTree.Height l + balanceTolerance)
+        //assert (AvlTree.AvlInvariant l)
+        //assert (AvlTree.AvlInvariant r)
+        //assert (AvlTree.Height r <= AvlTree.Height l + balanceTolerance)
 
         if AvlTree.Height r = AvlTree.Height l + balanceTolerance then
             match r with
@@ -665,9 +665,9 @@ type internal AvlTree<'T when 'T : comparison> =
     // TODO : This could be replaced by 'mkt_bal_l' and 'mkt_bal_r'.
     static member private Balance (l, r, n) : AvlTree<'T> =
         // Preconditions
-        assert (AvlTree.AvlInvariant l)
-        assert (AvlTree.AvlInvariant r)
-        assert (AvlTree.HeightDiff (l, r) <= (balanceTolerance + 1u))
+        //assert (AvlTree.AvlInvariant l)
+        //assert (AvlTree.AvlInvariant r)
+        //assert (AvlTree.HeightDiff (l, r) <= (balanceTolerance + 1u))
 
         let lh = AvlTree.Height l
         let rh = AvlTree.Height r
@@ -717,7 +717,6 @@ type internal AvlTree<'T when 'T : comparison> =
                             AvlTree.Create (rn, rlr, rr))
         else
             AvlTree.Create (n, l, r)
-            |> tap (fun x -> assert (AvlTree.AvlInvariant x))
 
     /// Join two trees together with the specified root element.
     /// Takes two trees representing disjoint sets and combines them, returning
@@ -726,8 +725,8 @@ type internal AvlTree<'T when 'T : comparison> =
     /// any difference in height between the trees.
     static member Join (comparer, l, r : AvlTree<'T>, root) : AvlTree<'T> =
         // Preconditions
-        assert (AvlTree.AvlInvariant l)
-        assert (AvlTree.AvlInvariant r)
+        //assert (AvlTree.AvlInvariant l)
+        //assert (AvlTree.AvlInvariant r)
 
         match l, r with
         | Empty, Empty ->
@@ -738,30 +737,21 @@ type internal AvlTree<'T when 'T : comparison> =
             AvlTree.Insert (comparer, l, root)
         | Node (ll, lr, ln, lh), Node (rl, rr, rn, rh) ->
             if lh > rh + balanceTolerance then
-                let r' =
-                    AvlTree.Join (comparer, lr, r, root)
-                    |> tap (fun x -> assert (AvlTree.AvlInvariant x))
-
+                let r' = AvlTree.Join (comparer, lr, r, root)
                 AvlTree.Balance (ll, r', ln)
-                |> tap (fun x -> assert (AvlTree.AvlInvariant x))
             elif rh > lh + balanceTolerance then
-                let l' =
-                    AvlTree.Join (comparer, l, rl, root)
-                    |> tap (fun x -> assert (AvlTree.AvlInvariant x))
-
+                let l' = AvlTree.Join (comparer, l, rl, root)
                 AvlTree.Balance (l', rr, rn)
-                |> tap (fun x -> assert (AvlTree.AvlInvariant x))
             else
                 AvlTree.Create (root, l, r)
-                |> tap (fun x -> assert (AvlTree.AvlInvariant x))
 
     /// Reroot of balanced trees.
     /// Takes two trees representing disjoint sets and combines them, returning
     /// a new balanced tree representing the union of the two sets.
     static member Reroot (comparer, l, r : AvlTree<'T>) : AvlTree<'T> =
         // Preconditions
-        assert (AvlTree.AvlInvariant l)
-        assert (AvlTree.AvlInvariant r)
+        //assert (AvlTree.AvlInvariant l)
+        //assert (AvlTree.AvlInvariant r)
 
         match l, r with
         | Empty, Empty ->
@@ -902,8 +892,8 @@ module internal CharDiet =
     //
     let rec internal (*private*) find_del_left p (tree : CharDiet) : char * CharDiet =
         // Preconditions
-        assert (dietInvariant tree)
-        assert (fst <| intervalsDisjoint tree Set.empty)
+        //assert (dietInvariant tree)
+        //assert (fst <| intervalsDisjoint tree Set.empty)
 
         match tree with
         | Empty ->
@@ -911,13 +901,7 @@ module internal CharDiet =
         | Node (left, right, (x, y), _) ->
             if p > safeSucc y then
                 let p', right' = find_del_left p right
-                assert (dietInvariant right')
-                assert (fst <| intervalsDisjoint right' Set.empty)
-                p',
-                CharDiet.Join (comparer, left, right', (x, y))
-                |> tap (fun x ->
-                    assert (dietInvariant x)
-                    assert (fst <| intervalsDisjoint x Set.empty))
+                p', CharDiet.Join (comparer, left, right', (x, y))
             elif p < x then
                 find_del_left p left
             else
@@ -926,8 +910,8 @@ module internal CharDiet =
     //
     let rec internal (*private*) find_del_right p (tree : CharDiet) : char * CharDiet =
         // Preconditions
-        assert (dietInvariant tree)
-        assert (fst <| intervalsDisjoint tree Set.empty)
+        //assert (dietInvariant tree)
+        //assert (fst <| intervalsDisjoint tree Set.empty)
 
         match tree with
         | Empty ->
@@ -935,14 +919,7 @@ module internal CharDiet =
         | Node (left, right, (x, y), _) ->
             if p < safePred x then
                 let p', left' = find_del_right p left
-                assert (dietInvariant left')
-                assert (fst <| intervalsDisjoint left' Set.empty)
-
-                p',
-                CharDiet.Join (comparer, left', right, (x, y))
-                |> tap (fun x ->
-                    assert (dietInvariant x)
-                    assert (fst <| intervalsDisjoint x Set.empty))
+                p', CharDiet.Join (comparer, left', right, (x, y))
             elif p > y then
                 find_del_right p right
             else
@@ -959,8 +936,8 @@ module internal CharDiet =
     /// Determines if a DIET contains a specified value.
     let rec contains value (tree : CharDiet) =
         // Preconditions
-        assert (dietInvariant tree)
-        assert (fst <| intervalsDisjoint tree Set.empty)
+        //assert (dietInvariant tree)
+        //assert (fst <| intervalsDisjoint tree Set.empty)
 
         match tree with
         | Empty ->
@@ -975,8 +952,8 @@ module internal CharDiet =
     /// Gets the maximum (greatest) value stored in the DIET.
     let maxElement (tree : CharDiet) : char =
         // Preconditions
-        assert (dietInvariant tree)
-        assert (fst <| intervalsDisjoint tree Set.empty)
+        //assert (dietInvariant tree)
+        //assert (fst <| intervalsDisjoint tree Set.empty)
 
         match tree with
         | Empty ->
@@ -987,8 +964,8 @@ module internal CharDiet =
     /// Gets the minimum (least) value stored in the DIET.
     let minElement (tree : CharDiet) : char =
         // Preconditions
-        assert (dietInvariant tree)
-        assert (fst <| intervalsDisjoint tree Set.empty)
+        //assert (dietInvariant tree)
+        //assert (fst <| intervalsDisjoint tree Set.empty)
 
         match tree with
         | Empty ->
@@ -999,8 +976,8 @@ module internal CharDiet =
     /// Gets the minimum (least) and maximum (greatest) values store in the DIET.
     let bounds (tree : CharDiet) : char * char =
         // Preconditions
-        assert (dietInvariant tree)
-        assert (fst <| intervalsDisjoint tree Set.empty)
+        //assert (dietInvariant tree)
+        //assert (fst <| intervalsDisjoint tree Set.empty)
 
         match tree with
         | Empty ->
@@ -1032,8 +1009,8 @@ module internal CharDiet =
     /// Returns the number of elements in the set.
     let count (tree : CharDiet) =
         // Preconditions
-        assert (dietInvariant tree)
-        assert (fst <| intervalsDisjoint tree Set.empty)
+        //assert (dietInvariant tree)
+        //assert (fst <| intervalsDisjoint tree Set.empty)
 
         // OPTIMIZE : Modify this to use a mutable stack instead of an F# list.
         let rec cardinal_aux acc = function
@@ -1049,8 +1026,8 @@ module internal CharDiet =
     /// Returns the number of intervals in the set.
     let intervalCount (tree : CharDiet) =
         // Preconditions
-        assert (dietInvariant tree)
-        assert (fst <| intervalsDisjoint tree Set.empty)
+        //assert (dietInvariant tree)
+        //assert (fst <| intervalsDisjoint tree Set.empty)
 
         // OPTIMIZE : Modify this to use a mutable stack instead of an F# list.
         let rec cardinal_aux acc = function
@@ -1077,76 +1054,46 @@ module internal CharDiet =
     /// No exception is thrown if the set already contains the value.
     let rec add value (tree : CharDiet) : CharDiet =
         // Preconditions
-        assert (dietInvariant tree)
-        assert (fst <| intervalsDisjoint tree Set.empty)
+        //assert (dietInvariant tree)
+        //assert (fst <| intervalsDisjoint tree Set.empty)
 
         match tree with
         | Empty ->
             singleton value
-            |> tap (fun x ->
-                assert (dietInvariant x)
-                assert (fst <| intervalsDisjoint x Set.empty))
         | Node (left, right, (x, y), h) ->
             if value >= x then
                 if value <= y then
                     // The value is already in [x, y] so the tree
                     // does not need to be modified.
                     tree
-                    |> tap (fun x ->
-                        assert (dietInvariant x)
-                        assert (fst <| intervalsDisjoint x Set.empty))
                 elif value > safeSucc y then
                     // The value is above the interval and is not adjacent
                     // to it, so recurse down the right subtree to add the value
                     // then join the result with the left subtree.
                     CharDiet.Join (comparer, left, add value right, (x, y))
-                    |> tap (fun x ->
-                        assert (dietInvariant x)
-                        assert (fst <| intervalsDisjoint x Set.empty))
                 else
                     match right with
                     | Empty ->
                         CharDiet.Create ((x, value), left, Empty)
-                        |> tap (fun x ->
-                            assert (dietInvariant x)
-                            assert (fst <| intervalsDisjoint x Set.empty))
                     | _ ->
                         let (u, v), r = CharDiet.DeleteMin right
                         if safePred u = value then
                             CharDiet.Join (comparer, left, r, (x, v))
-                            |> tap (fun x ->
-                                assert (dietInvariant x)
-                                assert (fst <| intervalsDisjoint x Set.empty))
                         else
                             CharDiet.Create ((x, value), left, right)
-                            |> tap (fun x ->
-                                assert (dietInvariant x)
-                                assert (fst <| intervalsDisjoint x Set.empty))
 
             elif value < safePred x then
                 CharDiet.Join (comparer, add value left, right, (x, y))
-                |> tap (fun x ->
-                    assert (dietInvariant x)
-                    assert (fst <| intervalsDisjoint x Set.empty))
             else
                 match left with
                 | Empty ->
                     CharDiet.Create ((value, y), Empty, right)
-                    |> tap (fun x ->
-                        assert (dietInvariant x)
-                        assert (fst <| intervalsDisjoint x Set.empty))
                 | _ ->
                     let (u, v), l = CharDiet.DeleteMax left
                     if safeSucc v = value then
                         CharDiet.Join (comparer, l, right, (u, y))
-                        |> tap (fun x ->
-                            assert (dietInvariant x)
-                            assert (fst <| intervalsDisjoint x Set.empty))
                     else
                         CharDiet.Create ((value, y), left, right)
-                        |> tap (fun x ->
-                            assert (dietInvariant x)
-                            assert (fst <| intervalsDisjoint x Set.empty))
 
     /// Returns a new set with the specified range of values added to the set.
     /// No exception is thrown if any of the values are already contained in the set.
@@ -1154,37 +1101,21 @@ module internal CharDiet =
         // Preconditions
         if a > b then
             invalidArg "b" "The upper bound of the interval is less than the lower bound."
-        assert (dietInvariant tree)
-        assert (fst <| intervalsDisjoint tree Set.empty)
+        //assert (dietInvariant tree)
+        //assert (fst <| intervalsDisjoint tree Set.empty)
 
         match tree with
         | Empty ->
             CharDiet.Singleton (a, b)
-            |> tap (fun x ->
-                assert (dietInvariant x)
-                assert (fst <| intervalsDisjoint x Set.empty))
         | Node (left, right, (x, y), _) ->
             if b < safePred x then
                 let left' = addRange (a, b) left
-                
-                assert (dietInvariant left')
-                assert (fst <| intervalsDisjoint left' Set.empty)
-                assert (fst <| intervalsDisjoint right Set.empty)
-
                 CharDiet.Join (comparer, left', right, (x, y))
-                |> tap (fun x ->
-                    assert (dietInvariant x)
-                    assert (fst <| intervalsDisjoint x Set.empty))
+
             elif a > safeSucc y then
                 let right' = addRange (a, b) right
-                
-                assert (dietInvariant right')
-                assert (fst <| intervalsDisjoint right' Set.empty)
-                
                 CharDiet.Join (comparer, left, right', (x, y))
-                |> tap (fun x ->
-                    assert (dietInvariant x)
-                    assert (fst <| intervalsDisjoint x Set.empty))
+
             else
                 // Now, we know the interval (a, b) being inserted either overlaps or is
                 // adjancent to the current inverval (x, y), so we merge them.
@@ -1195,20 +1126,14 @@ module internal CharDiet =
                     if b <= y then y, right
                     else find_del_right b right
 
-                assert (dietInvariant left')
-                assert (dietInvariant right')
-                assert (fst <| intervalsDisjoint left' Set.empty)
-                assert (fst <| intervalsDisjoint right' Set.empty)
                 CharDiet.Join (comparer, left', right', (x', y'))
-                |> tap (fun x ->
-                    assert (dietInvariant x)
-                    assert (fst <| intervalsDisjoint x Set.empty))
 
     /// Returns a new set with the given element removed.
     /// No exception is thrown if the set doesn't contain the specified element.
     let rec remove value (tree : CharDiet) : CharDiet =
         // Preconditions
-        assert (dietInvariant tree)
+        //assert (dietInvariant tree)
+        //assert (fst <| intervalsDisjoint tree Set.empty)
 
         match tree with
         | Empty ->
@@ -1246,9 +1171,11 @@ module internal CharDiet =
     let rec private union' (input : CharDiet) limit head (stream : CharDiet)
         : CharDiet * (char * char) option * CharDiet =
         // Preconditions
-        assert (CharDiet.Height input >= CharDiet.Height stream)
-        assert (dietInvariant input)
-        assert (dietInvariant stream)
+        //assert (CharDiet.Height input >= CharDiet.Height stream)  // Keep this!
+        //assert (dietInvariant input)
+        //assert (fst <| intervalsDisjoint input Set.empty)
+        //assert (dietInvariant stream)
+        //assert (fst <| intervalsDisjoint stream Set.empty)
 
         match head, input with
         | None, _ ->
@@ -1261,20 +1188,20 @@ module internal CharDiet =
                     union' left (Some <| safePred a) head stream
                 else
                     left, head, stream
-            union_helper ((tap (fun x -> assert (dietInvariant x))) left') (a, b) right limit head ((tap (fun x -> assert (dietInvariant x))) stream')
+            union_helper left' (a, b) right limit head stream'
 
     /// Helper function for computing the union of two sets.
     and private union_helper left (a, b) (right : CharDiet) limit head stream =
         // Preconditions
         if a > b then
             invalidArg "b" "The upper bound of the interval is less than the lower bound."
-        assert (dietInvariant left)
-        assert (dietInvariant right)
-        assert (dietInvariant stream)
+        //assert (dietInvariant left)
+        //assert (dietInvariant right)
+        //assert (dietInvariant stream)
 
         match head with
         | None ->
-            (tap (fun x -> assert (dietInvariant x)) <| CharDiet.Join (comparer, left, right, (a, b))), None, Empty
+            CharDiet.Join (comparer, left, right, (a, b)), None, Empty
         | Some (x, y) ->
             if y < a && y < safePred a then
                 let left' = addRange (x, y) left
@@ -1283,7 +1210,7 @@ module internal CharDiet =
 
             elif x > b && x > safeSucc b then
                 let right', head, stream = union' right limit head stream
-                (tap (fun x -> assert (dietInvariant x)) <| CharDiet.Join (comparer, left, right', (a, b))), head, stream
+                CharDiet.Join (comparer, left, right', (a, b)), head, stream
 
             elif b >= y then
                 CharDiet.TryDeleteMin stream
@@ -1294,13 +1221,13 @@ module internal CharDiet =
 
             else
                 let right', head, stream = union' right limit (Some (min a x, y)) stream
-                (tap (fun x -> assert (dietInvariant x)) <| CharDiet.Reroot (comparer, left, right')), head, stream
+                CharDiet.Reroot (comparer, left, right'), head, stream
 
     /// Computes the union of the two sets.
     let rec union (input : CharDiet) (stream : CharDiet) : CharDiet =
         // Preconditions
-        assert (dietInvariant input)
-        assert (dietInvariant stream)
+        //assert (dietInvariant input)
+        //assert (dietInvariant stream)
 
         match input, stream with
         | Empty, set
@@ -1321,20 +1248,16 @@ module internal CharDiet =
                 inputCount + streamCount
             #endif
 
-            // TEMP : This is a naive implementation of the union operation --
-            // we only use it here to help track down the bug in the union operation
-            // and to test that the rest of the code works correctly.
-            let result = CharDiet.FoldBack addRange stream input
-//            let result =
-//                let result, head', stream'' =
-//                    CharDiet.TryExtractMin stream
-//                    ||> union' input None
-//
-//                match head' with
-//                | None ->
-//                    result
-//                | Some i ->
-//                    CharDiet.Join comparer i result stream''
+            let result =
+                let result, head', stream'' =
+                    CharDiet.TryDeleteMin stream
+                    ||> union' input None
+
+                match head' with
+                | None ->
+                    result
+                | Some i ->
+                    CharDiet.Join (comparer, result, stream'', i)
 
             Debug.Assert (
                 dietInvariant result,
@@ -1359,9 +1282,9 @@ module internal CharDiet =
     /// Helper function for computing the intersection of two sets.
     let rec private inter' (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
         // Preconditions
-        assert (CharDiet.Height input >= CharDiet.Height stream)
-        assert (dietInvariant input)
-        assert (dietInvariant stream)
+        //assert (CharDiet.Height input >= CharDiet.Height stream)  // Should we keep this?
+        //assert (dietInvariant input)
+        //assert (dietInvariant stream)
 
         match head, input with
         | None, _ ->
@@ -1375,20 +1298,21 @@ module internal CharDiet =
                 else
                     Empty, head, stream
 
-            inter_helper (a, b) right (tap (fun x -> assert (dietInvariant x)) <| left') head (tap (fun x -> assert (dietInvariant x)) <| stream')
+            inter_helper (a, b) right left' head stream'
 
     /// Helper function for computing the intersection of two sets.
     and private inter_helper (a, b) (right : CharDiet) (left : CharDiet) head stream =
         // Preconditions
         if a > b then
             invalidArg "b" "The upper bound of the interval is less than the lower bound."
-        assert (dietInvariant left)
-        assert (dietInvariant right)
-        assert (dietInvariant stream)
+        //assert (dietInvariant left)
+        //assert (dietInvariant right)
+        //assert (dietInvariant stream)
 
         match head with
         | None ->
             left, None, Empty
+
         | Some (x, y) ->
             if y < a then
                 match stream with
@@ -1397,26 +1321,25 @@ module internal CharDiet =
                 | _ ->
                     CharDiet.TryDeleteMin stream
                     ||> inter_helper (a, b) right left
+
             elif b < x then
                 let right, head, stream = inter' right head stream
-                (tap (fun x -> assert (dietInvariant x)) <| CharDiet.Reroot (comparer, left, right)), head, stream
+                CharDiet.Reroot (comparer, left, right), head, stream
+
             elif y >= clampedPred y b then
                 let right, head, stream = inter' right head stream
-                let right' =
-                    CharDiet.Join (comparer, left, right, (max x a, min y b))
-                    |> tap (fun x -> assert (dietInvariant x))
+                let right' = CharDiet.Join (comparer, left, right, (max x a, min y b))
                 right', head, stream
+
             else
-                let left =
-                    addRange (max x a, y) left
-                    |> tap (fun x -> assert (dietInvariant x))
+                let left = addRange (max x a, y) left
                 inter_helper (safeSucc y, b) right left head stream
 
     /// Computes the intersection of the two sets.
     let rec intersect (input : CharDiet) (stream : CharDiet) : CharDiet =
         // Preconditions
-        assert (dietInvariant input)
-        assert (dietInvariant stream)
+        //assert (dietInvariant input)
+        //assert (dietInvariant stream)
 
         match input, stream with
         | Empty, _
@@ -1471,11 +1394,10 @@ module internal CharDiet =
     /// Helper function for computing the difference of two sets.
     let rec private diff' (input : CharDiet) head (stream : CharDiet) : CharDiet * (char * char) option * CharDiet =
         // Preconditions
-        assert (CharDiet.Height input >= CharDiet.Height stream)
-        assert (dietInvariant input)
-        assert (dietInvariant stream)
-        assert (fst <| intervalsDisjoint input Set.empty)
-        assert (fst <| intervalsDisjoint stream Set.empty)
+        //assert (dietInvariant input)
+        //assert (dietInvariant stream)
+        //assert (fst <| intervalsDisjoint input Set.empty)
+        //assert (fst <| intervalsDisjoint stream Set.empty)
 
         match head, input with
         | None, _->
@@ -1495,12 +1417,12 @@ module internal CharDiet =
         // Preconditions
         if a > b then
             invalidArg "b" "The upper bound of the interval is less than the lower bound."
-        assert (dietInvariant left)
-        assert (dietInvariant right)
-        assert (dietInvariant stream)
-        assert (fst <| intervalsDisjoint left Set.empty)
-        assert (fst <| intervalsDisjoint right Set.empty)
-        assert (fst <| intervalsDisjoint stream Set.empty)
+        //assert (dietInvariant left)
+        //assert (dietInvariant right)
+        //assert (dietInvariant stream)
+        //assert (fst <| intervalsDisjoint left Set.empty)
+        //assert (fst <| intervalsDisjoint right Set.empty)
+        //assert (fst <| intervalsDisjoint stream Set.empty)
 
         match head with
         | None ->
@@ -1531,10 +1453,10 @@ module internal CharDiet =
     /// Returns a new set with the elements of the second set removed from the first.
     let difference (input : CharDiet) (stream : CharDiet) : CharDiet =
         // Preconditions
-        assert (dietInvariant input)
-        assert (dietInvariant stream)
-        assert (fst <| intervalsDisjoint input Set.empty)
-        assert (fst <| intervalsDisjoint stream Set.empty)
+        //assert (dietInvariant input)
+        //assert (dietInvariant stream)
+        //assert (fst <| intervalsDisjoint input Set.empty)
+        //assert (fst <| intervalsDisjoint stream Set.empty)
 
         match input, stream with
         | Empty, _ ->
@@ -1548,12 +1470,8 @@ module internal CharDiet =
             #endif
 
             let result, _, _ =
-                let min, stream' = CharDiet.TryDeleteMin stream
-
-                assert (dietInvariant stream')
-                assert (fst <| intervalsDisjoint stream' Set.empty)
-                
-                diff' input min stream'
+                CharDiet.TryDeleteMin stream
+                ||> diff' input
             
             Debug.Assert (
                 dietInvariant result,
