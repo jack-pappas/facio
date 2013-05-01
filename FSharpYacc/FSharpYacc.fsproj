@@ -19,7 +19,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <Tailcalls>true</Tailcalls>
+    <Tailcalls>false</Tailcalls>
     <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
@@ -28,6 +28,7 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <WarningsAsErrors>25</WarningsAsErrors>
     <StartArguments>--internal --module "FSharpLex.Parser" -o "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\FSharpLex\ParserGenerated.fs" "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\FSharpLex\Parser.fsy"</StartArguments>
+    <OtherFlags>--stackReserveSize:16777216 --warnon:1182</OtherFlags>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>

@@ -1121,23 +1121,6 @@ module internal CharDiet =
     let inline comparison (t1 : CharDiet) (t2 : CharDiet) =
         CharDiet.Compare (comparer, t1, t2)
 
-//    /// Comparison function for DIETs.
-//    let rec comparison (t1 : CharDiet) (t2 : CharDiet) =
-//        match t1, t2 with
-//        | Node (_,_,_,_), Empty -> 1
-//        | Empty, Empty -> 0
-//        | Empty, Node (_,_,_,_) -> -1
-//        | Node (_,_,_,_), Node (_,_,_,_) ->
-//            let (ix1, iy1), r1 = AvlTree.DeleteMin t1
-//            let (ix2, iy2), r2 = AvlTree.DeleteMin t2
-//            let c =
-//                match compare ix1 ix2 with
-//                | 0 -> compare iy1 iy2
-//                | d -> -d
-//            match c with
-//            | 0 -> comparison r1 r2
-//            | c -> c
-
     /// Equality function for DIETs.
     let inline equal (t1 : CharDiet) (t2 : CharDiet) =
         comparison t1 t2 = 0
