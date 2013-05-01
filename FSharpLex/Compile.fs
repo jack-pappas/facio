@@ -41,6 +41,12 @@ type private CompilationState = {
     /// Final (accepting) DFA states.
     // OPTIMIZE : Use the TagSet type from ExtCore.
     FinalStates : Set<DfaStateId>;
+
+    // OPTIMIZE : Use the TagBimap type from ExtCore to combine these
+    //            next two fields into a single field.
+    /// Maps a DFA state to the regular vector it represents (and vice versa).
+    //DfaStateToRegularVector : TagBimap<DfaState, RegularVector>;
+
     /// Maps regular vectors to the DFA state representing them.
     RegularVectorToDfaState : Map<RegularVector, DfaStateId>;
     /// Maps a DFA state to the regular vector it represents.
