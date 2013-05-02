@@ -52,6 +52,9 @@
   <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="NLog.config">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <Compile Include="..\Common\CommonAssemblyInfo.fs">
       <Link>CommonAssemblyInfo.fs</Link>
     </Compile>
@@ -82,6 +85,10 @@
     </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core" />
+    <Reference Include="NLog">
+      <HintPath>..\packages\NLog.2.0.1.2\lib\net40\NLog.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="System.Core" />
