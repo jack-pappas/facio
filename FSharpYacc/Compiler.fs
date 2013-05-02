@@ -385,7 +385,7 @@ let precompile (spec : Specification, options : CompilationOptions)
                         let! result = PrecompilationState.result
                         if Map.containsKey symbolId result.Nonterminals
                             || Map.containsKey symbolId result.Terminals
-                            (*|| Set.contains symbolId reservedTerminalIdentifiers*) then
+                            || Set.contains symbolId reservedTerminalIdentifiers then
                             return productionRulesValid
                         else
                             // Undefined symbol; add an error message to the precompilation state.
