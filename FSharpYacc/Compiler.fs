@@ -145,7 +145,7 @@ module private PrecompilationState =
         
         // Add this nonterminal to the precompilation state.
         (), ({ (fst precompilationState) with
-                Nonterminals = Map.add nonterminalId None (fst precompilationState).Nonterminals; },
+                Nonterminals = Map.add nonterminalId declaredType (fst precompilationState).Nonterminals; },
             snd precompilationState)
 
     //
@@ -646,7 +646,7 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
         Lalr1.lookaheadSets (grammar, slr1Table)
 
     // If we detected that the grammar is not LR(k), stop and return an error message.
-    match Lalr1.lookaheadSets (grammar, slr1Table) with
+    match lalrLookaheadSets with
     | Choice2Of2 errorMessage ->
         Choice2Of2 [errorMessage]
     | Choice1Of2 lookaheadSets ->
