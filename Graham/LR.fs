@@ -414,7 +414,8 @@ module LrTableGenState =
             (true, parserStateId), tableGenState
 
     //
-    let private impossibleActionSetErrorMsg<'Terminal when 'Terminal : comparison> (sourceState : ParserStateId, transitionSymbol : 'Terminal, entry : LrParserActionSet, action : LrParserAction) =
+    let private impossibleActionSetErrorMsg<'Terminal when 'Terminal : comparison>
+        (sourceState : ParserStateId, transitionSymbol : 'Terminal, entry : LrParserActionSet, action : LrParserAction) =
         sprintf "Cannot add this action because it would create an impossible set of LR(k) parser actions. \
                  (State = %i, Terminal = %A, Existing Entry = %A, New Action = %A)"
                 (int sourceState) transitionSymbol entry action

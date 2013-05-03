@@ -159,8 +159,8 @@ module Lr0 =
             // Return the closure of the item set.
             |> closure productions
 
-
     //
+    // TODO : Rewrite this function to use the State workflow to handle the workSet and tableGenState arguments.
     let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) workSet (tableGenState : Lr0TableGenState<_,_>) =
         // If the work-set is empty, we're done creating the table.
         if Set.isEmpty workSet then
@@ -372,7 +372,7 @@ module Lr0 =
                         // out of their way to create such an entry.
                         lr0ParserTable
 
-                | ShiftReduce (targetStateId, reduceRuleId) ->
+                | ShiftReduce (_, reduceRuleId) ->
                     // Resolve in favor of shifting; this is similar to the
                     // "longest match rule" used in lexical analyzers.
                     LrParserTable.RemoveAction (lr0ParserTable, key, Reduce reduceRuleId))
