@@ -52,7 +52,7 @@ module private AssemblyInfo =
 module Program =
     open System.ComponentModel.Composition
     open System.ComponentModel.Composition.Hosting
-    open ExtCore
+    open NLog
     open FSharpYacc.Plugin
 
     (* TEMP : This code is taken from the F# Powerpack, and is licensed under the Apache 2.0 license *)
@@ -109,6 +109,9 @@ module Program =
         elif not <| System.IO.File.Exists inputFile then
             invalidArg "inputFile" "No parser specification exists at the specified path."
 
+        /// Used for writing messages to the console or log file.
+        let logger = LogManager.GetCurrentClassLogger ()
+
         // TEMP : This is hard-coded until we implement functionality to
         // allow the user to select which backend to use.
         let backends = loadBackends ()
@@ -140,7 +143,7 @@ module Program =
                         |> List.rev; }
 
             with ex ->
-                printfn "Error: %s" ex.Message
+                logger.FatalException ("Unable to parse the specification file.", ex)
                 exit 1
 
         // Precompile the parsed specification to validate and process it.
@@ -148,17 +151,15 @@ module Program =
             Compiler.precompile (parserSpec, options)
 
         // Display validation warning messages, if any.
-        // TODO : Write the warning messages to NLog (or similar) instead, for flexibility.
         validationMessages.Warnings
-        |> List.iter (printfn "Warning: %s")
+        |> List.iter logger.Warn
 
         // If there are any validation _errors_ display them and abort compilation.
         match validationMessages.Errors with
         | (_ :: _) as errorMessages ->
             // Write the error messages to the console.
-            // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
             errorMessages
-            |> List.iter (printfn "Error: %s")
+            |> List.iter logger.Error
 
             1   // Exit code: Error
         | [] ->
@@ -166,9 +167,8 @@ module Program =
             match Compiler.compile (processedSpecification, options) with
             | Choice2Of2 errorMessages ->
                 // Write the error messages to the console.
-                // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
                 errorMessages
-                |> List.iter (printfn "Error: %s")
+                |> List.iter logger.Error
 
                 1   // Exit code: Error
 
