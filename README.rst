@@ -11,7 +11,7 @@ These tools are still in development and should be considered "alpha"-quality.
 
 The core functionality has been implemented and passes some simple tests. The *fsharplex* and *fsharpyacc* tools are now able to bootstrap themselves. However, there is still much work to be done for the user-facing parts of the code.
 
-At this time, both *fsharplex* and *fsharpyacc* generate code which uses the lexer/parser table interpreters from the F# PowerPack. This means you'll need to clone the `F# PowerPack repository`_ and build the `FSharp.PowerPack` assembly, making sure to change the target framework version (in the project settings) to the *exact same* framework version used by your own project. Failure to do this will cause your lexers/parsers to fail at runtime with unusual and hard-to-track-down exceptions (e.g., `MissingMethodExeption`).
+At this time, both *fsharplex* and *fsharpyacc* generate code which uses the lexer/parser table interpreters for fslex and fsyacc. For the time being, I've copied the code for these interpreters from the F# PowerPack into the `LegacyInterpreters` project in this repository; this also allows you to build the interpreters for newer versions of .NET (the F# PowerPack was originally designed for .NET 2.0).
 
 .. _`F# PowerPack repository`: https://github.com/fsharp/powerpack
 
