@@ -33,7 +33,7 @@ module private Table =
     let term (parserStateId : int) (terminal : 'Terminal) action
         (table : Map<TerminalTransition<AugmentedTerminal<'Terminal>>, LrParserActionSet>) =
         /// The tagged parser state id.
-        let parserState = LanguagePrimitives.Int32WithMeasure<ParserStateIdentifier> parserStateId
+        let parserState = tag<ParserStateIdentifier> parserStateId
 
         table |> Map.add (parserState, AugmentedTerminal.Terminal terminal) action
 
@@ -41,7 +41,7 @@ module private Table =
     let eof (parserStateId : int) action
         (table : Map<TerminalTransition<AugmentedTerminal<'Terminal>>, LrParserActionSet>) =
         /// The tagged parser state id.
-        let parserState = LanguagePrimitives.Int32WithMeasure<ParserStateIdentifier> parserStateId
+        let parserState = tag<ParserStateIdentifier> parserStateId
 
         table |> Map.add (parserState, AugmentedTerminal.EndOfFile) action
 
@@ -49,9 +49,9 @@ module private Table =
     let nterm (sourceStateId : int) (nonterminal : 'Nonterminal) (targetStateId : int)
         (table : Map<NonterminalTransition<AugmentedNonterminal<'Nonterminal>>, ParserStateId>) =
         /// The tagged source state id.
-        let sourceState = LanguagePrimitives.Int32WithMeasure<ParserStateIdentifier> sourceStateId
+        let sourceState = tag<ParserStateIdentifier> sourceStateId
         /// The tagged target state id.
-        let targetState = LanguagePrimitives.Int32WithMeasure<ParserStateIdentifier> targetStateId
+        let targetState = tag<ParserStateIdentifier> targetStateId
 
         table |> Map.add (sourceState, AugmentedNonterminal.Nonterminal nonterminal) targetState
 

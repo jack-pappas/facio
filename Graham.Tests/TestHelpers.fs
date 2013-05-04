@@ -1,6 +1,6 @@
 ﻿(*
 
-Copyright 2012-2013 Jack Pappas
+Copyright 2013 Jack Pappas
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,18 +16,40 @@ limitations under the License.
 
 *)
 
-/// Internal helper classes for implementing unit tests.
-module internal Graham.Tests.TestHelpers
+[<AutoOpen>]
+module TestHelpers
+
+open NUnit.Framework
+open FsUnit
 
 
-/// Helper class that provides generic "overloads" of some Assert methods.
-[<AbstractClass; Sealed>]
-type Assert =
-    /// <summary>Verifies that two values are equal.
-    /// If they are not, then an NUnit.Framework.AssertException is thrown.</summary>
-    /// <param name="expected">The expected value.</param>
-    /// <param name="actual">The actual value.</param>
-    static member AreEqual<'T when 'T : equality> (expected : 'T, actual : 'T) : unit =
-        NUnit.Framework.Assert.AreEqual (expected, actual)
+(* Fluent test helpers for use with NUnit and FsUnit. *)
 
+/// Tests that the specified condition is true.
+/// If not, calls Assert.Fail with a formatted string.
+let inline assertf (condition : bool) format : 'T =
+    Printf.ksprintf (fun str -> if not condition then Assert.Fail str) format
 
+/// Asserts that two values are equal.
+let inline assertEqual<'T when 'T : equality> (expected : 'T) (actual : 'T) =
+    Assert.AreEqual (expected, actual)
+
+/// Asserts that two values are NOT equal.
+let inline assertNotEqual<'T when 'T : equality> (expected : 'T) (actual : 'T) =
+    Assert.AreNotEqual (expected, actual)
+
+/// Asserts that two objects are identical.
+let inline assertSame<'T when 'T : not struct> (expected : 'T) (actual : 'T) =
+    Assert.AreSame (expected, actual)
+
+/// Asserts that two objects are NOT identical.
+let inline assertNotSame<'T when 'T : not struct> (expected : 'T) (actual : 'T) =
+    Assert.AreNotSame (expected, actual)
+
+/// Asserts that a condition is true.
+let inline assertTrue condition =
+    Assert.IsTrue (condition)
+
+/// Asserts that a condition is false.
+let inline assertFalse condition =
+    Assert.IsFalse (condition)
