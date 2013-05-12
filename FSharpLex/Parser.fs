@@ -437,8 +437,7 @@ let private _fsyacc_reductions = [|
             box
                 (
                    (
-                      //UnicodeCategory _1
-                      raise <| System.NotImplementedException "UnicodeCategory pattern"
+                      Pattern <| UnicodeCategory _1
                    )
                  : 'regexp));
         (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
