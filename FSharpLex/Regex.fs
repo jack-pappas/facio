@@ -183,35 +183,126 @@ module Regex =
     let inline ofCharSet (set : CharSet) : Regex =
         CharacterSet set
 
+    /// Creates a normalized Regex.Negate from the specified Regex.
+    [<CompiledName("CreateNegate")>]
+    let rec negate (regex : Regex) : Regex =
+        match regex with
+        | Negate (Negate regex) ->
+            negate regex
+        | Negate regex ->
+            regex
+        | _ ->
+            Negate regex
+
     /// Returns a new regular expression which matches the given
     /// regular expression zero or more times.
     [<CompiledName("CreateStar")>]
-    let star (regex : Regex) : Regex =
-        notImpl "Regex.star"
+    let rec star (regex : Regex) : Regex =
+        match regex with
+        | Epsilon ->
+            Epsilon
+        | CharacterSet charSet
+            when CharSet.isEmpty charSet ->
+            Epsilon
+        | Or (Epsilon, regex)
+        | Or (regex, Epsilon)
+        | Star regex ->
+            star regex
+        | _ ->
+            Star regex
 
-    /// Creates a normalized Regex.Negate from the specified Regex.
-    [<CompiledName("CreateNegate")>]
-    let negate (regex : Regex) : Regex =
-        notImpl "Regex.negate"
+    //
+    let rec private concatImpl (regex1 : Regex) (regex2 : Regex) =
+        cont {
+        match regex1, regex2 with
+        | regex, Epsilon
+        | Epsilon, regex ->
+            return regex
+        | CharacterSet charSet, _
+        | _, CharacterSet charSet
+            when CharSet.isEmpty charSet ->
+            return empty
+
+        // Nested Concat patterns should skew towards the right.
+        | Concat (r, s), t ->
+            let! s' = concatImpl s t
+            return! concatImpl r s'
+
+        | _, _ ->
+            return Concat (regex1, regex2)
+        }
 
     /// Concatenates two regular expressions so they'll be matched sequentially.
     [<CompiledName("CreateConcat")>]
     let concat (regex1 : Regex) (regex2 : Regex) : Regex =
-        notImpl "Regex.concat"
+        // Call the recursive implementation.
+        concatImpl regex1 regex2 id
+
+    //
+    let rec private andImpl (regex1 : Regex) (regex2 : Regex) =
+        cont {
+        match regex1, regex2 with
+        | CharacterSet charSet, _
+        | _, CharacterSet charSet
+            when CharSet.isEmpty charSet ->
+            return empty
+
+        | Any, regex
+        | regex, Any ->
+            return regex
+
+        // Nested And patterns should skew towards the right.
+        | And (r, s), t ->
+            let! s' = andImpl s t
+            return! andImpl r s'
+
+        | _, _ ->
+            if regex1 = regex2 then
+                return regex1
+            else
+                return And (regex1, regex2)
+        }
 
     /// Conjunction of two regular expressions.
     /// This returns a new regular expression which matches an input string
     /// if and only if the input matches both of the given regular expressions.
     [<CompiledName("CreateAnd")>]
     let andr (regex1 : Regex) (regex2 : Regex) : Regex =
-        notImpl "Regex.andr"
+        // Call the recursive implementation.
+        andImpl regex1 regex2 id
+
+    //
+    let rec private orImpl (regex1 : Regex) (regex2 : Regex) =
+        cont {
+        match regex1, regex2 with
+        | CharacterSet charSet, regex
+        | regex, CharacterSet charSet
+            when CharSet.isEmpty charSet ->
+            return regex
+
+        | Any, _
+        | _, Any ->
+            return Any
+
+        // Nested Or patterns should skew towards the right.
+        | Or (r, s), t ->
+            let! s' = orImpl s t
+            return! orImpl r s'
+
+        | _, _ ->
+            if regex1 = regex2 then
+                return regex1
+            else
+                return Or (regex1, regex2)
+        }
 
     /// Disjunction of two regular expressions.
     /// This returns a new regular expression which matches an input string
     /// when the input matches either (or both) of the given regular expressions.
     [<CompiledName("CreateOr")>]
     let orr (regex1 : Regex) (regex2 : Regex) : Regex =
-        notImpl "Regex.orr"
+        // Call the recursive implementation.
+        orImpl regex1 regex2 id
 
 
 // Add derivative methods to Regex.
@@ -299,6 +390,26 @@ type Regex with
     /// Computes an approximate set of derivative classes for the specified Regex.
     static member DerivativeClasses (regex : Regex) =
         Regex.DerivativeClassesImpl regex id
+
+
+////
+//type RegexApproximateEqualityComparer () =
+//    //
+//    static member private ApproxEqualImpl (regex1, regex2) =
+//        cont {
+//        match regex1, regex2 with
+//        //
+//        
+//
+//
+//
+//        | _, _ ->
+//            return notImpl "RegexSimilarityComparer.SimilarImpl"
+//        }
+//
+//    //
+//    static member ApproxEqual (regex1, regex2) : bool =
+//        RegexApproximateEqualityComparer.ApproxEqualImpl (regex1, regex2) id
 
 
 /// An array of regular expressions.
