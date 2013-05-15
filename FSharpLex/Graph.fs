@@ -24,22 +24,17 @@ open LanguagePrimitives
 open FSharpLex.SpecializedCollections
 
 
-/// DFA state.
-[<Measure>] type DfaState
-/// Unique identifier for a state within a DFA.
-type DfaStateId = int<DfaState>
-
 /// <summary>The source and target state of a transition
 /// edge in an NFA transition graph.</summary>
 /// <remarks>Used as a key for sparse graph implementations
 /// because it's more efficient than an F# tuple.</remarks>
 [<Struct>]
 [<DebuggerDisplay("{Source} -> {Target}")>]
-type TransitionEdgeKey =
+type TransitionEdgeKey<[<Measure>] 'Tag> =
     /// The source vertex of the edge.
-    val Source : DfaStateId
+    val Source : int<'Tag>
     /// The target vertex of the edge.
-    val Target : DfaStateId
+    val Target : int<'Tag>
 
     new (source, target) =
         {   Source = source;
@@ -53,12 +48,11 @@ type TransitionEdgeKey =
     "Vertices = {VertexCount}, \
      EdgeSets = {EdgeSetCount}, \
      Edges = {EdgeCount}")>]
-type LexerDfaGraph private (vertexCount : int,
-                            adjacencyMap : Map<TransitionEdgeKey, CharSet>,
-                            eofTransition : TransitionEdgeKey option) =
+type SparseMultiDigraph<[<Measure>] 'Tag>
+    private (vertexCount : int, adjacencyMap : Map<TransitionEdgeKey<'Tag>, CharSet>, eofTransition : TransitionEdgeKey<'Tag> option) =
     //
     static let empty =
-        LexerDfaGraph (GenericZero, Map.empty, None)
+        SparseMultiDigraph (GenericZero, Map.empty, None)
 
     //
     static member internal Empty
@@ -95,26 +89,26 @@ type LexerDfaGraph private (vertexCount : int,
 
     //
     member __.CreateVertex () =
-        let newVertex : DfaStateId = Int32WithMeasure vertexCount
+        let newVertex : int<'Tag> = tag vertexCount
         newVertex,
-        LexerDfaGraph (
+        SparseMultiDigraph (
             vertexCount + 1,
             adjacencyMap,
             eofTransition)
 
     //
-    member __.TryGetEdgeSet (source : DfaStateId, target : DfaStateId) =
+    member __.TryGetEdgeSet (source : int<'Tag>, target : int<'Tag>) =
         // Preconditions
         if int source < 0 || int source >= vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
         elif int target < 0 || int target >= vertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        let key = TransitionEdgeKey (source, target)
+        let key = TransitionEdgeKey<'Tag> (source, target)
         Map.tryFind key adjacencyMap
 
     //
-    member __.AddEdges (source : DfaStateId, target : DfaStateId, edges : CharSet) =
+    member __.AddEdges (source : int<'Tag>, target : int<'Tag>, edges : CharSet) =
         // Preconditions
         if int source < 0 || int source >= vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
@@ -133,13 +127,13 @@ type LexerDfaGraph private (vertexCount : int,
             | None ->
                 edges
 
-        LexerDfaGraph (
+        SparseMultiDigraph (
             vertexCount,
             Map.add key edgeSet adjacencyMap,
             eofTransition)
 
     //
-    member __.AddEofEdge (source : DfaStateId, target : DfaStateId) =
+    member __.AddEofEdge (source : int<'Tag>, target : int<'Tag>) =
         // Preconditions
         if int source < 0 || int source >= vertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
@@ -148,16 +142,25 @@ type LexerDfaGraph private (vertexCount : int,
 
         let eofEdgeKey = TransitionEdgeKey (source, target)
 
-        LexerDfaGraph (
+        SparseMultiDigraph (
             vertexCount,
             adjacencyMap,
             Some eofEdgeKey)
+
+
+/// DFA state.
+[<Measure>] type DfaState
+/// Unique identifier for a state within a DFA.
+type DfaStateId = int<DfaState>
+
+type LexerDfaGraph = SparseMultiDigraph<DfaState>
         
 /// Functions on LexerDfaGraph.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module LexerDfaGraph =
     /// The empty graph.
-    let empty = LexerDfaGraph.Empty
+    let empty : LexerDfaGraph =
+        LexerDfaGraph.Empty
 
     /// Determines if the graph is empty -- i.e., if it's vertex set is empty.
     let inline isEmpty (graph : LexerDfaGraph) =
