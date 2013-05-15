@@ -260,7 +260,13 @@ module Regex =
             if regex1 = regex2 then
                 return regex1
             else
-                return And (regex1, regex2)
+                // Compare/sort the two regexes. This simplifies the compilation code and
+                // also -- crucially -- speeds it up since it allows the compiler-generated structural
+                // equality code to be used as an (approximate) equivalence test.
+                if regex2 < regex1 then
+                    return And (regex2, regex1)
+                else
+                    return And (regex1, regex2)
         }
 
     /// Conjunction of two regular expressions.
@@ -293,7 +299,13 @@ module Regex =
             if regex1 = regex2 then
                 return regex1
             else
-                return Or (regex1, regex2)
+                // Compare/sort the two regexes. This simplifies the compilation code and
+                // also -- crucially -- speeds it up since it allows the compiler-generated structural
+                // equality code to be used as an (approximate) equivalence test.
+                if regex2 < regex1 then
+                    return Or (regex2, regex1)
+                else
+                    return Or (regex1, regex2)
         }
 
     /// Disjunction of two regular expressions.
