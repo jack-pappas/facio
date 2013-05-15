@@ -119,13 +119,8 @@ let private transitions regularVector (transitionsFromCurrentDfaState, unvisited
             // will do (which is the point behind the derivative classes).
             let derivativeClassElement = CharSet.minElement derivativeClass
 
-            regularVector
             // Compute the derivative of the regular vector
-            |> RegularVector.derivative derivativeClassElement
-            // Canonicalize the derivative vector.
-            // THIS IS EXTREMELY IMPORTANT -- this algorithm absolutely
-            // will not work without this step.
-            |> RegularVector.canonicalize
+            RegularVector.derivative derivativeClassElement regularVector
 
         (*  If the derivative of the regular vector represents the 'error' state,
             ignore it. Instead of representing the error state with an explicit state
@@ -254,9 +249,6 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
 
     // The initial DFA compilation state.
     let initialDfaStateId, compilationState =
-        // Canonicalize the patterns before creating a state for them.
-        let rulePatterns = RegularVector.canonicalize rulePatterns
-
         CompilationState.empty
         |> CompilationState.createDfaState rulePatterns
 
