@@ -34,6 +34,33 @@ open FSharpLex.SpecializedCollections
     match those in the paper. *)
 #nowarn "49"
 
+//
+type DerivativeClasses = {
+    /// When set, indicates that this set of
+    /// derivative classes includes the empty set.
+    HasEmptySet : bool;
+    //
+    Elements : CharSet;
+    //
+    Negated : CharSet;
+} with
+    //
+    static member Universe =
+        {   HasEmptySet = false;
+            Elements = CharSet.empty;
+            Negated = CharSet.empty; }
+
+    /// Computes a conservative approximation of the intersection of two sets of
+    /// derivative classes. This is needed when computing the set of derivative
+    /// classes for a compound regular expression ('And', 'Or', and 'Concat').
+    static member Intersect (``C(r)``, ``C(s)``) =
+        {   HasEmptySet =
+                ``C(r)``.HasEmptySet || ``C(s)``.HasEmptySet;
+            Elements =
+                CharSet.union ``C(r)``.Elements ``C(s)``.Elements;
+            Negated =
+                CharSet.union ``C(r)``.Negated ``C(s)``.Negated; }
+
 
 /// <summary>A regular expression.</summary>
 /// <remarks>This type includes some cases which are normally referred to as "extended"
@@ -105,14 +132,14 @@ module private RegexPatterns =
         | _ ->
             None
 
-    //
-    let (|Character|_|) regex =
-        match regex with
-        | CharacterSet charSet
-            when CharSet.count charSet = 1 ->
-            Some <| CharSet.minElement charSet
-        | _ ->
-            None
+//    //
+//    let (|Character|_|) regex =
+//        match regex with
+//        | CharacterSet charSet
+//            when CharSet.count charSet = 1 ->
+//            Some <| CharSet.minElement charSet
+//        | _ ->
+//            None
 
 
 // Add additional members to Regex.
@@ -360,36 +387,6 @@ type Regex with
     static member Derivative symbol regex =
         Regex.DerivativeImpl symbol regex id
 
-
-//
-type DerivativeClasses = {
-    /// When set, indicates that this set of
-    /// derivative classes includes the empty set.
-    HasEmptySet : bool;
-    //
-    Elements : CharSet;
-    //
-    Negated : CharSet;
-} with
-    //
-    static member Universe =
-        {   HasEmptySet = false;
-            Elements = CharSet.empty;
-            Negated = CharSet.empty; }
-
-    /// Computes a conservative approximation of the intersection of two sets of
-    /// derivative classes. This is needed when computing the set of derivative
-    /// classes for a compound regular expression ('And', 'Or', and 'Concat').
-    static member Intersect (``C(r)``, ``C(s)``) =
-        {   HasEmptySet =
-                ``C(r)``.HasEmptySet || ``C(s)``.HasEmptySet;
-            Elements =
-                CharSet.union ``C(r)``.Elements ``C(s)``.Elements;
-            Negated =
-                CharSet.union ``C(r)``.Negated ``C(s)``.Negated; }
-
-// Add more members to Regex
-type Regex with
     //
     static member private DerivativeClassesImpl regex =
         cont {
@@ -437,12 +434,12 @@ module RegularVector =
 
     /// Compute the derivative of a regular vector
     /// with respect to the given symbol.
-    let inline derivative symbol (regVec : RegularVector) : RegularVector =
+    let (*inline*) derivative symbol (regVec : RegularVector) : RegularVector =
         Array.map (Regex.Derivative symbol) regVec
 
     /// Determines if the regular vector is nullable,
     /// i.e., it accepts the empty string (epsilon).
-    let inline isNullable (regVec : RegularVector) =
+    let (*inline*) isNullable (regVec : RegularVector) =
         // A regular vector is nullable iff any of
         // the component regexes are nullable.
         Array.exists Regex.IsNullable regVec
@@ -460,7 +457,7 @@ module RegularVector =
 
     /// Determines if a regular vector is an empty vector. Note that an
     /// empty regular vector is *not* the same thing as an empty array.
-    let inline isEmpty (regVec : RegularVector) =
+    let (*inline*) isEmpty (regVec : RegularVector) =
         // A regular vector is empty iff all of it's entries
         // are equal to the empty character set.
         regVec
@@ -487,7 +484,7 @@ module RegularVector =
 
     /// Creates a new regular vector in canonical form by canonicalizing
     /// each regular expression in the given regular vector.
-    let inline canonicalize (regVec : RegularVector) : RegularVector =
+    let (*inline*) canonicalize (regVec : RegularVector) : RegularVector =
         Array.map Regex.Canonicalize regVec
 
 
