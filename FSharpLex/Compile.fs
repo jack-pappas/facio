@@ -106,7 +106,7 @@ module private CompilationState =
         dfaState, compilationState
 
 //
-let private transitions regularVector (transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState) derivativeClass =
+let private transitions regularVector derivativeClass (transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState) =
     // Ignore empty derivative classes.
     if CharSet.isEmpty derivativeClass then
         transitionsFromCurrentDfaState,
@@ -150,7 +150,7 @@ let private transitions regularVector (transitionsFromCurrentDfaState, unvisited
                     // Add this new DFA state to the set of unvisited states
                     // targeted by transitions from the current DFA state.
                     let unvisitedTransitionTargets =
-                        Set.add newDfaState unvisitedTransitionTargets
+                        TagSet.add newDfaState unvisitedTransitionTargets
 
                     newDfaState,
                     unvisitedTransitionTargets,
@@ -167,12 +167,12 @@ let private transitions regularVector (transitionsFromCurrentDfaState, unvisited
 //
 let rec private createDfa pending compilationState =
     // If there are no more pending states, we're finished compiling.
-    if Set.isEmpty pending then
+    if TagSet.isEmpty pending then
         compilationState
     else
         //
-        let currentState = Set.minElement pending
-        let pending = Set.remove currentState pending
+        let currentState = TagSet.minElement pending
+        let pending = TagSet.remove currentState pending
 
         //
         let regularVector = CompilationState.getRegularVector currentState compilationState
@@ -190,16 +190,16 @@ let rec private createDfa pending compilationState =
             // add the DFA state to the compilation state (if necessary), then add an edge
             // to the transition graph from this DFA state to the target DFA state.
             let transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState =
-                ((Map.empty, Set.empty, compilationState), derivativeClasses.Elements)
+                ((Map.empty, TagSet.empty, compilationState), derivativeClasses.Elements)
                 ||> CharSet.fold (fun state element ->
                     // TEMP : The Elements field of DerivativeClasses needs to be redefined
                     // because it is possible for a class to contain multiple values.
                     let derivClass = CharSet.singleton element
-                    transitions regularVector state derivClass)
+                    transitions regularVector derivClass state)
 
             // Add any newly-created, unvisited states to the
             // set of states which still need to be visited.
-            let pending = Set.union pending unvisitedTransitionTargets
+            let pending = TagSet.union pending unvisitedTransitionTargets
 
             let compilationState =
                 { compilationState with
@@ -254,7 +254,7 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
 
     // Compile the DFA.
     let compilationState =
-        let initialPending = Set.singleton initialDfaStateId
+        let initialPending = TagSet.singleton initialDfaStateId
         createDfa initialPending compilationState
 
     //
