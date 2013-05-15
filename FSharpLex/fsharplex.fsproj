@@ -27,7 +27,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <WarningsAsErrors>25</WarningsAsErrors>
-    <StartArguments>--unicode -o "C:\Users\Jack\Desktop\fsharp-tools-test\Lexer.fs" "C:\Users\Jack\Desktop\fsharp-tools-test\lex.fsl"</StartArguments>
+    <StartArguments>--unicode -o "C:\Users\Jack\Desktop\fsharp-tools Info\Examples\fsharp_lexer.fs" "C:\Users\Jack\Desktop\fsharp-tools Info\Examples\fsharp.fsl"</StartArguments>
     <OtherFlags>--stackReserveSize:16777216 --warnon:1182</OtherFlags>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
