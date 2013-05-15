@@ -404,26 +404,6 @@ type Regex with
         Regex.DerivativeClassesImpl regex id
 
 
-////
-//type RegexApproximateEqualityComparer () =
-//    //
-//    static member private ApproxEqualImpl (regex1, regex2) =
-//        cont {
-//        match regex1, regex2 with
-//        //
-//        
-//
-//
-//
-//        | _, _ ->
-//            return notImpl "RegexSimilarityComparer.SimilarImpl"
-//        }
-//
-//    //
-//    static member ApproxEqual (regex1, regex2) : bool =
-//        RegexApproximateEqualityComparer.ApproxEqualImpl (regex1, regex2) id
-
-
 /// An array of regular expressions.
 // Definition 4.3.
 type RegularVector = Regex[]
