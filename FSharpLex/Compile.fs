@@ -294,7 +294,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
         cont {
         match pattern with
         | Pattern.Epsilon ->
-            return Choice1Of2 Regex.Epsilon
+            return Choice1Of2 Regex.epsilon
 
         | Pattern.Star r ->
             let! rResult = preprocessMacro r
@@ -303,7 +303,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                 return err
             | Choice1Of2 r ->
                 return
-                    Regex.Star r
+                    Regex.star r
                     |> Choice1Of2
 
         | Pattern.Concat (r, s) ->
@@ -318,7 +318,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                 return err
             | Choice1Of2 r, Choice1Of2 s ->
                 return
-                    Regex.Concat (r, s)
+                    Regex.concat r s
                     |> Choice1Of2
 
         | Pattern.And (r, s) ->
@@ -333,7 +333,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                 return err
             | Choice1Of2 r, Choice1Of2 s ->
                 return
-                    Regex.And (r, s)
+                    Regex.andr r s
                     |> Choice1Of2
 
         | Pattern.Or (r, s) ->
@@ -348,7 +348,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                 return err
             | Choice1Of2 r, Choice1Of2 s ->
                 return
-                    Regex.Or (r, s)
+                    Regex.orr r s
                     |> Choice1Of2
 
         (*  Extended patterns are rewritten using the cases of Pattern
@@ -414,7 +414,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                 return err
             | Choice1Of2 r ->
                 return
-                    Regex.Negate r
+                    Regex.negate r
                     |> Choice1Of2
 
         (* Macro patterns *)
@@ -465,7 +465,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
             // Make sure all of the characters in the set are ASCII characters unless the 'Unicode' option is set.
             if options.Unicode || CharSet.forall (fun c -> int c <= 255) charSet then
                 return
-                    Regex.CharacterSet charSet
+                    Regex.ofCharSet charSet
                     |> Choice1Of2
             else
                 return
@@ -481,7 +481,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                         |> Choice2Of2
                 | Some categoryCharSet ->
                     return
-                        Regex.CharacterSet categoryCharSet
+                        Regex.ofCharSet categoryCharSet
                         |> Choice1Of2
             else
                 return
@@ -567,6 +567,13 @@ let private preprocessMacros macros options =
     // definition), then call the preprocessor function.
     preprocessMacros (List.rev macros) Array.empty (Map.empty, Set.empty)
 
+/// Determines if all characters in the specified CharSet are ASCII characters;
+/// that is, they can be represented by an 8-bit value.
+let private isAsciiCharSet (charSet : CharSet) : bool =
+    charSet
+    |> CharSet.forall (fun c ->
+        int c <= int System.Byte.MaxValue)
+
 //
 let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
     //
@@ -576,13 +583,13 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
         cont {
         match pattern with
         | Pattern.Epsilon ->
-            return Choice1Of2 Regex.Epsilon
+            return Choice1Of2 Regex.epsilon
 
         | Pattern.CharacterSet charSet ->
             // Make sure all of the characters in the set are ASCII characters unless the 'Unicode' option is set.
-            if options.Unicode || CharSet.forall (fun c -> int c <= int System.Byte.MaxValue) charSet then
+            if options.Unicode || isAsciiCharSet charSet then
                 return
-                    Regex.CharacterSet charSet
+                    Regex.ofCharSet charSet
                     |> Choice1Of2
             else
                 return
@@ -615,7 +622,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
 
                 | Some charSet ->
                     return
-                        Regex.CharacterSet charSet
+                        Regex.ofCharSet charSet
                         |> Choice1Of2
             else
                 return
@@ -630,7 +637,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 return err
             | Choice1Of2 r ->
                 return
-                    Regex.Negate r
+                    Regex.negate r
                     |> Choice1Of2
 
         | Pattern.Star r ->
@@ -641,7 +648,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 return err
             | Choice1Of2 r ->
                 return
-                    Regex.Star r
+                    Regex.star r
                     |> Choice1Of2
 
         | Pattern.Concat (r, s) ->
@@ -656,7 +663,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 return err
             | Choice1Of2 r, Choice1Of2 s ->
                 return
-                    Regex.Concat (r, s)
+                    Regex.concat r s
                     |> Choice1Of2
 
         | Pattern.And (r, s) ->
@@ -671,7 +678,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 return err
             | Choice1Of2 r, Choice1Of2 s ->
                 return
-                    Regex.And (r, s)
+                    Regex.andr r s
                     |> Choice1Of2
 
         | Pattern.Or (r, s) ->
@@ -686,7 +693,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 return err
             | Choice1Of2 r, Choice1Of2 s ->
                 return
-                    Regex.Or (r, s)
+                    Regex.orr r s
                     |> Choice1Of2
 
         (*  Extended patterns are rewritten using the cases of Pattern
@@ -701,7 +708,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
 
         | Pattern.Character c ->
             // Make sure the character is an ASCII character unless the 'Unicode' option is set.
-            if options.Unicode || int c <= 255 then
+            if options.Unicode || int c <= int System.Byte.MaxValue then
                 return
                     Regex.ofChar c
                     |> Choice1Of2
@@ -767,8 +774,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
     // Call the function which traverses the pattern to validate/preprocess it.
     validateAndSimplify pattern <| function
         | Choice2Of2 errors ->
-            List.rev errors
-            |> List.toArray
+            List.revIntoArray errors
             |> Choice2Of2
         | Choice1Of2 processedPattern ->
             Choice1Of2 processedPattern
@@ -809,7 +815,7 @@ let private rewriteNegatedCharSets universe regex =
             return
                 charSet
                 |> CharSet.difference universe
-                |> Regex.CharacterSet
+                |> Regex.ofCharSet
 
         | Regex.Any
         | Regex.Epsilon
@@ -819,26 +825,26 @@ let private rewriteNegatedCharSets universe regex =
 
         | Regex.Negate r ->
             let! r = rewriteNegatedCharSets r
-            return Regex.Negate r
+            return Regex.negate r
 
         | Regex.Star r ->
             let! r = rewriteNegatedCharSets r
-            return Regex.Star r
-
-        | Regex.And (r, s) ->
-            let! r = rewriteNegatedCharSets r
-            let! s = rewriteNegatedCharSets s
-            return Regex.And (r, s)
+            return Regex.star r
 
         | Regex.Concat (r, s) ->
             let! r = rewriteNegatedCharSets r
             let! s = rewriteNegatedCharSets s
-            return Regex.Concat (r, s)
+            return Regex.concat r s
+
+        | Regex.And (r, s) ->
+            let! r = rewriteNegatedCharSets r
+            let! s = rewriteNegatedCharSets s
+            return Regex.andr r s
 
         | Regex.Or (r, s) ->
             let! r = rewriteNegatedCharSets r
             let! s = rewriteNegatedCharSets s
-            return Regex.Or (r, s)
+            return Regex.orr r s
         }
 
     rewriteNegatedCharSets regex id
