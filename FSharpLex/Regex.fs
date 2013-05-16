@@ -242,6 +242,11 @@ module Regex =
     let rec private andImpl (regex1 : Regex) (regex2 : Regex) =
         cont {
         match regex1, regex2 with
+        | CharacterSet charSet1, CharacterSet charSet2 ->
+            return
+                CharSet.intersect charSet1 charSet2
+                |> CharacterSet
+
         | CharacterSet charSet, _
         | _, CharacterSet charSet
             when CharSet.isEmpty charSet ->
@@ -281,6 +286,11 @@ module Regex =
     let rec private orImpl (regex1 : Regex) (regex2 : Regex) =
         cont {
         match regex1, regex2 with
+        | CharacterSet charSet1, CharacterSet charSet2 ->
+            return
+                CharSet.union charSet1 charSet2
+                |> CharacterSet
+
         | CharacterSet charSet, regex
         | regex, CharacterSet charSet
             when CharSet.isEmpty charSet ->
