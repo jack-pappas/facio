@@ -237,17 +237,19 @@ type Pattern =
             Pattern.Epsilon
         else
             (* Construct the pattern backwards (i.e., starting at the end of the string) *)
-            let mutable pattern = Pattern.Character str.[str.Length - 1]
 
-            // Loop backwards through the string to prepend the rest of the characters
-            for i = str.Length - 2 downto 0 do
-                pattern <-
-                    Pattern.Concat (
-                        Pattern.Character str.[i],
-                        pattern)
+            /// The substring representing the input string, minus the last character.
+            let substr = String.sub str 0 (String.length str - 1)
 
-            // Return the constructed pattern.
-            pattern
+            /// The pattern representing the last character in the input string.
+            let lastChar = Pattern.Character str.[str.Length - 1]
+
+            // Fold backwards over the substring, prepending characters to the pattern.
+            (substr, lastChar)
+            ||> Substring.foldBack (fun ch stringPat ->
+                Pattern.Concat (
+                    Pattern.Character ch,
+                    stringPat))
 
     /// Returns a new pattern which repeats a pattern a specified number of times.
     [<CompiledName("RepeatExactly")>]
@@ -263,9 +265,9 @@ type Pattern =
             | count ->
                 repeatExact (count - 1u) pattern <| fun repeatedPattern ->
                     // Since we're concatenating the pattern with itself, we can order
-                    // things how we like here. The repeated pattern goes on the *left*
-                    // here to enforce left-associativity.
-                    Concat (repeatedPattern, pattern)
+                    // things how we like here. The repeated pattern goes on the *right*
+                    // here to enforce right-associativity.
+                    Concat (pattern, repeatedPattern)
                     |> cont
 
         repeatExact count pattern id
