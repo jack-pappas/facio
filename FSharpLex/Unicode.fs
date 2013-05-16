@@ -50,8 +50,8 @@ module internal UnicodeCharSet =
 
         // Convert the dictionary to a Map
         (Map.empty, table)
-        ||> Seq.fold (fun categoryMap kvp ->
-            Map.add kvp.Key kvp.Value categoryMap)
+        ||> Dict.fold (fun categoryMap key value ->
+            Map.add key value categoryMap)
 
     //
     let ofCategory category =
