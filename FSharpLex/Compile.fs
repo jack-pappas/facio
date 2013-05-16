@@ -364,7 +364,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
         | Pattern.Optional r ->
             // Rewrite r? as (|r)
             let rewritten =
-                Pattern.Concat (Pattern.Epsilon, r)
+                Pattern.Or (Pattern.Epsilon, r)
 
             // Process the rewritten expression.
             return! preprocessMacro rewritten
@@ -882,11 +882,11 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             match clause.Pattern with
             | Pattern pattern ->
                 patterns.Add (
-                    (Int32WithMeasure i : RuleClauseIndex),
+                    tag<RuleClauseIdx> i,
                     pattern)
             | EndOfFile ->
                 eofClauseIndices <-
-                    Set.add (Int32WithMeasure i : RuleClauseIndex) eofClauseIndices
+                    Set.add (tag<RuleClauseIdx> i) eofClauseIndices
 
         // Return the data.
         patterns.ToArray (),
