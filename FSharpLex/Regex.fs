@@ -262,7 +262,7 @@ module Regex =
             return! andImpl r s'
 
         | _, _ ->
-            if regex1 = regex2 then
+            if regex1 === regex2 || regex1 = regex2 then
                 return regex1
             else
                 // Compare/sort the two regexes. This simplifies the compilation code and
@@ -306,7 +306,7 @@ module Regex =
             return! orImpl r s'
 
         | _, _ ->
-            if regex1 = regex2 then
+            if regex1 === regex2 || regex1 = regex2 then
                 return regex1
             else
                 // Compare/sort the two regexes. This simplifies the compilation code and
