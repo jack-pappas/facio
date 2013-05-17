@@ -242,15 +242,15 @@ module Regex =
     let rec private andImpl (regex1 : Regex) (regex2 : Regex) =
         cont {
         match regex1, regex2 with
-        | CharacterSet charSet1, CharacterSet charSet2 ->
-            return
-                CharSet.intersect charSet1 charSet2
-                |> CharacterSet
-
         | CharacterSet charSet, _
         | _, CharacterSet charSet
             when CharSet.isEmpty charSet ->
             return empty
+
+        | CharacterSet charSet1, CharacterSet charSet2 ->
+            return
+                CharSet.intersect charSet1 charSet2
+                |> CharacterSet
 
         | Any, regex
         | regex, Any ->
@@ -286,15 +286,15 @@ module Regex =
     let rec private orImpl (regex1 : Regex) (regex2 : Regex) =
         cont {
         match regex1, regex2 with
-        | CharacterSet charSet1, CharacterSet charSet2 ->
-            return
-                CharSet.union charSet1 charSet2
-                |> CharacterSet
-
         | CharacterSet charSet, regex
         | regex, CharacterSet charSet
             when CharSet.isEmpty charSet ->
             return regex
+
+        | CharacterSet charSet1, CharacterSet charSet2 ->
+            return
+                CharSet.union charSet1 charSet2
+                |> CharacterSet
 
         | Any, _
         | _, Any ->
@@ -437,6 +437,7 @@ module RegularVector =
 
     /// The indices of the element expressions (if any)
     /// that accept the empty string (epsilon).
+    // OPTIMIZE : Return an IntSet (from ExtCore) instead of Set<int>.
     let acceptingElements (regVec : RegularVector) =
         // Find the indices of the expressions accepting the empty string.
         (Set.empty, regVec)
