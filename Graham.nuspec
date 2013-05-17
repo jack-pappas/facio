@@ -4,7 +4,7 @@
         <id>Graham</id>
         <version>0.8.2</version>
         <dependencies>
-          <dependency id="ExtCore" version="0.8.17" />
+          <dependency id="ExtCore" version="0.8.19" />
         </dependencies>
         <title>Graham</title>
         <authors>Jack Pappas</authors>
