@@ -1761,10 +1761,27 @@ type CharSet private (tree : CharDiet) =
     static member Empty
         with get () = empty
     
-    override __.GetHashCode () =
+    override this.GetHashCode () =
+        (* The HashMap type is used throughout FSharpLex for performance reasons;
+           this function must return a "robust" hash code -- i.e., one which causes
+           a very low number of conflicts -- because otherwise performance will be
+           *severely* affected. *)
+
         // TODO : Come up with a better hashcode function.
-        (CharDiet.count tree) * (int <| AvlTree.Height tree)
-    
+        //(CharDiet.count tree) * (int <| AvlTree.Height tree)
+
+        let inline combineHash x y = (x <<< 1) + y + 631
+        CharSet.FoldIntervals (
+            (fun hashCode (lo, hi) ->
+                // Compute a value for this interval using the Cantor pairing function.
+                let intervalHash =
+                    let k1k2 = int lo + int hi
+                    ((k1k2 * (k1k2 + 1)) / 2) + (int hi)
+
+                // Combine the interval hash with the current hash code to produce a new hash code.
+                combineHash hashCode intervalHash),
+            19, this)
+
     override __.Equals other =
         match other with
         | :? CharSet as other ->
@@ -2082,6 +2099,16 @@ type CharSet private (tree : CharDiet) =
         //assert (CharDiet.intervalsDisjoint charSet.Tree)
 
         CharDiet.foldBack folder charSet.Tree state
+
+    /// Applies the given accumulating function to all intervals in a DIET.
+    static member FoldIntervals (folder : 'State -> char * char -> 'State, state, charSet : CharSet) : 'State =
+        // Preconditions
+        checkNonNull "charSet" charSet
+        //assert (CharDiet.dietInvariant charSet.Tree)
+        //assert (CharDiet.intervalsDisjoint charSet.Tree)
+
+        let folder = FSharpFunc<_,_,_>.Adapt folder
+        AvlTree.Fold folder.Invoke state charSet.Tree
 
     //
     static member Iter (action, charSet : CharSet) : unit =
