@@ -210,7 +210,7 @@ module private Dgml =
 
             // Add the transitions for this rule's DFA.
             compiledRule.Dfa.Transitions.AdjacencyMap
-            |> Map.iter (fun edgeKey edgeSet ->
+            |> HashMap.iter (fun edgeKey edgeSet ->
                 /// The Link element representing this transition edge.
                 let transitionEdgeLink =
                     dgmlDoc.CreateElement ("Link", directedGraph.NamespaceURI)

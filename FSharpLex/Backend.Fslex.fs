@@ -83,7 +83,7 @@ module private FsLex =
         // Additionally, it should be created on-the-fly while creating the DFA instead of having to re-compute it here.
         let outTransitions =
             (Map.empty, ruleDfaTransitions.AdjacencyMap)
-            ||> Map.fold (fun outTransitions edgeKey edgeSet ->
+            ||> HashMap.fold (fun outTransitions edgeKey edgeSet ->
                 // Filter to include only this DFA state's out-edges.
                 if edgeKey.Source <> ruleDfaStateId then
                     outTransitions
@@ -141,7 +141,7 @@ module private FsLex =
         // Additionally, it should be created on-the-fly while creating the DFA instead of having to re-compute it here.
         let outTransitions =
             (Map.empty, ruleDfaTransitions.AdjacencyMap)
-            ||> Map.fold (fun outTransitions edgeKey edgeSet ->
+            ||> HashMap.fold (fun outTransitions edgeKey edgeSet ->
                 // Filter to include only this DFA state's out-edges.
                 if edgeKey.Source <> ruleDfaStateId then
                     outTransitions
@@ -265,7 +265,7 @@ module private FsLex =
             (CharSet.empty, compiledRules)
             ||> Map.fold (fun allValidInputChars _ compiledRule ->
                 (allValidInputChars, compiledRule.Dfa.Transitions.AdjacencyMap)
-                ||> Map.fold (fun allValidInputChars _ edgeSet ->
+                ||> HashMap.fold (fun allValidInputChars _ edgeSet ->
                     CharSet.union allValidInputChars edgeSet))
 
         /// The maximum character value accepted by the combined DFA.

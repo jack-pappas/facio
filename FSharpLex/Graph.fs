@@ -49,10 +49,10 @@ type TransitionEdgeKey<[<Measure>] 'Tag> =
      EdgeSets = {EdgeSetCount}, \
      Edges = {EdgeCount}")>]
 type SparseMultiDigraph<[<Measure>] 'Tag>
-    private (vertexCount : int, adjacencyMap : Map<TransitionEdgeKey<'Tag>, CharSet>, eofTransition : TransitionEdgeKey<'Tag> option) =
+    private (vertexCount : int, adjacencyMap : HashMap<TransitionEdgeKey<'Tag>, CharSet>, eofTransition : TransitionEdgeKey<'Tag> option) =
     //
     static let empty =
-        SparseMultiDigraph (GenericZero, Map.empty, None)
+        SparseMultiDigraph (GenericZero, HashMap.empty, None)
 
     //
     static member internal Empty
@@ -84,7 +84,7 @@ type SparseMultiDigraph<[<Measure>] 'Tag>
         with get () =
             let seed = if Option.isSome eofTransition then 1 else 0
             (seed, adjacencyMap)
-            ||> Map.fold (fun edgeCount _ edgeSet ->
+            ||> HashMap.fold (fun edgeCount _ edgeSet ->
                 edgeCount + CharSet.count edgeSet)
 
     //
@@ -105,7 +105,7 @@ type SparseMultiDigraph<[<Measure>] 'Tag>
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
         let key = TransitionEdgeKey<'Tag> (source, target)
-        Map.tryFind key adjacencyMap
+        HashMap.tryFind key adjacencyMap
 
     //
     member __.AddEdges (source : int<'Tag>, target : int<'Tag>, edges : CharSet) =
@@ -121,7 +121,7 @@ type SparseMultiDigraph<[<Measure>] 'Tag>
 
         //
         let edgeSet =
-            match Map.tryFind key adjacencyMap with
+            match HashMap.tryFind key adjacencyMap with
             | Some edgeSet ->
                 CharSet.union edgeSet edges
             | None ->
@@ -129,7 +129,7 @@ type SparseMultiDigraph<[<Measure>] 'Tag>
 
         SparseMultiDigraph (
             vertexCount,
-            Map.add key edgeSet adjacencyMap,
+            HashMap.add key edgeSet adjacencyMap,
             eofTransition)
 
     //

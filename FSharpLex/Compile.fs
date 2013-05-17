@@ -48,7 +48,7 @@ type private CompilationState = {
     //DfaStateToRegularVector : TagBimap<DfaState, RegularVector>;
 
     /// Maps regular vectors to the DFA state representing them.
-    RegularVectorToDfaState : Map<RegularVector, DfaStateId>;
+    RegularVectorToDfaState : HashMap<RegularVector, DfaStateId>;
     /// Maps a DFA state to the regular vector it represents.
     // OPTIMIZE : Use the TagMap type from ExtCore.
     DfaStateToRegularVector : Map<DfaStateId, RegularVector>;
@@ -62,12 +62,12 @@ module private CompilationState =
     let empty = {
         Transitions = LexerDfaGraph.empty;
         FinalStates = Set.empty;
-        RegularVectorToDfaState = Map.empty;
+        RegularVectorToDfaState = HashMap.empty;
         DfaStateToRegularVector = Map.empty; }
 
     //
     let inline tryGetDfaState regVec (compilationState : CompilationState) =
-        Map.tryFind regVec compilationState.RegularVectorToDfaState
+        HashMap.tryFind regVec compilationState.RegularVectorToDfaState
 
     //
     let inline getRegularVector dfaState (compilationState : CompilationState) =
@@ -79,7 +79,7 @@ module private CompilationState =
         // TODO
 
         Debug.Assert (
-            not <| Map.containsKey regVec compilationState.RegularVectorToDfaState,
+            not <| HashMap.containsKey regVec compilationState.RegularVectorToDfaState,
             "The compilation state already contains a DFA state for this regular vector.")
 
         /// The DFA state representing this regular vector.
@@ -97,7 +97,7 @@ module private CompilationState =
                     else
                         compilationState.FinalStates;
                 RegularVectorToDfaState =
-                    Map.add regVec dfaState compilationState.RegularVectorToDfaState;
+                    HashMap.add regVec dfaState compilationState.RegularVectorToDfaState;
                 DfaStateToRegularVector =
                     Map.add dfaState regVec compilationState.DfaStateToRegularVector;
                  }
@@ -1012,13 +1012,13 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             let ruleAlphabet =
                 // The alphabet for this rule is the edge-label-set of the transition graph.
                 (CharSet.empty, compiledPatternDfa.Transitions.AdjacencyMap)
-                ||> Map.fold (fun ruleAlphabet _ edgeChars ->
+                ||> HashMap.fold (fun ruleAlphabet _ edgeChars ->
                     CharSet.union ruleAlphabet edgeChars)
 
             /// The set of characters labelling the out-edges of the initial DFA state.
             let initialEdgeLabels =
                 (CharSet.empty, compiledPatternDfa.Transitions.AdjacencyMap)
-                ||> Map.fold (fun initialEdgeLabels edgeKey edgeChars ->
+                ||> HashMap.fold (fun initialEdgeLabels edgeKey edgeChars ->
                     // We only care about out-edges from the initial DFA state.
                     if edgeKey.Source = compiledPatternDfa.InitialState then
                         CharSet.union initialEdgeLabels edgeChars
