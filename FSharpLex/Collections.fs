@@ -1761,25 +1761,19 @@ module internal CharDiet =
 /// This is faster and more efficient than the built-in F# Set<'T>,
 /// especially for dense sets.
 [<DebuggerDisplay("Count = {Count}, Intervals = {IntervalCount}")>]
-type CharSet private (tree : CharDiet) =
+type CharSet private (tree : CharDiet) as this =
     //
     static let empty = CharSet (CharDiet.empty)
 
-    //
-    static member Empty
-        with get () = empty
-    
-    override this.GetHashCode () =
+    /// The hash code for this CharSet is lazily computed,
+    /// then cached for maximum performance.
+    let hashCode =
         (* The HashMap type is used throughout FSharpLex for performance reasons;
            this function must return a "robust" hash code -- i.e., one which causes
            a very low number of conflicts -- because otherwise performance will be
            *severely* affected. *)
-
-        // TODO : Come up with a better hashcode function.
-        //(CharDiet.count tree) * (int <| AvlTree.Height tree)
-
-        let inline combineHash x y = (x <<< 1) + y + 631
-        CharSet.FoldIntervals (
+        lazy (
+           CharSet.FoldIntervals (
             (fun hashCode (lo, hi) ->
                 // Compute a value for this interval using the Cantor pairing function.
                 let intervalHash =
@@ -1787,12 +1781,24 @@ type CharSet private (tree : CharDiet) =
                     ((k1k2 * (k1k2 + 1)) / 2) + (int hi)
 
                 // Combine the interval hash with the current hash code to produce a new hash code.
-                combineHash hashCode intervalHash),
-            19, this)
+                CharSet.CombineHash (hashCode, intervalHash)),
+            19, this))
 
-    override __.Equals other =
+    //
+    static member Empty
+        with get () = empty
+
+    //
+    static member inline private CombineHash (x, y) =
+        (x <<< 1) + y + 631
+    
+    override this.GetHashCode () =
+        Lazy.force hashCode
+
+    override this.Equals other =
         match other with
         | :? CharSet as other ->
+            tree === other.Tree ||
             CharDiet.equal tree other.Tree
         | _ ->
             false
