@@ -1781,16 +1781,12 @@ type CharSet private (tree : CharDiet) as this =
                     ((k1k2 * (k1k2 + 1)) / 2) + (int hi)
 
                 // Combine the interval hash with the current hash code to produce a new hash code.
-                CharSet.CombineHash (hashCode, intervalHash)),
+                (hashCode <<< 1) + intervalHash + 631),
             19, this))
 
     //
     static member Empty
         with get () = empty
-
-    //
-    static member inline private CombineHash (x, y) =
-        (x <<< 1) + y + 631
     
     override this.GetHashCode () =
         Lazy.force hashCode
