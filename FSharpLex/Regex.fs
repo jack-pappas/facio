@@ -76,6 +76,14 @@ type DerivativeClasses = {
 type Regex =
     /// The empty string.
     | Epsilon
+    /// Any character.
+    | Any
+
+    /// A set of characters.
+    | CharacterSet of CharSet
+    /// Negation.
+    | Negate of Regex
+
     /// Kleene *-closure.
     /// The specified Regex will be matched zero (0) or more times.
     | Star of Regex
@@ -85,16 +93,6 @@ type Regex =
     | Or of Regex * Regex
     /// Boolean AND of two regular expressions.
     | And of Regex * Regex
-
-    /// Negation.
-    | Negate of Regex
-    /// A set of characters.
-    | CharacterSet of CharSet
-
-    (* TODO :   Remove this -- Pattern.Any should compile
-                into standard regexes for simplicity. *)
-    /// Any character.
-    | Any
 
     /// Infrastructure. Only for use with DebuggerDisplayAttribute.
     [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
@@ -169,6 +167,16 @@ type Regex =
 /// of states in the DFA constructed from the Regex.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Regex =
+    /// The 'epsilon' pattern, which matches (accepts) an empty string.
+    [<CompiledName("Epsilon")>]
+    let epsilon : Regex =
+        Epsilon
+
+    /// The regular expression which matches exactly one (1) instance of any character.
+    [<CompiledName("Any")>]
+    let any : Regex =
+        Any
+
     /// The regular expression which never matches (accepts) anything.
     [<CompiledName("Empty")>]
     let empty : Regex =
@@ -182,11 +190,6 @@ module Regex =
             CharSet.isEmpty charSet
         | _ ->
             false
-
-    /// The 'epsilon' pattern, which matches (accepts) an empty string.
-    [<CompiledName("Epsilon")>]
-    let epsilon : Regex =
-        Epsilon
 
     /// Returns a new regular expression which matches exactly one (1) instance of the specified character.
     [<CompiledName("OfCharacter")>]
