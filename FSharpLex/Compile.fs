@@ -50,7 +50,6 @@ type private CompilationState = {
     /// Maps regular vectors to the DFA state representing them.
     RegularVectorToDfaState : HashMap<RegularVector, DfaStateId>;
     /// Maps a DFA state to the regular vector it represents.
-    // OPTIMIZE : Use the TagMap type from ExtCore.
     DfaStateToRegularVector : TagMap<DfaState, RegularVector>;
 
     /// Caches the derivative of a regular expression with respect to a symbol.
@@ -268,7 +267,7 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
         createDfa initialPending compilationState
 
     //
-    let clausesAcceptedByDfaState : Map<_, Set<RuleClauseIndex>> =
+    let clausesAcceptedByDfaState =
         compilationState.FinalStates
         |> Map.ofKeys (fun finalDfaStateId ->
             // Get the regular vector represented by this DFA state.
