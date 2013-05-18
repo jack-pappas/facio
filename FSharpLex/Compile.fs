@@ -51,7 +51,7 @@ type private CompilationState = {
     RegularVectorToDfaState : HashMap<RegularVector, DfaStateId>;
     /// Maps a DFA state to the regular vector it represents.
     // OPTIMIZE : Use the TagMap type from ExtCore.
-    DfaStateToRegularVector : Map<DfaStateId, RegularVector>;
+    DfaStateToRegularVector : TagMap<DfaState, RegularVector>;
 }
 
 /// Functional operators related to the CompilationState record.
@@ -63,7 +63,7 @@ module private CompilationState =
         Transitions = LexerDfaGraph.empty;
         FinalStates = Set.empty;
         RegularVectorToDfaState = HashMap.empty;
-        DfaStateToRegularVector = Map.empty; }
+        DfaStateToRegularVector = TagMap.empty; }
 
     //
     let inline tryGetDfaState regVec (compilationState : CompilationState) =
@@ -71,7 +71,7 @@ module private CompilationState =
 
     //
     let inline getRegularVector dfaState (compilationState : CompilationState) =
-        Map.find dfaState compilationState.DfaStateToRegularVector
+        TagMap.find dfaState compilationState.DfaStateToRegularVector
 
     //
     let createDfaState regVec (compilationState : CompilationState) =
@@ -99,7 +99,7 @@ module private CompilationState =
                 RegularVectorToDfaState =
                     HashMap.add regVec dfaState compilationState.RegularVectorToDfaState;
                 DfaStateToRegularVector =
-                    Map.add dfaState regVec compilationState.DfaStateToRegularVector;
+                    TagMap.add dfaState regVec compilationState.DfaStateToRegularVector;
                  }
 
         // Return the new DFA state and the updated compilation state.
@@ -158,7 +158,7 @@ let private transitions regularVector derivativeClass (transitionsFromCurrentDfa
 
             //
             let transitionsFromCurrentDfaState =
-                Map.add derivativeClass targetDfaState transitionsFromCurrentDfaState
+                HashMap.add derivativeClass targetDfaState transitionsFromCurrentDfaState
 
             transitionsFromCurrentDfaState,
             unvisitedTransitionTargets,
@@ -190,7 +190,7 @@ let rec private createDfa pending compilationState =
             // add the DFA state to the compilation state (if necessary), then add an edge
             // to the transition graph from this DFA state to the target DFA state.
             let transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState =
-                ((Map.empty, TagSet.empty, compilationState), derivativeClasses.Elements)
+                ((HashMap.empty, TagSet.empty, compilationState), derivativeClasses.Elements)
                 ||> CharSet.fold (fun state element ->
                     // TEMP : The Elements field of DerivativeClasses needs to be redefined
                     // because it is possible for a class to contain multiple values.
@@ -206,7 +206,7 @@ let rec private createDfa pending compilationState =
                     Transitions =
                         // Add the unvisited transition targets to the transition graph.
                         (compilationState.Transitions, transitionsFromCurrentDfaState)
-                        ||> Map.fold (fun transitions derivativeClass target ->
+                        ||> HashMap.fold (fun transitions derivativeClass target ->
                             LexerDfaGraph.addEdges currentState target derivativeClass transitions); }
 
             // Continue processing recursively.
@@ -263,7 +263,7 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
         |> Map.ofKeys (fun finalDfaStateId ->
             // Get the regular vector represented by this DFA state.
             compilationState.DfaStateToRegularVector
-            |> Map.find finalDfaStateId
+            |> TagMap.find finalDfaStateId
             // Determine which lexer rules are accepted by this regular vector.
             |> RegularVector.acceptingElements
             // Map the indices of the patterns in the regular vector back to their
