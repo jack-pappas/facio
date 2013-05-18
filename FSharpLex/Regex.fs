@@ -46,20 +46,25 @@ type DerivativeClasses = {
 } with
     //
     static member Universe =
-        {   HasEmptySet = false;
-            Elements = CharSet.empty;
-            Negated = CharSet.empty; }
+      { HasEmptySet = false;
+        Elements = CharSet.empty;
+        Negated = CharSet.empty; }
+
+    //
+    static member UniversePlusEmptySet =
+      { DerivativeClasses.Universe
+            with HasEmptySet = true; }
 
     /// Computes a conservative approximation of the intersection of two sets of
     /// derivative classes. This is needed when computing the set of derivative
     /// classes for a compound regular expression ('And', 'Or', and 'Concat').
     static member Intersect (``C(r)``, ``C(s)``) =
-        {   HasEmptySet =
-                ``C(r)``.HasEmptySet || ``C(s)``.HasEmptySet;
-            Elements =
-                CharSet.union ``C(r)``.Elements ``C(s)``.Elements;
-            Negated =
-                CharSet.union ``C(r)``.Negated ``C(s)``.Negated; }
+      { HasEmptySet =
+            ``C(r)``.HasEmptySet || ``C(s)``.HasEmptySet;
+        Elements =
+            CharSet.union ``C(r)``.Elements ``C(s)``.Elements;
+        Negated =
+            CharSet.union ``C(r)``.Negated ``C(s)``.Negated; }
 
 
 /// <summary>A regular expression.</summary>
@@ -144,7 +149,18 @@ type Regex =
     /// Determines if a specified Regex is 'nullable',
     /// i.e., it accepts the empty string (epsilon).
     static member IsNullable (regex : Regex) =
-        Regex.IsNullableImpl regex id
+        // OPTIMIZATION : Immediately return the result for some patterns instead of calling
+        // the continuation-based method -- this eliminates the overhead of creating/calling
+        // the continuations for some very common cases.
+        match regex with
+        | Epsilon
+        | Star _ ->
+            true
+        | Any
+        | CharacterSet _ ->
+            false
+        | _ ->
+            Regex.IsNullableImpl regex id
 
 
 /// 'Smart' constructors for Regex.
@@ -326,15 +342,44 @@ module Regex =
         // Call the recursive implementation.
         orImpl regex1 regex2 id
 
+    /// Given two regular expressions, computes (regex1 / regex2).
+    /// The resulting expression matches any string which matches regex1
+    /// EXCEPT for those which also match regex2.
+    [<CompiledName("Quotient")>]
+    let quotient regex1 regex2 =
+        regex2
+        |> negate
+        |> andr regex1
+
 
 // Add derivative methods to Regex.
 type Regex with
+    /// Computes regex1 / regex2, given two regular expressions.
+    /// The resulting expression matches any string which matches regex1
+    /// EXCEPT for those which also match regex2.
+    static member Quotient (regex1, regex2) =
+        Regex.quotient regex1 regex2
+
     /// Computes the derivative of a Regex with respect to a specified symbol.
     static member private DerivativeImpl wrtSymbol regex =
         cont {
         match regex with
         | Epsilon ->
             return Regex.empty
+        | Any ->
+            return Regex.epsilon
+
+        | CharacterSet charSet ->
+            return
+                if CharSet.contains wrtSymbol charSet then
+                    Regex.epsilon
+                else
+                    Regex.empty
+
+        | Negate r ->
+            let! r' = Regex.DerivativeImpl wrtSymbol r
+            return Regex.negate r'
+
         | Star r as ``r*`` ->
             let! r' = Regex.DerivativeImpl wrtSymbol r
             return Regex.concat r' ``r*``
@@ -357,25 +402,27 @@ type Regex with
             let! r' = Regex.DerivativeImpl wrtSymbol r
             let! s' = Regex.DerivativeImpl wrtSymbol s
             return Regex.andr r' s'
-
-        | Any ->
-            return Regex.epsilon
-
-        | Negate r ->
-            let! r' = Regex.DerivativeImpl wrtSymbol r
-            return Regex.negate r'
-
-        | CharacterSet charSet ->
-            return
-                if CharSet.contains wrtSymbol charSet then
-                    Regex.epsilon
-                else
-                    Regex.empty
         }
 
     /// Computes the derivative of a Regex with respect to a specified symbol.
     static member Derivative symbol regex =
-        Regex.DerivativeImpl symbol regex id
+        // OPTIMIZATION : Immediately return the result for some patterns instead of calling
+        // the continuation-based method -- this eliminates the overhead of creating/calling
+        // the continuations for some very common cases.
+        match regex with
+        | Epsilon ->
+            Regex.empty
+        | Any ->
+            Regex.epsilon
+
+        | CharacterSet charSet ->
+            if CharSet.contains symbol charSet then
+                Regex.epsilon
+            else
+                Regex.empty
+
+        | _ ->
+            Regex.DerivativeImpl symbol regex id
 
     /// Computes an approximate set of derivative classes for the specified Regex.
     static member private DerivativeClassesImpl regex =
@@ -384,9 +431,7 @@ type Regex with
         | Epsilon ->
             return DerivativeClasses.Universe
         | Any ->
-            return
-                { DerivativeClasses.Universe
-                    with HasEmptySet = true; }
+            return DerivativeClasses.UniversePlusEmptySet
         | CharacterSet charSet ->
             return
                 { HasEmptySet = false;
@@ -411,7 +456,20 @@ type Regex with
 
     /// Computes an approximate set of derivative classes for the specified Regex.
     static member DerivativeClasses (regex : Regex) =
-        Regex.DerivativeClassesImpl regex id
+        // OPTIMIZATION : Immediately return the result for some patterns instead of calling
+        // the continuation-based method -- this eliminates the overhead of creating/calling
+        // the continuations for some very common cases.
+        match regex with
+        | Epsilon ->
+            DerivativeClasses.Universe
+        | Any ->
+            DerivativeClasses.UniversePlusEmptySet
+        | CharacterSet charSet ->
+            { HasEmptySet = false;
+                Elements = charSet;
+                Negated = charSet; }
+        | _ ->
+            Regex.DerivativeClassesImpl regex id
 
 
 /// An array of regular expressions.
