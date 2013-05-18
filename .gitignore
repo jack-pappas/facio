@@ -87,3 +87,8 @@ ParserGenerated.fs
 
 # Ignore the NuGet build folder, it's only needed when building the package
 _NuGetBuild/*
+
+# Ignore any output files from the test cases.
+TestCases/*
+!TestCases/*.fsl
+!TestCases/*.fsy
