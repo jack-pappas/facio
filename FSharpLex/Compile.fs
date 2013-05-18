@@ -52,6 +52,9 @@ type private CompilationState = {
     /// Maps a DFA state to the regular vector it represents.
     // OPTIMIZE : Use the TagMap type from ExtCore.
     DfaStateToRegularVector : TagMap<DfaState, RegularVector>;
+
+    /// Caches the derivative of a regular expression with respect to a symbol.
+    RegexDerivativeCache : HashMap<Regex * char, Regex>;
 }
 
 /// Functional operators related to the CompilationState record.
@@ -63,7 +66,8 @@ module private CompilationState =
         Transitions = LexerDfaGraph.empty;
         FinalStates = Set.empty;
         RegularVectorToDfaState = HashMap.empty;
-        DfaStateToRegularVector = TagMap.empty; }
+        DfaStateToRegularVector = TagMap.empty;
+        RegexDerivativeCache = HashMap.empty; }
 
     //
     let inline tryGetDfaState regVec (compilationState : CompilationState) =
@@ -114,13 +118,19 @@ let private transitions regularVector derivativeClass (transitionsFromCurrentDfa
         compilationState
     else
         // The derivative of the regular vector w.r.t. the chosen element.
-        let regularVector' =
+        let regularVector', compilationState =
             // Choose an element from the derivative class; any element
             // will do (which is the point behind the derivative classes).
             let derivativeClassElement = CharSet.minElement derivativeClass
 
             // Compute the derivative of the regular vector
-            RegularVector.derivative derivativeClassElement regularVector
+            let regularVector', derivativeCache =
+                RegularVector.derivative derivativeClassElement regularVector compilationState.RegexDerivativeCache
+            
+            // Return the derivative vector and the updated compilation state.
+            regularVector',
+            { compilationState with
+                RegexDerivativeCache = derivativeCache; }
 
         (*  If the derivative of the regular vector represents the 'error' state,
             ignore it. Instead of representing the error state with an explicit state

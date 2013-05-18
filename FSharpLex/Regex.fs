@@ -423,10 +423,20 @@ type RegularVector = Regex[]
 module RegularVector =
     open LanguagePrimitives
 
-    /// Compute the derivative of a regular vector
-    /// with respect to the given symbol.
-    let (*inline*) derivative symbol (regVec : RegularVector) : RegularVector =
-        Array.map (Regex.Derivative symbol) regVec
+    /// Compute the derivative of a regular vector with respect to the given symbol.
+    /// A HashMap is used to memoize the computation for increased performance.
+    let derivative symbol (regVec : RegularVector)
+        (derivativeCache : HashMap<Regex * char, Regex>) : RegularVector * HashMap<Regex * char, Regex> =
+        (regVec, derivativeCache)
+        ||> State.Array.map (fun regex derivativeCache ->
+            let cacheKey = regex, symbol
+            match HashMap.tryFind cacheKey derivativeCache with
+            | Some regex' ->
+                regex', derivativeCache
+            | None ->
+                let regex' = Regex.Derivative symbol regex
+                let derivativeCache = HashMap.add cacheKey regex' derivativeCache
+                regex', derivativeCache)
 
     /// Determines if the regular vector is nullable,
     /// i.e., it accepts the empty string (epsilon).
