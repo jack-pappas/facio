@@ -26,6 +26,24 @@ open Graham.Analysis
 open Graham.LR
 
 
+//
+[<AutoOpen>]
+module private TableHelpers =
+    /// Determines if two LR parser tables are equivalent.
+    /// Two LR parser tables are equivalent if they parse exactly the same grammar.
+    /// This is useful for implementing tests, since it provides a way to determine
+    /// if two parser tables are the same even when the LR parser states or production
+    /// rules have been assigned different identifiers.
+    let equivalentTables (table1 : LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>,
+                          table2 : LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>) : bool =
+        // Preconditions
+        checkNonNull "table1" table1
+        checkNonNull "table2" table2
+
+        // TODO : Try to determine if the ACTION and GOTO tables of the two LR parser tables are equivalent.
+        notImpl "TableHelpers.equivalentTables"
+
+
 /// Helper functions for creating LR parser tables for tests.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module private Table =

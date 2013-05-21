@@ -167,17 +167,16 @@ module internal Relation =
                 traverse (x, N, stack, F, X, R, F')
             | _ ->
                 F, N, stack)
-        // Discard the intermediate variables
-        |> fun (F, N, _) ->
-            // DEBUG : Make sure all set elements have been completely traversed.
-            #if DEBUG
+        #if DEBUG
+        // DEBUG : Make sure all set elements have been completely traversed.
+        |> tap (fun (_, N, _) ->
             let untraversed =
                 X |> Set.filter (fun x ->
-                    match Map.find x N with Completed -> false | _ -> true)
+                    Map.find x N <> Completed)
             Debug.Assert (
                 Set.isEmpty untraversed,
                 sprintf "There are %i elements of X (Count = %i) which have not been completely traversed." (Set.count untraversed) (Set.count X))
-            #endif
-
-            // Return the computed relation.
-            F
+            )
+        #endif
+        // Discard the intermediate variables
+        |> fun (F, _, _) -> F
