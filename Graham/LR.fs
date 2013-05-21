@@ -292,7 +292,9 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
                     match action with
                     | Shift targetState ->
                         let sourceState = fst key
-                        LabeledSparseDigraph.removeEdge sourceState targetState table.ParserTransitions
+
+                        table.ParserTransitions
+                        |> LabeledSparseDigraph.removeEdge sourceState targetState
                     | _ ->
                         table.ParserTransitions
 
@@ -300,6 +302,7 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
                 { table with
                     ActionTable = actionTable;
                     ParserTransitions = parserTransitions; }
+
 
 //
 type LrTableGenEnvironment<'Nonterminal, 'Terminal, 'Lookahead
@@ -536,7 +539,7 @@ module LrTableGenState =
                         |> Graph.addEdge sourceState targetState (Symbol.Nonterminal transitionSymbol); }
 
             // Return the updated table-generation state.
-            (), tableGenState                
+            (), tableGenState
 
         | Some entry ->
             // If the existing entry is the same as the target state,
