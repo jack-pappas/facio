@@ -1501,13 +1501,10 @@ module internal CharDiet =
             intersect stream input
         | _, _ ->
             #if DEBUG
-            let inputCount = count input
-            let streamCount = count stream
-            /// The minimum possible number of elements in the resulting set.
-            let minPossibleResultCount =
-                min inputCount streamCount
             /// The maximum possible number of elements in the resulting set.
             let maxPossibleResultCount =
+                let inputCount = count input
+                let streamCount = count stream
                 inputCount + streamCount
             #endif
 
@@ -1524,17 +1521,7 @@ module internal CharDiet =
 
             #if DEBUG
             let resultCount = count result
-//            let inputArr =
-//                if resultCount >= minPossibleResultCount then Array.empty
-//                else toArray input
-//            let streamArr =
-//                if resultCount >= minPossibleResultCount then Array.empty
-//                else toArray stream
-                    
-            Debug.Assert (
-                resultCount >= minPossibleResultCount,
-                sprintf "The result set should not contain fewer than %i elements, but it contains only %i elements."
-                    minPossibleResultCount resultCount)
+
             Debug.Assert (
                 resultCount <= maxPossibleResultCount,
                 sprintf "The result set should not contain more than %i elements, but it contains %i elements."
@@ -1767,22 +1754,7 @@ type CharSet private (tree : CharDiet) as this =
 
     /// The hash code for this CharSet is lazily computed,
     /// then cached for maximum performance.
-    let hashCode =
-        (* The HashMap type is used throughout FSharpLex for performance reasons;
-           this function must return a "robust" hash code -- i.e., one which causes
-           a very low number of conflicts -- because otherwise performance will be
-           *severely* affected. *)
-        lazy (
-           CharSet.FoldIntervals (
-            (fun hashCode (lo, hi) ->
-                // Compute a value for this interval using the Cantor pairing function.
-                let intervalHash =
-                    let k1k2 = int lo + int hi
-                    ((k1k2 * (k1k2 + 1)) / 2) + (int hi)
-
-                // Combine the interval hash with the current hash code to produce a new hash code.
-                (hashCode <<< 1) + intervalHash + 631),
-            19, this))
+    let hashCode = lazy (CharSet.ComputeHash this)
 
     //
     static member Empty
@@ -2119,6 +2091,23 @@ type CharSet private (tree : CharDiet) as this =
 
         let folder = FSharpFunc<_,_,_>.Adapt folder
         AvlTree.Fold folder.Invoke state charSet.Tree
+
+    //
+    static member private ComputeHash (charSet : CharSet) =
+        (* The HashMap type is used throughout FSharpLex for performance reasons;
+           this function must return a "robust" hash code -- i.e., one which causes
+           a very low number of conflicts -- because otherwise performance will be
+           *severely* affected. *)
+        CharSet.FoldIntervals (
+            (fun hashCode (lo, hi) ->
+                // Compute a value for this interval using the Cantor pairing function.
+                let intervalHash =
+                    let k1k2 = int lo + int hi
+                    ((k1k2 * (k1k2 + 1)) / 2) + (int hi)
+
+                // Combine the interval hash with the current hash code to produce a new hash code.
+                (hashCode <<< 1) + intervalHash + 631),
+            19, charSet)
 
     //
     static member Iter (action, charSet : CharSet) : unit =

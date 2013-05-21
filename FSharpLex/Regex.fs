@@ -36,35 +36,30 @@ open FSharpLex.SpecializedCollections
 
 //
 type DerivativeClasses = {
-    /// When set, indicates that this set of
-    /// derivative classes includes the empty set.
-    HasEmptySet : bool;
     //
-    Elements : CharSet;
-    //
-    Negated : CharSet;
+    // OPTIMIZE : Use HashSet from ExtCore, once it implements intersect/union/difference.
+    Classes : Set<CharSet>;
 } with
     //
     static member Universe =
-      { HasEmptySet = false;
-        Elements = CharSet.empty;
-        Negated = CharSet.empty; }
+        { Classes = Set.empty; }
 
     //
     static member UniversePlusEmptySet =
-      { DerivativeClasses.Universe
-            with HasEmptySet = true; }
+        { Classes = Set.singleton CharSet.empty; }
 
     /// Computes a conservative approximation of the intersection of two sets of
     /// derivative classes. This is needed when computing the set of derivative
     /// classes for a compound regular expression ('And', 'Or', and 'Concat').
     static member Intersect (``C(r)``, ``C(s)``) =
-      { HasEmptySet =
-            ``C(r)``.HasEmptySet || ``C(s)``.HasEmptySet;
-        Elements =
-            CharSet.union ``C(r)``.Elements ``C(s)``.Elements;
-        Negated =
-            CharSet.union ``C(r)``.Negated ``C(s)``.Negated; }
+        { Classes =
+            (Set.empty, ``C(r)``.Classes, ``C(s)``.Classes)
+            |||> Set.Cartesian.fold (fun intersectionClasses ``S(r)`` ``S(s)`` ->
+                // Compute the intersection of these two derivative classes
+                let ``S(r) /\ S(s)`` = CharSet.intersect ``S(r)`` ``S(s)``
+                
+                // Add the intersection to the set of derivative classes representing the intersection.
+                Set.add ``S(r) /\ S(s)`` intersectionClasses); }
 
 
 /// <summary>A regular expression.</summary>
@@ -436,10 +431,7 @@ type Regex with
         | Any ->
             return DerivativeClasses.UniversePlusEmptySet
         | CharacterSet charSet ->
-            return
-                { HasEmptySet = false;
-                  Elements = charSet;
-                  Negated = charSet; }
+            return { Classes = Set.singleton charSet; }
         | Negate r
         | Star r ->
             return! Regex.DerivativeClassesImpl r
@@ -468,9 +460,7 @@ type Regex with
         | Any ->
             DerivativeClasses.UniversePlusEmptySet
         | CharacterSet charSet ->
-            { HasEmptySet = false;
-                Elements = charSet;
-                Negated = charSet; }
+            { Classes = Set.singleton charSet; }
         | _ ->
             Regex.DerivativeClassesImpl regex id
 

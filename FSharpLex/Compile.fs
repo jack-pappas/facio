@@ -173,7 +173,7 @@ let private transitions regularVector derivativeClass (transitionsFromCurrentDfa
             unvisitedTransitionTargets,
             compilationState
 
-//
+// TODO : Re-write this using the readerState workflow.
 let rec private createDfa pending compilationState =
     // If there are no more pending states, we're finished compiling.
     if TagSet.isEmpty pending then
@@ -199,12 +199,9 @@ let rec private createDfa pending compilationState =
             // add the DFA state to the compilation state (if necessary), then add an edge
             // to the transition graph from this DFA state to the target DFA state.
             let transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState =
-                ((HashMap.empty, TagSet.empty, compilationState), derivativeClasses.Elements)
-                ||> CharSet.fold (fun state element ->
-                    // TEMP : The Elements field of DerivativeClasses needs to be redefined
-                    // because it is possible for a class to contain multiple values.
-                    let derivClass = CharSet.singleton element
-                    transitions regularVector derivClass state)
+                ((HashMap.empty, TagSet.empty, compilationState), derivativeClasses.Classes)
+                ||> Set.fold (fun state derivativeClass ->
+                    transitions regularVector derivativeClass state)
 
             // Add any newly-created, unvisited states to the
             // set of states which still need to be visited.
