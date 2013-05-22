@@ -68,6 +68,11 @@ module private FsLex =
     //
     let [<Literal>] private lexingStateVariableName = "_fslex_state"
 
+    /// Writes an array or list element containing an F# uint16 literal value to a TextWriter.
+    let inline private writeUInt16LiteralElement (textWriter : System.IO.TextWriter) (value : uint16) =
+        textWriter.Write (uint32 value)
+        textWriter.Write "us; "
+
     /// Emits the elements into an ASCII transition table row for the given DFA state.
     let private asciiTransitionVectorElements (compiledRule, ruleDfaStateId, baseDfaStateId, indentingWriter : IndentedTextWriter) =
         (*  The transition vector for each state in an 'fslex'-compatible ASCII transition
@@ -104,8 +109,7 @@ module private FsLex =
                 defaultArg targetStateId (tag <| int sentinelValue)
 
             // Emit the state number of the transition target.
-            sprintf "%uus; " (Checked.uint16 targetStateId)
-            |> indentingWriter.Write
+            writeUInt16LiteralElement indentingWriter <| Checked.uint16 targetStateId
 
         // Emit the element representing the state to transition
         // into when the 'end-of'file' marker is consumed.
@@ -120,8 +124,7 @@ module private FsLex =
                     Checked.uint16 (edgeKey.Target + baseDfaStateId)
             else sentinelValue
 
-        sprintf "%uus; " eofTransitionTarget
-        |> indentingWriter.Write
+        writeUInt16LiteralElement indentingWriter eofTransitionTarget
 
     /// Emits the elements into a Unicode transition table row for the given DFA state.
     let private unicodeTransitionVectorElements (compiledRule, ruleDfaStateId, baseDfaStateId, indentingWriter : IndentedTextWriter) =
@@ -164,8 +167,7 @@ module private FsLex =
                 defaultArg targetStateId (tag <| int sentinelValue)
 
             // Emit the state number of the transition target.
-            sprintf "%uus; " (Checked.uint16 targetStateId)
-            |> indentingWriter.Write
+            writeUInt16LiteralElement indentingWriter <| Checked.uint16 targetStateId
 
         //
         let unicodeCategoryTransitions, unicodeCharTransitions =
@@ -233,16 +235,14 @@ module private FsLex =
         unicodeCharTransitions
         |> Map.iter (fun c targetStateId ->
             // Emit the character itself (as a uint16).
-            sprintf "%uus; " (uint16 c)
-            |> indentingWriter.Write
+            writeUInt16LiteralElement indentingWriter <| uint16 c            
 
             /// The target state ID, or a sentinel value if this character does
             /// not label a transition out-edge from this DFA state.
             let targetStateId = defaultArg targetStateId (tag <| int sentinelValue)
 
             // Emit the target state ID.
-            sprintf "%uus; " (Checked.uint16 targetStateId)
-            |> indentingWriter.Write)
+            writeUInt16LiteralElement indentingWriter <| Checked.uint16 targetStateId)
 
         // Emit entries for Unicode categories.
         for i = 0 to 29 do
@@ -252,8 +252,7 @@ module private FsLex =
                 defaultArg targetStateId (tag <| int sentinelValue)
 
             // Emit the state number of the transition target.
-            sprintf "%uus; " (Checked.uint16 targetStateId)
-            |> indentingWriter.Write
+            writeUInt16LiteralElement indentingWriter <| Checked.uint16 targetStateId
 
         // Emit the element representing the state to transition
         // into when the 'end-of'file' marker is consumed.
@@ -268,8 +267,7 @@ module private FsLex =
                     Checked.uint16 (edgeKey.Target + baseDfaStateId)
             else sentinelValue
 
-        sprintf "%uus; " eofTransitionTarget
-        |> indentingWriter.Write
+        writeUInt16LiteralElement indentingWriter eofTransitionTarget
 
     //
     let private transitionAndActionTables (compiledRules : Map<RuleIdentifier, CompiledRule>) (options : CompilationOptions) (indentingWriter : IndentedTextWriter) =
@@ -394,18 +392,18 @@ module private FsLex =
                 for dfaStateId = 0 to ruleDfaStateCount - 1 do
                     // Determine the index of the rule clause accepted by this DFA state (if any).
                     let acceptedRuleClauseIndex =
-                        compiledRule.Dfa.RuleClauseAcceptedByState
-                        |> Map.tryFind (tag dfaStateId)
+                        Map.tryFind (tag dfaStateId) compiledRule.Dfa.RuleClauseAcceptedByState
 
                     // Emit the accepted rule number.
                     match acceptedRuleClauseIndex with
                     | None ->
                         // Emit the sentinel value which indicates this is not a final (accepting) state.
-                        sentinelValue.ToString () + "us; "
+                        sentinelValue.ToString ()
                     | Some ruleClauseIndex ->
                         // Emit the rule-clause index.
-                        ruleClauseIndex.ToString () + "us; "
+                        ruleClauseIndex.ToString ()
                     |> indentingWriter.Write
+                    indentingWriter.Write "us; "
 
                 // End the line containing the transition elements for this rule.
                 indentingWriter.WriteLine ()
@@ -440,10 +438,8 @@ module private FsLex =
             |> indentingWriter.WriteLine
 
             // Emit the let-binding for this rule's function.
-            sprintf "%s %s "
-                (if isFirstRule then "let rec" else "and")
-                ruleId
-            |> indentingWriter.Write
+            fprintf indentingWriter "%s %s "
+                (if isFirstRule then "let rec" else "and") ruleId
 
             // Emit parameter names
             compiledRule.Parameters
@@ -460,8 +456,7 @@ module private FsLex =
             // Indent and emit the body of the function.
             IndentedTextWriter.indented indentingWriter <| fun indentingWriter ->
                 // Emit the "let" binding for the inner function.
-                sprintf "let _fslex_%s " ruleId
-                |> indentingWriter.Write
+                fprintf indentingWriter "let _fslex_%s " ruleId
 
                 // Emit parameter names
                 compiledRule.Parameters
@@ -488,8 +483,7 @@ module private FsLex =
                     compiledRule.RuleClauseActions
                     |> Array.iteri (fun ruleClauseIndex actionCode ->
                         // Emit the index as a match pattern.
-                        "| " + ruleClauseIndex.ToString() + " ->"
-                        |> indentingWriter.Write    // 'Write', not 'WriteLine' (see comment below).
+                        fprintf indentingWriter "| %i ->" ruleClauseIndex   // 'Write', not 'WriteLine' (see comment below).
 
                         // Decrease the indentation down to one (1) when emitting the user's code.
                         // Due to a small bug in IndentedTextWriter, a change in indentation only
@@ -506,7 +500,7 @@ module private FsLex =
                             // to traverse the string, checking for newlines and writing each
                             // non-newline character into 'indentingWriter'.
                             actionCode.Split (
-                                [|"\r\n";"\r";"\n"|],
+                                [|"\r\n"; "\r"; "\n"|],
                                 System.StringSplitOptions.None)
                             |> Array.iter indentingWriter.WriteLine)
 
@@ -520,8 +514,7 @@ module private FsLex =
                 indentingWriter.WriteLine ()
 
                 // Emit the call to the inner function.
-                sprintf "_fslex_%s " ruleId
-                |> indentingWriter.Write
+                fprintf indentingWriter "_fslex_%s " ruleId
                 
                 compiledRule.Parameters
                 |> Array.iter (fun paramName ->
