@@ -40,7 +40,6 @@ open FSharpLex.Compile
 module private FsLex =
     open System.CodeDom.Compiler
     open System.Text
-    open LanguagePrimitives
     open BackendUtils.CodeGen
 
     (* TODO :   Given that each rule is compiled as it's own DFA and therefore won't ever transition
@@ -102,7 +101,7 @@ module private FsLex =
 
                 // If no transition edge was found for this character, return the
                 // sentinel value to indicate there's no transition.
-                defaultArg targetStateId (Int32WithMeasure <| int sentinelValue)
+                defaultArg targetStateId (tag <| int sentinelValue)
 
             // Emit the state number of the transition target.
             sprintf "%uus; " (Checked.uint16 targetStateId)
@@ -162,53 +161,73 @@ module private FsLex =
 
                 // If no transition edge was found for this character, return the
                 // sentinel value to indicate there's no transition.
-                defaultArg targetStateId (Int32WithMeasure <| int sentinelValue)
+                defaultArg targetStateId (tag <| int sentinelValue)
 
             // Emit the state number of the transition target.
             sprintf "%uus; " (Checked.uint16 targetStateId)
             |> indentingWriter.Write
 
         //
-        let unicodeCategoryTransitions =
-            (Map.empty, UnicodeCharSet.byCategory)
-            ||> Map.fold (fun categoryTransitions category categoryChars ->
-                // If there is a transition out of this DFA state for each character
-                // in this Unicode category, and all of the transitions go to the same
-                // state, then we combine them into a single transition along an edge
-                // labeled with this Unicode category.
-                if categoryChars |> CharSet.forall (fun c -> Map.containsKey c outTransitions) then
-                    // OK, all the transitions are present -- do they all transition to the same target state?
-                    // OPTIMIZE : This could be rewritten for efficiency -- i.e., do this without
-                    // using a Set to hold the transition targets.
-                    let categoryTargets =
-                        (Set.empty, categoryChars)
-                        ||> CharSet.fold (fun categoryTargets c ->
-                            let target = Map.find c outTransitions
-                            Set.add target categoryTargets)
+        let unicodeCategoryTransitions, unicodeCharTransitions =
+            ((Map.empty, Map.empty), UnicodeCharSet.byCategory)
+            ||> Map.fold (fun (categoryTransitions, charTransitions) category categoryChars ->
+                // If there is a transition out of this DFA state for *most* characters in this
+                // Unicode category and all of those transitions go to the same state, we can compress
+                // the lexer table by emitting a transition for the Unicode category itself instead
+                // of the individual characters.
+                // If we do emit a transition for the category, we also need to emit an individual edge
+                // for each character which transitions to a different DFA state than the one used by
+                // the whole category (or the sentinel value to indicate no transition for that character).
 
-                    if Set.count categoryTargets = 1 then
-                        // Add a transition into the category-transitions map.                        
-                        let categoryTarget = Set.minElement categoryTargets
-                        Map.add category categoryTarget categoryTransitions
-                    else
-                        // This category can't be combined because some characters
-                        // transition to different target states.
-                        categoryTransitions
-                else
-                    categoryTransitions)
+                /// The DFA states targeted by transitions labeled with characters from this Unicode class.
+                let weightedTransitionTargets =
+                    (Map.empty, categoryChars)
+                    ||> CharSet.fold (fun weightedTransitionTargets c ->
+                        let target = Map.tryFind c outTransitions
+                        match Map.tryFind target weightedTransitionTargets with
+                        | None ->
+                            Map.add target 1 weightedTransitionTargets
+                        | Some weight ->
+                            Map.add target (weight + 1) weightedTransitionTargets)
 
-        //
-        let unicodeCharTransitions =
-            // Determine the Unicode characters for which we must emit
-            // individual entries in the transition vector.
-            outTransitions
-            // Filter out ASCII characters
-            |> Map.filter (fun c _ -> int c >= 128)
-            // Filter out any characters whose transitions were consolidated
-            // into a Unicode category transition.
-            |> Map.filter (fun c _ ->
-                let category = System.Char.GetUnicodeCategory c
-                Map.containsKey category unicodeCategoryTransitions)
+                /// The DFA state targeted by the greatest number of edges labeled with
+                /// characters from this Unicode category.
+                let categoryTarget =
+                    // TODO : Simplify this to use the Map.maxKeyBy function from ExtCore.
+                    (None, weightedTransitionTargets)
+                    ||> Map.fold (fun categoryTarget target weight ->
+                        match categoryTarget with
+                        | None ->
+                            Some (target, weight)
+                        | Some (_, maxWeight) ->
+                            if weight > maxWeight then
+                                Some (target, weight)
+                            else categoryTarget)
+                    // Discard the intermediate values from the fold.
+                    |> Option.get
+                    |> fst
+
+                // Add the DFA state targeted by the greatest number of edges labeled with
+                // characters in this Unicode category to the category-transition-target map.
+                let categoryTransitions = Map.add category categoryTarget categoryTransitions
+                
+                // Add individual character transitions for any character which targets a different state
+                // (or does not label a transition from this state).
+                let charTransitions =
+                    (charTransitions, categoryChars)
+                    ||> CharSet.fold (fun charTransitions c ->
+                        // Filter out ASCII characters -- we've already emitted transitions for them.
+                        if int c < 128 then
+                            charTransitions
+                        else
+                            let target = Map.tryFind c outTransitions
+                            if target = categoryTarget then
+                                charTransitions
+                            else
+                                Map.add c target charTransitions)
+
+                // Pass the category and character transition maps to the next iteration.
+                categoryTransitions, charTransitions)
 
         // Emit entries for specific Unicode elements.
         unicodeCharTransitions
@@ -217,6 +236,10 @@ module private FsLex =
             sprintf "%uus; " (uint16 c)
             |> indentingWriter.Write
 
+            /// The target state ID, or a sentinel value if this character does
+            /// not label a transition out-edge from this DFA state.
+            let targetStateId = defaultArg targetStateId (tag <| int sentinelValue)
+
             // Emit the target state ID.
             sprintf "%uus; " (Checked.uint16 targetStateId)
             |> indentingWriter.Write)
@@ -224,11 +247,9 @@ module private FsLex =
         // Emit entries for Unicode categories.
         for i = 0 to 29 do
             let targetStateId =
-                let targetStateId =
-                    Map.tryFind (EnumOfValue i) unicodeCategoryTransitions
-
                 // If this category does not have a transition, use the sentinel value as the target.
-                defaultArg targetStateId (Int32WithMeasure <| int sentinelValue)
+                let targetStateId = Map.find (enum i) unicodeCategoryTransitions
+                defaultArg targetStateId (tag <| int sentinelValue)
 
             // Emit the state number of the transition target.
             sprintf "%uus; " (Checked.uint16 targetStateId)
@@ -258,18 +279,19 @@ module private FsLex =
             ||> Map.fold (fun combinedDfaStateCount _ compiledRule ->
                 combinedDfaStateCount + compiledRule.Dfa.Transitions.VertexCount)
 
-        /// The set of all valid input characters.
-        let allValidInputChars =
-            // OPTIMIZE : This could be determined on-the-fly while compiling the DFA
-            // so we don't have to perform a costly additional computation here.
-            (CharSet.empty, compiledRules)
-            ||> Map.fold (fun allValidInputChars _ compiledRule ->
-                (allValidInputChars, compiledRule.Dfa.Transitions.AdjacencyMap)
-                ||> HashMap.fold (fun allValidInputChars _ edgeSet ->
-                    CharSet.union allValidInputChars edgeSet))
-
         /// The maximum character value accepted by the combined DFA.
-        let maxCharValue = CharSet.maxElement allValidInputChars
+        let maxCharValue =
+            /// The set of all valid input characters.
+            let allValidInputChars =
+                // OPTIMIZE : We don't need to actually union the sets here, we can simply get
+                // the maximum value of each edge-set, then use the 'max' operator to combine them.
+                (CharSet.empty, compiledRules)
+                ||> Map.fold (fun allValidInputChars _ compiledRule ->
+                    (allValidInputChars, compiledRule.Dfa.Transitions.AdjacencyMap)
+                    ||> HashMap.fold (fun allValidInputChars _ edgeSet ->
+                        CharSet.union allValidInputChars edgeSet))
+            
+            CharSet.maxElement allValidInputChars
 
         // Emit the 'let' binding for the fslex "Tables" object.
         "/// Interprets the transition and action tables of the lexer automaton."
@@ -324,14 +346,14 @@ module private FsLex =
                     if options.Unicode then
                         unicodeTransitionVectorElements (
                             compiledRule,
-                            Int32WithMeasure ruleDfaStateId,
-                            Int32WithMeasure baseDfaStateId,
+                            tag ruleDfaStateId,
+                            tag baseDfaStateId,
                             indentingWriter)
                     else
                         asciiTransitionVectorElements (
                             compiledRule,
-                            Int32WithMeasure ruleDfaStateId,
-                            Int32WithMeasure baseDfaStateId,
+                            tag ruleDfaStateId,
+                            tag baseDfaStateId,
                             indentingWriter)
 
                     // Emit the closing bracket of the transition vector for this state,
@@ -372,7 +394,7 @@ module private FsLex =
                     // Determine the index of the rule clause accepted by this DFA state (if any).
                     let acceptedRuleClauseIndex =
                         compiledRule.Dfa.RuleClauseAcceptedByState
-                        |> Map.tryFind (LanguagePrimitives.Int32WithMeasure dfaStateId)
+                        |> Map.tryFind (tag dfaStateId)
 
                     // Emit the accepted rule number.
                     match acceptedRuleClauseIndex with
