@@ -34,76 +34,44 @@ open FSharpLex.SpecializedCollections
     match those in the paper. *)
 #nowarn "49"
 
-//
-[<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
-type DerivativeClass =
-    //
-    | Any
-    //
-    | Characters of CharSet
 
 //
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module DerivativeClass =
     //
-    [<CompiledName("IsEmpty")>]
-    let isEmpty derivClass =
-        match derivClass with
-        | Any -> false
-        | Characters charSet ->
-            CharSet.isEmpty charSet
+    [<CompiledName("Universe")>]
+    let universe =
+        CharSet.ofRange System.Char.MinValue System.Char.MaxValue
 
     //
-    [<CompiledName("MinElement")>]
-    let minElement derivClass =
-        match derivClass with
-        | Any ->
-            System.Char.MinValue
-        | Characters charSet ->
-            CharSet.minElement charSet
+    [<CompiledName("Complement")>]
+    let complement derivClass =
+        CharSet.difference universe derivClass
 
 //
-type DerivativeClasses = Set<DerivativeClass>
+type DerivativeClasses = Set<CharSet>
 
 //
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module DerivativeClasses =
     //
     [<CompiledName("Universe")>]
-    let universe =
-        Set.singleton Any
-
-    //
-    [<CompiledName("UniversePlusEmptySet")>]
-    let universePlusEmptySet =
-        Set.empty
-        |> Set.add Any
-        |> Set.add (Characters CharSet.empty)
+    let universe : DerivativeClasses =
+        Set.singleton DerivativeClass.universe
 
     //
     [<CompiledName("OfCharSet")>]
-    let inline ofCharSet charSet =
-        Set.singleton (Characters charSet)
+    let ofCharSet charSet : DerivativeClasses =
+        Set.empty
+        |> Set.add charSet
+        |> Set.add (DerivativeClass.complement charSet)
 
     /// Computes a conservative approximation of the intersection of two sets of
     /// derivative classes. This is needed when computing the set of derivative
     /// classes for a compound regular expression ('And', 'Or', and 'Concat').
     [<CompiledName("Intersect")>]
-    let intersect ``C(r)`` ``C(s)`` =
-        (Set.empty, ``C(r)``, ``C(s)``)
-        |||> Set.Cartesian.fold (fun intersectionClasses ``S(r)`` ``S(s)`` ->
-            match ``S(r)``, ``S(s)`` with
-            | Any, Any ->
-                Set.add Any intersectionClasses
-            | Characters cs, Any
-            | Any, Characters cs ->
-                Set.add (Characters cs) intersectionClasses
-            | Characters sr, Characters ss ->
-                // Compute the intersection of these two derivative classes
-                let ``S(r) /\ S(s)`` = CharSet.intersect sr ss
-                
-                // Add the intersection to the set of derivative classes representing the intersection.
-                Set.add (Characters ``S(r) /\ S(s)``) intersectionClasses)
+    let intersect ``C(r)`` ``C(s)`` : DerivativeClasses =
+        Set.Cartesian.map CharSet.intersect ``C(r)`` ``C(s)``
 
 
 /// <summary>A regular expression.</summary>
@@ -387,8 +355,8 @@ module Regex =
     /// Given two regular expressions, computes (regex1 / regex2).
     /// The resulting expression matches any string which matches regex1
     /// EXCEPT for those which also match regex2.
-    [<CompiledName("Quotient")>]
-    let quotient regex1 regex2 =
+    [<CompiledName("Difference")>]
+    let difference regex1 regex2 =
         regex2
         |> negate
         |> andr regex1
@@ -399,8 +367,8 @@ type Regex with
     /// Computes regex1 / regex2, given two regular expressions.
     /// The resulting expression matches any string which matches regex1
     /// EXCEPT for those which also match regex2.
-    static member Quotient (regex1, regex2) =
-        Regex.quotient regex1 regex2
+    static member Difference (regex1, regex2) =
+        Regex.difference regex1 regex2
 
     /// Computes the derivative of a Regex with respect to a specified symbol.
     static member private DerivativeImpl wrtSymbol regex =
@@ -470,10 +438,9 @@ type Regex with
     static member private DerivativeClassesImpl regex =
         cont {
         match regex with
-        | Epsilon ->
-            return DerivativeClasses.universe
+        | Epsilon
         | Any ->
-            return DerivativeClasses.universePlusEmptySet
+            return DerivativeClasses.universe
         | CharacterSet charSet ->
             return DerivativeClasses.ofCharSet charSet
         | Negate r
@@ -499,10 +466,9 @@ type Regex with
         // the continuation-based method -- this eliminates the overhead of creating/calling
         // the continuations for some very common cases.
         match regex with
-        | Epsilon ->
-            DerivativeClasses.universe
+        | Epsilon
         | Any ->
-            DerivativeClasses.universePlusEmptySet
+            DerivativeClasses.universe
         | CharacterSet charSet ->
             DerivativeClasses.ofCharSet charSet
         | _ ->

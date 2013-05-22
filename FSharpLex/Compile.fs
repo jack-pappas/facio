@@ -111,7 +111,7 @@ module private CompilationState =
 //
 let private transitions regularVector derivativeClass (transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState) =
     // Ignore empty derivative classes.
-    if DerivativeClass.isEmpty derivativeClass then
+    if CharSet.isEmpty derivativeClass then
         transitionsFromCurrentDfaState,
         unvisitedTransitionTargets,
         compilationState
@@ -120,7 +120,7 @@ let private transitions regularVector derivativeClass (transitionsFromCurrentDfa
         let regularVector', compilationState =
             // Choose an element from the derivative class; any element
             // will do (which is the point behind the derivative classes).
-            let derivativeClassElement = DerivativeClass.minElement derivativeClass
+            let derivativeClassElement = CharSet.minElement derivativeClass
 
             // Compute the derivative of the regular vector
             let regularVector', derivativeCache =
@@ -213,14 +213,7 @@ let rec private createDfa pending compilationState =
                         // Add the unvisited transition targets to the transition graph.
                         (compilationState.Transitions, transitionsFromCurrentDfaState)
                         ||> HashMap.fold (fun transitions derivativeClass target ->
-                            let edgeSet =
-                                match derivativeClass with
-                                | DerivativeClass.Any ->
-                                    CharSet.ofRange System.Char.MinValue System.Char.MaxValue
-                                | Characters charSet ->
-                                    charSet
-
-                            LexerDfaGraph.addEdges currentState target edgeSet transitions); }
+                            LexerDfaGraph.addEdges currentState target derivativeClass transitions); }
 
             // Continue processing recursively.
             createDfa pending compilationState
@@ -975,15 +968,16 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         (* TEMP :   For compatibility with fslex, we need to determine the alphabet used
                     by the rule, then rewrite any negated character sets so the transition
                     table is generated in a way that fslex can handle. *)
-        let ruleAlphabet =
-            ruleClauseRegexes
-            |> Array.map getAlphabet
-            |> Array.reduce CharSet.union
-            // Add the low ASCII characters too, like fslex does.
-            |> CharSet.union (CharSet.ofRange (char 0) (char 127))
 
         // Rewrite the regexes so they don't contain negated character sets.
         let ruleClauseRegexes =
+            let ruleAlphabet =
+                ruleClauseRegexes
+                |> Array.map getAlphabet
+                |> Array.reduce CharSet.union
+                // Add the low ASCII characters too, like fslex does.
+                |> CharSet.union (CharSet.ofRange (char 0) (char 127))
+
             ruleClauseRegexes
             |> Array.map (rewriteNegatedCharSets ruleAlphabet)
 
