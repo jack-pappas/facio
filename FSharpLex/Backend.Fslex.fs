@@ -398,12 +398,11 @@ module private FsLex =
                     match acceptedRuleClauseIndex with
                     | None ->
                         // Emit the sentinel value which indicates this is not a final (accepting) state.
-                        sentinelValue.ToString ()
+                        sentinelValue
                     | Some ruleClauseIndex ->
                         // Emit the rule-clause index.
-                        ruleClauseIndex.ToString ()
-                    |> indentingWriter.Write
-                    indentingWriter.Write "us; "
+                        Checked.uint16 ruleClauseIndex
+                    |> writeUInt16LiteralElement indentingWriter
 
                 // End the line containing the transition elements for this rule.
                 indentingWriter.WriteLine ()
@@ -496,9 +495,8 @@ module private FsLex =
 
                             // Emit the user-defined code for this pattern's semantic action.
                             // This has to be done line-by-line so the indenting is correct!
-                            // OPTIMIZE : Speed this up a bit by using a fold or 'for' loop
-                            // to traverse the string, checking for newlines and writing each
-                            // non-newline character into 'indentingWriter'.
+                            // OPTIMIZE : Avoid creating the intermediate array of substrings by
+                            // using String.Split.iter from ExtCore.
                             actionCode.Split (
                                 [|"\r\n"; "\r"; "\n"|],
                                 System.StringSplitOptions.None)
