@@ -211,7 +211,7 @@ type internal AvlTree<'T when 'T : comparison> =
     static member inline private Create (l, r : AvlTree<'T>, value) =
         //assert (AvlTree.AvlInvariant l)
         //assert (AvlTree.AvlInvariant r)
-        assert (AvlTree.HeightDiff (l, r) <= balanceTolerance)
+        //assert (AvlTree.HeightDiff (l, r) <= balanceTolerance)
         Node (l, r, value, (max (AvlTree.Height l) (AvlTree.Height r)) + 1u)
 
     /// Creates a AvlTree containing the specified value.
@@ -224,7 +224,7 @@ type internal AvlTree<'T when 'T : comparison> =
         // Preconditions
         //assert (AvlTree.AvlInvariant l)
         //assert (AvlTree.AvlInvariant r)
-        assert (AvlTree.Height l <= AvlTree.Height r + balanceTolerance)
+        //assert (AvlTree.Height l <= AvlTree.Height r + balanceTolerance)
 
         if AvlTree.Height l = AvlTree.Height r + balanceTolerance then
             match l with
@@ -250,7 +250,7 @@ type internal AvlTree<'T when 'T : comparison> =
         // Preconditions
         //assert (AvlTree.AvlInvariant l)
         //assert (AvlTree.AvlInvariant r)
-        assert (AvlTree.Height r <= AvlTree.Height l + balanceTolerance)
+        //assert (AvlTree.Height r <= AvlTree.Height l + balanceTolerance)
 
         if AvlTree.Height r = AvlTree.Height l + balanceTolerance then
             match r with
@@ -709,7 +709,7 @@ type internal AvlTree<'T when 'T : comparison> =
         // Preconditions
         //assert (AvlTree.AvlInvariant l)
         //assert (AvlTree.AvlInvariant r)
-        assert (AvlTree.HeightDiff (l, r) <= (balanceTolerance + 1u))
+        //assert (AvlTree.HeightDiff (l, r) <= (balanceTolerance + 1u))
         // TODO : Assert all values in 'l' are less than all values in 'r', and also less than 'n'.
         //        Assert 'n' is less than all values in 'r'.
 
@@ -958,6 +958,7 @@ module internal CharDiet =
         | Node (l, r, _, _) ->
             1u + max (computeHeight l) (computeHeight r)
 
+(*
     /// Determines if the intervals in a DIET are disjoint.
     let rec intervalsDisjointImpl (tree : CharDiet) (elements : Set<char>) =
         match tree with
@@ -988,8 +989,7 @@ module internal CharDiet =
 
     /// Determines if the intervals in a DIET are disjoint.
     let intervalsDisjoint (tree : CharDiet) : bool =
-        //fst <| intervalsDisjointImpl tree Set.empty
-        true
+        fst <| intervalsDisjointImpl tree Set.empty
         
     /// Determines if a DIET is correctly formed.
     let rec dietInvariant (tree : CharDiet) =
@@ -1026,6 +1026,7 @@ module internal CharDiet =
             && dietInvariant r
             // Check that the intervals are disjoint.
             //&& (intervalsDisjoint tree Set.empty |> fst)
+*)
 
     //
     // NOTE : This function is only called by 'addRange'.
@@ -1139,7 +1140,6 @@ module internal CharDiet =
         //assert (dietInvariant tree)
         //assert (intervalsDisjoint tree)
 
-        // OPTIMIZE : Modify this to use a mutable stack instead of an F# list.
         let rec cardinal_aux acc = function
             | [] -> acc
             | Empty :: ts ->
@@ -1381,16 +1381,16 @@ module internal CharDiet =
             when streamHeight > inputHeight ->
             union stream input
         | _, _ ->
-            #if DEBUG
-            let inputCount = count input
-            let streamCount = count stream
-            /// The minimum possible number of elements in the resulting set.
-            let minPossibleResultCount =
-                max inputCount streamCount
-            /// The maximum possible number of elements in the resulting set.
-            let maxPossibleResultCount =
-                inputCount + streamCount
-            #endif
+//            #if DEBUG
+//            let inputCount = count input
+//            let streamCount = count stream
+//            /// The minimum possible number of elements in the resulting set.
+//            let minPossibleResultCount =
+//                max inputCount streamCount
+//            /// The maximum possible number of elements in the resulting set.
+//            let maxPossibleResultCount =
+//                inputCount + streamCount
+//            #endif
 
             let result =
                 let result, head', stream'' =
@@ -1403,24 +1403,24 @@ module internal CharDiet =
                 | Some i ->
                     CharDiet.Join (comparer, result, stream'', i)
 
-            Debug.Assert (
-                dietInvariant result,
-                "The DIET invariant does not hold for the result.")
-            Debug.Assert (
-                intervalsDisjoint result,
-                "The intervals in the DIET are not disjoint.")
+//            Debug.Assert (
+//                dietInvariant result,
+//                "The DIET invariant does not hold for the result.")
+//            Debug.Assert (
+//                intervalsDisjoint result,
+//                "The intervals in the DIET are not disjoint.")
 
-            #if DEBUG
-            let resultCount = count result
-            Debug.Assert (
-                resultCount >= minPossibleResultCount,
-                sprintf "The result set should not contain fewer than %i elements, but it contains only %i elements."
-                    minPossibleResultCount resultCount)
-            Debug.Assert (
-                resultCount <= maxPossibleResultCount,
-                sprintf "The result set should not contain more than %i elements, but it contains %i elements."
-                    maxPossibleResultCount resultCount)
-            #endif
+//            #if DEBUG
+//            let resultCount = count result
+//            Debug.Assert (
+//                resultCount >= minPossibleResultCount,
+//                sprintf "The result set should not contain fewer than %i elements, but it contains only %i elements."
+//                    minPossibleResultCount resultCount)
+//            Debug.Assert (
+//                resultCount <= maxPossibleResultCount,
+//                sprintf "The result set should not contain more than %i elements, but it contains %i elements."
+//                    maxPossibleResultCount resultCount)
+//            #endif
             result
 
     /// Recursive implementation function for computing the intersection of two sets.
@@ -1500,33 +1500,33 @@ module internal CharDiet =
             when streamHeight > inputHeight ->
             intersect stream input
         | _, _ ->
-            #if DEBUG
-            /// The maximum possible number of elements in the resulting set.
-            let maxPossibleResultCount =
-                let inputCount = count input
-                let streamCount = count stream
-                inputCount + streamCount
-            #endif
+//            #if DEBUG
+//            /// The maximum possible number of elements in the resulting set.
+//            let maxPossibleResultCount =
+//                let inputCount = count input
+//                let streamCount = count stream
+//                inputCount + streamCount
+//            #endif
 
             let result, _, _ =
                 CharDiet.TryDeleteMin stream
                 ||> intersectImpl input
             
-            Debug.Assert (
-                dietInvariant result,
-                "The DIET invariant does not hold for the result.")
-            Debug.Assert (
-                intervalsDisjoint result,
-                "The intervals in the DIET are not disjoint.")
+//            Debug.Assert (
+//                dietInvariant result,
+//                "The DIET invariant does not hold for the result.")
+//            Debug.Assert (
+//                intervalsDisjoint result,
+//                "The intervals in the DIET are not disjoint.")
 
-            #if DEBUG
-            let resultCount = count result
-
-            Debug.Assert (
-                resultCount <= maxPossibleResultCount,
-                sprintf "The result set should not contain more than %i elements, but it contains %i elements."
-                    maxPossibleResultCount resultCount)
-            #endif
+//            #if DEBUG
+//            let resultCount = count result
+//
+//            Debug.Assert (
+//                resultCount <= maxPossibleResultCount,
+//                sprintf "The result set should not contain more than %i elements, but it contains %i elements."
+//                    maxPossibleResultCount resultCount)
+//            #endif
             result
 
     /// Recursive implementation function for computing the difference of two sets.
@@ -1602,29 +1602,29 @@ module internal CharDiet =
         | _, Empty ->
             input
         | _, _ ->
-            #if DEBUG
-            /// The maximum possible number of elements in the resulting set.
-            let maxPossibleResultCount = count input
-            #endif
+//            #if DEBUG
+//            /// The maximum possible number of elements in the resulting set.
+//            let maxPossibleResultCount = count input
+//            #endif
 
             let result, _, _ =
                 CharDiet.TryDeleteMin stream
                 ||> diffImpl input
             
-            Debug.Assert (
-                dietInvariant result,
-                "The DIET invariant does not hold for the result.")
-            Debug.Assert (
-                intervalsDisjoint result,
-                "The intervals in the DIET are not disjoint.")
+//            Debug.Assert (
+//                dietInvariant result,
+//                "The DIET invariant does not hold for the result.")
+//            Debug.Assert (
+//                intervalsDisjoint result,
+//                "The intervals in the DIET are not disjoint.")
 
-            #if DEBUG
-            let resultCount = count result
-            Debug.Assert (
-                resultCount <= maxPossibleResultCount,
-                sprintf "The result set should not contain more than %i elements, but it contains %i elements."
-                    maxPossibleResultCount resultCount)
-            #endif
+//            #if DEBUG
+//            let resultCount = count result
+//            Debug.Assert (
+//                resultCount <= maxPossibleResultCount,
+//                sprintf "The result set should not contain more than %i elements, but it contains %i elements."
+//                    maxPossibleResultCount resultCount)
+//            #endif
             result
 
     /// Applies the given accumulating function to all elements in a DIET.
