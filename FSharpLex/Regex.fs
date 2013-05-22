@@ -35,31 +35,75 @@ open FSharpLex.SpecializedCollections
 #nowarn "49"
 
 //
-type DerivativeClasses = {
+[<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
+type DerivativeClass =
     //
-    // OPTIMIZE : Use HashSet from ExtCore, once it implements intersect/union/difference.
-    Classes : Set<CharSet>;
-} with
+    | Any
     //
-    static member Universe =
-        { Classes = Set.empty; }
+    | Characters of CharSet
+
+//
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module DerivativeClass =
+    //
+    [<CompiledName("IsEmpty")>]
+    let isEmpty derivClass =
+        match derivClass with
+        | Any -> false
+        | Characters charSet ->
+            CharSet.isEmpty charSet
 
     //
-    static member UniversePlusEmptySet =
-        { Classes = Set.singleton CharSet.empty; }
+    [<CompiledName("MinElement")>]
+    let minElement derivClass =
+        match derivClass with
+        | Any ->
+            System.Char.MinValue
+        | Characters charSet ->
+            CharSet.minElement charSet
+
+//
+type DerivativeClasses = Set<DerivativeClass>
+
+//
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module DerivativeClasses =
+    //
+    [<CompiledName("Universe")>]
+    let universe =
+        Set.singleton Any
+
+    //
+    [<CompiledName("UniversePlusEmptySet")>]
+    let universePlusEmptySet =
+        Set.empty
+        |> Set.add Any
+        |> Set.add (Characters CharSet.empty)
+
+    //
+    [<CompiledName("OfCharSet")>]
+    let inline ofCharSet charSet =
+        Set.singleton (Characters charSet)
 
     /// Computes a conservative approximation of the intersection of two sets of
     /// derivative classes. This is needed when computing the set of derivative
     /// classes for a compound regular expression ('And', 'Or', and 'Concat').
-    static member Intersect (``C(r)``, ``C(s)``) =
-        { Classes =
-            (Set.empty, ``C(r)``.Classes, ``C(s)``.Classes)
-            |||> Set.Cartesian.fold (fun intersectionClasses ``S(r)`` ``S(s)`` ->
+    [<CompiledName("Intersect")>]
+    let intersect ``C(r)`` ``C(s)`` =
+        (Set.empty, ``C(r)``, ``C(s)``)
+        |||> Set.Cartesian.fold (fun intersectionClasses ``S(r)`` ``S(s)`` ->
+            match ``S(r)``, ``S(s)`` with
+            | Any, Any ->
+                Set.add Any intersectionClasses
+            | Characters cs, Any
+            | Any, Characters cs ->
+                Set.add (Characters cs) intersectionClasses
+            | Characters sr, Characters ss ->
                 // Compute the intersection of these two derivative classes
-                let ``S(r) /\ S(s)`` = CharSet.intersect ``S(r)`` ``S(s)``
+                let ``S(r) /\ S(s)`` = CharSet.intersect sr ss
                 
                 // Add the intersection to the set of derivative classes representing the intersection.
-                Set.add ``S(r) /\ S(s)`` intersectionClasses); }
+                Set.add (Characters ``S(r) /\ S(s)``) intersectionClasses)
 
 
 /// <summary>A regular expression.</summary>
@@ -427,11 +471,11 @@ type Regex with
         cont {
         match regex with
         | Epsilon ->
-            return DerivativeClasses.Universe
+            return DerivativeClasses.universe
         | Any ->
-            return DerivativeClasses.UniversePlusEmptySet
+            return DerivativeClasses.universePlusEmptySet
         | CharacterSet charSet ->
-            return { Classes = Set.singleton charSet; }
+            return DerivativeClasses.ofCharSet charSet
         | Negate r
         | Star r ->
             return! Regex.DerivativeClassesImpl r
@@ -441,12 +485,12 @@ type Regex with
             else
                 let! ``C(r)`` = Regex.DerivativeClassesImpl r
                 let! ``C(s)`` = Regex.DerivativeClassesImpl s
-                return DerivativeClasses.Intersect (``C(r)``, ``C(s)``)
+                return DerivativeClasses.intersect ``C(r)`` ``C(s)``
         | Or (r, s)
         | And (r, s) ->
             let! ``C(r)`` = Regex.DerivativeClassesImpl r
             let! ``C(s)`` = Regex.DerivativeClassesImpl s
-            return DerivativeClasses.Intersect (``C(r)``, ``C(s)``)
+            return DerivativeClasses.intersect ``C(r)`` ``C(s)``
         }
 
     /// Computes an approximate set of derivative classes for the specified Regex.
@@ -456,11 +500,11 @@ type Regex with
         // the continuations for some very common cases.
         match regex with
         | Epsilon ->
-            DerivativeClasses.Universe
+            DerivativeClasses.universe
         | Any ->
-            DerivativeClasses.UniversePlusEmptySet
+            DerivativeClasses.universePlusEmptySet
         | CharacterSet charSet ->
-            { Classes = Set.singleton charSet; }
+            DerivativeClasses.ofCharSet charSet
         | _ ->
             Regex.DerivativeClassesImpl regex id
 
@@ -528,6 +572,5 @@ module RegularVector =
         // By Definition 4.3, the approximate set of derivative classes
         // of a regular vector is the intersection of the approximate
         // sets of derivative classes of it's elements.
-        |> Array.reduce (
-            FuncConvert.FuncFromTupled DerivativeClasses.Intersect)
+        |> Array.reduce DerivativeClasses.intersect
 

@@ -111,7 +111,7 @@ module private CompilationState =
 //
 let private transitions regularVector derivativeClass (transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState) =
     // Ignore empty derivative classes.
-    if CharSet.isEmpty derivativeClass then
+    if DerivativeClass.isEmpty derivativeClass then
         transitionsFromCurrentDfaState,
         unvisitedTransitionTargets,
         compilationState
@@ -120,7 +120,7 @@ let private transitions regularVector derivativeClass (transitionsFromCurrentDfa
         let regularVector', compilationState =
             // Choose an element from the derivative class; any element
             // will do (which is the point behind the derivative classes).
-            let derivativeClassElement = CharSet.minElement derivativeClass
+            let derivativeClassElement = DerivativeClass.minElement derivativeClass
 
             // Compute the derivative of the regular vector
             let regularVector', derivativeCache =
@@ -199,7 +199,7 @@ let rec private createDfa pending compilationState =
             // add the DFA state to the compilation state (if necessary), then add an edge
             // to the transition graph from this DFA state to the target DFA state.
             let transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState =
-                ((HashMap.empty, TagSet.empty, compilationState), derivativeClasses.Classes)
+                ((HashMap.empty, TagSet.empty, compilationState), derivativeClasses)
                 ||> Set.fold (fun state derivativeClass ->
                     transitions regularVector derivativeClass state)
 
@@ -213,7 +213,14 @@ let rec private createDfa pending compilationState =
                         // Add the unvisited transition targets to the transition graph.
                         (compilationState.Transitions, transitionsFromCurrentDfaState)
                         ||> HashMap.fold (fun transitions derivativeClass target ->
-                            LexerDfaGraph.addEdges currentState target derivativeClass transitions); }
+                            let edgeSet =
+                                match derivativeClass with
+                                | DerivativeClass.Any ->
+                                    CharSet.ofRange System.Char.MinValue System.Char.MaxValue
+                                | Characters charSet ->
+                                    charSet
+
+                            LexerDfaGraph.addEdges currentState target edgeSet transitions); }
 
             // Continue processing recursively.
             createDfa pending compilationState
@@ -710,7 +717,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 |> Choice1Of2
         
         | Pattern.Any ->
-            return Choice1Of2 Regex.Any
+            return Choice1Of2 Regex.Regex.Any
 
         | Pattern.Character c ->
             // Make sure the character is an ASCII character unless the 'Unicode' option is set.
