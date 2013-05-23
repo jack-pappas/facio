@@ -390,9 +390,9 @@ type Regex with
             let! r' = Regex.DerivativeImpl wrtSymbol r
             return Regex.negate r'
 
-        | Star r as ``r*`` ->
+        | Star r ->
             let! r' = Regex.DerivativeImpl wrtSymbol r
-            return Regex.concat r' ``r*``
+            return Regex.concat r' regex
 
         | Concat (r, s) ->
             let ``nu(r)`` = if Regex.IsNullable r then Regex.epsilon else Regex.empty
@@ -486,8 +486,8 @@ module RegularVector =
 
     /// Compute the derivative of a regular vector with respect to the given symbol.
     /// A HashMap is used to memoize the computation for increased performance.
-    let derivative symbol (regVec : RegularVector)
-        (derivativeCache : HashMap<Regex * char, Regex>) : RegularVector * HashMap<Regex * char, Regex> =
+    let derivative symbol (regVec : RegularVector) (derivativeCache : HashMap<Regex * char, Regex>)
+        : RegularVector * HashMap<Regex * char, Regex> =
         (regVec, derivativeCache)
         ||> State.Array.map (fun regex derivativeCache ->
             let cacheKey = regex, symbol
@@ -531,12 +531,17 @@ module RegularVector =
         if Array.isEmpty regVec then
             invalidArg "regVec" "The regular vector does not contain any regular expressions."
 
-        regVec
         // Compute the approximate set of derivative classes
         // for each regular expression in the vector.
-        |> Array.map Regex.DerivativeClasses
         // By Definition 4.3, the approximate set of derivative classes
         // of a regular vector is the intersection of the approximate
         // sets of derivative classes of it's elements.
-        |> Array.reduce DerivativeClasses.intersect
-
+        // OPTIMIZE : Use State.Array.mapReduce so we can cache the results of the
+        // derivative-class intersections for better performance.
+        regVec
+        |> Array.mapReduce
+            { new IMapReduction<_,_> with
+                member __.Map regex =
+                    Regex.DerivativeClasses regex
+                member __.Reduce dc1 dc2 =
+                    DerivativeClasses.intersect dc1 dc2 }
