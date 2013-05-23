@@ -1999,14 +1999,17 @@ type CharSet private (tree : CharDiet) as this =
         //assert (CharDiet.intervalsDisjoint charSet1.Tree)
         //assert (CharDiet.intervalsDisjoint charSet2.Tree)
 
-        // OPTIMIZATION : If the result is the same as either input set's tree,
-        // return that set instead of creating a new one.
-        let result = CharDiet.difference charSet1.Tree charSet2.Tree
-        //assert (CharDiet.dietInvariant result)
-        //assert (CharDiet.intervalsDisjoint result)
-        if charSet1.Tree === result then charSet1
-        elif charSet2.Tree === result then charSet2
-        else CharSet (result)
+        // If the input sets have the same underlying tree, we can return immediately.
+        if charSet1.Tree === charSet2.Tree then CharSet.Empty
+        else
+            // OPTIMIZATION : If the result is the same as either input set's tree,
+            // return that set instead of creating a new one.
+            let result = CharDiet.difference charSet1.Tree charSet2.Tree
+            //assert (CharDiet.dietInvariant result)
+            //assert (CharDiet.intervalsDisjoint result)
+            if charSet1.Tree === result then charSet1
+            elif charSet2.Tree === result then charSet2
+            else CharSet (result)
 
     //
     static member Intersect (charSet1 : CharSet, charSet2 : CharSet) : CharSet =
@@ -2018,14 +2021,17 @@ type CharSet private (tree : CharDiet) as this =
         //assert (CharDiet.intervalsDisjoint charSet1.Tree)
         //assert (CharDiet.intervalsDisjoint charSet2.Tree)
 
-        // OPTIMIZATION : If the result is the same as either input set's tree,
-        // return that set instead of creating a new one.
-        let result = CharDiet.intersect charSet1.Tree charSet2.Tree
-        //assert (CharDiet.dietInvariant result)
-        //assert (CharDiet.intervalsDisjoint result)
-        if charSet1.Tree === result then charSet1
-        elif charSet2.Tree === result then charSet2
-        else CharSet (result)
+        // If the input sets have the same underlying tree, we can return immediately.
+        if charSet1.Tree === charSet2.Tree then charSet1
+        else
+            // OPTIMIZATION : If the result is the same as either input set's tree,
+            // return that set instead of creating a new one.
+            let result = CharDiet.intersect charSet1.Tree charSet2.Tree
+            //assert (CharDiet.dietInvariant result)
+            //assert (CharDiet.intervalsDisjoint result)
+            if charSet1.Tree === result then charSet1
+            elif charSet2.Tree === result then charSet2
+            else CharSet (result)
 
     //
     static member Union (charSet1 : CharSet, charSet2 : CharSet) : CharSet =
@@ -2037,14 +2043,17 @@ type CharSet private (tree : CharDiet) as this =
         //assert (CharDiet.intervalsDisjoint charSet1.Tree)
         //assert (CharDiet.intervalsDisjoint charSet2.Tree)
 
-        // OPTIMIZATION : If the result is the same as either input set's tree,
-        // return that set instead of creating a new one.
-        let result = CharDiet.union charSet1.Tree charSet2.Tree
-        //assert (CharDiet.dietInvariant result)
-        //assert (CharDiet.intervalsDisjoint result)
-        if charSet1.Tree === result then charSet1
-        elif charSet2.Tree === result then charSet2
-        else CharSet (result)
+        // If the input sets have the same underlying tree, we can return immediately.
+        if charSet1.Tree === charSet2.Tree then charSet1
+        else
+            // OPTIMIZATION : If the result is the same as either input set's tree,
+            // return that set instead of creating a new one.
+            let result = CharDiet.union charSet1.Tree charSet2.Tree
+            //assert (CharDiet.dietInvariant result)
+            //assert (CharDiet.intervalsDisjoint result)
+            if charSet1.Tree === result then charSet1
+            elif charSet2.Tree === result then charSet2
+            else CharSet (result)
 
     //
     static member Exists (predicate, charSet : CharSet) : bool =
