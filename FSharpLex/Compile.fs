@@ -318,7 +318,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
 
             match rResult, sResult with
             | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                return Choice2Of2 (rErrors @ sErrors)
+                return Choice2Of2 (rErrors ++ sErrors)
             | (Choice2Of2 _ as err), Choice1Of2 _
             | Choice1Of2 _, (Choice2Of2 _ as err) ->
                 return err
@@ -333,7 +333,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
 
             match rResult, sResult with
             | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                return Choice2Of2 (rErrors @ sErrors)
+                return Choice2Of2 (rErrors ++ sErrors)
             | (Choice2Of2 _ as err), Choice1Of2 _
             | Choice1Of2 _, (Choice2Of2 _ as err) ->
                 return err
@@ -348,7 +348,7 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
 
             match rResult, sResult with
             | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                return Choice2Of2 (rErrors @ sErrors)
+                return Choice2Of2 (rErrors ++ sErrors)
             | (Choice2Of2 _ as err), Choice1Of2 _
             | Choice1Of2 _, (Choice2Of2 _ as err) ->
                 return err
@@ -379,7 +379,8 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
             match atLeast, atMost with
             | None, None ->
                 return
-                    ["Invalid number of repetitions. Either the minimum or maximum (or both) number of repetitions must be specified."]
+                    "Invalid number of repetitions. Either the minimum or maximum (or both) number of repetitions must be specified."
+                    |> LazyList.singleton
                     |> Choice2Of2
 
             | None, Some atMost ->
@@ -402,7 +403,8 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
             | Some atLeast, Some atMost
                 when atLeast > atMost ->
                 return
-                    ["Invalid number of repetitions. The lower value of the range is greater than the upper value of the range."]
+                    "Invalid number of repetitions. The lower value of the range is greater than the upper value of the range."
+                    |> LazyList.singleton
                     |> Choice2Of2
 
             | Some atLeast, Some atMost ->
@@ -431,7 +433,8 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
             // however, this separate check allows us to provide a more specific error message.
             if macroId = nestedMacroId then
                 return
-                    ["Recursive macro definitions are not allowed."]
+                    "Recursive macro definitions are not allowed."
+                    |> LazyList.singleton
                     |> Choice2Of2
 
             else
@@ -444,7 +447,10 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                         // of this macro reference.
                         return Choice1Of2 Regex.empty
                     else
-                        return Choice2Of2 [ sprintf "The macro '%s' is not defined." nestedMacroId ]
+                        return
+                            sprintf "The macro '%s' is not defined." nestedMacroId
+                            |> LazyList.singleton
+                            |> Choice2Of2
 
                 | Some nestedMacro ->
                     // Return the pattern for the nested macro so it'll be "inlined" into this pattern.
@@ -464,7 +470,8 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                     |> Choice1Of2
             else
                 return
-                    ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                    "Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."
+                    |> LazyList.singleton
                     |> Choice2Of2
 
         | Pattern.CharacterSet charSet ->
@@ -475,7 +482,8 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                     |> Choice1Of2
             else
                 return
-                    ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                    "Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."
+                    |> LazyList.singleton
                     |> Choice2Of2
 
         | Pattern.UnicodeCategory abbrev ->
@@ -483,7 +491,8 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                 match UnicodeCharSet.ofAbbreviation abbrev with
                 | None ->
                     return
-                        [ sprintf "Unknown or invalid Unicode category specified. (Category = %s)" abbrev ]
+                        sprintf "Unknown or invalid Unicode category specified. (Category = %s)" abbrev
+                        |> LazyList.singleton
                         |> Choice2Of2
                 | Some categoryCharSet ->
                     return
@@ -491,14 +500,16 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                         |> Choice1Of2
             else
                 return
-                    ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
+                    "Unicode category patterns may not be used unless the 'Unicode' compiler option is set."
+                    |> LazyList.singleton
                     |> Choice2Of2
 
         (* Wildcard pattern *)
         | Pattern.Any ->
             // Macros are not allowed to use the wildcard pattern.
             return
-                ["The wildcard pattern cannot be used within macro definitions."]
+                "The wildcard pattern cannot be used within macro definitions."
+                |> LazyList.singleton
                 |> Choice2Of2
         }
 
@@ -515,10 +526,9 @@ let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition
                 match duplicateNameError with
                 | None -> errors
                 | Some duplicateNameError ->
-                    duplicateNameError :: errors
+                    LazyList.cons duplicateNameError errors
 
-            List.rev errors
-            |> List.toArray
+            LazyList.toArray errors
             |> Choice2Of2
 
         | Choice1Of2 processedPattern ->
@@ -599,7 +609,8 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                     |> Choice1Of2
             else
                 return
-                    ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                    "Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."
+                    |> LazyList.singleton
                     |> Choice2Of2
 
         | Pattern.Macro macroId ->
@@ -612,7 +623,10 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                     // take the place of this macro reference.
                     return Choice1Of2 Regex.empty
                 else
-                    return Choice2Of2 [ sprintf "The macro '%s' is not defined." macroId ]
+                    return
+                        sprintf "The macro '%s' is not defined." macroId
+                        |> LazyList.singleton
+                        |> Choice2Of2
             | Some nestedMacro ->
                 // Return the pattern for the nested macro so it'll be "inlined" into this pattern.
                 return Choice1Of2 nestedMacro
@@ -623,7 +637,8 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 match UnicodeCharSet.ofAbbreviation abbrev with
                 | None ->
                     return
-                        [ sprintf "Unknown or invalid Unicode category specified. (Category = %s)" abbrev ]
+                        sprintf "Unknown or invalid Unicode category specified. (Category = %s)" abbrev
+                        |> LazyList.singleton
                         |> Choice2Of2
 
                 | Some charSet ->
@@ -632,7 +647,8 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                         |> Choice1Of2
             else
                 return
-                    ["Unicode category patterns may not be used unless the 'Unicode' compiler option is set."]
+                    "Unicode category patterns may not be used unless the 'Unicode' compiler option is set."
+                    |> LazyList.singleton
                     |> Choice2Of2
 
         | Pattern.Negate r ->
@@ -663,7 +679,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
 
             match rResult, sResult with
             | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                return Choice2Of2 (rErrors @ sErrors)
+                return Choice2Of2 (rErrors ++ sErrors)
             | (Choice2Of2 _ as err), Choice1Of2 _
             | Choice1Of2 _, (Choice2Of2 _ as err) ->
                 return err
@@ -678,7 +694,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
 
             match rResult, sResult with
             | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                return Choice2Of2 (rErrors @ sErrors)
+                return Choice2Of2 (rErrors ++ sErrors)
             | (Choice2Of2 _ as err), Choice1Of2 _
             | Choice1Of2 _, (Choice2Of2 _ as err) ->
                 return err
@@ -693,7 +709,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
 
             match rResult, sResult with
             | Choice2Of2 rErrors, Choice2Of2 sErrors ->
-                return Choice2Of2 (rErrors @ sErrors)
+                return Choice2Of2 (rErrors ++ sErrors)
             | (Choice2Of2 _ as err), Choice1Of2 _
             | Choice1Of2 _, (Choice2Of2 _ as err) ->
                 return err
@@ -720,7 +736,8 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                     |> Choice1Of2
             else
                 return
-                    ["Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."]
+                    "Unicode characters may not be used in patterns unless the 'Unicode' compiler option is set."
+                    |> LazyList.singleton
                     |> Choice2Of2
 
         | Pattern.OneOrMore r ->
@@ -743,7 +760,8 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
             match atLeast, atMost with
             | None, None ->
                 return
-                    ["Invalid number of repetitions. Either the minimum or maximum (or both) number of repetitions must be specified."]
+                    "Invalid number of repetitions. Either the minimum or maximum (or both) number of repetitions must be specified."
+                    |> LazyList.singleton
                     |> Choice2Of2
 
             | None, Some atMost ->
@@ -766,7 +784,8 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
             | Some atLeast, Some atMost
                 when atLeast > atMost ->
                 return
-                    ["Invalid number of repetitions. The lower value of the range is greater than the upper value of the range."]
+                    "Invalid number of repetitions. The lower value of the range is greater than the upper value of the range."
+                    |> LazyList.singleton
                     |> Choice2Of2
 
             | Some atLeast, Some atMost ->
@@ -780,7 +799,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
     // Call the function which traverses the pattern to validate/preprocess it.
     validateAndSimplify pattern <| function
         | Choice2Of2 errors ->
-            List.revIntoArray errors
+            LazyList.toArray errors
             |> Choice2Of2
         | Choice1Of2 processedPattern ->
             Choice1Of2 processedPattern
