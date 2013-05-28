@@ -27,7 +27,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <WarningsAsErrors>25</WarningsAsErrors>
-    <StartArguments>--unicode -o "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\TestCases\fslex_lexer.fs" "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\TestCases\fslex.fsl"</StartArguments>
+    <StartArguments>--unicode -o "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\TestCases\fsharp_lexer.fs" "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\TestCases\fsharp.fsl"</StartArguments>
     <OtherFlags>--stackReserveSize:16777216 --warnon:1182</OtherFlags>
     <StartWorkingDirectory>
     </StartWorkingDirectory>

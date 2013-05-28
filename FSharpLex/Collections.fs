@@ -67,6 +67,9 @@ type internal AvlTree<'T when 'T : comparison> =
 
     //
     static member private CompareStacks (comparer : IComparer<'T>, l1 : AvlTree<'T> list, l2 : AvlTree<'T> list) : int =
+        // OPTIMIZATION : If the lists are identical, there's no need to compare them.
+        if l1 === l2 then 0 else
+
         match l1, l2 with
         | [], [] -> 0
         | [], _ -> -1
@@ -1747,6 +1750,7 @@ module internal CharDiet =
 /// Character set implementation based on a Discrete Interval Encoding Tree.
 /// This is faster and more efficient than the built-in F# Set<'T>,
 /// especially for dense sets.
+[<Sealed>]
 [<DebuggerDisplay("Count = {Count}, Intervals = {IntervalCount}")>]
 type CharSet private (tree : CharDiet) as this =
     //

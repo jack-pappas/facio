@@ -49,6 +49,8 @@ module DerivativeClass =
         CharSet.difference universe derivClass
 
 //
+// OPTIMIZE : Change this to HashSet<CharSet> once ExtCore implements the custom Set functions
+// for HashSet too (e.g., Set.Cartesian.map).
 type DerivativeClasses = Set<CharSet>
 
 //
@@ -485,7 +487,7 @@ module RegularVector =
     open LanguagePrimitives
 
     /// Compute the derivative of a regular vector with respect to the given symbol.
-    /// A HashMap is used to memoize the computation for increased performance.
+    /// The computation is memoized for increased performance.
     let derivative symbol (regVec : RegularVector) (derivativeCache : HashMap<Regex * char, Regex>)
         : RegularVector * HashMap<Regex * char, Regex> =
         (regVec, derivativeCache)
@@ -526,22 +528,53 @@ module RegularVector =
         Array.forall Regex.isEmpty regVec
 
     /// Compute the approximate set of derivative classes of a regular vector.
-    let derivativeClasses (regVec : RegularVector) =
+    /// The computation is memoized for increased performance.
+    let derivativeClasses (regVec : RegularVector) (intersectionCache : HashMap<DerivativeClasses * DerivativeClasses, DerivativeClasses>)
+        : DerivativeClasses * HashMap<DerivativeClasses * DerivativeClasses, DerivativeClasses> =
         // Preconditions
         if Array.isEmpty regVec then
             invalidArg "regVec" "The regular vector does not contain any regular expressions."
 
-        // Compute the approximate set of derivative classes
-        // for each regular expression in the vector.
-        // By Definition 4.3, the approximate set of derivative classes
-        // of a regular vector is the intersection of the approximate
-        // sets of derivative classes of it's elements.
-        // OPTIMIZE : Use State.Array.mapReduce so we can cache the results of the
-        // derivative-class intersections for better performance.
-        regVec
-        |> Array.mapReduce
-            { new IMapReduction<_,_> with
-                member __.Map regex =
-                    Regex.DerivativeClasses regex
-                member __.Reduce dc1 dc2 =
-                    DerivativeClasses.intersect dc1 dc2 }
+        // DEBUG : For debugging purposes ONLY. Remove ASAP.
+        // This will help us determine if using an LruCache will be more efficient than plain HashMap
+        // (since an LruCache is limited to a certain size, the lookups should be faster even if it
+        // means we have to re-compute the intersections on occasion).
+        Debug.Write "Cached Intersections: "
+        Debug.WriteLine (HashMap.count intersectionCache)
+
+        (* Compute the approximate set of derivative classes
+           for each regular expression in the vector.
+           By Definition 4.3, the approximate set of derivative classes
+           of a regular vector is the intersection of the approximate
+           sets of derivative classes of it's elements. *)
+
+        // OPTIMIZE : Use State.Array.mapReduce from ExtCore so we can still cache the
+        // results of the derivative-class intersections, but while describing the computation
+        // in a parallelizable form.
+        let regVecDerivativeClasses = Array.map Regex.DerivativeClasses regVec
+
+        let zerothElement = regVecDerivativeClasses.[0]
+        let regVecLen = Array.length regVec
+        if regVecLen = 1 then
+            zerothElement, intersectionCache
+        else
+            let rest = ArrayView.create regVecDerivativeClasses 1 (regVecLen - 1)
+            ((zerothElement, intersectionCache), rest)
+            ||> ArrayView.fold (fun (intersection, intersectionCache) derivClass ->
+                let key =
+                    if intersection < derivClass then intersection, derivClass
+                    else derivClass, intersection
+
+                // Try to find the intersection in the cache; if it's not found,
+                // compute it then add it to the cache for later reuse.
+                match HashMap.tryFind key intersectionCache with
+                | Some intersection ->
+                    intersection, intersectionCache
+                | None ->
+                    // Compute the intersection of this derivative class and the intersection
+                    // of the previous derivative classes.
+                    let intersection = DerivativeClasses.intersect intersection derivClass
+
+                    // Add the result to the cache, then return it.
+                    let intersectionCache = HashMap.add key intersection intersectionCache
+                    intersection, intersectionCache)

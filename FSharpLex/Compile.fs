@@ -52,8 +52,18 @@ type private CompilationState = {
     /// Maps a DFA state to the regular vector it represents.
     DfaStateToRegularVector : TagMap<DfaState, RegularVector>;
 
+    (* Caches for memoizing the output of functions.
+       These *hugely* improve compilation performance. *)
+
+    // OPTIMIZE :   Change these fields to use LruCache from ExtCore to
+    //              limit the amount of memory they can use.
+
     /// Caches the derivative of a regular expression with respect to a symbol.
     RegexDerivativeCache : HashMap<Regex * char, Regex>;
+    /// Caches the intersection of two derivative classes.
+    // NOTE : Since the intersection operation is commutative, the derivative classes
+    // are sorted when creating the cache key to increase the cache hit ratio.
+    DerivativeClassIntersectionCache : HashMap<DerivativeClasses * DerivativeClasses, DerivativeClasses>
 }
 
 /// Functional operators related to the CompilationState record.
@@ -66,7 +76,8 @@ module private CompilationState =
         FinalStates = Set.empty;
         RegularVectorToDfaState = HashMap.empty;
         DfaStateToRegularVector = TagMap.empty;
-        RegexDerivativeCache = HashMap.empty; }
+        RegexDerivativeCache = HashMap.empty;
+        DerivativeClassIntersectionCache = HashMap.empty; }
 
     //
     let inline tryGetDfaState regVec (compilationState : CompilationState) =
@@ -193,7 +204,11 @@ let rec private createDfa pending compilationState =
         else
             /// The approximate set of derivative classes of the regular vector,
             /// representing transitions out of the DFA state representing it.
-            let derivativeClasses = RegularVector.derivativeClasses regularVector
+            let derivativeClasses, compilationState =
+                let derivativeClasses, intersectionCache =
+                    RegularVector.derivativeClasses regularVector compilationState.DerivativeClassIntersectionCache
+                
+                derivativeClasses, { compilationState with DerivativeClassIntersectionCache = intersectionCache; }
 
             // For each DFA state (regular vector) targeted by a transition (derivative class),
             // add the DFA state to the compilation state (if necessary), then add an edge
