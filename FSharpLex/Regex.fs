@@ -49,7 +49,7 @@ module DerivativeClass =
         CharSet.difference universe derivClass
 
 //
-type DerivativeClasses = HashSet<CharSet>
+type DerivativeClasses = Set<CharSet>
 
 //
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -57,28 +57,21 @@ module DerivativeClasses =
     //
     [<CompiledName("Universe")>]
     let universe : DerivativeClasses =
-        HashSet.singleton DerivativeClass.universe
+        Set.singleton DerivativeClass.universe
 
     //
     [<CompiledName("OfCharSet")>]
     let ofCharSet charSet : DerivativeClasses =
-        HashSet.empty
-        |> HashSet.add charSet
-        |> HashSet.add (DerivativeClass.complement charSet)
+        Set.empty
+        |> Set.add charSet
+        |> Set.add (DerivativeClass.complement charSet)
 
     /// Computes a conservative approximation of the intersection of two sets of
     /// derivative classes. This is needed when computing the set of derivative
     /// classes for a compound regular expression ('And', 'Or', and 'Concat').
     [<CompiledName("Intersect")>]
     let intersect ``C(r)`` ``C(s)`` : DerivativeClasses =
-        // OPTIMIZE : Use the cartesian map function once ExtCore implements it for HashSet.
-        //HashSet.Cartesian.map CharSet.intersect ``C(r)`` ``C(s)``
-        (HashSet.empty, ``C(r)``)
-        ||> HashSet.fold (fun intersection s_r ->
-            (intersection, ``C(s)``)
-            ||> HashSet.fold (fun intersection s_s ->
-                let combined = CharSet.intersect s_r s_s
-                HashSet.add combined intersection))
+        Set.Cartesian.map CharSet.intersect ``C(r)`` ``C(s)``
 
 
 /// <summary>A regular expression.</summary>
@@ -539,6 +532,13 @@ module RegularVector =
         // Preconditions
         if Array.isEmpty regVec then
             invalidArg "regVec" "The regular vector does not contain any regular expressions."
+
+        // DEBUG : For debugging purposes ONLY. Remove ASAP.
+        // This will help us determine if using an LruCache will be more efficient than plain HashMap
+        // (since an LruCache is limited to a certain size, the lookups should be faster even if it
+        // means we have to re-compute the intersections on occasion).
+        Debug.Write "Cached Intersections: "
+        Debug.WriteLine (HashMap.count intersectionCache)
 
         (* Compute the approximate set of derivative classes
            for each regular expression in the vector.

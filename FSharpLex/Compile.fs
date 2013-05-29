@@ -214,7 +214,7 @@ let rec private createDfa pending compilationState =
             // to the transition graph from this DFA state to the target DFA state.
             let transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState =
                 ((HashMap.empty, TagSet.empty, compilationState), derivativeClasses)
-                ||> HashSet.fold (fun state derivativeClass ->
+                ||> Set.fold (fun state derivativeClass ->
                     transitions regularVector derivativeClass state)
 
             // Add any newly-created, unvisited states to the
