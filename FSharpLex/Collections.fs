@@ -2174,15 +2174,6 @@ type CharSet private (tree : CharDiet) as this =
         if charSet.Tree === filteredTree then charSet
         else CharSet (filteredTree)
 
-    //
-    static member Partition (predicate : char -> bool, charSet : CharSet) : CharSet * CharSet =
-        // Preconditions
-        checkNonNull "charSet" charSet
-        //assert (CharDiet.dietInvariant charSet.Tree)
-        //assert (CharDiet.intervalsDisjoint charSet.Tree)
-
-        notImpl "CharSet.Partition"
-
     interface System.IComparable with
         member this.CompareTo other =
             match other with
@@ -2363,10 +2354,4 @@ module CharSet =
     [<CompiledName("Union")>]
     let inline union set1 set2 : CharSet =
         CharSet.Union (set1, set2)
-
-    /// Splits the set into two sets containing the elements for which
-    /// the given predicate returns true and false respectively.
-    [<CompiledName("Partition")>]
-    let inline partition predicate charSet : CharSet * CharSet =
-        CharSet.Partition (predicate, charSet)
 

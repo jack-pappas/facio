@@ -540,13 +540,6 @@ module RegularVector =
         if Array.isEmpty regVec then
             invalidArg "regVec" "The regular vector does not contain any regular expressions."
 
-        // DEBUG : For debugging purposes ONLY. Remove ASAP.
-        // This will help us determine if using an LruCache will be more efficient than plain HashMap
-        // (since an LruCache is limited to a certain size, the lookups should be faster even if it
-        // means we have to re-compute the intersections on occasion).
-        Debug.Write "Cached Intersections: "
-        Debug.WriteLine (HashMap.count intersectionCache)
-
         (* Compute the approximate set of derivative classes
            for each regular expression in the vector.
            By Definition 4.3, the approximate set of derivative classes
