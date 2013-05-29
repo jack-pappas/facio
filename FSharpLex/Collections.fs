@@ -1033,7 +1033,7 @@ module internal CharDiet =
 
     //
     // NOTE : This function is only called by 'addRange'.
-    let rec internal (*private*) find_del_left p (tree : CharDiet) : char * CharDiet =
+    let rec private find_del_left p (tree : CharDiet) : char * CharDiet =
         // Preconditions
         //assert (dietInvariant tree)
         //assert (intervalsDisjoint tree)
@@ -1052,7 +1052,7 @@ module internal CharDiet =
 
     //
     // NOTE : This function is only called by 'addRange'.
-    let rec internal (*private*) find_del_right p (tree : CharDiet) : char * CharDiet =
+    let rec private find_del_right p (tree : CharDiet) : char * CharDiet =
         // Preconditions
         //assert (dietInvariant tree)
         //assert (intervalsDisjoint tree)
@@ -1298,7 +1298,7 @@ module internal CharDiet =
 
     /// Determines if a value is greater than or equal to a given
     /// limit value if one is specified.
-    let greater_limit limit value =
+    let private greater_limit limit value =
         match limit with
         | None -> false
         | Some limit ->
@@ -2113,10 +2113,9 @@ type CharSet private (tree : CharDiet) as this =
            *severely* affected. *)
         CharSet.FoldIntervals (
             (fun hashCode (lo, hi) ->
-                // Compute a value for this interval using the Cantor pairing function.
-                let intervalHash =
-                    let k1k2 = int lo + int hi
-                    ((k1k2 * (k1k2 + 1)) / 2) + (int hi)
+                // Compute a value for this interval by simply packing the characters
+                // into a 32-bit value as [hi, lo].
+                let intervalHash = int (((uint32 hi) <<< 16) &&& uint32 lo)
 
                 // Combine the interval hash with the current hash code to produce a new hash code.
                 (hashCode <<< 1) + intervalHash + 631),

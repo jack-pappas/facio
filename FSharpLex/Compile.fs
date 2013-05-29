@@ -129,12 +129,11 @@ let private transitions regularVector derivativeClass (transitionsFromCurrentDfa
     else
         // The derivative of the regular vector w.r.t. the chosen element.
         let regularVector', compilationState =
-            // Choose an element from the derivative class; any element
-            // will do (which is the point behind the derivative classes).
-            let derivativeClassElement = CharSet.minElement derivativeClass
-
             // Compute the derivative of the regular vector
             let regularVector', derivativeCache =
+                // Choose an element from the derivative class; any element
+                // will do (which is the point behind the derivative classes).
+                let derivativeClassElement = CharSet.minElement derivativeClass
                 RegularVector.derivative derivativeClassElement regularVector compilationState.RegexDerivativeCache
             
             // Return the derivative vector and the updated compilation state.
