@@ -49,9 +49,7 @@ module DerivativeClass =
         CharSet.difference universe derivClass
 
 //
-// OPTIMIZE : Change this to HashSet<CharSet> once ExtCore implements the custom Set functions
-// for HashSet too (e.g., Set.Cartesian.map).
-type DerivativeClasses = Set<CharSet>
+type DerivativeClasses = HashSet<CharSet>
 
 //
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -59,21 +57,28 @@ module DerivativeClasses =
     //
     [<CompiledName("Universe")>]
     let universe : DerivativeClasses =
-        Set.singleton DerivativeClass.universe
+        HashSet.singleton DerivativeClass.universe
 
     //
     [<CompiledName("OfCharSet")>]
     let ofCharSet charSet : DerivativeClasses =
-        Set.empty
-        |> Set.add charSet
-        |> Set.add (DerivativeClass.complement charSet)
+        HashSet.empty
+        |> HashSet.add charSet
+        |> HashSet.add (DerivativeClass.complement charSet)
 
     /// Computes a conservative approximation of the intersection of two sets of
     /// derivative classes. This is needed when computing the set of derivative
     /// classes for a compound regular expression ('And', 'Or', and 'Concat').
     [<CompiledName("Intersect")>]
     let intersect ``C(r)`` ``C(s)`` : DerivativeClasses =
-        Set.Cartesian.map CharSet.intersect ``C(r)`` ``C(s)``
+        // OPTIMIZE : Use the cartesian map function once ExtCore implements it for HashSet.
+        //HashSet.Cartesian.map CharSet.intersect ``C(r)`` ``C(s)``
+        (HashSet.empty, ``C(r)``)
+        ||> HashSet.fold (fun intersection s_r ->
+            (intersection, ``C(s)``)
+            ||> HashSet.fold (fun intersection s_s ->
+                let combined = CharSet.intersect s_r s_s
+                HashSet.add combined intersection))
 
 
 /// <summary>A regular expression.</summary>
