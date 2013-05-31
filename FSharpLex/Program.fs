@@ -52,7 +52,7 @@ module internal AssemblyInfo =
 module Program =
     open System.ComponentModel.Composition
     open System.ComponentModel.Composition.Hosting
-    open ExtCore
+    open ExtCore.Args
     open FSharpLex.Plugin
 
     (* TEMP : This code is taken from the F# Powerpack, and is licensed under the Apache 2.0 license *)

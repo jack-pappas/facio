@@ -53,6 +53,7 @@ module Program =
     open System.ComponentModel.Composition
     open System.ComponentModel.Composition.Hosting
     open NLog
+    open ExtCore.Args
     open FSharpYacc.Plugin
 
     (* TEMP : This code is taken from the F# Powerpack, and is licensed under the Apache 2.0 license *)
