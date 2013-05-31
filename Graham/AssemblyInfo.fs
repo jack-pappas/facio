@@ -41,6 +41,7 @@ module private AssemblyInfo =
     (* Dependency hints for Ngen *)
     [<assembly: DependencyAttribute("FSharp.Core", LoadHint.Always)>]
     [<assembly: DependencyAttribute("System", LoadHint.Always)>]
+    [<assembly: DependencyAttribute("ExtCore", LoadHint.Always)>]
 
     // Appease the F# compiler
     do ()
