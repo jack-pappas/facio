@@ -90,5 +90,6 @@ _NuGetBuild/*
 
 # Ignore any output files from the test cases.
 TestCases/*.*
+TestCases/*/*.*
 !TestCases/*.fsl
 !TestCases/*.fsy
