@@ -28,45 +28,50 @@ open FsUnit
 [<AutoOpen>]
 module private TestCaseHelpers =
     //
-    let private startOverlap (str1 : string) (str2 : string) : string =
-        notImpl "TestCaseHelpers.startOverlap"
+    let rec private findRepoRoot (path : string) =
+        // Get the directory containing the path.
+        let dirPath = Path.GetDirectoryName path
 
+        // Does this directory contain a directory called ".git"?
+        if Directory.Exists <| Path.Combine (dirPath, ".git") then
+            dirPath
+        elif Path.GetPathRoot path = dirPath then
+            // We've reach the root of a drive, so raise an exception.
+            failwith "Unable to locate the root folder of the repository."
+        else
+            // Continue recursing upwards
+            findRepoRoot dirPath
+        
     /// The absolute path to the fsharpyacc executable to test.
     let toolPath =
-        notImpl "TestCaseHelpers.toolPath"
-        ""
+        (System.Uri (typeof<FSharpYacc.FsyaccBackendOptions>.Assembly.CodeBase)).LocalPath
+
+    type private Dummy () = class end
 
     //
     let repositoryRoot =
-        notImpl "TestCaseHelpers.repositoryRoot"
-        ""
+        (System.Uri (typeof<Dummy>.Assembly.CodeBase)).LocalPath
+        |> findRepoRoot
 
     //
     let testCases () =
-        // TODO : Implement this so it searches the TestCases directory and
-        // it's children instead of hard-coding the return values.
-        seq {
-            yield TestCaseData (
-                [| box @"C:\Users\Jack\Documents\Code Libraries\fsharp-tools\TestCases\fslex.fsy";          // Input (specification)
-                   box @"C:\Users\Jack\Documents\Code Libraries\fsharp-tools\TestCases\fslex-parser.fs";    // Output (F# source)
-                   box true;                                                                                // Generate an internal module?
-                   box "Parser";                                                                            // The name of the generated module.
-                   |])
-            yield TestCaseData (
-                [| box @"C:\Users\Jack\Documents\Code Libraries\fsharp-tools\TestCases\fsyacc.fsy";          // Input (specification)
-                   box @"C:\Users\Jack\Documents\Code Libraries\fsharp-tools\TestCases\fsyacc-parser.fs";    // Output (F# source)
-                   box true;                                                                                 // Generate an internal module?
-                   box "Parser";                                                                             // The name of the generated module.
-                   |])
-            }
+        Directory.EnumerateFiles (
+            Path.Combine (repositoryRoot + Path.DirectorySeparatorChar.ToString (), "TestCases"),
+            "*.fsy",
+            SearchOption.AllDirectories)
+        |> Seq.map (fun testCaseFile ->
+            /// The output file name, which is based on the input filename.
+            let outputFile =
+                Path.Combine (
+                    Path.GetDirectoryName testCaseFile,
+                    Path.GetFileNameWithoutExtension testCaseFile + "-parser.fs")
 
-
-//
-type RepositoryTestCases () =
-    //
-    member __.Items
-        with get () =
-            testCases () :> System.Collections.IEnumerable
+            TestCaseData (
+                [| box testCaseFile;    // Input (specification)
+                   box outputFile;      // Output (F# source)
+                   box true;            // Generate an internal module?
+                   box "Parser";        // The name of the generated module.
+                   |]))
 
 
 /// Run fsharpyacc against the test cases in the repository.
@@ -79,12 +84,19 @@ module TestCases =
     let private testTimeout = TimeSpan.FromSeconds 60.0
 
     //
+    type private RepositoryTestCases () =
+        //
+        member __.Items
+            with get () =
+                testCases () :> System.Collections.IEnumerable
+
+    //
     [<TestCaseSource(typeof<RepositoryTestCases>, "Items")>]
     let repository (inputFilename : string, outputFilename : string, internalModule : bool, parserModuleName : string) =
         //
         use toolProcess = new Process ()
         
-        // Set the process' start info.
+        // Set the process' start info and other properties.
         toolProcess.StartInfo <-
             //
             let toolProcessStartInfo =
@@ -97,6 +109,8 @@ module TestCases =
 
             // Set additional properties of the ProcessStartInfo.
             toolProcessStartInfo.CreateNoWindow <- true
+            toolProcessStartInfo.WorkingDirectory <- Path.GetDirectoryName toolPath
+            toolProcessStartInfo.UseShellExecute <- true
             toolProcessStartInfo
 
         (* TODO : Add additional code to capture output and error information
@@ -108,7 +122,7 @@ module TestCases =
 
         // Wait for the process to complete.
         while not toolProcess.HasExited && DateTime.Now - toolProcess.StartTime < testTimeout do
-            Thread.Sleep (TimeSpan.FromSeconds 5.0)
+            Thread.Sleep (TimeSpan.FromSeconds 1.0)
 
         // If the process has not completed yet, it's considered to be "timed out" so kill it.
         if not toolProcess.HasExited then
@@ -120,5 +134,5 @@ module TestCases =
                 // TODO : Provide a message with timing information.
                 Assert.Pass ()
             else
-                let msg = sprintf "THe external tool process exited with code %i." toolProcess.ExitCode
+                let msg = sprintf "The external tool process exited with code %i." toolProcess.ExitCode
                 Assert.Fail msg
