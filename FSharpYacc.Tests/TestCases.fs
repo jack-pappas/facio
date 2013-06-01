@@ -121,11 +121,8 @@ module TestCases =
             Assert.Fail "Unable to start the external tool process."
 
         // Wait for the process to complete.
-        while not toolProcess.HasExited && DateTime.Now - toolProcess.StartTime < testTimeout do
-            Thread.Sleep (TimeSpan.FromSeconds 1.0)
-
-        // If the process has not completed yet, it's considered to be "timed out" so kill it.
-        if not toolProcess.HasExited then
+        if not <| toolProcess.WaitForExit (int testTimeout.TotalMilliseconds) then
+            // If the process has not completed yet, it's considered to be "timed out" so kill it.
             toolProcess.Kill ()
             Assert.Inconclusive "The external tool process timed out."
         else
