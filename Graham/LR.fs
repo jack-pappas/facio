@@ -488,6 +488,8 @@ module LrTableGenState =
                 match actionSet with
                 | Action (Shift shiftStateId) ->
                     Conflict <| ShiftReduce (shiftStateId, productionRuleId)
+                | Action (Reduce productionRuleId') ->
+                    Conflict <| ReduceReduce (productionRuleId', productionRuleId)
 
                 | Action (Reduce productionRuleId')
                 | Conflict (ShiftReduce (_, productionRuleId'))
