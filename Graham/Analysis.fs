@@ -89,21 +89,13 @@ module PredictiveSets =
 
     /// Determines if all symbols within the specified slice of a production are nullable.
     let inline internal allNullableInSlice (production : Symbol<'Nonterminal, 'Terminal>[], startInclusive, endInclusive, nullable : Map<'Nonterminal, bool>) =
-        let mutable result = true
-        let mutable index = startInclusive
-        while result && index <= endInclusive do
-            result <-
-                match production.[index] with
-                | Symbol.Terminal _ ->
-                    false
-                | Symbol.Nonterminal nontermId ->
-                    Map.find nontermId nullable
-
-            // Increment the index
-            index <- index + 1
-
-        // Return the result
-        result
+        (startInclusive, endInclusive)
+        ||> Range.forall (fun index ->
+            match production.[index] with
+            | Symbol.Terminal _ ->
+                false
+            | Symbol.Nonterminal nontermId ->
+                Map.find nontermId nullable)
 
     //
     let computeFirst (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>, nullable : Map<'Nonterminal, bool>) =

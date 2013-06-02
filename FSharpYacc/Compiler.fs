@@ -403,16 +403,11 @@ let precompile (spec : Specification, options : CompilationOptions)
                 let! result = PrecompilationState.result
                 /// The production rules for this nonterminal.
                 let productionRules : ProcessedProductionRule<_,_>[] =
-                    // OPTIMIZE : Use List.revMapIntoArray here to avoid unnecessary intermediate data structures.
                     rules
-                    |> List.rev
-                    |> List.toArray
-                    |> Array.map (fun rule ->
+                    |> List.revMapIntoArray (fun rule ->
                         { Symbols =
                             rule.Symbols
-                            |> List.rev
-                            |> List.toArray
-                            |> Array.map (fun symbolId ->
+                            |> List.revMapIntoArray (fun symbolId ->
                                 if Map.containsKey symbolId result.Nonterminals then
                                     Symbol.Nonterminal symbolId
                                 else

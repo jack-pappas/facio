@@ -243,14 +243,14 @@ module Lalr1 =
 
         // Use the LALR(1) lookahead sets to resolve conflicts in the LR(0) parser table.
         (lr0ParserTable, lr0ParserTable.ParserStates)
-        ||> TagBimap.fold (fun parserTable stateId items ->
-            (parserTable, items)
-            ||> Set.fold (fun parserTable item ->
+        ||> TagBimap.fold (fun lr0ParserTable stateId items ->
+            (lr0ParserTable, items)
+            ||> Set.fold (fun lr0ParserTable item ->
                 // If the parser position is at the end of this item's production,
                 // remove the Reduce actions from the ACTION table for any terminals
                 // which aren't in this state/rule's lookahead set.
                 if int item.Position < Array.length item.Production then
-                    parserTable
+                    lr0ParserTable
                 else
                     /// This state/rule's look-ahead set.
                     let lookahead =
@@ -262,14 +262,14 @@ module Lalr1 =
                         |> Map.find (item.Nonterminal, item.Production)
                         |> LrParserAction.Reduce
 
-                    (parserTable, grammar.Terminals)
-                    ||> Set.fold (fun parserTable terminal ->
+                    (lr0ParserTable, grammar.Terminals)
+                    ||> Set.fold (fun lr0ParserTable terminal ->
                         // Is this terminal in this state/rule's lookahead set?
                         if Set.contains terminal lookahead then
-                            parserTable
+                            lr0ParserTable
                         else
                             // Remove the unnecessary Reduce action for this terminal.
                             let key = stateId, terminal
-                            LrParserTable.RemoveAction (parserTable, key, action))
+                            LrParserTable.RemoveAction (lr0ParserTable, key, action))
                         ))
 

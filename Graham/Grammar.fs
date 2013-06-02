@@ -157,9 +157,11 @@ type Grammar<'Nonterminal, 'Terminal
                         nontermProductions
                         |> Array.map (Array.map (function
                             | Symbol.Nonterminal nontermId ->
-                                Symbol.Nonterminal <| AugmentedNonterminal.Nonterminal nontermId
+                                AugmentedNonterminal.Nonterminal nontermId
+                                |> Symbol.Nonterminal
                             | Symbol.Terminal token ->
-                                Symbol.Terminal <| AugmentedTerminal.Terminal token))
+                                AugmentedTerminal.Terminal token
+                                |> Symbol.Terminal))
                     Map.add (AugmentedNonterminal.Nonterminal nontermId) nontermProductions productionMap)
                 // Add the (only) production of the new start symbol.
                 |> Map.add Start startProductions; }
