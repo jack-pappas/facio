@@ -78,7 +78,27 @@ module private TestCaseHelpers =
 [<TestFixture>]
 module TestCases =
     open System
+    open System.Runtime.InteropServices
     open System.Threading
+    
+
+    [<Flags>]
+    type ErrorModes =
+        | SYSTEM_DEFAULT             = 0x00000000u
+        | SEM_FAILCRITICALERRORS     = 0x00000001u
+        | SEM_NOGPFAULTERRORBOX      = 0x00000002u
+        | SEM_NOALIGNMENTFAULTEXCEPT = 0x00000004u
+        | SEM_NOOPENFILEERRORBOX     = 0x00008000u
+
+    [<DllImport("kernel32.dll")>]
+    extern ErrorModes public SetErrorMode (ErrorModes uMode)
+
+    [<TestFixtureSetUp>]
+    let disableCrashDialog () : unit =
+        // Disable the crash dialog. This affects not only this process,
+        // but also any child processes (which is really what we care about).
+        let oldMode = SetErrorMode ErrorModes.SEM_NOGPFAULTERRORBOX
+        SetErrorMode (oldMode ||| ErrorModes.SEM_NOGPFAULTERRORBOX) |> ignore
 
     //
     let private testTimeout = TimeSpan.FromSeconds 60.0
@@ -109,12 +129,13 @@ module TestCases =
 
             // Set additional properties of the ProcessStartInfo.
             toolProcessStartInfo.CreateNoWindow <- true
+            toolProcessStartInfo.ErrorDialog <- false
+            toolProcessStartInfo.WindowStyle <- ProcessWindowStyle.Hidden
             toolProcessStartInfo.WorkingDirectory <- Path.GetDirectoryName toolPath
-            toolProcessStartInfo.UseShellExecute <- true
+            toolProcessStartInfo.UseShellExecute <- false
+            toolProcessStartInfo.RedirectStandardError <- true
+            toolProcessStartInfo.RedirectStandardOutput <- true
             toolProcessStartInfo
-
-        (* TODO : Add additional code to capture output and error information
-                  from the process, then log it through NUnit. *)
 
         // Start the process.
         if not <| toolProcess.Start () then
@@ -126,6 +147,18 @@ module TestCases =
             toolProcess.Kill ()
             Assert.Inconclusive "The external tool process timed out."
         else
+            // Read the error/output streams from the process, then write them into the
+            // error/output streams of this process so they can be captured by NUnit.
+            do
+                let errorStr = toolProcess.StandardError.ReadToEnd ()
+                if not <| String.IsNullOrWhiteSpace errorStr then
+                    System.Console.Error.Write errorStr
+
+            do
+                let outputStr = toolProcess.StandardOutput.ReadToEnd ()
+                if not <| String.IsNullOrWhiteSpace outputStr then
+                    System.Console.Out.Write outputStr
+
             // Based on the process' exit code, assert that the test passed or failed.
             if toolProcess.ExitCode = 0 then
                 // TODO : Provide a message with timing information.
