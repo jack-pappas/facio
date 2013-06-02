@@ -163,11 +163,11 @@ module Lr0 =
     // TODO : Rewrite this function to use the State workflow to handle the workSet and tableGenState arguments.
     let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) workSet (tableGenState : Lr0TableGenState<_,_>) =
         // If the work-set is empty, we're done creating the table.
-        if Set.isEmpty workSet then
+        if TagSet.isEmpty workSet then
             tableGenState
         else
-            ((Set.empty, tableGenState), workSet)
-            ||> Set.fold (fun workSet_tableGenState stateId ->
+            ((TagSet.empty, tableGenState), workSet)
+            ||> TagSet.fold (fun workSet_tableGenState stateId ->
                 /// The set of parser items for this state.
                 let stateItems = TagBimap.find stateId (snd tableGenState).ParserStates
 
@@ -214,7 +214,7 @@ module Lr0 =
                             // If this is a new state, add it to the list of states which need to be visited.
                             let workSet =
                                 if isNewState then
-                                    Set.add targetStateId workSet
+                                    TagSet.add targetStateId workSet
                                 else workSet
 
                             // The next symbol to be parsed is a terminal (token),
@@ -236,7 +236,7 @@ module Lr0 =
                             // If this is a new state, add it to the list of states which need to be visited.
                             let workSet =
                                 if isNewState then
-                                    Set.add targetStateId workSet
+                                    TagSet.add targetStateId workSet
                                 else workSet
 
                             // The next symbol to be parsed is a nonterminal,
@@ -281,7 +281,7 @@ module Lr0 =
             LrTableGenState.stateId initialParserState tableGenState
             
         // Create the parser table.
-        createTableImpl grammar (Set.singleton initialParserStateId) tableGenState
+        createTableImpl grammar (TagSet.singleton initialParserStateId) tableGenState
         // Get the table from the table-generation state.
         |> snd
 
