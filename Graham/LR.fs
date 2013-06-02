@@ -470,12 +470,9 @@ module LrTableGenState =
         (), tableGenState
 
     /// Add a 'reduce' action to the ACTION table.
-    let reduce (key : TerminalTransition<'Terminal>)
-                (productionRuleId : ProductionRuleId)
-                (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
+    let reduce (key : TerminalTransition<'Terminal>) (productionRuleId : ProductionRuleId)
+               (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
         : unit * LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
-        // Destructure the key to get it's components.
-        let sourceState, transitionSymbol = key
         // Destructure the table-generation state to get it's components.
         let env, table = tableGenState
 
@@ -500,6 +497,9 @@ module LrTableGenState =
                     actionSet
 
                 | actionSet ->
+                    // Destructure the key to get it's components.
+                    let sourceState, transitionSymbol = key
+
                     // Adding this action to the existing action set would create
                     // an impossible set of actions, so raise an exception.
                     impossibleActionSetErrorMsg (
