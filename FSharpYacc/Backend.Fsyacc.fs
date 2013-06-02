@@ -91,6 +91,7 @@ module private FsYacc =
     /// Emits a formatted string as a quick-summary (F# triple-slash comment) into an IndentedTextWriter.
     let inline private quickSummary (writer : IndentedTextWriter) fmt : ^T =
         fmt |> Printf.ksprintf (fun str ->
+            // OPTIMIZE : Use the String.Split.iter function from ExtCore.
             // Split the string into individual lines.
             str.Split ([| "\r\n"; "\r"; "\n" |], System.StringSplitOptions.None)
             // Write the lines to the IndentedTextWriter as triple-slash comments.
@@ -653,7 +654,7 @@ module private FsYacc =
                         match mostFrequent with
                         | None ->
                             Some (action, terminalCount)
-                        | Some (mostFrequentAction, mostFrequentActionTerminalCount) ->
+                        | Some (_, mostFrequentActionTerminalCount) ->
                             if terminalCount > mostFrequentActionTerminalCount then
                                 Some (action, terminalCount)
                             else
