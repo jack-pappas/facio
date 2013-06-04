@@ -17,7 +17,7 @@ limitations under the License.
 *)
 
 /// Grammars from Dick Grune's "Parsing Techniques, A Practical Guide".
-module Graham.Tests.Grammars.Grune
+module Tests.Graham.Grammars.Grune
 
 open Graham.Grammar
 

@@ -50,7 +50,7 @@
     <Compile Include="Tables.fs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="ExtCore, Version=0.8.17.0, Culture=neutral, PublicKeyToken=null">
+    <Reference Include="ExtCore, Version=0.8.23.0, Culture=neutral, PublicKeyToken=null">
       <Private>True</Private>
     </Reference>
     <Reference Include="FsUnit.NUnit">

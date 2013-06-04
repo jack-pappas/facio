@@ -17,7 +17,7 @@ limitations under the License.
 *)
 
 /// Miscellaneous grammars for testing purposes.
-module Graham.Tests.Grammars
+module Tests.Graham.Grammars.Misc
 
 open Graham.Grammar
 

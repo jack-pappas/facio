@@ -16,18 +16,19 @@ limitations under the License.
 
 *)
 
-module Graham.Tests.Analysis
+module Tests.Graham.Analysis
 
 open NUnit.Framework
 open FsUnit
 
 open Graham.Grammar
 open Graham.Analysis
+open Tests.Graham.Grammars
 
 
 [<TestCase>]
 let ``Analysis of Grammar 3.26`` () =
-    let grammar = Grammars.Appel.``Grammar 3.26``
+    let grammar = Appel.``Grammar 3.26``
     let predictiveSets = PredictiveSets.ofGrammar grammar
 
     (* Verify the nullable map. *)

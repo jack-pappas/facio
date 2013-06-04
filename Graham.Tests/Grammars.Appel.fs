@@ -17,7 +17,7 @@ limitations under the License.
 *)
 
 /// Grammars from Andrew W. Appel's "Modern Compiler Implementation in ML".
-module Graham.Tests.Grammars.Appel
+module Tests.Graham.Grammars.Appel
 
 open Graham.Grammar
 
