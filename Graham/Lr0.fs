@@ -303,20 +303,24 @@ module Lr0 =
                     match terminal with
                     | EndOfFile ->
                         // TODO : Create a better error message here.
-                        raise <| exn "Found a conflict involving the end-of-file marker."
+                        failwith "Found a conflict involving the end-of-file marker."
                     | Terminal terminal ->
                         terminal
 
                 // Use the precedence and associativity tables to resolve this conflict (if possible).
                 // If the conflict can be resolved, use the LrParserTable.RemoveAction method
-                // to remove the action we're not using.
-                match conflict with
-                | ReduceReduce (_,_) ->
+                // to remove the action(s) we're not using.
+                match conflict.Shift with
+                | None ->
                     (*  Reduce-reduce conflicts aren't solved with precedence/associativity --
                         instead, they must be resolved by the 'resolveConflicts' function. *)
                     lr0ParserTable
 
-                | ShiftReduce (targetStateId, reduceRuleId) ->
+                | Some targetStateId ->
+                    // TODO : Multi-way conflicts should really be handled in a better way to
+                    // resolve the conflict as accurately as possible.
+                    let reduceRuleId = TagSet.minElement conflict.Reductions
+
                     match Map.tryFind terminal settings.TerminalPrecedence,
                           Map.tryFind reduceRuleId settings.RulePrecedence with
                     | None, _
@@ -360,20 +364,21 @@ module Lr0 =
                 // Use the precedence and associativity tables to resolve this conflict (if possible).
                 // If the conflict can be resolved, use the LrParserTable.RemoveAction method
                 // to remove the action we're not using.
-                match conflict with
-                | ReduceReduce (reduceRuleId1, reduceRuleId2) ->
-                    // Resolve in favor of the lower-numbered rule (i.e., the rule declared first in the grammar).
-                    if reduceRuleId1 < reduceRuleId2 then
-                        LrParserTable.RemoveAction (lr0ParserTable, key, Reduce reduceRuleId2)
-                    elif reduceRuleId1 > reduceRuleId2 then
-                        LrParserTable.RemoveAction (lr0ParserTable, key, Reduce reduceRuleId1)
-                    else
-                        // This shouldn't ever happen, unless someone goes
-                        // out of their way to create such an entry.
-                        lr0ParserTable
-
-                | ShiftReduce (_, reduceRuleId) ->
+                match conflict.Shift with
+                | Some shiftTargetId ->
                     // Resolve in favor of shifting; this is similar to the
                     // "longest match rule" used in lexical analyzers.
-                    LrParserTable.RemoveAction (lr0ParserTable, key, Reduce reduceRuleId))
+                    // Remove all of the reduce actions from the table.
+                    (lr0ParserTable, conflict.Reductions)
+                    ||> TagSet.fold (fun lr0ParserTable productionRuleId ->
+                        LrParserTable.RemoveAction (lr0ParserTable, key, Reduce productionRuleId))
+
+                | None ->
+                    // Resolve in favor of the lowest-numbered rule (i.e., the rule declared first in the grammar).
+                    // OPTIMIZE : Use TagSet.extractMin from ExtCore once it's implemented.
+                    let resolvedRule = TagSet.minElement conflict.Reductions
+                    let reductions = TagSet.remove resolvedRule conflict.Reductions
+                    (lr0ParserTable, reductions)
+                    ||> TagSet.fold (fun lr0ParserTable productionRuleId ->
+                        LrParserTable.RemoveAction (lr0ParserTable, key, Reduce productionRuleId)))
 

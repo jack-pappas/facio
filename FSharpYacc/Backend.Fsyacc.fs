@@ -611,7 +611,8 @@ module private FsYacc =
                 ||> Map.fold (fun parserActionsByState (stateId, terminal) actionSet ->
                     match actionSet with
                     | Conflict _ ->
-                        failwithf "Conflicting actions on terminal %O in state #%i." terminal (int stateId)
+                        let msg = sprintf "Conflicting actions on terminal %O in state #%i." terminal (int stateId)
+                        raise <| exn msg
                     | Action action ->
                         let stateActions =
                             let value = terminal, action

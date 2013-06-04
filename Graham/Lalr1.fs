@@ -54,7 +54,7 @@ module Lalr1 =
                        (match entry with
                         | Action Accept
                         | Action (Shift _)
-                        | Conflict (ShiftReduce (_,_)) -> true
+                        | Conflict { Shift = Some _; } -> true
                         | _ -> false) then
                         Set.add terminal directReadSymbols
                     else
@@ -144,7 +144,7 @@ module Lalr1 =
                                         // If this entry contains a Shift action,
                                         // retrieve the target state from it.
                                         | Action (Shift shiftTarget)
-                                        | Conflict (ShiftReduce (shiftTarget, _)) ->
+                                        | Conflict { Shift = Some shiftTarget; } ->
                                             Some shiftTarget
                                         | _ ->
                                             None)

@@ -114,22 +114,34 @@ type LrParserAction =
         | Accept ->
             "a"
 
-/// A conflict between two LrParserActions.
+/// A conflict between two or more LrParserActions.
 /// A deterministic parser cannot be created until all
 /// conflicts in its parser table have been resolved.
-type LrParserConflict =
-    /// A conflict between a Shift action and a Reduce action.
-    | ShiftReduce of ParserStateId * ProductionRuleId
-    /// <summary>A conflict between two Reduce actions.</summary>
-    | ReduceReduce of ProductionRuleId * ProductionRuleId
-
+type LrParserConflictSet = {
+    //
+    Shift : ParserStateId option;
+    //
+    // Invariant : This set should never be empty.
+    Reductions : TagSet<ProductionRuleIdentifier>;
+}
+with
     /// <inherit />
     override this.ToString () =
-        match this with
-        | ShiftReduce (shiftStateId, productionRuleId) ->
-            sprintf "s%i/r%i" (untag shiftStateId) (untag productionRuleId)
-        | ReduceReduce (productionRuleId1, productionRuleId2) ->
-            sprintf "r%i/r%i" (untag productionRuleId1) (untag productionRuleId2)
+        //
+        let reductions =
+            TagSet.toArray this.Reductions
+            |> Array.map (fun productionRuleId ->
+                sprintf "r%i" (untag productionRuleId))
+            |> String.concat "/"
+
+        // If there's a shift action in this conflict set, prepend it to
+        // the string of reduction actions.
+        match this.Shift with
+        | None ->
+            reductions
+        | Some shiftStateId ->
+            let shift = sprintf "s%i/" (untag shiftStateId)
+            shift + reductions
 
 /// A non-empty set of LrParserActions representing the
 /// action(s) to take for a specific parser state.
@@ -137,7 +149,7 @@ type LrParserActionSet =
     /// A single LrParserAction.
     | Action of LrParserAction
     /// Two (2) conflicting LrParserActions.
-    | Conflict of LrParserConflict
+    | Conflict of LrParserConflictSet
 
     /// <inherit />
     override this.ToString () =
@@ -156,19 +168,31 @@ type LrParserActionSet =
             if action = action' then None
             else Some actionSet
         | Conflict conflict ->
-            match action, conflict with
-            | Shift shiftStateId', ShiftReduce (shiftStateId, reduceRuleId)
-                when shiftStateId' = shiftStateId ->
-                Some <| Action (Reduce reduceRuleId)
-            | Reduce reduceRuleId', ShiftReduce (shiftStateId, reduceRuleId)
-                when reduceRuleId' = reduceRuleId ->
-                Some <| Action (Shift shiftStateId)
-            | Reduce reduceRuleId', ReduceReduce (reduceRuleId1, reduceRuleId2)
-                when reduceRuleId' = reduceRuleId1 ->
-                Some <| Action (Reduce reduceRuleId2)
-            | Reduce reduceRuleId', ReduceReduce (reduceRuleId1, reduceRuleId2)
-                when reduceRuleId' = reduceRuleId2 ->
-                Some <| Action (Reduce reduceRuleId1)
+            match action with
+            | Shift shiftStateId' ->
+                match conflict with
+                | { Shift = Some shiftStateId; }
+                    when shiftStateId' = shiftStateId ->
+                    if TagSet.count conflict.Reductions > 1 then
+                        Some <| Conflict { conflict with Shift = None; }
+                    else
+                        Some <| Action (Reduce <| TagSet.minElement conflict.Reductions)
+                | _ ->
+                    Some actionSet
+
+            | Reduce reduceRuleId' ->
+                let reductions = TagSet.remove reduceRuleId' conflict.Reductions
+                if TagSet.isEmpty reductions then
+                    match conflict.Shift with
+                    | None ->
+                        None
+                    | Some shiftStateId ->
+                        Some <| Action (Shift shiftStateId)
+                elif TagSet.count reductions = 1 && Option.isNone conflict.Shift then
+                    Some <| Action (Reduce <| TagSet.minElement reductions)
+                else
+                    Some <| Conflict { conflict with Reductions = reductions; }
+
             | _ ->
                 Some actionSet
 
@@ -181,18 +205,12 @@ type LrParserActionSet =
             match action with
             | Accept -> false
             | Shift shiftStateId' ->
-                match conflict with
-                | ShiftReduce (shiftStateId, _) ->
-                    shiftStateId' = shiftStateId
-                | ReduceReduce (_,_) ->
-                    false
+                match conflict.Shift with
+                | None -> false
+                | Some shiftStateId ->
+                    shiftStateId = shiftStateId'
             | Reduce reduceRuleId' ->
-                match conflict with
-                | ShiftReduce (_, reduceRuleId) ->
-                    reduceRuleId' = reduceRuleId
-                | ReduceReduce (reduceRuleId1, reduceRuleId2) ->
-                    reduceRuleId' = reduceRuleId1
-                    || reduceRuleId' = reduceRuleId2
+                TagSet.contains reduceRuleId' conflict.Reductions
 
 //
 type NonterminalTransition<'Nonterminal
@@ -439,14 +457,21 @@ module LrTableGenState =
                 Action <| Shift targetState
             | Some actionSet ->
                 match actionSet with
-                | Action (Reduce ruleId) ->
-                    Conflict <| ShiftReduce (targetState, ruleId)
-
                 | Action (Shift targetState')
-                | Conflict (ShiftReduce (targetState', _))
+                | Conflict ({ Shift = Some targetState'; })
                     when targetState = targetState' ->
                     // Return the existing action set without modifying it.
                     actionSet
+
+                | Action (Reduce ruleId) ->
+                    Conflict {
+                        Shift = Some targetState;
+                        Reductions = TagSet.singleton ruleId; }
+
+                | Conflict ({ Shift = None; } as conflict) ->
+                    Conflict {
+                        conflict with
+                            Shift = Some targetState; }
 
                 | entry ->
                     // Adding this action to the existing action set would create
@@ -484,17 +509,31 @@ module LrTableGenState =
             | Some actionSet ->
                 match actionSet with
                 | Action (Shift shiftStateId) ->
-                    Conflict <| ShiftReduce (shiftStateId, productionRuleId)
+                    Conflict {
+                        Shift = Some shiftStateId;
+                        Reductions = TagSet.singleton productionRuleId; }
+
                 | Action (Reduce productionRuleId') ->
-                    Conflict <| ReduceReduce (productionRuleId', productionRuleId)
+                    Conflict {
+                        Shift = None;
+                        Reductions =
+                            TagSet.empty
+                            |> TagSet.add productionRuleId'
+                            |> TagSet.add productionRuleId; }
 
                 | Action (Reduce productionRuleId')
-                | Conflict (ShiftReduce (_, productionRuleId'))
-                | Conflict (ReduceReduce (productionRuleId', _))
-                | Conflict (ReduceReduce (_, productionRuleId'))
                     when productionRuleId = productionRuleId' ->
                     // Return the existing action set without modifying it.
                     actionSet
+
+                | Conflict conflict ->
+                    if TagSet.contains productionRuleId conflict.Reductions then
+                        // Return the existing action set without modifying it.
+                        actionSet
+                    else
+                        Conflict {
+                            conflict with
+                                Reductions = TagSet.add productionRuleId conflict.Reductions; }
 
                 | actionSet ->
                     // Destructure the key to get it's components.
