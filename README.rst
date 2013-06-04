@@ -4,19 +4,16 @@ F# Compiler Tools
 This repository contains a collection of tools which assist in implementing compilers, interpreters, and other language-based tools in F#.
 
 - fsharplex
-
     ``fsharplex`` is a tool for generating lexical analyzers ("tokenizers") from a lexer specification file (``*.fsl``).
 
     The lexer specification files used by ``fsharplex`` and the lexers it generates are largely compatible with the older ``fslex`` tool from the F# PowerPack.
 
 - fsharpyacc
-
     ``fsharpyacc`` is a tool for generating parsers for context-free grammars (CFGs) described by a parser specification file (``*.fsy``).
 
     The parser specification files used by ``fsharpyacc`` and the parsers it generates are largely compatible with the older ``fsyacc`` tool from the F# PowerPack.
 
 - Graham
-
     ``Graham`` is a library for creating, manipulating, and analyzing context-free grammars (CFGs).
 
     ``Graham`` also includes algorithms for generating parser automata, providing a flexible, *generic* approach to implementing parser-generator tools like ``fsharpyacc``.
@@ -38,7 +35,6 @@ Compatibility Notes
 ===================
 
 - fsharpyacc
-
     - After switching from ``fsyacc`` to ``fsharpyacc``, you may find that a parser specification which works correctly with ``fsyacc`` does not work correctly with ``fsharpyacc``. If you encounter this problem, it is likely that your parser will return a result which is not "complete" -- i.e., the parser did not parse the entire contents of the input file. The cause of this seems to be that ``fsyacc`` contains a bug where it sometimes does not honor a ``%left`` declaration for a token, meaning that some conflicts on that token may be solved by shifting (the equivalent of a ``%right`` declaration). The problem can be remedied by changing the ``%left`` declarations in question to ``%right`` declarations.
 
       *TODO: Include instructions for diagnosing which declarations need to be modified.*
@@ -54,11 +50,9 @@ Known Bugs/Issues
 =================
 
 - fsharplex
-
     - There is a performance issue which arises when compiling a lexer specification which makes heavy use of Unicode character classes (such as the lexer for the F# compiler). Due to the way ``fsharplex`` is designed, the comparison function for the CharSet data structure is called repeatedly; the Unicode character classes use CharSet extensively, and the CharSet comparison function has a relatively heavyweight implementation, so the combination of these factors causes a blowup in execution time which causes ``fsharplex`` to take an extremely long time to compile the lexer specification. For example, profiling ``fsharplex`` when compiling the lexer for the F# compiler shows that most (>90%) of the execution time is spent within the CharSet comparison function. Eventually, this issue will be fixed by modifying the CharSet implementation itself to allow a much faster comparison function to be used.
 
 - fsharpyacc / Graham
-
     - Some parts of the LR (LR(0), SLR(1), LALR(1), LR(1)) parser table generation have not been optimized yet. This issue doesn't impact smaller parser specifications, but larger specifications such as the parser for the F# compiler can take a long time to compile. The parts of the code causing the performance drain will eventually be profiled and tuned to correct the problem; the likely solution will be to implement memoization in some places, and to increase the performance of some Map lookups by using TagBimap to assign 'tags' which can be used in place of more heavyweight objects (e.g., LrParserState<_,_,_>).
 
 
