@@ -16,7 +16,7 @@ limitations under the License.
 
 *)
 
-namespace Tests.FSharpYacc
+namespace Tests.FSharpLex
 
 open System.Diagnostics
 open System.IO
@@ -42,9 +42,9 @@ module private TestCaseHelpers =
             // Continue recursing upwards
             findRepoRoot dirPath
         
-    /// The absolute path to the fsharpyacc executable to test.
+    /// The absolute path to the fsharplex executable to test.
     let toolPath =
-        (System.Uri (typeof<FSharpYacc.FsyaccBackendOptions>.Assembly.CodeBase)).LocalPath
+        (System.Uri (typeof<FSharpLex.CompilationOptions>.Assembly.CodeBase)).LocalPath
 
     type private Dummy () = class end
 
@@ -57,24 +57,23 @@ module private TestCaseHelpers =
     let testCases () =
         Directory.EnumerateFiles (
             Path.Combine (repositoryRoot + Path.DirectorySeparatorChar.ToString (), "TestCases"),
-            "*.fsy",
+            "*.fsl",
             SearchOption.AllDirectories)
         |> Seq.map (fun testCaseFile ->
             /// The output file name, which is based on the input filename.
             let outputFile =
                 Path.Combine (
                     Path.GetDirectoryName testCaseFile,
-                    Path.GetFileNameWithoutExtension testCaseFile + "-parser.fs")
+                    Path.GetFileNameWithoutExtension testCaseFile + "-lexer.fs")
 
             TestCaseData (
                 [| box testCaseFile;    // Input (specification)
                    box outputFile;      // Output (F# source)
-                   box true;            // Generate an internal module?
-                   box "Parser";        // The name of the generated module.
+                   box true;            // Generate a lexer which supports Unicode?
                    |]))
 
 
-/// Run fsharpyacc against the test cases in the repository.
+/// Run fsharplex against the test cases in the repository.
 [<TestFixture>]
 module TestCases =
     open System
@@ -112,7 +111,7 @@ module TestCases =
 
     //
     [<TestCaseSource(typeof<RepositoryTestCases>, "Items")>]
-    let repository (inputFilename : string, outputFilename : string, internalModule : bool, parserModuleName : string) =
+    let repository (inputFilename : string, outputFilename : string, unicodeSupport : bool) =
         //
         use toolProcess = new Process ()
         
@@ -121,9 +120,9 @@ module TestCases =
             //
             let toolProcessStartInfo =
                 let processArgs =
-                    let internalModule = if internalModule then "--internal " else ""
-                    sprintf "%s--module \"%s\" -o \"%s\" \"%s\""
-                        internalModule parserModuleName outputFilename inputFilename
+                    let unicodeSupport = if unicodeSupport then "--unicode " else ""
+                    sprintf "%s-o \"%s\" \"%s\""
+                        unicodeSupport outputFilename inputFilename
             
                 ProcessStartInfo (toolPath, processArgs)
 
