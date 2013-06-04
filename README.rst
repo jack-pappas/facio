@@ -35,20 +35,21 @@ At this time, *fsharplex* and *fsharpyacc* generate code which uses the lexer/pa
 Known Bugs/Issues
 =================
 
-  - fsharplex
+- fsharplex
     - There is a performance issue which arises when compiling a lexer specification which makes heavy use of Unicode character classes (such as the lexer for the F# compiler).
-    Due to the way fsharplex is designed, the comparison function for the CharSet data structure is called repeatedly; the Unicode character classes use CharSet extensively,
-    and the CharSet comparison function has a relatively heavyweight implementation, so the combination of these factors causes a blowup in execution time which causes fsharplex
-    to take an extremely long time to compile the lexer specification. For example, profiling fsharplex when compiling the lexer for the F# compiler shows that most (>90%)
-    of the execution time is spent within the CharSet comparison function. Eventually, this issue will be fixed by modifying the CharSet implementation itself to allow
-    a much faster comparison function to be used.
+      Due to the way fsharplex is designed, the comparison function for the CharSet data structure is called repeatedly; the Unicode character classes use CharSet extensively,
+      and the CharSet comparison function has a relatively heavyweight implementation, so the combination of these factors causes a blowup in execution time which causes fsharplex
+      to take an extremely long time to compile the lexer specification. For example, profiling fsharplex when compiling the lexer for the F# compiler shows that most (>90%)
+      of the execution time is spent within the CharSet comparison function. Eventually, this issue will be fixed by modifying the CharSet implementation itself to allow
+      a much faster comparison function to be used.
 
-  - fsharpyacc
+- fsharpyacc
     - The current version (as of 03-Jun-2013) of fsharpyacc does not correctly handle multi-way conflicts -- that is, it crashes when attempting to create an LR parser table
-    containing multiple REDUCE actions (with or without a SHIFT action) for an LR parser state. This type of conflict often occurs when compiling a parser specification with
-    an empty production rule for one or more nonterminals.
-    NOTE : From a brief investigation, it appears that fsyacc also does not correctly handle multi-way conflicts. However, instead of crashing, when fsyacc adds an action to the
-    LR parser table for an LR parser state for which there is already a S/R or R/R conflict, it discards *both* of the earlier actions and simply uses the new action.
+      containing multiple REDUCE actions (with or without a SHIFT action) for an LR parser state. This type of conflict often occurs when compiling a parser specification with
+      an empty production rule for one or more nonterminals.
+      
+      NOTE : From a brief investigation, it appears that fsyacc also does not correctly handle multi-way conflicts. However, instead of crashing, when fsyacc adds an action to the
+      LR parser table for an LR parser state for which there is already a S/R or R/R conflict, it discards *both* of the earlier actions and simply uses the new action.
 
 
 .. _`F# PowerPack repository`: https://github.com/fsharp/powerpack
