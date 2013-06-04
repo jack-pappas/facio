@@ -93,7 +93,7 @@ type LrParserState<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
     and 'Lookahead : comparison> =
-    Set<LrItem<'Nonterminal, 'Terminal, 'Lookahead>>
+    HashSet<LrItem<'Nonterminal, 'Terminal, 'Lookahead>>
 
 /// An action which manipulates the state of an LR(k) parser automaton.
 type LrParserAction =
@@ -260,7 +260,7 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
             (Map.empty, this.ParserStates)
             ||> TagBimap.fold (fun reduceStates stateId items ->
                 (reduceStates, items)
-                ||> Set.fold (fun reduceStates item ->
+                ||> HashSet.fold (fun reduceStates item ->
                     if int item.Position = Array.length item.Production then
                         let nonterms =
                             match Map.tryFind stateId reduceStates with

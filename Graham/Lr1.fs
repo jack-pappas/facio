@@ -113,7 +113,7 @@ module Lr1 =
             let rec closure items =
                 let items' =
                     (items, items)
-                    ||> Set.fold (fun items item ->
+                    ||> HashSet.fold (fun items item ->
                         // If the position is at the end of the production,
                         // there's nothing that needs to be done for this item.
                         if int item.Position = Array.length item.Production then
@@ -149,7 +149,7 @@ module Lr1 =
                                             Position = GenericZero;
                                             Lookahead = nontermFollowToken; }
 
-                                        Set.add newItem items)))
+                                        HashSet.add newItem items)))
 
                 // If the items set has changed, recurse for another iteration.
                 // If not, we're done processing and the set is returned.
@@ -166,8 +166,8 @@ module Lr1 =
         let goto symbol items (grammar : Grammar<'Nonterminal, 'Terminal>) predictiveSets =
             /// The updated 'items' set.
             let items =
-                (Set.empty, items)
-                ||> Set.fold (fun updatedItems item ->
+                (HashSet.empty, items)
+                ||> HashSet.fold (fun updatedItems item ->
                     // If the position is at the end of the production, we know
                     // this item can't be a match, so continue to to the next item.
                     if int item.Position = Array.length item.Production then
@@ -180,7 +180,7 @@ module Lr1 =
                             let updatedItem =
                                 { item with
                                     Position = item.Position + 1<_>; }
-                            Set.add updatedItem updatedItems
+                            HashSet.add updatedItem updatedItems
                         else
                             // The symbol did not match, so this item won't be added to
                             // the updated items set.
@@ -202,7 +202,7 @@ module Lr1 =
                 let stateItems = TagBimap.find stateId (snd tableGenState).ParserStates
 
                 (workSet_tableGenState, stateItems)
-                ||> Set.fold (fun (workSet, tableGenState) item ->
+                ||> HashSet.fold (fun (workSet, tableGenState) item ->
                     // If the parser position is at the end of the production,
                     // add a 'reduce' action for every terminal (token) in the grammar.
                     if int item.Position = Array.length item.Production then
@@ -295,7 +295,7 @@ module Lr1 =
             /// The initial state (set of items) passed to 'createTableImpl'.
             let initialParserState : Lr1ParserState<_,_> =
                 let startProductions = Map.find Start grammar.Productions
-                (Set.empty, startProductions)
+                (HashSet.empty, startProductions)
                 ||> Array.fold (fun items production ->
                     // Create an 'item', with the parser position at
                     // the beginning of the production.
@@ -307,7 +307,7 @@ module Lr1 =
                         // (in the augmented start production) will never be shifted.
                         // We use the EndOfFile token itself here to keep the code generic.
                         Lookahead = EndOfFile; }
-                    Set.add item items)
+                    HashSet.add item items)
                 |> Item.closure grammar predictiveSets
 
             LrTableGenState.stateId initialParserState tableGenState

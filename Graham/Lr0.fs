@@ -68,7 +68,7 @@ module Lr0 =
             // A parser state is a 'reduce state' if any of its items
             // have a parser position past the end of the production.
             parserState
-            |> Set.exists (fun item ->
+            |> HashSet.exists (fun item ->
                 int item.Position = Array.length item.Production)
 
 
@@ -96,7 +96,7 @@ module Lr0 =
             let rec closure items =
                 let items' =
                     (items, items)
-                    ||> Set.fold (fun items item ->
+                    ||> HashSet.fold (fun items item ->
                         // If the position is at the end of the production,
                         // there's nothing that needs to be done for this item.
                         if int item.Position = Array.length item.Production then
@@ -122,7 +122,7 @@ module Lr0 =
                                         Position = GenericZero;
                                         Lookahead = (); }
 
-                                    Set.add newItem items))
+                                    HashSet.add newItem items))
 
                 // If the items set has changed, recurse for another iteration.
                 // If not, we're done processing and the set is returned.
@@ -136,9 +136,9 @@ module Lr0 =
 
         /// Moves the 'dot' (the current parser position) past the
         /// specified symbol for each item in a set of items.
-        let goto symbol items (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) =
-            (Set.empty, items)
-            ||> Set.fold (fun updatedItems item ->
+        let goto symbol items (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) : LrParserState<_,_,_> =
+            (HashSet.empty, items)
+            ||> HashSet.fold (fun updatedItems item ->
                 // If the position is at the end of the production, we know
                 // this item can't be a match, so continue to to the next item.
                 if int item.Position = Array.length item.Production then
@@ -151,7 +151,7 @@ module Lr0 =
                         let updatedItem =
                             { item with
                                 Position = item.Position + 1<_>; }
-                        Set.add updatedItem updatedItems
+                        HashSet.add updatedItem updatedItems
                     else
                         // The symbol did not match, so this item won't be added to
                         // the updated items set.
@@ -172,7 +172,7 @@ module Lr0 =
                 let stateItems = TagBimap.find stateId (snd tableGenState).ParserStates
 
                 (workSet_tableGenState, stateItems)
-                ||> Set.fold (fun (workSet, ((_, env) as tableGenState)) item ->
+                ||> HashSet.fold (fun (workSet, ((_, env) as tableGenState)) item ->
                     // If the parser position is at the end of the production,
                     // add a 'reduce' action for every terminal (token) in the grammar.
                     if int item.Position = Array.length item.Production then
@@ -275,7 +275,7 @@ module Lr0 =
                         Production = production;
                         Position = GenericZero;
                         Lookahead = (); })
-                |> Set.ofArray
+                |> HashSet.ofArray
                 |> Item.closure grammar.Productions
 
             LrTableGenState.stateId initialParserState tableGenState
