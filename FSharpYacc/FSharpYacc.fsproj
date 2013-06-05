@@ -27,8 +27,9 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <WarningsAsErrors>25</WarningsAsErrors>
-    <StartArguments>--internal --module "Parser" -o "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\TestCases\fsharp-parser.fs" "C:\Users\Jack\Documents\Code Libraries\fsharp-tools\TestCases\fsharp.fsy"</StartArguments>
+    <StartArguments>--internal --module "Parser" -o "TestCases\fsharp-parser.fs" "TestCases\fsharp.fsy"</StartArguments>
     <OtherFlags>--stackReserveSize:16777216 --warnon:1182</OtherFlags>
+    <StartWorkingDirectory>C:\Users\Jack\Documents\Code Libraries\fsharp-tools\</StartWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
