@@ -16,7 +16,6 @@ limitations under the License.
 
 *)
 
-//
 namespace Graham.LR
 
 open LanguagePrimitives
@@ -96,14 +95,15 @@ module Lr0 =
             let rec closure items =
                 let items' =
                     (items, items)
-                    ||> HashSet.fold (fun items item ->
+                    ||> HashSet.fold (fun items (item : LrItem<_,_,_>) ->
                         // If the position is at the end of the production,
                         // there's nothing that needs to be done for this item.
-                        if int item.Position = Array.length item.Production then
+                        match item.CurrentSymbol with
+                        | None ->
                             items
-                        else
+                        | Some sym ->
                             // Determine what to do based on the next symbol to be parsed.
-                            match item.Production.[int item.Position] with
+                            match sym with
                             | Symbol.Terminal _ ->
                                 // Nothing to do for terminals
                                 items
@@ -126,7 +126,7 @@ module Lr0 =
 
                 // If the items set has changed, recurse for another iteration.
                 // If not, we're done processing and the set is returned.
-                if items' = items then
+                if items' === items || items' = items then
                     items
                 else
                     closure items'
@@ -138,24 +138,19 @@ module Lr0 =
         /// specified symbol for each item in a set of items.
         let goto symbol items (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) : LrParserState<_,_,_> =
             (HashSet.empty, items)
-            ||> HashSet.fold (fun updatedItems item ->
-                // If the position is at the end of the production, we know
-                // this item can't be a match, so continue to to the next item.
-                if int item.Position = Array.length item.Production then
-                    updatedItems
-                else
-                    // If the next symbol to be parsed in the production is the
-                    // specified symbol, create a new item with the position advanced
-                    // to the right of the symbol and add it to the updated items set.
-                    if item.Production.[int item.Position] = symbol then
-                        let updatedItem =
-                            { item with
-                                Position = item.Position + 1<_>; }
-                        HashSet.add updatedItem updatedItems
-                    else
-                        // The symbol did not match, so this item won't be added to
-                        // the updated items set.
-                        updatedItems)
+            ||> HashSet.fold (fun updatedItems (item : LrItem<_,_,_>) ->
+                // If the next symbol to be parsed in the production is the
+                // specified symbol, create a new item with the position advanced
+                // to the right of the symbol and add it to the updated items set.
+                match item.CurrentSymbol with
+                | Some sym when sym = symbol ->
+                    let updatedItem =
+                        { item with
+                            Position = item.Position + 1<_>; }
+                    HashSet.add updatedItem updatedItems
+
+                | _ ->
+                    updatedItems)
             // Return the closure of the item set.
             |> closure productions
 
@@ -166,6 +161,7 @@ module Lr0 =
         if TagSet.isEmpty workSet then
             tableGenState
         else
+            // OPTIMIZE : Use the State.TagSet.fold function from ExtCore here.
             ((TagSet.empty, tableGenState), workSet)
             ||> TagSet.fold (fun workSet_tableGenState stateId ->
                 /// The set of parser items for this state.
@@ -291,7 +287,7 @@ module Lr0 =
         // Fold over the provided table, using the supplied precedence and
         // associativity tables to resolve conflicts wherever possible.
         (lr0ParserTable, lr0ParserTable.ActionTable)
-        ||> Map.fold (fun lr0ParserTable ((stateId, terminal) as key) actionSet ->
+        ||> Map.fold (fun lr0ParserTable ((_, terminal) as key) actionSet ->
             // Does this state contain a conflict?
             match actionSet with
             | Action _ ->
@@ -355,7 +351,7 @@ module Lr0 =
     let resolveConflicts (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
         //
         (lr0ParserTable, lr0ParserTable.ActionTable)
-        ||> Map.fold (fun lr0ParserTable ((stateId, terminal) as key) actionSet ->
+        ||> Map.fold (fun lr0ParserTable key actionSet ->
             // Does this state contain a conflict?
             match actionSet with
             | Action _ ->
@@ -365,7 +361,7 @@ module Lr0 =
                 // If the conflict can be resolved, use the LrParserTable.RemoveAction method
                 // to remove the action we're not using.
                 match conflict.Shift with
-                | Some shiftTargetId ->
+                | Some _ ->
                     // Resolve in favor of shifting; this is similar to the
                     // "longest match rule" used in lexical analyzers.
                     // Remove all of the reduce actions from the table.

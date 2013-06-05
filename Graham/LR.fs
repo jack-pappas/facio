@@ -49,6 +49,13 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
         with get () =
             this.ToString '\u2022'
 
+    //
+    member this.CurrentSymbol
+        with get () =
+            let position = int this.Position
+            if position = Array.length this.Production then None
+            else Some this.Production.[position]
+
     /// <summary>Private ToString implementation which allows the 'dot' character to be specified.</summary>
     /// <param name="dotChar">The character to use to represent the 'dot' (parser position).</param>
     member private this.ToString (dotChar : char) =
@@ -328,8 +335,6 @@ type LrTableGenEnvironment<'Nonterminal, 'Terminal, 'Lookahead
     and 'Terminal : comparison
     and 'Lookahead : comparison> = {
     //
-    ParserStateIds : Map<LrParserState<'Nonterminal, 'Terminal, 'Lookahead>, ParserStateId>;
-    //
     ProductionRuleIds : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], ProductionRuleId>;
 }
 
@@ -355,8 +360,7 @@ module LrTableGenState =
         and 'Terminal : comparison
         and 'Lookahead : comparison> : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
         // The empty table-gen environment.
-        {   ParserStateIds = Map.empty;
-            ProductionRuleIds = Map.empty; },
+        {   ProductionRuleIds = Map.empty; },
         // The empty parser table.
         {   ParserStates = TagBimap.empty;
             ParserTransitions = Graph.empty;
@@ -367,9 +371,6 @@ module LrTableGenState =
     /// then stores it in the environment component of the table-generation state.
     let setProductionRules (productionRules : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>)
                             (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
-        // Destructure the table-generation state to get it's components.
-        let env, table = tableGenState
-
         /// The production-rule-id lookup table.
         let productionRuleIds =
             (Map.empty, productionRules)
@@ -385,6 +386,9 @@ module LrTableGenState =
 
         // Update the table-generation state.
         let tableGenState =
+            // Destructure the table-generation state to get it's components.
+            let env, table = tableGenState
+
             { env with
                 ProductionRuleIds = productionRuleIds;
             }, table
@@ -410,20 +414,17 @@ module LrTableGenState =
         let env, table = tableGenState
 
         // Try to retrieve an existing id for this state.
-        match Map.tryFind parserState env.ParserStateIds with
+        match TagBimap.tryFindValue parserState table.ParserStates with
         | Some parserStateId ->
             (false, parserStateId), tableGenState
         | None ->
             // Create a new ID for this state.
             let parserStateId =
-                tag env.ParserStateIds.Count
+                tag <| TagBimap.count table.ParserStates
 
             // Update the table-generation state.
             let tableGenState =
-                { env with
-                    // Add the new state-id into the table-gen environment.
-                    ParserStateIds =
-                        Map.add parserState parserStateId env.ParserStateIds; },
+                env,
                 { table with
                     // Add this state to the transition graph's vertex-set.
                     ParserTransitions = Graph.addVertex parserStateId table.ParserTransitions;
