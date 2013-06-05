@@ -2,9 +2,9 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
     <metadata>
         <id>Graham</id>
-        <version>0.8.2</version>
+        <version>0.8.3</version>
         <dependencies>
-          <dependency id="ExtCore" version="0.8.23" />
+          <dependency id="ExtCore" version="0.8.24" />
         </dependencies>
         <title>Graham</title>
         <authors>Jack Pappas</authors>
