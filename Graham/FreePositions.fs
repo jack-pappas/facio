@@ -98,7 +98,7 @@ module FreePositions =
         // but it is an _empty_ graph (i.e., a graph with an empty edge-set).
         let positionGraph =
             (Graph.empty, parserState)
-            ||> HashSet.fold (fun positionGraph item ->
+            ||> Set.fold (fun positionGraph item ->
                 // Add the item to the graph.
                 Graph.addVertex (Item item) positionGraph)
 
@@ -108,19 +108,19 @@ module FreePositions =
         //
         let transitionItems, actionItems =
             parserState
-            |> HashSet.partition (fun item ->
+            |> Set.partition (fun (item : LrItem<_,_,_>) ->
                 // Does this item represent the derivation of the entire production?
-                if int item.Position = Array.length item.Production then
-                    false   // Reduce
-                else
-                    match item.Production.[int item.Position] with
-                    | Symbol.Terminal _ -> false    // Shift
-                    | Symbol.Nonterminal _ -> true)
+                match item.CurrentSymbol with
+                | None                          // Reduce
+                | Some (Symbol.Terminal _) ->   // Shift
+                    false
+                | Some (Symbol.Nonterminal _) ->
+                    true)
 
         // Add edges representing parser actions to the graph.
         let positionGraph =
             (positionGraph, actionItems)
-            ||> HashSet.fold (fun positionGraph item ->
+            ||> Set.fold (fun positionGraph item ->
                 if int item.Position = Array.length item.Production then
                     let action = Action <| Reduce item.Nonterminal
 
@@ -146,7 +146,7 @@ module FreePositions =
         // the existing set of graph edges (which may already contain some shift edges).
         let positionGraph =
             (positionGraph, transitionItems)
-            ||> HashSet.fold (fun positionGraph nonterminalDerivingItem ->
+            ||> Set.fold (fun positionGraph nonterminalDerivingItem ->
                 /// The nonterminal being derived by this item.
                 let derivingNonterminal =
                     match nonterminalDerivingItem.Production.[int nonterminalDerivingItem.Position] with
@@ -155,7 +155,7 @@ module FreePositions =
                         invalidOp "A terminal was found where a nonterminal was expected."
 
                 (positionGraph, parserState)
-                ||> HashSet.fold (fun positionGraph item ->
+                ||> Set.fold (fun positionGraph item ->
                     // A derivation edge exists iff the nonterminal produced by this item
                     // is the one we're trying to derive AND the parser position of this
                     // item is the initial position.

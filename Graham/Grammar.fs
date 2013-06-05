@@ -43,6 +43,7 @@ type ProductionRuleId = int<ProductionRuleIdentifier>
 type ParserStateId = int<ParserStateIdentifier>
 
 /// A nonterminal or the start symbol.
+[<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
 type AugmentedNonterminal<'Nonterminal when 'Nonterminal : comparison> =
     /// The start symbol.
     | Start
@@ -58,6 +59,7 @@ type AugmentedNonterminal<'Nonterminal when 'Nonterminal : comparison> =
             nonterm.ToString ()        
 
 /// A terminal (token) or the end-of-file marker.
+[<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
 type AugmentedTerminal<'Terminal when 'Terminal : comparison> =
     /// A terminal symbol specified by a grammar.
     | Terminal of 'Terminal

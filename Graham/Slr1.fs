@@ -47,7 +47,7 @@ module Slr1 =
         (lr0ParserTable, lr0ParserTable.ParserStates)
         ||> TagBimap.fold (fun parserTable stateId items ->
             (parserTable, items)
-            ||> HashSet.fold (fun parserTable item ->
+            ||> Set.fold (fun parserTable item ->
                 // If the parser position is at the end of this item's production,
                 // remove the Reduce actions from the ACTION table for any tokens
                 // which aren't in this nonterminal's FOLLOW set.

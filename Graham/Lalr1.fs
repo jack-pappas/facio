@@ -107,7 +107,7 @@ module Lalr1 =
 
             // Fold over the LR(0) items in this parser state.
             (lookback_includes, parserState)
-            ||> HashSet.fold (fun (lookback : PartialFunction<_, NonterminalTransition<_>>, includes : Relation<_>) item ->
+            ||> Set.fold (fun (lookback : PartialFunction<_, NonterminalTransition<_>>, includes : Relation<_>) item ->
                 // Only consider items with rules which produce this nonterminal.
                 if item.Nonterminal <> nonterminal then
                     lookback, includes
@@ -164,7 +164,7 @@ module Lalr1 =
                             // 'j' represents the final/last state of the path through the parser transition graph
                             // which describes the derivation of a rule (thereby producing a nonterminal).
                             (lookback, TagBimap.find j lr0ParserTable.ParserStates)
-                            ||> HashSet.fold (fun lookback item' ->
+                            ||> Set.fold (fun lookback item' ->
                                 if item.Nonterminal = item'.Nonterminal
                                     && item.Production = item'.Production then
                                     let rule = item.Nonterminal, item.Production
@@ -244,7 +244,7 @@ module Lalr1 =
         (lr0ParserTable, lr0ParserTable.ParserStates)
         ||> TagBimap.fold (fun lr0ParserTable stateId items ->
             (lr0ParserTable, items)
-            ||> HashSet.fold (fun lr0ParserTable item ->
+            ||> Set.fold (fun lr0ParserTable item ->
                 // If the parser position is at the end of this item's production,
                 // remove the Reduce actions from the ACTION table for any terminals
                 // which aren't in this state/rule's lookahead set.

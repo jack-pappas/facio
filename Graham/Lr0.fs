@@ -67,7 +67,7 @@ module Lr0 =
             // A parser state is a 'reduce state' if any of its items
             // have a parser position past the end of the production.
             parserState
-            |> HashSet.exists (fun item ->
+            |> Set.exists (fun item ->
                 int item.Position = Array.length item.Production)
 
 
@@ -87,7 +87,7 @@ module Lr0 =
                 | Nonterminal _ -> false
 
         /// Computes the LR(0) closure of a set of items using a worklist-style algorithm.
-        let rec private closureImpl (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) items pendingItems =
+        let rec private closureImpl (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) items pendingItems : LrParserState<_,_,_> =
             match pendingItems with
             | [] ->
                 items
@@ -97,7 +97,7 @@ module Lr0 =
                     ((items, []), pendingItems)
                     ||> List.fold (fun (items, pendingItems) (item : LrItem<_,_,_>) ->
                         // Add the current item to the item set.
-                        let items = HashSet.add item items
+                        let items = Set.add item items
 
                         // If the position is at the end of the production,
                         // there's nothing that needs to be done for this item.
@@ -127,7 +127,7 @@ module Lr0 =
                                             Lookahead = (); }
 
                                         // Only add this item to the worklist if it hasn't been seen yet.
-                                        if HashSet.contains newItem items then pendingItems
+                                        if Set.contains newItem items then pendingItems
                                         else newItem :: pendingItems)
 
                                 // Return the updated item set and worklist.
@@ -142,13 +142,13 @@ module Lr0 =
         /// Computes the LR(0) closure of a set of items.
         let closure (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) items =
             // Call the recursive implementation, starting with the specified initial item set.
-            closureImpl productions HashSet.empty (HashSet.toList items)
+            closureImpl productions Set.empty (Set.toList items)
 
         /// Moves the 'dot' (the current parser position) past the
         /// specified symbol for each item in a set of items.
         let goto symbol items (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) : LrParserState<_,_,_> =
-            (HashSet.empty, items)
-            ||> HashSet.fold (fun updatedItems (item : LrItem<_,_,_>) ->
+            (Set.empty, items)
+            ||> Set.fold (fun updatedItems (item : LrItem<_,_,_>) ->
                 // If the next symbol to be parsed in the production is the
                 // specified symbol, create a new item with the position advanced
                 // to the right of the symbol and add it to the updated items set.
@@ -157,7 +157,7 @@ module Lr0 =
                     let updatedItem =
                         { item with
                             Position = item.Position + 1<_>; }
-                    HashSet.add updatedItem updatedItems
+                    Set.add updatedItem updatedItems
 
                 | _ ->
                     updatedItems)
@@ -178,7 +178,7 @@ module Lr0 =
                 let stateItems = TagBimap.find stateId (snd tableGenState).ParserStates
 
                 (workSet_tableGenState, stateItems)
-                ||> HashSet.fold (fun (workSet, ((_, env) as tableGenState)) item ->
+                ||> Set.fold (fun (workSet, ((_, env) as tableGenState)) item ->
                     // If the parser position is at the end of the production,
                     // add a 'reduce' action for every terminal (token) in the grammar.
                     if int item.Position = Array.length item.Production then
@@ -281,7 +281,7 @@ module Lr0 =
                         Production = production;
                         Position = GenericZero;
                         Lookahead = (); })
-                |> HashSet.ofArray
+                |> Set.ofArray
                 |> Item.closure grammar.Productions
 
             LrTableGenState.stateId initialParserState tableGenState

@@ -568,11 +568,11 @@ module private FsYacc =
                     Checked.uint16 stateToProdIdxsTableElements.Count
 
                 // Add the number of elements for this state to the 'elements' array.
-                stateToProdIdxsTableElements.Add (Checked.uint16 <| HashSet.count items)
+                stateToProdIdxsTableElements.Add (Checked.uint16 <| Set.count items)
 
                 // Store the elements for this state into the 'elements' array.
                 items
-                |> HashSet.iter (fun item ->
+                |> Set.iter (fun item ->
                     productionRuleIndices
                     |> Map.find (item.Nonterminal, item.Production)
                     |> Checked.uint16
@@ -857,12 +857,12 @@ module private FsYacc =
                 // Set the array element corresponding to this parser state.
                 immediateActions.[int parserStateId] <-
                     // Does this state contain just one (1) item?
-                    if HashSet.count items <> 1 then
+                    if Set.count items <> 1 then
                         // Return the value which indicates this parser state has no immediate action.
                         EnumToValue ActionValue.Any
                     else
                         /// The single item in this parser state.
-                        let item = items.First
+                        let item = Set.minElement items
 
                         // Is the parser position at the end of the production rule?
                         // (Or, if it's one of the starting productions -- the next-to-last position).
