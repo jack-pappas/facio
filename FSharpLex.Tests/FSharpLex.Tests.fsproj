@@ -46,7 +46,8 @@
     <Compile Include="TestCases.fs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="ExtCore, Version=0.8.23.0, Culture=neutral, PublicKeyToken=null">
+    <Reference Include="ExtCore">
+      <HintPath>..\packages\ExtCore.0.8.24\lib\net40\ExtCore.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="FsCheck">
