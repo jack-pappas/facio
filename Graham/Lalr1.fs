@@ -16,7 +16,6 @@ limitations under the License.
 
 *)
 
-//
 namespace Graham.LR
 
 open System.Diagnostics
