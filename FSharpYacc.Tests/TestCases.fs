@@ -101,7 +101,7 @@ module TestCases =
         SetErrorMode (oldMode ||| ErrorModes.SEM_NOGPFAULTERRORBOX) |> ignore
 
     //
-    let private testTimeout = TimeSpan.FromSeconds 60.0
+    let private testTimeout = TimeSpan.FromSeconds 30.0
 
     //
     type private RepositoryTestCases () =
