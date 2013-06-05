@@ -86,27 +86,30 @@ module Lr0 =
                 | Start -> true
                 | Nonterminal _ -> false
 
-        /// Computes the LR(0) closure of a set of items.
-        // OPTIMIZE : Modify this to use a worklist-style algorithm to avoid
-        // reprocessing items which already exist in the set (i.e., when iterating,
-        // we only process items added to the set in the previous iteration).
-        let closure (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) items =
-            /// Implementation of the LR(0) closure algorithm.
-            let rec closure items =
-                let items' =
-                    (items, items)
-                    ||> HashSet.fold (fun items (item : LrItem<_,_,_>) ->
+        /// Computes the LR(0) closure of a set of items using a worklist-style algorithm.
+        let rec private closureImpl (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) items pendingItems =
+            match pendingItems with
+            | [] ->
+                items
+            | _ ->
+                // Process the worklist.
+                let items, pendingItems =
+                    ((items, []), pendingItems)
+                    ||> List.fold (fun (items, pendingItems) (item : LrItem<_,_,_>) ->
+                        // Add the current item to the item set.
+                        let items = HashSet.add item items
+
                         // If the position is at the end of the production,
                         // there's nothing that needs to be done for this item.
                         match item.CurrentSymbol with
                         | None ->
-                            items
+                            items, pendingItems
                         | Some sym ->
                             // Determine what to do based on the next symbol to be parsed.
                             match sym with
                             | Symbol.Terminal _ ->
                                 // Nothing to do for terminals
-                                items
+                                items, pendingItems
                             | Symbol.Nonterminal nontermId ->
                                 /// The productions of this nonterminal.
                                 let nontermProductions = Map.find nontermId productions
@@ -114,25 +117,32 @@ module Lr0 =
                                 // For all productions of this nonterminal, create a new item
                                 // with the parser position at the beginning of the production.
                                 // Add these new items into the set of items.
-                                (items, nontermProductions)
-                                ||> Array.fold (fun items production ->
-                                    let newItem = {
-                                        Nonterminal = nontermId;
-                                        Production = production;
-                                        Position = GenericZero;
-                                        Lookahead = (); }
+                                let pendingItems =
+                                    (pendingItems, nontermProductions)
+                                    ||> Array.fold (fun pendingItems production ->
+                                        let newItem = {
+                                            Nonterminal = nontermId;
+                                            Production = production;
+                                            Position = GenericZero;
+                                            Lookahead = (); }
 
-                                    HashSet.add newItem items))
+                                        // Only add this item to the worklist if it hasn't been seen yet.
+                                        if HashSet.contains newItem items then pendingItems
+                                        else newItem :: pendingItems)
 
-                // If the items set has changed, recurse for another iteration.
-                // If not, we're done processing and the set is returned.
-                if items' === items || items' = items then
-                    items
-                else
-                    closure items'
+                                // Return the updated item set and worklist.
+                                items, pendingItems)
 
-            // Compute the closure, starting with the specified initial items.
-            closure items
+                // Recurse to continue processing.
+                // OPTIMIZE : It's not really necessary to reverse the list here -- we could just as easily
+                // process the list in reverse but for now we'll process it in order to make the algorithm
+                // easier to understand/trace.
+                closureImpl productions items (List.rev pendingItems)
+
+        /// Computes the LR(0) closure of a set of items.
+        let closure (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) items =
+            // Call the recursive implementation, starting with the specified initial item set.
+            closureImpl productions HashSet.empty (HashSet.toList items)
 
         /// Moves the 'dot' (the current parser position) past the
         /// specified symbol for each item in a set of items.
