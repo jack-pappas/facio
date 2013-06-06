@@ -14,11 +14,6 @@
 .hg
 .svn
 
-# NuGet
-!.nuget/*
-[Pp]ackages/*
-![Pp]ackages/repositories.config
-
 # .NET / Visual Studio (Folders)
 ipch/
 obj/
@@ -55,6 +50,11 @@ obj/
 *.vssscc
 Ankh.NoLoad
 
+# NuGet
+!.nuget/*
+[Pp]ackages/*
+![Pp]ackages/repositories.config
+
 # Visual Studio (Project Upgrade)
 Backup/
 _UpgradeReport_Files/
@@ -85,11 +85,14 @@ _ReSharper*/
 LexerGenerated.fs
 ParserGenerated.fs
 
-# Ignore the NuGet build folder, it's only needed when building the package
+# Ignore the NuGet build folder, it's only needed when building packages
 _NuGetBuild/*
 
 # Ignore any output files from the test cases.
-TestCases/*.*
-TestCases/*/*.*
-!TestCases/*.fsl
-!TestCases/*.fsy
+/TestCases/*.*
+!/TestCases/*.fsl
+!/TestCases/*.fsy
+
+/TestCases/*/*.*
+!/TestCases/*/*.fsl
+!/TestCases/*/*.fsy
