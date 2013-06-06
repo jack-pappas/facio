@@ -188,90 +188,93 @@ module Lr1 =
 
 
     //
-    let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, predictiveSets) workSet (tableGenState : Lr1TableGenState<_,_>) =
+    let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, predictiveSets) workSet
+        (env : LrTableGenEnvironment<_,_>) (tableGenState : Lr1TableGenState<_,_>) =
         // If the work-set is empty, we're finished creating the table.
         if Set.isEmpty workSet then
             tableGenState
         else
-            ((Set.empty, tableGenState), workSet)
-            ||> Set.fold (fun workSet_tableGenState stateId ->
-                /// The set of parser items for this state.
-                let stateItems = TagBimap.find stateId (snd tableGenState).ParserStates
+            let workSet, tableGenState =
+                ((Set.empty, tableGenState), workSet)
+                ||> Set.fold (fun workSet_tableGenState stateId ->
+                    /// The set of parser items for this state.
+                    let stateItems = TagBimap.find stateId tableGenState.ParserStates
 
-                (workSet_tableGenState, stateItems)
-                ||> Set.fold (fun (workSet, tableGenState) item ->
-                    // If the parser position is at the end of the production,
-                    // add a 'reduce' action for every terminal (token) in the grammar.
-                    if int item.Position = Array.length item.Production then
-                        /// The production rule identifier for this production.
-                        let productionRuleId =
-                            // Get the production-rule-id from the 'environment' component of the table-generation state.
-                            let productionKey = (item.Nonterminal, item.Production)
-                            Map.find productionKey (fst tableGenState).ProductionRuleIds
+                    (workSet_tableGenState, stateItems)
+                    ||> Set.fold (fun (workSet, tableGenState) item ->
+                        // If the parser position is at the end of the production,
+                        // add a 'reduce' action for every terminal (token) in the grammar.
+                        if int item.Position = Array.length item.Production then
+                            /// The production rule identifier for this production.
+                            let productionRuleId =
+                                // Get the production-rule-id from the 'environment' component of the table-generation state.
+                                let productionKey = (item.Nonterminal, item.Production)
+                                Map.find productionKey env.ProductionRuleIds
 
-                        // Add a 'reduce' action for the entry with this state and lookahead token.
-                        workSet,
-                        LrTableGenState.reduce (stateId, item.Lookahead) productionRuleId tableGenState
-                        // TEMP : Discard the unit return value until we can use a monadic fold.
-                        |> snd
-                    else
-                        // Add actions to the table based on the next symbol to be parsed.
-                        match item.Production.[int item.Position] with
-                        | Symbol.Terminal EndOfFile ->
-                            // When the end-of-file symbol is the next to be parsed,
-                            // add an 'accept' action to the table to indicate the
-                            // input has been parsed successfully.
+                            // Add a 'reduce' action for the entry with this state and lookahead token.
                             workSet,
-                            LrTableGenState.accept stateId tableGenState
+                            LrTableGenState.reduce (stateId, item.Lookahead) productionRuleId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
+                        else
+                            // Add actions to the table based on the next symbol to be parsed.
+                            match item.Production.[int item.Position] with
+                            | Symbol.Terminal EndOfFile ->
+                                // When the end-of-file symbol is the next to be parsed,
+                                // add an 'accept' action to the table to indicate the
+                                // input has been parsed successfully.
+                                workSet,
+                                LrTableGenState.accept stateId tableGenState
+                                // TEMP : Discard the unit return value until we can use a monadic fold.
+                                |> snd
 
-                        | Symbol.Terminal (Terminal _ as token) as symbol ->                            
-                            /// The state (set of items) transitioned into
-                            /// via the edge labeled with this symbol.
-                            let targetState = Item.goto symbol stateItems grammar predictiveSets
+                            | Symbol.Terminal (Terminal _ as token) as symbol ->                            
+                                /// The state (set of items) transitioned into
+                                /// via the edge labeled with this symbol.
+                                let targetState = Item.goto symbol stateItems grammar predictiveSets
 
-                            /// The identifier of the target state.
-                            let (isNewState, targetStateId), tableGenState =
-                                LrTableGenState.stateId targetState tableGenState
+                                /// The identifier of the target state.
+                                let (isNewState, targetStateId), tableGenState =
+                                    LrTableGenState.stateId targetState tableGenState
 
-                            // If this is a new state, add it to the list of states which need to be visited.
-                            let workSet =
-                                if isNewState then
-                                    Set.add targetStateId workSet
-                                else workSet
+                                // If this is a new state, add it to the list of states which need to be visited.
+                                let workSet =
+                                    if isNewState then
+                                        Set.add targetStateId workSet
+                                    else workSet
 
-                            // The next symbol to be parsed is a terminal (token),
-                            // so add a 'shift' action to this entry of the table.
-                            workSet,
-                            LrTableGenState.shift (stateId, token) targetStateId tableGenState
-                            // TEMP : Discard the unit return value until we can use a monadic fold.
-                            |> snd
+                                // The next symbol to be parsed is a terminal (token),
+                                // so add a 'shift' action to this entry of the table.
+                                workSet,
+                                LrTableGenState.shift (stateId, token) targetStateId tableGenState
+                                // TEMP : Discard the unit return value until we can use a monadic fold.
+                                |> snd
 
-                        | Symbol.Nonterminal nonterm as symbol ->
-                            /// The state (set of items) transitioned into
-                            /// via the edge labeled with this symbol.
-                            let targetState = Item.goto symbol stateItems grammar predictiveSets
+                            | Symbol.Nonterminal nonterm as symbol ->
+                                /// The state (set of items) transitioned into
+                                /// via the edge labeled with this symbol.
+                                let targetState = Item.goto symbol stateItems grammar predictiveSets
 
-                            /// The identifier of the target state.
-                            let (isNewState, targetStateId), tableGenState =
-                                LrTableGenState.stateId targetState tableGenState
+                                /// The identifier of the target state.
+                                let (isNewState, targetStateId), tableGenState =
+                                    LrTableGenState.stateId targetState tableGenState
 
-                            // If this is a new state, add it to the list of states which need to be visited.
-                            let workSet =
-                                if isNewState then
-                                    Set.add targetStateId workSet
-                                else workSet
+                                // If this is a new state, add it to the list of states which need to be visited.
+                                let workSet =
+                                    if isNewState then
+                                        Set.add targetStateId workSet
+                                    else workSet
 
-                            // The next symbol to be parsed is a nonterminal,
-                            // so add a 'goto' action to this entry of the table.
-                            workSet,
-                            LrTableGenState.goto (stateId, nonterm) targetStateId tableGenState
-                            // TEMP : Discard the unit return value until we can use a monadic fold.
-                            |> snd
-                        ))
+                                // The next symbol to be parsed is a nonterminal,
+                                // so add a 'goto' action to this entry of the table.
+                                workSet,
+                                LrTableGenState.goto (stateId, nonterm) targetStateId tableGenState
+                                // TEMP : Discard the unit return value until we can use a monadic fold.
+                                |> snd
+                            ))
+
             // Recurse with the updated table-generation state and work-set.
-            ||> createTableImpl (grammar, predictiveSets)
+            createTableImpl (grammar, predictiveSets) workSet env tableGenState
 
     /// Create an LR(1) parser table for the specified grammar.
     let createTable (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>)
@@ -281,14 +284,6 @@ module Lr1 =
 
         // The initial table-gen state.
         let (_, initialParserStateId), tableGenState =
-            //
-            let tableGenState =
-                LrTableGenState.empty
-                // Create the production-rule-id lookup table.
-                |> LrTableGenState.setProductionRules grammar.Productions
-                // TEMP : Discard the unit return value until we rewrite this using the State workflow.
-                |> snd
-
             /// The initial state (set of items) passed to 'createTableImpl'.
             let initialParserState : Lr1ParserState<_,_> =
                 let startProductions = Map.find Start grammar.Productions
@@ -307,10 +302,13 @@ module Lr1 =
                     Set.add item items)
                 |> Item.closure grammar predictiveSets
 
-            LrTableGenState.stateId initialParserState tableGenState
+            LrTableGenState.stateId initialParserState LrTableGenState.empty
 
-        // Create the table.
-        createTableImpl (grammar, predictiveSets) (Set.singleton initialParserStateId) tableGenState
-        // Get the table from the table-generation state.
-        |> snd
+        /// The parser table generation environment.
+        let tableGenEnv = LrTableGenEnvironment.Create grammar.Productions
+            
+        // Create the parser table.
+        (tableGenEnv, tableGenState)
+        ||> createTableImpl (grammar, predictiveSets) (Set.singleton initialParserStateId)
+
 

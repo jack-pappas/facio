@@ -330,47 +330,15 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
 
 
 //
-type LrTableGenEnvironment<'Nonterminal, 'Terminal, 'Lookahead
+type LrTableGenEnvironment<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
-    and 'Terminal : comparison
-    and 'Lookahead : comparison> = {
+    and 'Terminal : comparison> = {
     //
     ProductionRuleIds : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], ProductionRuleId>;
-}
-
-/// LR(k) parser table generation state.
-type LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison
-    and 'Lookahead : comparison> =
-    (*  The table generation state is the table itself plus an "environment" record
-        which holds lookup tables only needed while creating the table. *)
-    LrTableGenEnvironment<'Nonterminal, 'Terminal, 'Lookahead> *
-    LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>
-
-/// Functions which use the State monad to manipulate an LR(k) table-generation state.
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module LrTableGenState =
-    module Graph = LabeledSparseDigraph
-
-    /// Returns an empty LrTableGenState with the given
-    /// nonterminal and terminal types.
-    let empty<'Nonterminal, 'Terminal, 'Lookahead
-        when 'Nonterminal : comparison
-        and 'Terminal : comparison
-        and 'Lookahead : comparison> : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
-        // The empty table-gen environment.
-        {   ProductionRuleIds = Map.empty; },
-        // The empty parser table.
-        {   ParserStates = TagBimap.empty;
-            ParserTransitions = Graph.empty;
-            ActionTable = Map.empty;
-            GotoTable = Map.empty; }
-
-    /// Creates the production-rule-id lookup table from the production rules of a grammar,
-    /// then stores it in the environment component of the table-generation state.
-    let setProductionRules (productionRules : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>)
-                            (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
+} with
+    /// Creates a new LR(k) parser table generation environment from
+    /// a grammar's production rules.
+    static member Create (productionRules : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) =
         /// The production-rule-id lookup table.
         let productionRuleIds =
             (Map.empty, productionRules)
@@ -384,17 +352,32 @@ module LrTableGenState =
                     // Add this identifier to the map.
                     Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
 
-        // Update the table-generation state.
-        let tableGenState =
-            // Destructure the table-generation state to get it's components.
-            let env, table = tableGenState
+        // Create and return the environment.
+        { ProductionRuleIds = productionRuleIds; }
 
-            { env with
-                ProductionRuleIds = productionRuleIds;
-            }, table
 
-        // Return the updated table-generation state.
-        (), tableGenState
+/// LR(k) parser table generation state.
+type LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison
+    and 'Lookahead : comparison> =
+    LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>
+
+/// Functions which use the State monad to manipulate an LR(k) table-generation state.
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module LrTableGenState =
+    module Graph = LabeledSparseDigraph
+
+    /// Returns an empty LrTableGenState with the given
+    /// nonterminal and terminal types.
+    let empty<'Nonterminal, 'Terminal, 'Lookahead
+        when 'Nonterminal : comparison
+        and 'Terminal : comparison
+        and 'Lookahead : comparison> : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
+        {   ParserStates = TagBimap.empty;
+            ParserTransitions = Graph.empty;
+            ActionTable = Map.empty;
+            GotoTable = Map.empty; }
 
     /// <summary>Retrives the identifier for a given parser state (set of items).
     /// If the state has not been assigned an identifier, one is created
@@ -408,32 +391,25 @@ module LrTableGenState =
     /// </returns>
     let stateId
         (parserState : LrParserState<'Nonterminal, 'Terminal, 'Lookahead>)
-        (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
+        (state : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
         : _ * LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
-        // Destructure the table-generation state to get it's components.
-        let env, table = tableGenState
-
         // Try to retrieve an existing id for this state.
-        match TagBimap.tryFindValue parserState table.ParserStates with
+        match TagBimap.tryFindValue parserState state.ParserStates with
         | Some parserStateId ->
-            (false, parserStateId), tableGenState
+            (false, parserStateId), state
         | None ->
             // Create a new ID for this state.
             let parserStateId =
-                tag <| TagBimap.count table.ParserStates
-
-            // Update the table-generation state.
-            let tableGenState =
-                env,
-                { table with
-                    // Add this state to the transition graph's vertex-set.
-                    ParserTransitions = Graph.addVertex parserStateId table.ParserTransitions;
-                    // Add this state (by it's state-id) to the table.
-                    ParserStates =
-                        TagBimap.add parserStateId parserState table.ParserStates; }
+                tag <| TagBimap.count state.ParserStates
 
             // Return the id, along with the updated table-generation state.
-            (true, parserStateId), tableGenState
+            (true, parserStateId),
+            { state with
+                // Add this state to the transition graph's vertex-set.
+                ParserTransitions = Graph.addVertex parserStateId state.ParserTransitions;
+                // Add this state (by it's state-id) to the table.
+                ParserStates =
+                    TagBimap.add parserStateId parserState state.ParserStates; }
 
     //
     let private impossibleActionSetErrorMsg<'Terminal when 'Terminal : comparison>
@@ -444,16 +420,14 @@ module LrTableGenState =
 
     /// Add a 'shift' action to the parser table.
     let shift (key : TerminalTransition<'Terminal>) targetState
-        (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
+        (state : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
         : unit * LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
         // Destructure the key to get it's components.
         let sourceState, transitionSymbol = key
-        // Destructure the table-generation state to get it's components.
-        let env, table = tableGenState
 
         //
         let actionSet =
-            match Map.tryFind key table.ActionTable with
+            match Map.tryFind key state.ActionTable with
             | None ->
                 Action <| Shift targetState
             | Some actionSet ->
@@ -482,29 +456,22 @@ module LrTableGenState =
                     |> invalidOp
 
         // Update the table-generation state.
-        let tableGenState =
-            env,
-            { table with
-                // Update the table with the new action set.
-                ActionTable = Map.add key actionSet table.ActionTable;
-                // Add an edge labeled with this symbol to the transition graph.
-                ParserTransitions =
-                    table.ParserTransitions
-                    |> Graph.addEdge sourceState targetState (Symbol.Terminal transitionSymbol); }
-            
-        // Return the updated table-generation state.
-        (), tableGenState
+        (),
+        { state with
+            // Update the table with the new action set.
+            ActionTable = Map.add key actionSet state.ActionTable;
+            // Add an edge labeled with this symbol to the transition graph.
+            ParserTransitions =
+                state.ParserTransitions
+                |> Graph.addEdge sourceState targetState (Symbol.Terminal transitionSymbol); }
 
     /// Add a 'reduce' action to the ACTION table.
     let reduce (key : TerminalTransition<'Terminal>) (productionRuleId : ProductionRuleId)
-               (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
+        (state : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
         : unit * LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
-        // Destructure the table-generation state to get it's components.
-        let env, table = tableGenState
-
         //
         let actionSet =
-            match Map.tryFind key table.ActionTable with
+            match Map.tryFind key state.ActionTable with
             | None ->
                 Action <| Reduce productionRuleId
             | Some actionSet ->
@@ -547,47 +514,36 @@ module LrTableGenState =
                     |> invalidOp
 
         // Update the table-generation state.
-        let tableGenState =
-            env,
-            { table with
-                // Update the table with the new action set.
-                ActionTable = Map.add key actionSet table.ActionTable; }
-        
-        // Return the updated table-generation state.
-        (), tableGenState            
+        (),
+        { state with
+            // Update the table with the new action set.
+            ActionTable = Map.add key actionSet state.ActionTable; }
 
     /// Add an entry to the GOTO table.
-    let goto (key : NonterminalTransition<'Nonterminal>)
-                (targetState : ParserStateId)
-                (tableGenState : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
+    let goto (key : NonterminalTransition<'Nonterminal>) (targetState : ParserStateId)
+        (state : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
         : unit * LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
         // Destructure the key to get it's components.
         let sourceState, transitionSymbol = key
-        // Destructure the table-generation state to get it's components.
-        let env, table = tableGenState
 
         //
-        match Map.tryFind key table.GotoTable with
+        match Map.tryFind key state.GotoTable with
         | None ->
             // Update the table-generation state.
-            let tableGenState =
-                env,
-                { table with
-                    // Update the table with the new entry.
-                    GotoTable = Map.add key targetState table.GotoTable;
-                    // Add an edge labelled with this symbol to the transition graph.
-                    ParserTransitions =
-                        table.ParserTransitions
-                        |> Graph.addEdge sourceState targetState (Symbol.Nonterminal transitionSymbol); }
-
-            // Return the updated table-generation state.
-            (), tableGenState
+            (),
+            { state with
+                // Update the table with the new entry.
+                GotoTable = Map.add key targetState state.GotoTable;
+                // Add an edge labelled with this symbol to the transition graph.
+                ParserTransitions =
+                    state.ParserTransitions
+                    |> Graph.addEdge sourceState targetState (Symbol.Nonterminal transitionSymbol); }
 
         | Some entry ->
             // If the existing entry is the same as the target state,
             // there's nothing to do -- just return the existing 'tableGenState'.
             if entry = targetState then
-                (), tableGenState
+                (), state
             else
                 let msg = sprintf "Cannot add the entry (g%i) to the GOTO table; \
                                     it already contains an entry (g%i) for the key %A."
@@ -595,15 +551,14 @@ module LrTableGenState =
                 invalidOp msg
 
     /// Add an 'accept' action to the ACTION table.
-    let accept (sourceState : ParserStateId) (tableGenState : LrTableGenState<'Nonterminal, AugmentedTerminal<'Terminal>, 'Lookahead>) =
+    let accept (sourceState : ParserStateId)
+        (state : LrTableGenState<'Nonterminal, AugmentedTerminal<'Terminal>, 'Lookahead>) =
         /// The transition key for the ACTION table.
         let key = sourceState, EndOfFile
-        // Destructure the table-generation state to get it's components.
-        let env, table = tableGenState
 
         //
         let actionSet =
-            match Map.tryFind key table.ActionTable with
+            match Map.tryFind key state.ActionTable with
             | None ->
                 // Create a new 'accept' action for this action set.
                 Action Accept
@@ -618,12 +573,9 @@ module LrTableGenState =
                 |> invalidOp
 
         // Update the table-generation state.
-        let tableGenState =
-            env,
-            { table with
-                // Add the new action set into the table.
-                ActionTable = Map.add key actionSet table.ActionTable; }
+        (),
+        { state with
+            // Add the new action set into the table.
+            ActionTable = Map.add key actionSet state.ActionTable; }
 
-        // Return the updated table-generation state.
-        (), tableGenState
 
