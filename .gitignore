@@ -86,7 +86,7 @@ LexerGenerated.fs
 ParserGenerated.fs
 
 # Ignore the NuGet build folder, it's only needed when building packages
-_NuGetBuild/*
+/_build/*
 
 # Ignore any output files from the test cases.
 /TestCases/*.*
