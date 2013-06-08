@@ -47,7 +47,7 @@
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExtCore">
-      <HintPath>..\packages\ExtCore.0.8.24\lib\net40\ExtCore.dll</HintPath>
+      <HintPath>..\packages\ExtCore.0.8.25\lib\net40\ExtCore.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="FsCheck">
