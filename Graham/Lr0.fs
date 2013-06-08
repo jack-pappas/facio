@@ -170,7 +170,7 @@ module Lr0 =
         (env : LrTableGenEnvironment<_,_>) (tableGenState : Lr0TableGenState<_,_>) =
         // If the work-set is empty, we're done creating the table.
         if TagSet.isEmpty workSet then
-            tableGenState
+            (), tableGenState
         else
             let workSet, tableGenState =
                 // OPTIMIZE : Use the State.TagSet.fold function from ExtCore here.
@@ -183,7 +183,8 @@ module Lr0 =
                     ||> Set.fold (fun (workSet, tableGenState) item ->
                         // If the parser position is at the end of the production,
                         // add a 'reduce' action for every terminal (token) in the grammar.
-                        if int item.Position = Array.length item.Production then
+                        match item.CurrentSymbol with
+                        | None ->
                             /// The production rule identifier for this production.
                             let productionRuleId =
                                 // Get the production-rule-id from the 'environment' component of the table-generation state.
@@ -198,9 +199,9 @@ module Lr0 =
                                 LrTableGenState.reduce key productionRuleId tableGenState
                                 // TEMP : Discard the unit return value until we can use a monadic fold.
                                 |> snd)
-                        else
+                        | Some sym ->
                             // Add actions to the table based on the next symbol to be parsed.
-                            match item.Production.[int item.Position] with
+                            match sym with
                             | Symbol.Terminal EndOfFile ->
                                 // When the end-of-file symbol is the next to be parsed,
                                 // add an 'accept' action to the table to indicate the
@@ -259,34 +260,40 @@ module Lr0 =
             createTableImpl grammar workSet env tableGenState
 
     /// Creates an LR(0) parser table from the specified grammar.
-    let createTable (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) : Lr0ParserTable<'Nonterminal, 'Terminal> =
+    let createTable (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>)
+        : Lr0ParserTable<'Nonterminal, 'Terminal> =
         // Preconditions
         // TODO
 
-        // The initial table-generation state.
-        let (_, initialParserStateId), tableGenState =
-            /// The initial state (set of items) passed to 'createTable'.
-            let initialParserState =
-                grammar.Productions
-                |> Map.find Start
-                |> Array.map (fun production ->
-                    // Create an 'item', with the parser position at
-                    // the beginning of the production.
-                    {   Nonterminal = Start;
-                        Production = production;
-                        Position = GenericZero;
-                        Lookahead = (); })
-                |> Set.ofArray
-                |> Item.closure grammar.Productions
-
-            LrTableGenState.stateId initialParserState LrTableGenState.empty
-
         /// The parser table generation environment.
         let tableGenEnv = LrTableGenEnvironment.Create grammar.Productions
-            
-        // Create the parser table.
-        (tableGenEnv, tableGenState)
-        ||> createTableImpl grammar (TagSet.singleton initialParserStateId)
+
+        let workflow =
+            readerState {
+            /// The identifier for the initial parser state.
+            let! (_, initialParserStateId) =
+                /// The initial LR state (set of items) passed to 'createTableImpl'.
+                let initialParserState =
+                    grammar.Productions
+                    |> Map.find Start
+                    |> Array.map (fun production ->
+                        // Create an 'item', with the parser position at
+                        // the beginning of the production.
+                        {   Nonterminal = Start;
+                            Production = production;
+                            Position = GenericZero;
+                            Lookahead = (); })
+                    |> Set.ofArray
+                    |> Item.closure grammar.Productions
+
+                ReaderState.liftState (LrTableGenState.stateId initialParserState)
+
+            return! createTableImpl grammar (TagSet.singleton initialParserStateId)
+            }
+
+        // Execute the workflow to create the parser table.
+        (tableGenEnv, LrTableGenState.empty)
+        ||> ReaderState.execute workflow
 
     //
     let applyPrecedence (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,

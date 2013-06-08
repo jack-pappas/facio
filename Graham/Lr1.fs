@@ -21,6 +21,8 @@ namespace Graham.LR
 open LanguagePrimitives
 open ExtCore
 open ExtCore.Collections
+open ExtCore.Control
+open ExtCore.Control.Collections
 open Graham.Grammar
 open AugmentedPatterns
 open Graham.Analysis
@@ -110,14 +112,15 @@ module Lr1 =
             let rec closure items =
                 let items' =
                     (items, items)
-                    ||> Set.fold (fun items item ->
+                    ||> Set.fold (fun items (item : LrItem<_,_,_>) ->
                         // If the position is at the end of the production,
                         // there's nothing that needs to be done for this item.
-                        if int item.Position = Array.length item.Production then
+                        match item.CurrentSymbol with
+                        | None ->
                             items
-                        else
+                        | Some sym ->
                             // Determine what to do based on the next symbol to be parsed.
-                            match item.Production.[int item.Position] with
+                            match sym with
                             | Symbol.Terminal _ ->
                                 // Nothing to do for terminals
                                 items
@@ -188,11 +191,12 @@ module Lr1 =
 
 
     //
+    // TODO : Simplify this function using the readerState workflow.
     let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, predictiveSets) workSet
         (env : LrTableGenEnvironment<_,_>) (tableGenState : Lr1TableGenState<_,_>) =
         // If the work-set is empty, we're finished creating the table.
         if Set.isEmpty workSet then
-            tableGenState
+            (), tableGenState
         else
             let workSet, tableGenState =
                 ((Set.empty, tableGenState), workSet)
@@ -204,7 +208,8 @@ module Lr1 =
                     ||> Set.fold (fun (workSet, tableGenState) item ->
                         // If the parser position is at the end of the production,
                         // add a 'reduce' action for every terminal (token) in the grammar.
-                        if int item.Position = Array.length item.Production then
+                        match item.CurrentSymbol with
+                        | None ->
                             /// The production rule identifier for this production.
                             let productionRuleId =
                                 // Get the production-rule-id from the 'environment' component of the table-generation state.
@@ -216,9 +221,10 @@ module Lr1 =
                             LrTableGenState.reduce (stateId, item.Lookahead) productionRuleId tableGenState
                             // TEMP : Discard the unit return value until we can use a monadic fold.
                             |> snd
-                        else
+                        
+                        | Some sym ->
                             // Add actions to the table based on the next symbol to be parsed.
-                            match item.Production.[int item.Position] with
+                            match sym with
                             | Symbol.Terminal EndOfFile ->
                                 // When the end-of-file symbol is the next to be parsed,
                                 // add an 'accept' action to the table to indicate the
@@ -279,36 +285,43 @@ module Lr1 =
     /// Create an LR(1) parser table for the specified grammar.
     let createTable (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>)
         : Lr1ParserTable<'Nonterminal, 'Terminal> =
+        // Preconditions
+        // TODO
+
         /// Analysis of the augmented grammar.
         let predictiveSets = PredictiveSets.ofGrammar grammar
 
-        // The initial table-gen state.
-        let (_, initialParserStateId), tableGenState =
-            /// The initial state (set of items) passed to 'createTableImpl'.
-            let initialParserState : Lr1ParserState<_,_> =
-                let startProductions = Map.find Start grammar.Productions
-                (Set.empty, startProductions)
-                ||> Array.fold (fun items production ->
-                    // Create an 'item', with the parser position at
-                    // the beginning of the production.
-                    let item = {
-                        Nonterminal = Start;
-                        Production = production;
-                        Position = GenericZero;
-                        // Any token can be used here, because the end-of-file symbol
-                        // (in the augmented start production) will never be shifted.
-                        // We use the EndOfFile token itself here to keep the code generic.
-                        Lookahead = EndOfFile; }
-                    Set.add item items)
-                |> Item.closure grammar predictiveSets
-
-            LrTableGenState.stateId initialParserState LrTableGenState.empty
-
         /// The parser table generation environment.
         let tableGenEnv = LrTableGenEnvironment.Create grammar.Productions
-            
-        // Create the parser table.
-        (tableGenEnv, tableGenState)
-        ||> createTableImpl (grammar, predictiveSets) (Set.singleton initialParserStateId)
 
+        let workflow =
+            readerState {
+            /// The identifier for the initial parser state.
+            let! (_, initialParserStateId) =
+                /// The initial LR state (set of items) passed to 'createTableImpl'.
+                let initialParserState : Lr1ParserState<_,_> =
+                    let startProductions = Map.find Start grammar.Productions
+                    (Set.empty, startProductions)
+                    ||> Array.fold (fun items production ->
+                        // Create an 'item', with the parser position at
+                        // the beginning of the production.
+                        let item = {
+                            Nonterminal = Start;
+                            Production = production;
+                            Position = GenericZero;
+                            // Any token can be used here, because the end-of-file symbol
+                            // (in the augmented start production) will never be shifted.
+                            // We use the EndOfFile token itself here to keep the code generic.
+                            Lookahead = EndOfFile; }
+                        Set.add item items)
+                    |> Item.closure grammar predictiveSets
+
+                ReaderState.liftState (LrTableGenState.stateId initialParserState)
+
+            return! createTableImpl (grammar, predictiveSets) (Set.singleton initialParserStateId)
+            }
+
+        // Execute the workflow to create the parser table.
+        (tableGenEnv, LrTableGenState.empty)
+        ||> ReaderState.execute workflow
 
