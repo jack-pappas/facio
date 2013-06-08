@@ -195,17 +195,17 @@ module Lr1 =
     let rec private createTableImpl (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, predictiveSets) workSet
         (env : LrTableGenEnvironment<_,_>) (tableGenState : Lr1TableGenState<_,_>) =
         // If the work-set is empty, we're finished creating the table.
-        if Set.isEmpty workSet then
+        if TagSet.isEmpty workSet then
             (), tableGenState
         else
             let workSet, tableGenState =
-                ((Set.empty, tableGenState), workSet)
-                ||> Set.fold (fun workSet_tableGenState stateId ->
+                (TagSet.empty, workSet, tableGenState)
+                |||> State.TagSet.fold (fun workSet stateId tableGenState ->
                     /// The set of parser items for this state.
                     let stateItems = TagBimap.find stateId tableGenState.ParserStates
 
-                    (workSet_tableGenState, stateItems)
-                    ||> Set.fold (fun (workSet, tableGenState) item ->
+                    (workSet, stateItems, tableGenState)
+                    |||> State.Set.fold (fun workSet item tableGenState ->
                         // If the parser position is at the end of the production,
                         // add a 'reduce' action for every terminal (token) in the grammar.
                         match item.CurrentSymbol with
@@ -246,7 +246,7 @@ module Lr1 =
                                 // If this is a new state, add it to the list of states which need to be visited.
                                 let workSet =
                                     if isNewState then
-                                        Set.add targetStateId workSet
+                                        TagSet.add targetStateId workSet
                                     else workSet
 
                                 // The next symbol to be parsed is a terminal (token),
@@ -268,7 +268,7 @@ module Lr1 =
                                 // If this is a new state, add it to the list of states which need to be visited.
                                 let workSet =
                                     if isNewState then
-                                        Set.add targetStateId workSet
+                                        TagSet.add targetStateId workSet
                                     else workSet
 
                                 // The next symbol to be parsed is a nonterminal,
@@ -318,7 +318,7 @@ module Lr1 =
 
                 ReaderState.liftState (LrTableGenState.stateId initialParserState)
 
-            return! createTableImpl (grammar, predictiveSets) (Set.singleton initialParserStateId)
+            return! createTableImpl (grammar, predictiveSets) (TagSet.singleton initialParserStateId)
             }
 
         // Execute the workflow to create the parser table.
