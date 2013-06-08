@@ -28,6 +28,24 @@ open Graham.Analysis
 open Graham.Graph
 
 
+//
+module private LrItemHelper =
+    //
+    let compareArrays<'T when 'T : comparison> (arr1 : 'T[], arr2 : 'T[]) : int =
+        let len = arr1.Length
+        match compare len arr2.Length with
+        | 0 ->
+            let mutable result = 0
+            let mutable idx = 0
+
+            while idx < len && result = 0 do
+                result <- compare arr1.[idx] arr2.[idx]
+                idx <- idx + 1
+
+            result
+
+        | c -> c
+
 /// An LR(k) item.
 [<DebuggerDisplay("{DebuggerDisplay,nq}")>]
 [<CustomEquality; CustomComparison>]
@@ -131,7 +149,7 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
                         // Are the productions the same or equal?
                         match
                             if this.Production === other.Production then 0
-                            else compare this.Production other.Production with
+                            else LrItemHelper.compareArrays (this.Production, other.Production) with
                         | 0 ->
                             // Are the lookaheads the same or equal?
                             match
