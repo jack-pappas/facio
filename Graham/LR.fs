@@ -30,6 +30,7 @@ open Graham.Graph
 
 /// An LR(k) item.
 [<DebuggerDisplay("{DebuggerDisplay,nq}")>]
+[<CustomEquality; CustomComparison>]
 type LrItem<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
@@ -92,8 +93,59 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
         sb.ToString ()
 
     /// <inherit />
+    override this.Equals other =
+        match other with
+        | :? LrItem<'Nonterminal, 'Terminal, 'Lookahead> as other ->
+            LrItem.Equals (this, other)
+        | _ ->
+            false
+
+    /// <inherit />
     override this.ToString () =
         this.ToString '.'
+
+    //
+    static member private Equals (item1 : LrItem<'Nonterminal, 'Terminal, 'Lookahead>, item2 : LrItem<'Nonterminal, 'Terminal, 'Lookahead>) =
+        item1 === item2 || (
+            (box item1.Nonterminal === box item2.Nonterminal || item1.Nonterminal = item2.Nonterminal) &&
+            (item1.Production === item2.Production || item1.Production = item2.Production) &&
+            (box item1.Lookahead === box item2.Lookahead || item1.Lookahead = item2.Lookahead) &&
+            item1.Position = item2.Position)
+
+    interface System.IEquatable<LrItem<'Nonterminal, 'Terminal, 'Lookahead>> with
+        member this.Equals other =
+            LrItem.Equals (this, other)
+
+    interface System.IComparable with
+        member this.CompareTo other =
+            match other with
+            | :? LrItem<'Nonterminal, 'Terminal, 'Lookahead> as other ->
+                // Are the instances actually the same instance?
+                if this === other then 0
+                else
+                    // Are the nonterminals the same or equal?
+                    match
+                        if box this.Nonterminal === box other.Nonterminal then 0
+                        else compare this.Nonterminal other.Nonterminal with
+                    | 0 ->
+                        // Are the productions the same or equal?
+                        match
+                            if this.Production === other.Production then 0
+                            else compare this.Production other.Production with
+                        | 0 ->
+                            // Are the lookaheads the same or equal?
+                            match
+                                if box this.Lookahead === box other.Production then 0
+                                else compare this.Lookahead other.Lookahead with
+                            | 0 ->
+                                // Compare the parser positions.
+                                compare this.Position other.Position
+                            | c -> c
+                        | c -> c
+                    | c -> c
+
+            | _ ->
+                invalidArg "other" "The other object is not a type-compatible instance of LrItem."
 
 /// An LR(k) parser state -- i.e., a set of LR(k) items.
 type LrParserState<'Nonterminal, 'Terminal, 'Lookahead
