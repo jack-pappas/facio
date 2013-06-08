@@ -99,39 +99,34 @@ module Lr0 =
                         // Add the current item to the item set.
                         let items = Set.add item items
 
-                        // If the position is at the end of the production,
-                        // there's nothing that needs to be done for this item.
+                        // If the position is at the end of the production, or if the current symbol
+                        // is a terminal, there's nothing that needs to be done for this item.
                         match item.CurrentSymbol with
-                        | None ->
+                        | None
+                        | Some (Symbol.Terminal _) ->
                             items, pendingItems
-                        | Some sym ->
-                            // Determine what to do based on the next symbol to be parsed.
-                            match sym with
-                            | Symbol.Terminal _ ->
-                                // Nothing to do for terminals
-                                items, pendingItems
-                            | Symbol.Nonterminal nontermId ->
+                        | Some (Symbol.Nonterminal nontermId) ->
+                            // For all productions of this nonterminal, create a new item
+                            // with the parser position at the beginning of the production.
+                            // Add these new items into the set of items.
+                            let pendingItems =
                                 /// The productions of this nonterminal.
                                 let nontermProductions = Map.find nontermId productions
 
-                                // For all productions of this nonterminal, create a new item
-                                // with the parser position at the beginning of the production.
-                                // Add these new items into the set of items.
-                                let pendingItems =
-                                    (pendingItems, nontermProductions)
-                                    ||> Array.fold (fun pendingItems production ->
-                                        let newItem = {
-                                            Nonterminal = nontermId;
-                                            Production = production;
-                                            Position = GenericZero;
-                                            Lookahead = (); }
+                                (pendingItems, nontermProductions)
+                                ||> Array.fold (fun pendingItems production ->
+                                    let newItem = {
+                                        Nonterminal = nontermId;
+                                        Production = production;
+                                        Position = GenericZero;
+                                        Lookahead = (); }
 
-                                        // Only add this item to the worklist if it hasn't been seen yet.
-                                        if Set.contains newItem items then pendingItems
-                                        else newItem :: pendingItems)
+                                    // Only add this item to the worklist if it hasn't been seen yet.
+                                    if Set.contains newItem items then pendingItems
+                                    else newItem :: pendingItems)
 
-                                // Return the updated item set and worklist.
-                                items, pendingItems)
+                            // Return the updated item set and worklist.
+                            items, pendingItems)
 
                 // Recurse to continue processing.
                 // OPTIMIZE : It's not really necessary to reverse the list here -- we could just as easily

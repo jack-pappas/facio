@@ -105,29 +105,33 @@ module Lr1 =
             // Call the recursive implementation to compute the FIRST set.
             firstSetOfString Set.empty startIndex
 
-        /// Computes the LR(1) closure of a set of items.
-        // OPTIMIZE : Modify this to use a worklist-based algorithm as in the LR(0) closure computation.
-        let closure (grammar : Grammar<'Nonterminal, 'Terminal>) predictiveSets items : LrParserState<_,_,_> =
-            /// Implementation of the LR(1) closure algorithm.
-            let rec closure items =
-                let items' =
-                    (items, items)
-                    ||> Set.fold (fun items (item : LrItem<_,_,_>) ->
-                        // If the position is at the end of the production,
-                        // there's nothing that needs to be done for this item.
+        //
+        let rec private closureImpl (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) predictiveSets items pendingItems : LrParserState<_,_,_> =
+            match pendingItems with
+            | [] ->
+                items
+            | _ ->
+                // Process the worklist.
+                let items, pendingItems =
+                    ((items, []), pendingItems)
+                    ||> List.fold (fun (items, pendingItems) (item : LrItem<_,_,_>) ->
+                        // Add the current item to the item set.
+                        let items = Set.add item items
+
+                        // If the position is at the end of the production, or if the current symbol
+                        // is a terminal, there's nothing that needs to be done for this item.
                         match item.CurrentSymbol with
-                        | None ->
-                            items
-                        | Some sym ->
-                            // Determine what to do based on the next symbol to be parsed.
-                            match sym with
-                            | Symbol.Terminal _ ->
-                                // Nothing to do for terminals
-                                items
-                            | Symbol.Nonterminal nontermId ->
+                        | None
+                        | Some (Symbol.Terminal _) ->
+                            items, pendingItems
+                        | Some (Symbol.Nonterminal nontermId) ->
+                            // For all productions of this nonterminal, create a new item
+                            // with the parser position at the beginning of the production.
+                            // Add these new items into the set of items.
+                            let pendingItems =
                                 /// The productions of this nonterminal.
-                                let nontermProductions = Map.find nontermId grammar.Productions
-                            
+                                let nontermProductions = Map.find nontermId productions
+
                                 /// The FIRST set of the remaining symbols in this production
                                 /// (i.e., the symbols following this nonterminal symbol),
                                 /// plus the lookahead token from the item.
@@ -137,29 +141,35 @@ module Lr1 =
                                 // For all productions of this nonterminal, create a new item
                                 // with the parser position at the beginning of the production.
                                 // Add these new items into the set of items.
-                                (items, nontermProductions)
-                                ||> Array.fold (fun items production ->
+                                (pendingItems, nontermProductions)
+                                ||> Array.fold (fun pendingItems production ->
                                     // Combine the production with each token which could
                                     // possibly follow this nonterminal.
-                                    (items, firstSetOfRemainingSymbols)
-                                    ||> Set.fold (fun items nontermFollowToken ->
+                                    (pendingItems, firstSetOfRemainingSymbols)
+                                    ||> Set.fold (fun pendingItems nontermFollowToken ->
                                         let newItem = {
                                             Nonterminal = nontermId;
                                             Production = production;
                                             Position = GenericZero;
                                             Lookahead = nontermFollowToken; }
 
-                                        Set.add newItem items)))
+                                        // Only add this item to the worklist if it hasn't been seen yet.
+                                        if Set.contains newItem items then pendingItems
+                                        else newItem :: pendingItems))
 
-                // If the items set has changed, recurse for another iteration.
-                // If not, we're done processing and the set is returned.
-                if items' = items then
-                    items
-                else
-                    closure items'
+                            // Return the updated item set and worklist.
+                            items, pendingItems)
 
-            // Compute the closure, starting with the specified initial item.
-            closure items
+                // Recurse to continue processing.
+                // OPTIMIZE : It's not really necessary to reverse the list here -- we could just as easily
+                // process the list in reverse but for now we'll process it in order to make the algorithm
+                // easier to understand/trace.
+                closureImpl productions predictiveSets items (List.rev pendingItems)
+
+        /// Computes the LR(1) closure of a set of items.
+        let closure (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) predictiveSets items : LrParserState<_,_,_> =
+            // Call the recursive implementation, starting with the specified initial item set.
+            closureImpl productions predictiveSets Set.empty (Set.toList items)
 
         /// Moves the 'dot' (the current parser position) past the
         /// specified symbol for each item in a set of items.
@@ -187,7 +197,7 @@ module Lr1 =
                             updatedItems)
 
             // Return the closure of the item set.
-            closure grammar predictiveSets items
+            closure grammar.Productions predictiveSets items
 
 
     //
@@ -335,7 +345,7 @@ module Lr1 =
                             // We use the EndOfFile token itself here to keep the code generic.
                             Lookahead = EndOfFile; }
                         Set.add item items)
-                    |> Item.closure grammar predictiveSets
+                    |> Item.closure grammar.Productions predictiveSets
 
                 ReaderState.liftState (LrTableGenState.stateId initialParserState)
 
