@@ -156,9 +156,7 @@ module internal Relation =
     let digraph (X : Set<'T>, R : Relation<'T>, F' : PartialFunction<'T, 'U>) =
         //
         let N =
-            (Map.empty, X)
-            ||> Set.fold (fun N x ->
-                Map.add x NotStarted N)
+            X |> Map.ofKeys (fun _ -> NotStarted)
 
         ((Map.empty, N, []), X)
         ||> Set.fold (fun (F, N, stack) x ->
