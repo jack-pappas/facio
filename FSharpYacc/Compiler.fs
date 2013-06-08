@@ -20,6 +20,7 @@ limitations under the License.
 module FSharpYacc.Compiler
 
 open ExtCore
+open ExtCore.Printf
 open ExtCore.Collections
 open ExtCore.Control
 open ExtCore.Control.Collections
@@ -590,6 +591,8 @@ let private precedenceSettings (processedSpec : ProcessedSpecification<Nontermin
 /// Compiles a parser specification into a deterministic pushdown automaton (DPDA),
 /// then invokes a specified backend to generate code implementing the parser automaton.
 let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationOptions) : Choice<_,_> =
+    tprintfn "Compiling the parser specification..."
+
     /// The grammar created from the parser specification.
     let grammar =
         //
@@ -624,21 +627,33 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
         precedence table to the constructed parser table to (possibly) resolve some
         of them. At this point, if there aren't any remaining conflicts, report that
         the grammar is LR(0) and return. *)
-    //
-    let lr0Table = Lr0.createTable grammar
+    
+    /// The LR(0) parser table.
+    let lr0Table =
+        tprintf "  Creating the LR(0) parser table..."
+        let lr0Table = Lr0.createTable grammar
+        tprintfn "done."
+        lr0Table
 
     (*  Upgrade the LR(0) automaton to SLR(1); report the remaining number of S/R and
         R/R conflicts. If there aren't any remaining conflicts, report that the grammar
         is SLR(1) and return. *)
     //
-    let slr1Table = Slr1.upgrade (grammar, lr0Table, productionRuleIds)        
+    let slr1Table =
+        tprintf "  Upgrading the LR(0) parser table to SLR(1)..."
+        let slr1Table = Slr1.upgrade (grammar, lr0Table, productionRuleIds)
+        tprintfn "done."
+        slr1Table
 
     (*  Upgrade the LR(0)/SLR(1) automaton to LALR(1); report the remaining number of
         S/R and R/R conflicts. If there aren't any remaining conflicts, report that the
         grammar is LALR(1) and return. *)
     //
     let lalrLookaheadSets =
-        Lalr1.lookaheadSets (grammar, slr1Table)
+        tprintf "  Computing LALR(1) look-ahead sets..."
+        let lalrLookaheadSets = Lalr1.lookaheadSets (grammar, slr1Table)
+        tprintfn "done."
+        lalrLookaheadSets
 
     // If we detected that the grammar is not LR(k), stop and return an error message.
     match lalrLookaheadSets with
@@ -647,13 +662,19 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
     | Choice1Of2 lookaheadSets ->
         //
         let lalr1Table =
-            Lalr1.upgrade (grammar, slr1Table, productionRuleIds, lookaheadSets)
+            tprintf "  Upgrading the SLR(1) parser table to LALR(1)..."
+            let lalr1Table = Lalr1.upgrade (grammar, slr1Table, productionRuleIds, lookaheadSets)
+            tprintfn "done."
+            lalr1Table
 
         (* Apply precedence settings to resolve as many conflicts as possible. *)
         /// The LALR(1) parser table, after applying precedence settings.
         let lalr1Table =
+            tprintf "  Applying precedence declarations..."
             // Apply precedences to resolve conflicts.
-            Lr0.applyPrecedence (lalr1Table, precedenceSettings)
+            let lalr1Table = Lr0.applyPrecedence (lalr1Table, precedenceSettings)
+            tprintfn "done."
+            lalr1Table
             
         (*  If we reach this point, the grammar is not LALR(1), but we can still create a
             parser by taking certain actions to resolve any remaining conflicts.
@@ -661,8 +682,12 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
             we've taken to resolve it. *)
         //
         let lalr1Table =
-            Lr0.resolveConflicts lalr1Table
+            tprintf "  Using default strategy to solve any remaining conflicts..."
+            let lalr1Table = Lr0.resolveConflicts lalr1Table
+            tprintfn "done."
+            lalr1Table
 
         // Return the compiled parser table.
+        tprintfn "Finished compiling the parser specification."
         Choice1Of2 lalr1Table
 
