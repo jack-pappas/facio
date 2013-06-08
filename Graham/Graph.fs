@@ -436,7 +436,7 @@ module VertexLabeledSparseDigraph =
     /// it's strongly-connected components into a single vertex.
     let condense (graph : VertexLabeledSparseDigraph<'Vertex>) : VertexLabeledSparseDigraph<Set<'Vertex>> =
         //
-        raise <| System.NotImplementedException "VertexLabeledSparseDigraph.condense"
+        notImpl "VertexLabeledSparseDigraph.condense"
 
 
 /// An immutable implementation of a vertex- and edge-labeled sparse digraph.

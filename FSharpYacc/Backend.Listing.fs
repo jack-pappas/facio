@@ -41,7 +41,7 @@ type TableListingBackend () =
     interface IBackend with
         member this.Invoke (processedSpec, parserTable, options) : unit =
             // TODO
-            raise <| System.NotImplementedException "TableListingBackend.Invoke"
+            notImpl "TableListingBackend.Invoke"
 
 //            /// Compilation options specific to this backend.
 //            let fsyaccOptions =

@@ -107,5 +107,5 @@ module internal LeftCorner =
 
     /// Adapts a LALR(1) parser table into an LC(1) parser table.
     let ofLalr1 (lalr1Table : LrParserTable<'Nonterminal, 'Terminal, 'Terminal>) =
-        raise <| System.NotImplementedException "LeftCorner.ofLalr1"
+        notImpl "LeftCorner.ofLalr1"
 

@@ -268,12 +268,12 @@ module PredictiveSets =
 //
 //    // Detect unreachable/dead nonterminals
 //    let unreachableNonterminals () =
-//        raise <| System.NotImplementedException "Grammar.unreachableNonterminals"
+//        notImpl "Grammar.unreachableNonterminals"
 //
 //    // Detect unreachable productions; i.e., productions overlapped
 //    // by some earlier production of the same nonterminal.
 //    let unreachableProductions () =
-//        raise <| System.NotImplementedException "Grammar.unreachableProductions"
+//        notImpl "Grammar.unreachableProductions"
 
 
 (* TODO :   Implement an ambiguity detection module. *)
