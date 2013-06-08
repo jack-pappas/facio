@@ -94,6 +94,16 @@ type Symbol<'Nonterminal, 'Terminal
         | Nonterminal nonterm ->
             nonterm.ToString ()
 
+    /// 'Lift' the symbol into an equivalent augmented symbol.
+    static member Augment (symbol : Symbol<'Nonterminal, 'Terminal>) =
+        match symbol with
+        | Symbol.Nonterminal nontermId ->
+            AugmentedNonterminal.Nonterminal nontermId
+            |> Symbol.Nonterminal
+        | Symbol.Terminal token ->
+            AugmentedTerminal.Terminal token
+            |> Symbol.Terminal
+
 /// A symbol within a context-free grammar (CFG) augmented with
 /// the start symbol and end-of-file marker.
 type AugmentedSymbol<'Nonterminal, 'Terminal
@@ -156,14 +166,7 @@ type Grammar<'Nonterminal, 'Terminal
                 (Map.empty, grammar.Productions)
                 ||> Map.fold (fun productionMap nontermId nontermProductions ->
                     let nontermProductions =
-                        nontermProductions
-                        |> Array.map (Array.map (function
-                            | Symbol.Nonterminal nontermId ->
-                                AugmentedNonterminal.Nonterminal nontermId
-                                |> Symbol.Nonterminal
-                            | Symbol.Terminal token ->
-                                AugmentedTerminal.Terminal token
-                                |> Symbol.Terminal))
+                        Array.map (Array.map Symbol.Augment) nontermProductions
                     Map.add (AugmentedNonterminal.Nonterminal nontermId) nontermProductions productionMap)
                 // Add the (only) production of the new start symbol.
                 |> Map.add Start startProductions; }
