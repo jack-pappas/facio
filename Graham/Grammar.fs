@@ -149,8 +149,7 @@ type Grammar<'Nonterminal, 'Terminal
         // terminal representing the end-of-file marker.
         let startProductions =
             startSymbols
-            |> Set.toArray
-            |> Array.map (fun startSymbol ->
+            |> Set.mapToArray (fun startSymbol ->
                 [|  Nonterminal <| AugmentedNonterminal.Nonterminal startSymbol;
                     Terminal EndOfFile; |])
 

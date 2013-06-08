@@ -119,6 +119,13 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
             false
 
     /// <inherit />
+    override this.GetHashCode () =
+        ((19 +
+          ((hash this.Nonterminal) <<< 1) + 631) +
+          ((hash this.Lookahead) <<< 1) + 631) +
+          ((int this.Position) <<< 1) + 631
+
+    /// <inherit />
     override this.ToString () =
         this.ToString '.'
 
@@ -645,5 +652,3 @@ module LrTableGenState =
         { state with
             // Add the new action set into the table.
             ActionTable = Map.add key actionSet state.ActionTable; }
-
-
