@@ -37,11 +37,11 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
     //
     Nonterminal : 'Nonterminal;
     //
-    Position : int<ParserPosition>;
-    //
     Production : Symbol<'Nonterminal, 'Terminal>[];
     //
     Lookahead : 'Lookahead;
+    //
+    Position : int<ParserPosition>;
 } with
     /// Private. Only for use with DebuggerDisplayAttribute.
     [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
@@ -252,13 +252,11 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
     [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member private this.ConflictCount
         with get () =
-            (0, this.ActionTable)
-            ||> Map.fold (fun conflictCount _ actionSet ->
+            this.ActionTable
+            |> Map.countWith (fun _ actionSet ->
                 match actionSet with
-                | Action _ ->
-                    conflictCount
-                | Conflict _ ->
-                    conflictCount + 1)
+                | Action _ -> false
+                | Conflict _ -> true)
 
     /// Private. For debugging purposes only -- this property can be browsed
     /// in the VS debugger, but it can't be used from within our code.
@@ -282,12 +280,12 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
     /// in the VS debugger, but it can't be used from within our code.
     member private this.Conflicts
         with get () =
-            (Map.empty, this.ActionTable)
-            ||> Map.fold (fun conflicts key actionSet ->
+            this.ActionTable
+            |> Map.choose (fun _ actionSet ->
                 match actionSet with
-                | Action _ -> conflicts
+                | Action _ -> None
                 | Conflict conflict ->
-                    Map.add key conflict conflicts)
+                    Some conflict)
 
     /// Removes an action from the action set corresponding to a specified key.
     static member RemoveAction (table : LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>, key, action) =
