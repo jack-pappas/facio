@@ -199,9 +199,9 @@ module Lr0 =
                                 LrTableGenState.reduce key productionRuleId tableGenState
                                 // TEMP : Discard the unit return value until we can use a monadic fold.
                                 |> snd)
-                        | Some sym ->
+                        | Some symbol ->
                             // Add actions to the table based on the next symbol to be parsed.
-                            match sym with
+                            match symbol with
                             | Symbol.Terminal EndOfFile ->
                                 // When the end-of-file symbol is the next to be parsed,
                                 // add an 'accept' action to the table to indicate the
@@ -211,7 +211,7 @@ module Lr0 =
                                 // TEMP : Discard the unit return value until we can use a monadic fold.
                                 |> snd
 
-                            | Symbol.Terminal (Terminal _ as token) as symbol ->
+                            | Symbol.Terminal (Terminal _ as token) ->
                                 /// The state (set of items) transitioned into
                                 /// via the edge labeled with this symbol.
                                 let targetState = Item.goto symbol stateItems grammar.Productions
@@ -233,7 +233,7 @@ module Lr0 =
                                 // TEMP : Discard the unit return value until we can use a monadic fold.
                                 |> snd
 
-                            | Symbol.Nonterminal nonterm as symbol ->
+                            | Symbol.Nonterminal nonterm ->
                                 /// The state (set of items) transitioned into
                                 /// via the edge labeled with this symbol.
                                 let targetState = Item.goto symbol stateItems grammar.Productions
