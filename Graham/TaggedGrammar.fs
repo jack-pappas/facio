@@ -150,6 +150,12 @@ module TaggedGrammar =
                         }))
 
 
+/// A tagged, augmented grammar.
+type TaggedAugmentedGrammar<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
+    TaggedGrammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
+
 /// Tags an integer as denoting the position of a parser in the right-hand-side (RHS) of a production rule.
 [<Measure>] type ParserPositionTag
 /// <summary>The position of a parser in the right-hand-side (RHS) of a production rule.</summary>

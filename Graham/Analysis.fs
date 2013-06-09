@@ -25,17 +25,15 @@ open Graham
 
 
 //
-type PredictiveSets<'Nonterminal, 'Terminal
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison> = {
+type PredictiveSets = {
     //
-    // OPTIMIZE : Change this to use a Multimap once it's available in ExtCore.
-    First : Map<'Nonterminal, Set<'Terminal>>;
+    // OPTIMIZE : Change this to use a TagMultimap once it's available in ExtCore.
+    First : TagMap<NonterminalIndexTag, TagSet<TerminalIndexTag>>;
     //
-    // OPTIMIZE : Change this to use a Multimap once it's available in ExtCore.
-    Follow : Map<'Nonterminal, Set<'Terminal>>;
+    // OPTIMIZE : Change this to use a TagMultimap once it's available in ExtCore.
+    Follow : TagMap<NonterminalIndexTag, TagSet<TerminalIndexTag>>;
     //
-    Nullable : Map<'Nonterminal, bool>;
+    Nullable : TagMap<NonterminalIndexTag, bool>;
 }
 
 //
@@ -49,7 +47,7 @@ module PredictiveSets =
                     avoid re-processing values which haven't changed. *)
 
     //
-    let computeNullable (grammar : Grammar<'Nonterminal, 'Terminal>) =
+    let internal nullable (grammar : Grammar<'Nonterminal, 'Terminal>) =
         /// Implementation of the nullable-map-computing algorithm.
         let rec computeNullable (nullable : Map<'Nonterminal, bool>) =
             let nullable, updated =
@@ -90,7 +88,7 @@ module PredictiveSets =
         |> computeNullable
 
     /// Determines if all symbols within the specified slice of a production are nullable.
-    let inline internal allNullableInSlice (production : Symbol<'Nonterminal, 'Terminal>[], startInclusive, endInclusive, nullable : Map<'Nonterminal, bool>) =
+    let inline private allNullableInSlice (production : Symbol<'Nonterminal, 'Terminal>[], startInclusive, endInclusive, nullable : Map<'Nonterminal, bool>) =
         (startInclusive, endInclusive)
         ||> Range.forall (fun index ->
             match production.[index] with
@@ -100,7 +98,7 @@ module PredictiveSets =
                 Map.find nontermId nullable)
 
     //
-    let computeFirst (grammar : Grammar<'Nonterminal, 'Terminal>) (nullable : Map<'Nonterminal, bool>) =
+    let internal first (grammar : Grammar<'Nonterminal, 'Terminal>) (nullable : Map<'Nonterminal, bool>) =
         /// Implementation of the algorithm for computing the FIRST sets of the nonterminals.
         let rec computeFirst (firstSets : Map<'Nonterminal, Set<'Terminal>>) =
             let firstSets, updated =
@@ -153,7 +151,7 @@ module PredictiveSets =
         |> computeFirst
 
     //
-    let computeFollow (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>)
+    let internal follow (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>)
                       (nullable : Map<AugmentedNonterminal<'Nonterminal>, bool>)
                       (firstSets : Map<AugmentedNonterminal<'Nonterminal>, Set<AugmentedTerminal<'Terminal>>>) =
         /// Implementation of the algorithm for computing the FOLLOW sets of the nonterminals.
@@ -248,18 +246,51 @@ module PredictiveSets =
     //
     let ofGrammar (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
         /// Map denoting which nonterminals in the grammar are nullable.
-        let nullable = computeNullable grammar
+        let nullable = nullable grammar
 
         /// The FIRST sets for the nonterminals in the grammar.
-        let firstSets = computeFirst grammar nullable
+        let firstSets = first grammar nullable
 
         /// The FOLLOW sets for the nonterminals in the grammar.
-        let followSets = computeFollow grammar nullable firstSets
+        let followSets = follow grammar nullable firstSets
 
-        // Combine the computed sets into a GrammarAnalysis record and return it.
-        { Nullable = nullable;
-            First = firstSets;
-            Follow = followSets; }
+        (* TEMP :   Until the analysis functions are modified to use a TaggedGrammar
+                    (or TaggedAugmentedGrammar), we need to convert their results so
+                    they can be used with the newly re-defined PredictiveSets record. *)
+        let taggedGrammar = TaggedGrammar.ofGrammar grammar
+
+        let nullable' =
+            (TagMap.empty, nullable)
+            ||> Map.fold (fun nullable' nonterminal isNullable ->
+                let nonterminalIndex = TagBimap.findValue nonterminal taggedGrammar.Nonterminals
+                TagMap.add nonterminalIndex isNullable nullable')
+
+        let firstSets' =
+            (TagMap.empty, firstSets)
+            ||> Map.fold (fun firstSets' nonterminal terminals ->
+                let nonterminalIndex = TagBimap.findValue nonterminal taggedGrammar.Nonterminals
+                let terminals' =
+                    (TagSet.empty, terminals)
+                    ||> Set.fold (fun terminals' terminal ->
+                        let terminalIndex = TagBimap.findValue terminal taggedGrammar.Terminals
+                        TagSet.add terminalIndex terminals')
+                TagMap.add nonterminalIndex terminals' firstSets')
+
+        let followSets' =
+            (TagMap.empty, followSets)
+            ||> Map.fold (fun followSets' nonterminal terminals ->
+                let nonterminalIndex = TagBimap.findValue nonterminal taggedGrammar.Nonterminals
+                let terminals' =
+                    (TagSet.empty, terminals)
+                    ||> Set.fold (fun terminals' terminal ->
+                        let terminalIndex = TagBimap.findValue terminal taggedGrammar.Terminals
+                        TagSet.add terminalIndex terminals')
+                TagMap.add nonterminalIndex terminals' followSets')
+
+        // Combine the computed sets into a PredictiveSets record and return it.
+        { Nullable = nullable';
+            First = firstSets';
+            Follow = followSets'; }
 
 
 ///// Reachability analyses on context-free grammars.
