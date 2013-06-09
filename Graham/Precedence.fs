@@ -47,15 +47,14 @@ type AbsolutePrecedenceLevel = int<AbsolutePrecedenceLevelTag>
 
 /// Contains precedence and associativity settings for a grammar,
 /// which can be used to resolve conflicts due to grammar ambiguities.
-type PrecedenceSettings<'Terminal
-    when 'Terminal : comparison> = {
+type PrecedenceSettings = {
     //
     RulePrecedence : TagMap<ProductionRuleIndexTag, Associativity * AbsolutePrecedenceLevel>;
     //
     TerminalPrecedence : TagMap<TerminalIndexTag, Associativity * AbsolutePrecedenceLevel>;
 } with
     /// Returns an empty PrecedenceSettings instance.
-    static member Empty : PrecedenceSettings<'Terminal> = {
+    static member Empty : PrecedenceSettings = {
         RulePrecedence = TagMap.empty;
         TerminalPrecedence = TagMap.empty; }
 
