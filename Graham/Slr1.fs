@@ -51,9 +51,10 @@ module Slr1 =
                 // If the parser position is at the end of this item's production,
                 // remove the Reduce actions from the ACTION table for any tokens
                 // which aren't in this nonterminal's FOLLOW set.
-                if int item.Position < Array.length item.Production then
+                match item.CurrentSymbol with
+                | Some _ ->
                     parserTable
-                else
+                | None ->
                     /// The rule nonterminal's FOLLOW set.
                     let nonterminalFollow =
                         Map.find item.Nonterminal predictiveSets.Follow
