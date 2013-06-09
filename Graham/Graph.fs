@@ -20,6 +20,8 @@ limitations under the License.
 namespace Graham.Graph
 
 open System.Diagnostics
+open ExtCore.Control
+open ExtCore.Control.Collections
 
 
 /// An immutable implementation of a vertex-labeled sparse digraph.
@@ -244,32 +246,28 @@ module VertexLabeledSparseDigraph =
 
     //
     let dominators (graph : VertexLabeledSparseDigraph<'Vertex>) =
+        choice {
         // If the graph's vertex-set is empty, return an
         // empty map instead of raising an exception.
         if isEmpty graph then
-            Choice1Of2 Map.empty
+            return Map.empty
         else
-        // Find the root vertex.
-        // If there is no root vertex, or multiple roots (i.e., the graph is
-        // not connected / has multiple components), return an error.
-        let root =
-            let roots = roots graph
+            // Find the root vertex.
+            // If there is no root vertex, or multiple roots (i.e., the graph is
+            // not connected / has multiple components), return an error.
+            let! root =
+                let roots = roots graph
 
-            // The set should have only one root vertex.
-            match Set.count roots with
-            | 0 ->
-                Choice2Of2 "The graph's vertex set is empty; or the graph is not a DAG."
-            | 1 ->
-                Set.minElement roots
-                |> Choice1Of2
-            | n ->
-                Choice2Of2 "The graph contains multiple components (i.e., the graph is not connected)."
+                // The set should have only one root vertex.
+                match Set.count roots with
+                | 0 ->
+                    Choice2Of2 "The graph's vertex set is empty; or the graph is not a DAG."
+                | 1 ->
+                    Set.minElement roots
+                    |> Choice1Of2
+                | _ ->
+                    Choice2Of2 "The graph contains multiple components (i.e., the graph is not connected)."
 
-        // TODO : Clean this up using the Either workflow.
-        match root with
-        | Choice2Of2 errorMsg ->
-            Choice2Of2 errorMsg
-        | Choice1Of2 root ->
             /// The predecessors of each vertex.
             let predecessorsOf = predecessors graph
 
@@ -309,15 +307,16 @@ module VertexLabeledSparseDigraph =
 
             // For vertices other than the root, initialize their
             // dominator sets to the graph's vertex-set.
-            (Map.empty, vertices)
-            ||> Set.fold (fun dominatedBy vertex ->
-                Map.add vertex graph.Vertices dominatedBy)
-            // The root vertex is it's own dominator.
-            |> Map.add root (Set.singleton root)
-            // Find the dominator sets by finding a fixpoint of the set equations.
-            |> domFix
-            |> Choice1Of2
-
+            return
+                (Map.empty, vertices)
+                ||> Set.fold (fun dominatedBy vertex ->
+                    Map.add vertex graph.Vertices dominatedBy)
+                // The root vertex is it's own dominator.
+                |> Map.add root (Set.singleton root)
+                // Find the dominator sets by finding a fixpoint of the set equations.
+                |> domFix
+        }
+(*
     /// Computes the set of vertices reachable from each vertex in a graph.
     // NOTE : This is equivalent to computing the non-reflexive transitive closure of the graph.
     let reachable (graph : VertexLabeledSparseDigraph<'Vertex>) =
@@ -437,6 +436,7 @@ module VertexLabeledSparseDigraph =
     let condense (graph : VertexLabeledSparseDigraph<'Vertex>) : VertexLabeledSparseDigraph<Set<'Vertex>> =
         //
         notImpl "VertexLabeledSparseDigraph.condense"
+*)
 
 
 /// An immutable implementation of a vertex- and edge-labeled sparse digraph.

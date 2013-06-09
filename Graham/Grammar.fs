@@ -16,31 +16,10 @@ limitations under the License.
 
 *)
 
-//
-namespace Graham.Grammar
+namespace Graham
 
 open System.Diagnostics
-open ExtCore
-open ExtCore.Collections
 
-
-//
-[<Measure>] type ProductionRuleIdentifier
-//
-type ProductionRuleId = int<ProductionRuleIdentifier>
-
-/// <summary>The position of a parser in the right-hand-side (RHS) of a production rule.</summary>
-/// <remarks>
-/// The position corresponds to the 0-based index of the next symbol
-/// to be parsed, so position values must always be within the range
-/// [0, production.Length].
-/// </remarks>
-[<Measure>] type ParserPosition
-
-/// Identifier for a parser state.
-[<Measure>] type ParserStateIdentifier
-/// Unique identifier for a parser state, e.g., when creating an LR parser table.
-type ParserStateId = int<ParserStateIdentifier>
 
 /// A nonterminal or the start symbol.
 [<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
@@ -112,33 +91,69 @@ type AugmentedSymbol<'Nonterminal, 'Terminal
     Symbol<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
 
 /// A context-free grammar (CFG).
-[<DebuggerDisplay("Terminals = {Terminals.Count,nq}, \
-                   Nonterminals = {Nonterminals.Count,nq}, \
-                   Rules = {ProductionRuleCount,nq}")>]
 type Grammar<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
-    and 'Terminal : comparison> = {
+    and 'Terminal : comparison> =
+    Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>
+
+/// A grammar augmented with the "start" symbol and the end-of-file marker.
+type AugmentedGrammar<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
+    Grammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
+
+//
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module Grammar =
     //
-    Terminals : Set<'Terminal>;
+    [<CompiledName("Nonterminals")>]
+    let nonterminals (grammar : Grammar<'Nonterminal, 'Terminal>) =
+        (Set.empty, grammar)
+        ||> Map.fold (fun nonterminals nonterminal productionRules ->
+            let nonterminals = Set.add nonterminal nonterminals
+
+            (nonterminals, productionRules)
+            ||> Array.fold (Array.fold (fun nonterminals symbol ->
+                match symbol with
+                | Nonterminal nonterminal ->
+                    Set.add nonterminal nonterminals
+                | Terminal _ ->
+                    nonterminals)))
+
     //
-    Nonterminals : Set<'Nonterminal>;
-    //
-    Productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>;
-} with
-    /// Private. Only for use with DebuggerDisplayAttribute.
-    /// Returns the number of production rules defined in the grammar.
-    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
-    member private this.ProductionRuleCount
-        with get () =
-            (0, this.Productions)
-            ||> Map.fold (fun ruleCount _ rules ->
-                ruleCount + Array.length rules)
+    [<CompiledName("Terminals")>]
+    let terminals (grammar : Grammar<'Nonterminal, 'Terminal>) =
+        (Set.empty, grammar)
+        ||> Map.fold (fun terminals _ rules ->
+            (terminals, rules)
+            ||> Array.fold (Array.fold (fun terminals symbol ->
+                match symbol with
+                | Nonterminal _ ->
+                    terminals
+                | Terminal terminal ->
+                    Set.add terminal terminals)))
+
+    /// Computes sets containing the nonterminals and terminals used with the productions of a grammar.
+    [<CompiledName("SymbolSets")>]
+    let symbolSets (grammar : Grammar<'Nonterminal, 'Terminal>) =
+        ((Set.empty, Set.empty), grammar)
+        ||> Map.fold (fun (nonterminals, terminals) nonterminal productionRules ->
+            let nonterminals = Set.add nonterminal nonterminals
+
+            ((nonterminals, terminals), productionRules)
+            ||> Array.fold (Array.fold (fun (nonterminals, terminals) symbol ->
+                match symbol with
+                | Nonterminal nonterminal ->
+                    Set.add nonterminal nonterminals, terminals
+                | Terminal terminal ->
+                    nonterminals, Set.add terminal terminals)))
 
     /// <summary>Augments a Grammar with a unique "start" symbol and the end-of-file marker.</summary>
     /// <param name="grammar">The grammar to be augmented.</param>
     /// <param name="startSymbols">The parser will begin parsing with any one of these symbols.</param>
     /// <returns>A grammar augmented with the Start symbol and the EndOfFile marker.</returns>
-    static member Augment (grammar : Grammar<'Nonterminal, 'Terminal>, startSymbols : Set<'Nonterminal>)
+    [<CompiledName("AugmentWith")>]
+    let augmentWith (grammar : Grammar<'Nonterminal, 'Terminal>) (startSymbols : Set<'Nonterminal>)
         : AugmentedGrammar<'Nonterminal, 'Terminal> =
         // Preconditions
         if Set.isEmpty startSymbols then
@@ -153,69 +168,23 @@ type Grammar<'Nonterminal, 'Terminal
                 [|  Nonterminal <| AugmentedNonterminal.Nonterminal startSymbol;
                     Terminal EndOfFile; |])
 
-        {   Terminals =
-                grammar.Terminals
-                |> Set.map AugmentedTerminal.Terminal
-                |> Set.add EndOfFile;
-            Nonterminals =
-                grammar.Nonterminals
-                |> Set.map AugmentedNonterminal.Nonterminal
-                |> Set.add Start;
-            Productions =
-                (Map.empty, grammar.Productions)
-                ||> Map.fold (fun productionMap nontermId nontermProductions ->
-                    let nontermProductions =
-                        Array.map (Array.map Symbol.Augment) nontermProductions
-                    Map.add (AugmentedNonterminal.Nonterminal nontermId) nontermProductions productionMap)
-                // Add the (only) production of the new start symbol.
-                |> Map.add Start startProductions; }
+        (Map.empty, grammar)
+        ||> Map.fold (fun productionMap nontermId nontermProductions ->
+            let nontermProductions =
+                Array.map (Array.map Symbol.Augment) nontermProductions
+            Map.add (AugmentedNonterminal.Nonterminal nontermId) nontermProductions productionMap)
+        // Add the (only) production of the new start symbol.
+        |> Map.add Start startProductions
 
     /// <summary>Augments a Grammar with a unique "start" symbol and the end-of-file marker.</summary>
     /// <param name="grammar">The grammar to be augmented.</param>
     /// <param name="startSymbol">The parser will begin parsing with this symbol.</param>
     /// <returns>A grammar augmented with the Start symbol and the EndOfFile marker.</returns>
-    static member Augment (grammar : Grammar<'Nonterminal, 'Terminal>, startSymbol : 'Nonterminal)
+    [<CompiledName("Augment")>]
+    let augment (grammar : Grammar<'Nonterminal, 'Terminal>) (startSymbol : 'Nonterminal)
         : AugmentedGrammar<'Nonterminal, 'Terminal> =
-        Grammar.Augment (grammar, Set.singleton startSymbol)
+        augmentWith grammar (Set.singleton startSymbol)
 
-    //
-    static member ProductionRuleIds (grammar : Grammar<'Nonterminal, 'Terminal>) =
-        (Map.empty, grammar.Productions)
-        ||> Map.fold (fun productionRuleIds nonterminal rules ->
-            (productionRuleIds, rules)
-            ||> Array.fold (fun productionRuleIds ruleRhs ->
-                /// The identifier for this production rule.
-                let productionRuleId : ProductionRuleId =
-                    tag <| Map.count productionRuleIds
-
-                // Add this identifier to the map.
-                Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
-
-    /// Computes sets containing the nonterminals and terminals used with the productions of a grammar.
-    static member SymbolSets (productions : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) =
-        ((Set.empty, Set.empty), productions)
-        ||> Map.fold (fun (nonterminals, terminals) nonterminal productions ->
-            // Add the nonterminal to the set of nonterminals
-            let nonterminals = Set.add nonterminal nonterminals
-
-            ((nonterminals, terminals), productions)
-            ||> Array.fold (Array.fold (fun (nonterminals, terminals) symbol ->
-                // Add the current symbol to the appropriate set.
-                match symbol with
-                | Terminal terminal ->
-                    nonterminals,
-                    Set.add terminal terminals
-                | Nonterminal nontermId ->
-                    Set.add nontermId nonterminals,
-                    terminals
-                    )))
-
-
-/// A grammar augmented with the "start" symbol and the end-of-file marker.
-and AugmentedGrammar<'Nonterminal, 'Terminal
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison> =
-    Grammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
 
 /// Active patterns which simplify pattern matching on augmented grammars.
 module internal AugmentedPatterns =
@@ -232,91 +201,3 @@ module internal AugmentedPatterns =
             Terminal terminal
         | AugmentedTerminal.EndOfFile ->
             EndOfFile
-
-
-/// Associativity of a terminal (token).
-/// This can be explicitly specified to override the
-/// default behavior for resolving conflicts.
-type Associativity =
-    /// Non-associative.
-    | NonAssociative
-    /// Left-associative.
-    | Left
-    /// Right-associative.
-    | Right
-
-    /// <inherit />
-    override this.ToString () =
-        match this with
-        | NonAssociative ->
-            "NonAssociative"
-        | Left ->
-            "Left"
-        | Right ->
-            "Right"
-
-//
-[<Measure>] type AbsolutePrecedence
-//
-type PrecedenceLevel = int<AbsolutePrecedence>
-
-/// Contains precedence and associativity settings for a grammar,
-/// which can be used to resolve conflicts due to grammar ambiguities.
-type PrecedenceSettings<'Terminal
-    when 'Terminal : comparison> = {
-    //
-    RulePrecedence : Map<ProductionRuleId, Associativity * PrecedenceLevel>;
-    //
-    TerminalPrecedence : Map<'Terminal, Associativity * PrecedenceLevel>;
-} with
-    /// Returns an empty PrecedenceSettings instance.
-    static member Empty : PrecedenceSettings<'Terminal> = {
-        RulePrecedence = Map.empty;
-        TerminalPrecedence = Map.empty; }
-
-
-(* TODO :   Un-comment the RelativePrecedence type whenever we get around to
-            implementing the algorithm for creating operator-precedence parsers. *)
-(*
-//
-[<DebuggerDisplay("{DebuggerDisplay,nq}")>]
-type RelativePrecedence =
-    //
-    | LessThan
-    //
-    | Equal
-    //
-    | GreaterThan
-
-    //
-    member private this.DebuggerDisplay
-        with get () =
-            match this with
-            | LessThan ->
-                "\u22d6"
-            | Equal ->
-                "\u2250"
-            | GreaterThan ->
-                "\u22d7"
-
-    /// <inherit />
-    override this.ToString () =
-        match this with
-        | LessThan ->
-            "LessThan"
-        | Equal ->
-            "Equal"
-        | GreaterThan ->
-            "GreaterThan"
-
-    //
-    static member Inverse prec =
-        match prec with
-        | LessThan ->
-            GreaterThan
-        | Equal ->
-            Equal
-        | GreaterThan ->
-            LessThan
-*)
-

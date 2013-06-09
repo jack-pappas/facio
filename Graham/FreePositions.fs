@@ -213,6 +213,7 @@ module FreePositions =
     //
     let private nonfreeItems (graph : StatePositionGraph<'Nonterminal, 'Terminal, 'Lookahead>) =
         /// For each item in the graph, contains the set of items/actions reachable from it.
+        // TODO : Modify this to use Relation instead of graph -- it's likely to be faster (and simpler).
         let reachableFrom = Graph.reachable graph
 
         /// For each item in the graph, contains the set of items/actions it's dominated _by_.
