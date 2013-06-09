@@ -20,7 +20,7 @@ namespace Graham.LR
 
 open ExtCore
 open ExtCore.Collections
-open Graham.Grammar
+open Graham
 open AugmentedPatterns
 open Graham.Analysis
 open Graham.Graph
@@ -35,9 +35,7 @@ open Graham.Graph
 [<RequireQualifiedAccess>]
 module Slr1 =
     /// Given a grammar and it's LR(0) parser table, upgrades the table to SLR(1).
-    let upgrade (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>,
-                 lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,
-                 productionRuleIds : Map<(AugmentedNonterminal<'Nonterminal> * AugmentedSymbol<'Nonterminal, 'Terminal>[]), ProductionRuleId>) =
+    let upgrade (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
         /// Predictive sets of the augmented grammar.
         let predictiveSets = PredictiveSets.ofGrammar grammar
 
@@ -51,28 +49,26 @@ module Slr1 =
                 // If the parser position is at the end of this item's production,
                 // remove the Reduce actions from the ACTION table for any tokens
                 // which aren't in this nonterminal's FOLLOW set.
-                match item.CurrentSymbol with
+                match LrItem.CurrentSymbol item taggedGrammar with
                 | Some _ ->
                     parserTable
                 | None ->
                     /// The rule nonterminal's FOLLOW set.
                     let nonterminalFollow =
-                        Map.find item.Nonterminal predictiveSets.Follow
+                        let nonterminalIndex = TagMap.find item.ProductionRuleIndex taggedGrammar.NonterminalOfProduction
+                        TagMap.find nonterminalIndex predictiveSets.Follow
 
                     // Remove the unnecessary Reduce actions, thereby resolving some conflicts.
-                    let action =
-                        productionRuleIds
-                        |> Map.find (item.Nonterminal, item.Production)
-                        |> LrParserAction.Reduce
+                    let action = LrParserAction.Reduce item.ProductionRuleIndex
 
-                    (parserTable, grammar.Terminals)
-                    ||> Set.fold (fun parserTable terminal ->
+                    (parserTable, taggedGrammar.Terminals)
+                    ||> TagBimap.fold (fun parserTable terminalIndex _ ->
                         // Is this terminal in the nonterminal's FOLLOW set?
-                        if Set.contains terminal nonterminalFollow then
+                        if TagSet.contains terminalIndex nonterminalFollow then
                             parserTable
                         else
                             // Remove the unnecessary Reduce action for this terminal.
-                            let key = stateId, terminal
+                            let key = stateId, terminalIndex
                             LrParserTable.RemoveAction (parserTable, key, action))
                             ))
 

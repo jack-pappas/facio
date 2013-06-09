@@ -58,6 +58,9 @@
     <Compile Include="Analysis.fs" />
     <Compile Include="Precedence.fs" />
     <Compile Include="LR.fs" />
+    <Compile Include="Lr0.fs" />
+    <Compile Include="Slr1.fs" />
+    <Compile Include="ConflictResolution.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExtCore">

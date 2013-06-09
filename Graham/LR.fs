@@ -55,7 +55,21 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
     Position : ParserPosition;
     //
     Lookahead : 'Lookahead;
-}
+} with
+    //
+    static member CurrentSymbol (item : LrItem<'Nonterminal, 'Terminal, 'Lookahead>)
+        (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) : Symbol<_,_> option =
+        // Get the production from the tagged grammar.
+        match TagMap.tryFind item.ProductionRuleIndex taggedGrammar.Productions with
+        | None ->
+            keyNotFound "Cannot find a production with the specified index."
+        | Some production ->
+            // If the parser position is not at the end of the production,
+            // return the next symbol to be parsed.
+            let position = int item.Position
+            if position < Array.length production then
+                Some <| production.[position]
+            else None
    
 /// An LR(k) parser state -- i.e., a set of LR(k) items.
 type LrParserState<'Nonterminal, 'Terminal, 'Lookahead
