@@ -156,17 +156,5 @@ type TaggedAugmentedGrammar<'Nonterminal, 'Terminal
     and 'Terminal : comparison> =
     TaggedGrammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
 
-/// Tags an integer as denoting the position of a parser in the right-hand-side (RHS) of a production rule.
-[<Measure>] type ParserPositionTag
-/// <summary>The position of a parser in the right-hand-side (RHS) of a production rule.</summary>
-/// <remarks>
-/// The position corresponds to the 0-based index of the next symbol to be parsed,
-/// so position values must always be within the range [0, production.Length].
-/// </remarks>
-type ParserPosition = int<ParserPositionTag>
 
-/// Identifier for a parser state.
-[<Measure>] type ParserStateIdentifier
-/// Unique identifier for a parser state, e.g., when creating an LR parser table.
-type ParserStateId = int<ParserStateIdentifier>
 

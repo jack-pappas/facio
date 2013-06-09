@@ -57,6 +57,7 @@
     <Compile Include="TaggedGrammar.fs" />
     <Compile Include="Analysis.fs" />
     <Compile Include="Precedence.fs" />
+    <Compile Include="LR.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExtCore">

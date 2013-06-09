@@ -22,156 +22,41 @@ namespace Graham.LR
 open System.Diagnostics
 open ExtCore
 open ExtCore.Collections
-open Graham.Grammar
+open Graham
 open AugmentedPatterns
 open Graham.Analysis
 open Graham.Graph
 
 
-//
-module private LrItemHelper =
-    //
-    let compareArrays<'T when 'T : comparison> (arr1 : 'T[], arr2 : 'T[]) : int =
-        let len = arr1.Length
-        match compare len arr2.Length with
-        | 0 ->
-            let mutable result = 0
-            let mutable idx = 0
+/// Tags an integer as denoting the position of a parser in the right-hand-side (RHS) of a production rule.
+[<Measure>] type ParserPositionTag
+/// <summary>The position of a parser in the right-hand-side (RHS) of a production rule.</summary>
+/// <remarks>
+/// The position corresponds to the 0-based index of the next symbol to be parsed,
+/// so position values must always be within the range [0, production.Length].
+/// </remarks>
+type ParserPosition = int<ParserPositionTag>
 
-            while idx < len && result = 0 do
-                result <- compare arr1.[idx] arr2.[idx]
-                idx <- idx + 1
-
-            result
-
-        | c -> c
+/// Tags an integer denoting the zero-based index of a parser state
+/// within a constructed parser automaton.
+[<Measure>] type ParserStateIndexTag
+/// The zero-based index of a parser state within a constructed parser automaton.
+type ParserStateIndex = int<ParserStateIndexTag>
 
 /// An LR(k) item.
 [<DebuggerDisplay("{DebuggerDisplay,nq}")>]
-[<CustomEquality; CustomComparison>]
 type LrItem<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
     and 'Lookahead : comparison> = {
     //
-    Nonterminal : 'Nonterminal;
+    ProductionRuleIndex : ProductionRuleIndex;
     //
-    Production : Symbol<'Nonterminal, 'Terminal>[];
+    Position : ParserPosition;
     //
     Lookahead : 'Lookahead;
-    //
-    Position : int<ParserPosition>;
-} with
-    /// Private. Only for use with DebuggerDisplayAttribute.
-    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
-    member private this.DebuggerDisplay
-        with get () =
-            this.ToString '\u2022'
-
-    //
-    member this.CurrentSymbol
-        with get () =
-            let position = int this.Position
-            if position = Array.length this.Production then None
-            else Some this.Production.[position]
-
-    /// <summary>Private ToString implementation which allows the 'dot' character to be specified.</summary>
-    /// <param name="dotChar">The character to use to represent the 'dot' (parser position).</param>
-    member private this.ToString (dotChar : char) =
-        let sb = System.Text.StringBuilder ()
-
-        // Add the nonterminal text and arrow to the StringBuilder.
-        sprintf "%O \u2192" this.Nonterminal
-        |> sb.Append |> ignore
-
-        // Is this an empty (epsilon) production?
-        if Array.isEmpty this.Production then
-            sb.Append " (Empty)" |> ignore
-        else
-            for i = 0 to Array.length this.Production do
-                // Append a space before each symbol.
-                sb.Append " " |> ignore
-
-                if i < int this.Position then
-                    this.Production.[i].ToString ()
-                    |> sb.Append |> ignore
-                elif i = int this.Position then
-                    // Append the dot character representing the parser position.
-                    sb.Append dotChar |> ignore
-                else
-                    this.Production.[i - 1].ToString ()
-                    |> sb.Append |> ignore
-
-        // Append the lookahead symbol, if applicable.
-        if typeof<'Lookahead> <> typeof<unit> then
-            sprintf ", %A" this.Lookahead
-            |> sb.Append |> ignore
-
-        // Return the constructed string.
-        sb.ToString ()
-
-    /// <inherit />
-    override this.Equals other =
-        match other with
-        | :? LrItem<'Nonterminal, 'Terminal, 'Lookahead> as other ->
-            LrItem.Equals (this, other)
-        | _ ->
-            false
-
-    /// <inherit />
-    override this.GetHashCode () =
-        ((19 +
-          ((hash this.Nonterminal) <<< 1) + 631) +
-          ((hash this.Lookahead) <<< 1) + 631) +
-          ((int this.Position) <<< 1) + 631
-
-    /// <inherit />
-    override this.ToString () =
-        this.ToString '.'
-
-    //
-    static member private Equals (item1 : LrItem<'Nonterminal, 'Terminal, 'Lookahead>, item2 : LrItem<'Nonterminal, 'Terminal, 'Lookahead>) =
-        item1 === item2 || (
-            (box item1.Nonterminal === box item2.Nonterminal || item1.Nonterminal = item2.Nonterminal) &&
-            (item1.Production === item2.Production || item1.Production = item2.Production) &&
-            (box item1.Lookahead === box item2.Lookahead || item1.Lookahead = item2.Lookahead) &&
-            item1.Position = item2.Position)
-
-    interface System.IEquatable<LrItem<'Nonterminal, 'Terminal, 'Lookahead>> with
-        member this.Equals other =
-            LrItem.Equals (this, other)
-
-    interface System.IComparable with
-        member this.CompareTo other =
-            match other with
-            | :? LrItem<'Nonterminal, 'Terminal, 'Lookahead> as other ->
-                // Are the instances actually the same instance?
-                if this === other then 0
-                else
-                    // Are the nonterminals the same or equal?
-                    match
-                        if box this.Nonterminal === box other.Nonterminal then 0
-                        else compare this.Nonterminal other.Nonterminal with
-                    | 0 ->
-                        // Are the productions the same or equal?
-                        match
-                            if this.Production === other.Production then 0
-                            else LrItemHelper.compareArrays (this.Production, other.Production) with
-                        | 0 ->
-                            // Are the lookaheads the same or equal?
-                            match
-                                if box this.Lookahead === box other.Production then 0
-                                else compare this.Lookahead other.Lookahead with
-                            | 0 ->
-                                // Compare the parser positions.
-                                compare this.Position other.Position
-                            | c -> c
-                        | c -> c
-                    | c -> c
-
-            | _ ->
-                invalidArg "other" "The other object is not a type-compatible instance of LrItem."
-
+}
+   
 /// An LR(k) parser state -- i.e., a set of LR(k) items.
 type LrParserState<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
@@ -182,9 +67,9 @@ type LrParserState<'Nonterminal, 'Terminal, 'Lookahead
 /// An action which manipulates the state of an LR(k) parser automaton.
 type LrParserAction =
     /// Shift into a state.
-    | Shift of ParserStateId
+    | Shift of ParserStateIndex
     /// Reduce by a production rule.
-    | Reduce of ProductionRuleId
+    | Reduce of ProductionRuleIndex
     /// Accept.
     | Accept
 
@@ -203,10 +88,10 @@ type LrParserAction =
 /// conflicts in its parser table have been resolved.
 type LrParserConflictSet = {
     //
-    Shift : ParserStateId option;
+    Shift : ParserStateIndex option;
     //
     // Invariant : This set should never be empty.
-    Reductions : TagSet<ProductionRuleIdentifier>;
+    Reductions : TagSet<ProductionRuleIndexTag>;
 }
 with
     /// <inherit />
@@ -297,14 +182,12 @@ type LrParserActionSet =
                 TagSet.contains reduceRuleId' conflict.Reductions
 
 //
-type NonterminalTransition<'Nonterminal
-    when 'Nonterminal : comparison> =
-    ParserStateId * 'Nonterminal
+type NonterminalTransition =
+    ParserStateIndex * NonterminalIndex
 
 //
-type TerminalTransition<'Terminal
-    when 'Terminal : comparison> =
-    ParserStateId * 'Terminal
+type TerminalTransition =
+    ParserStateIndex * TerminalIndex
 
 /// LR(k) parser table.
 [<DebuggerDisplay("States = {ParserStates.Count,nq}, \
@@ -316,13 +199,13 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
     and 'Terminal : comparison
     and 'Lookahead : comparison> = {
     //
-    ParserStates : TagBimap<ParserStateIdentifier, LrParserState<'Nonterminal, 'Terminal, 'Lookahead>>;
+    ParserStates : TagBimap<ParserStateIndexTag, LrParserState<'Nonterminal, 'Terminal, 'Lookahead>>;
     //
-    ParserTransitions : LabeledSparseDigraph<ParserStateId, Symbol<'Nonterminal, 'Terminal>>;
+    ParserTransitions : LabeledSparseDigraph<ParserStateIndex, Symbol<NonterminalIndex, TerminalIndex>>;
     //
-    ActionTable : Map<TerminalTransition<'Terminal>, LrParserActionSet>;
+    ActionTable : Map<TerminalTransition, LrParserActionSet>;
     //
-    GotoTable : Map<NonterminalTransition<'Nonterminal>, ParserStateId>;
+    GotoTable : Map<NonterminalTransition, ParserStateIndex>;
 } with
     /// Private. For use with DebuggerDisplay only.
     /// Gets the number of conflicts in the ACTION table.
@@ -334,24 +217,6 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
                 match actionSet with
                 | Action _ -> false
                 | Conflict _ -> true)
-
-    /// Private. For debugging purposes only -- this property can be browsed
-    /// in the VS debugger, but it can't be used from within our code.
-    member private this.ReduceStates
-        with get () =
-            (Map.empty, this.ParserStates)
-            ||> TagBimap.fold (fun reduceStates stateId items ->
-                (reduceStates, items)
-                ||> Set.fold (fun reduceStates item ->
-                    if int item.Position = Array.length item.Production then
-                        let nonterms =
-                            match Map.tryFind stateId reduceStates with
-                            | None -> Set.singleton item.Nonterminal
-                            | Some nonterms ->
-                                Set.add item.Nonterminal nonterms
-                        Map.add stateId nonterms reduceStates
-                    else
-                        reduceStates))
 
     /// Private. For debugging purposes only -- this property can be browsed
     /// in the VS debugger, but it can't be used from within our code.
@@ -402,33 +267,6 @@ type LrParserTable<'Nonterminal, 'Terminal, 'Lookahead
                 { table with
                     ActionTable = actionTable;
                     ParserTransitions = parserTransitions; }
-
-
-//
-type LrTableGenEnvironment<'Nonterminal, 'Terminal
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison> = {
-    //
-    ProductionRuleIds : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], ProductionRuleId>;
-} with
-    /// Creates a new LR(k) parser table generation environment from
-    /// a grammar's production rules.
-    static member Create (productionRules : Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>) =
-        /// The production-rule-id lookup table.
-        let productionRuleIds =
-            (Map.empty, productionRules)
-            ||> Map.fold (fun productionRuleIds nonterminal rules ->
-                (productionRuleIds, rules)
-                ||> Array.fold (fun productionRuleIds ruleRhs ->
-                    /// The identifier for this production rule.
-                    let productionRuleId : ProductionRuleId =
-                        tag productionRuleIds.Count
-
-                    // Add this identifier to the map.
-                    Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
-
-        // Create and return the environment.
-        { ProductionRuleIds = productionRuleIds; }
 
 
 /// LR(k) parser table generation state.
@@ -488,13 +326,13 @@ module LrTableGenState =
 
     //
     let private impossibleActionSetErrorMsg<'Terminal when 'Terminal : comparison>
-        (sourceState : ParserStateId, transitionSymbol : 'Terminal, entry : LrParserActionSet, action : LrParserAction) =
+        (sourceState : ParserStateIndex, transitionSymbol : 'Terminal, entry : LrParserActionSet, action : LrParserAction) =
         sprintf "Cannot add this action because it would create an impossible set of LR(k) parser actions. \
                  (State = %i, Terminal = %A, Existing Entry = %A, New Action = %A)"
                 (int sourceState) transitionSymbol entry action
 
     /// Add a 'shift' action to the parser table.
-    let shift (key : TerminalTransition<'Terminal>) targetState
+    let shift (key : TerminalTransition) targetState
         (state : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
         : unit * LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
         // Destructure the key to get it's components.
@@ -541,7 +379,7 @@ module LrTableGenState =
                 |> Graph.addEdge sourceState targetState (Symbol.Terminal transitionSymbol); }
 
     /// Add a 'reduce' action to the ACTION table.
-    let reduce (key : TerminalTransition<'Terminal>) (productionRuleId : ProductionRuleId)
+    let reduce (key : TerminalTransition) (productionRuleId : ProductionRuleIndex)
         (state : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
         : unit * LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
         //
@@ -595,7 +433,7 @@ module LrTableGenState =
             ActionTable = Map.add key actionSet state.ActionTable; }
 
     /// Add an entry to the GOTO table.
-    let goto (key : NonterminalTransition<'Nonterminal>) (targetState : ParserStateId)
+    let goto (key : NonterminalTransition) (targetState : ParserStateIndex)
         (state : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>)
         : unit * LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead> =
         // Destructure the key to get it's components.
@@ -626,10 +464,12 @@ module LrTableGenState =
                 invalidOp msg
 
     /// Add an 'accept' action to the ACTION table.
-    let accept (sourceState : ParserStateId)
-        (state : LrTableGenState<'Nonterminal, AugmentedTerminal<'Terminal>, 'Lookahead>) =
+    let accept (sourceState : ParserStateIndex) (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
+        (state : LrTableGenState<AugmentedTerminal<'Nonterminal>, AugmentedTerminal<'Terminal>, 'Lookahead>) =
         /// The transition key for the ACTION table.
-        let key = sourceState, EndOfFile
+        let key =
+            let eofIndex = TagBimap.findValue EndOfFile taggedGrammar.Terminals
+            sourceState, eofIndex
 
         //
         let actionSet =
