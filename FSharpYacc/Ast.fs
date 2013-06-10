@@ -20,7 +20,7 @@ limitations under the License.
 namespace FSharpYacc.Ast
 
 open System.Diagnostics
-open Graham.Grammar
+open Graham
 
 
 /// A fragment of F# code.

@@ -19,12 +19,10 @@ limitations under the License.
 //
 module FSharpYacc.Compiler
 
-open ExtCore
 open ExtCore.Printf
-open ExtCore.Collections
 open ExtCore.Control
 open ExtCore.Control.Collections
-open Graham.Grammar
+open Graham
 open Graham.LR
 open FSharpYacc.Ast
 
@@ -60,7 +58,7 @@ type ProcessedSpecification<'Nonterminal, 'Terminal
     //
     ProductionRules : Map<'Nonterminal, ProcessedProductionRule<'Nonterminal, 'Terminal>[]>;
     //
-    TerminalPrecedence : Map<'Terminal, Associativity * PrecedenceLevel>;
+    TerminalPrecedence : Map<'Terminal, Associativity * AbsolutePrecedenceLevel>;
     /// For production rules with a %prec declaration, maps the production rule
     /// to the terminal specified in the declaration.
     ProductionRulePrecedenceOverrides : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], 'Terminal>;
@@ -463,7 +461,7 @@ let precompile (spec : Specification, options : CompilationOptions)
     let! dummyTerminalsWithoutPrecedence =
         (* NOTE :   We REQUIRE the associativity/precedence to be specified for any dummy terminals
                     defined by the %prec declaration of a production rule. *)
-        ((dummyTerminals, (1<_> : PrecedenceLevel)), List.rev spec.Associativities)
+        ((dummyTerminals, (1<_> : AbsolutePrecedenceLevel)), List.rev spec.Associativities)
         ||> State.List.fold (fun (dummyTerminalsWithoutPrecedence, precedenceLevel) (associativity, terminals) ->
             state {
             let! terminalSet =
@@ -520,9 +518,9 @@ let precompile (spec : Specification, options : CompilationOptions)
     |> snd
 
 /// Creates a PrecedenceSettings record from a ProcessedSpecification.
-let private precedenceSettings (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
-                                productionRuleIds : Map<AugmentedNonterminal<_> * AugmentedSymbol<_,_>[], ProductionRuleId>)
-    : PrecedenceSettings<TerminalIdentifier> =
+let private precedenceSettings (taggedGrammar : TaggedAugmentedGrammar<_,_>)
+    (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+    : PrecedenceSettings =
     //
     let rulePrecedence =
         (Map.empty, processedSpec.ProductionRules)
@@ -593,34 +591,28 @@ let private precedenceSettings (processedSpec : ProcessedSpecification<Nontermin
 let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationOptions) : Choice<_,_> =
     tprintfn "Compiling the parser specification..."
 
-    /// The grammar created from the parser specification.
-    let grammar =
-        //
-        let rawGrammar : Grammar<_,_> = {
-            Terminals =
-                (Set.empty, processedSpec.Terminals)
-                ||> Map.fold (fun terminals terminal _ ->
-                    Set.add terminal terminals);
-            Nonterminals =
-                (Set.empty, processedSpec.Nonterminals)
-                ||> Map.fold (fun nonterminals nonterminal _ ->
-                    Set.add nonterminal nonterminals);
-            Productions =
+    /// The tagged grammar.
+    let taggedGrammar =
+        /// The grammar created from the parser specification.
+        let grammar =
+            //
+            let rawGrammar : Grammar<_,_> =
                 processedSpec.ProductionRules
                 |> Map.map (fun _ rules ->
-                    rules |> Array.map (fun rule -> rule.Symbols)); }
+                    rules |> Array.map (fun rule -> rule.Symbols))
 
-        // Augment the grammar.
-        Grammar.Augment (rawGrammar, processedSpec.StartSymbols)
-
-    /// The production-rule-id lookup table.
-    let productionRuleIds =
-        Grammar.ProductionRuleIds grammar
+            // Augment the grammar.
+            Grammar.augmentWith rawGrammar processedSpec.StartSymbols
+        
+        TaggedGrammar.ofGrammar grammar
 
     // Create the precedence settings (precedence and associativity maps)
     // from the precompilation result.
     let precedenceSettings =
-        precedenceSettings (processedSpec, productionRuleIds)
+        tprintf "  Creating precedence settings..."
+        let precedenceSettings = precedenceSettings taggedGrammar processedSpec
+        tprintfn "done."
+        precedenceSettings
 
     (*  Create the LR(0) automaton from the grammar; report the number of states and
         the number of S/R and R/R conflicts. If there are any conflicts, apply the
@@ -631,7 +623,7 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
     /// The LR(0) parser table.
     let lr0Table =
         tprintf "  Creating the LR(0) parser table..."
-        let lr0Table = Lr0.createTable grammar
+        let lr0Table = Lr0.createTable taggedGrammar
         tprintfn "done."
         lr0Table
 
@@ -641,7 +633,7 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
     //
     let slr1Table =
         tprintf "  Upgrading the LR(0) parser table to SLR(1)..."
-        let slr1Table = Slr1.upgrade (grammar, lr0Table, productionRuleIds)
+        let slr1Table = Slr1.upgrade taggedGrammar lr0Table
         tprintfn "done."
         slr1Table
 
@@ -651,7 +643,7 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
     //
     let lalrLookaheadSets =
         tprintf "  Computing LALR(1) look-ahead sets..."
-        let lalrLookaheadSets = Lalr1.lookaheadSets (grammar, slr1Table)
+        let lalrLookaheadSets = Lalr1.lookaheadSets taggedGrammar slr1Table
         tprintfn "done."
         lalrLookaheadSets
 
@@ -663,7 +655,7 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
         //
         let lalr1Table =
             tprintf "  Upgrading the SLR(1) parser table to LALR(1)..."
-            let lalr1Table = Lalr1.upgrade (grammar, slr1Table, productionRuleIds, lookaheadSets)
+            let lalr1Table = Lalr1.upgrade taggedGrammar slr1Table lookaheadSets None
             tprintfn "done."
             lalr1Table
 
@@ -672,7 +664,7 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
         let lalr1Table =
             tprintf "  Applying precedence declarations..."
             // Apply precedences to resolve conflicts.
-            let lalr1Table = Lr0.applyPrecedence (lalr1Table, precedenceSettings)
+            let lalr1Table = ConflictResolution.applyPrecedence lalr1Table precedenceSettings
             tprintfn "done."
             lalr1Table
             
@@ -683,7 +675,7 @@ let compile (processedSpec : ProcessedSpecification<_,_>, options : CompilationO
         //
         let lalr1Table =
             tprintf "  Using default strategy to solve any remaining conflicts..."
-            let lalr1Table = Lr0.resolveConflicts lalr1Table
+            let lalr1Table = ConflictResolution.resolveConflicts lalr1Table
             tprintfn "done."
             lalr1Table
 
