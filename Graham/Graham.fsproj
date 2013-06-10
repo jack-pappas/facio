@@ -61,6 +61,7 @@
     <Compile Include="Lr0.fs" />
     <Compile Include="Slr1.fs" />
     <Compile Include="Lr1.fs" />
+    <Compile Include="Lalr1.fs" />
     <Compile Include="ConflictResolution.fs" />
   </ItemGroup>
   <ItemGroup>

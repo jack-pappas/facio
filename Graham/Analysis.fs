@@ -92,7 +92,7 @@ module PredictiveSets =
         |> computeNullable
 
     /// Determines if all symbols within the specified slice of a production are nullable.
-    let inline private allNullableInSlice (production : TaggedProductionRule, startInclusive, endInclusive, nullable : TagMap<NonterminalIndexTag, bool>) =
+    let inline internal allNullableInSlice (production : TaggedProductionRule, startInclusive, endInclusive, nullable : TagMap<NonterminalIndexTag, bool>) =
         (startInclusive, endInclusive)
         ||> Range.forall (fun index ->
             match production.[index] with

@@ -299,7 +299,6 @@ let ``LR(1) table for Grammar 3.26`` () =
     parserTable.GotoTable
     |> Collection.assertEqual (Table.taggedGoto expectedGotoTable taggedGrammar)
 
-(*
 [<TestCase>]
 let ``LALR(1) table for Grammar 3.26`` () =
     let expectedActionTable =
@@ -362,4 +361,4 @@ let ``LALR(1) table for Grammar 3.26`` () =
     // Verify the GOTO table.
     lalr1ParserTable.GotoTable
     |> Collection.assertEqual (Table.taggedGoto expectedGotoTable taggedGrammar)
-*)
+

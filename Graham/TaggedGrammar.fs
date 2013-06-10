@@ -165,5 +165,3 @@ type TaggedAugmentedGrammar<'Nonterminal, 'Terminal
     and 'Terminal : comparison> =
     TaggedGrammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
 
-
-

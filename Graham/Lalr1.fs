@@ -21,7 +21,7 @@ namespace Graham.LR
 open System.Diagnostics
 open ExtCore
 open ExtCore.Collections
-open Graham.Grammar
+open Graham
 open AugmentedPatterns
 open Graham.Analysis
 open Graham.Graph
@@ -64,7 +64,7 @@ module Lalr1 =
 
     // D. Compute 'Read' using the SCC-based transitive closure algorithm.
     // If a cycle is detected, announce that the grammar is not LR(k) for any 'k'.
-    let private read (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>, nonterminalTransitions, nullable) =
+    let private read (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) nonterminalTransitions nullable =
         // B. Initialize 'Read' to DR. One set for each nonterminal transition,
         // by inspection of the transition's successor state.
         let directRead = directRead lr0ParserTable
@@ -75,11 +75,11 @@ module Lalr1 =
             (Map.empty, lr0ParserTable.GotoTable)
             ||> Map.fold (fun reads transition succStateId ->
                 (reads, lr0ParserTable.GotoTable)
-                ||> Map.fold (fun reads ((stateId, nonterminal) as succTransition) _ ->
+                ||> Map.fold (fun reads ((stateId, nonterminalIndex) as succTransition) _ ->
                     // We only care about successors of the original transition;
                     // also, the nonterminal for this (successor) transition must be nullable.
                     if stateId = succStateId &&
-                        Map.find nonterminal nullable then
+                        TagMap.find nonterminalIndex nullable then
                         // Add the edge to the adjacency map representing the induced 'reads' graph.
                         let readsTransition =
                             match Map.tryFind transition reads with
@@ -96,29 +96,34 @@ module Lalr1 =
         Relation.digraph (nonterminalTransitions, reads, directRead)
 
     /// Compute the 'includes' and 'lookback' relations needed to compute the look-ahead sets for a grammar.
-    let private lookbackAndIncludes (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>,
-                                     lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,
-                                     nonterminalTransitions : Set<NonterminalTransition<_>>,
-                                     nullable) =
+    let private lookbackAndIncludes (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
+                                    (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
+                                    (nonterminalTransitions : Set<NonterminalTransition>)
+                                    (nullable : TagMap<NonterminalIndexTag, bool>) =
         ((PartialFunction.empty, Relation.empty), nonterminalTransitions)
-        ||> Set.fold (fun lookback_includes (stateId, nonterminal) ->
+        ||> Set.fold (fun lookback_includes (stateId, nonterminalIndex) ->
             //
             let parserState = TagBimap.find stateId lr0ParserTable.ParserStates
 
             // Fold over the LR(0) items in this parser state.
             (lookback_includes, parserState)
-            ||> Set.fold (fun (lookback : PartialFunction<_, NonterminalTransition<_>>, includes : Relation<_>) item ->
+            ||> Set.fold (fun (lookback : PartialFunction<_, NonterminalTransition>, includes : Relation<_>) item ->
                 // Only consider items with rules which produce this nonterminal.
-                if item.Nonterminal <> nonterminal then
+                let itemNonterminalIndex = TagMap.find item.ProductionRuleIndex taggedGrammar.NonterminalOfProduction
+                if itemNonterminalIndex <> nonterminalIndex then
                     lookback, includes
                 else
+                    /// The production of this item.
+                    let itemProduction = TagMap.find item.ProductionRuleIndex taggedGrammar.Productions
+
                     // Add edges to the 'includes' relation graph.
                     let includes, j =
+                        // OPTIMIZE : Use Range.fold here instead of creating 'rhsPositions' then folding over it.
                         let rhsPositions = seq {
-                            int item.Position .. Array.length item.Production - 1 }
+                            int item.Position .. Array.length itemProduction - 1 }
                         ((includes, stateId), rhsPositions)
                         ||> Seq.fold (fun (includes, j) position ->
-                            let t = item.Production.[position]
+                            let t = itemProduction.[position]
                             let includes =
                                 // Only care about nonterminal transitions here
                                 match t with
@@ -129,8 +134,8 @@ module Lalr1 =
                                         // At this point, we just need to check if the rest of the
                                         // right context of the production is nullable; if so, then
                                         // we can add the edge to the 'includes' graph.
-                                        PredictiveSets.allNullableInSlice (item.Production, position + 1, Array.length item.Production - 1, nullable) then
-                                            Relation.add (j, t) (stateId, nonterminal) includes
+                                        PredictiveSets.allNullableInSlice (itemProduction, position + 1, Array.length itemProduction - 1, nullable) then
+                                            Relation.add (j, t) (stateId, nonterminalIndex) includes
                                     else
                                         includes
 
@@ -163,12 +168,13 @@ module Lalr1 =
                         else
                             // 'j' represents the final/last state of the path through the parser transition graph
                             // which describes the derivation of a rule (thereby producing a nonterminal).
+                            let rule = itemNonterminalIndex, item.ProductionRuleIndex
                             (lookback, TagBimap.find j lr0ParserTable.ParserStates)
                             ||> Set.fold (fun lookback item' ->
-                                if item.Nonterminal = item'.Nonterminal
-                                    && item.Production = item'.Production then
-                                    let rule = item.Nonterminal, item.Production
-                                    PartialFunction.add (j, rule) (stateId, nonterminal) lookback
+                                //if item.Nonterminal = item'.Nonterminal
+                                //    && item.Production = item'.Production then
+                                if item.ProductionRuleIndex = item'.ProductionRuleIndex then
+                                    PartialFunction.add (j, rule) (stateId, nonterminalIndex) lookback
                                 else
                                     lookback)
 
@@ -185,12 +191,12 @@ module Lalr1 =
                 for the remaining states. *)
 
     /// Computes the LALR(1) look-ahead (LA) sets given a grammar and its LR(0) parser table.
-    let lookaheadSets (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>, lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
-        : Choice<Map<_,_>, string> =
+    let lookaheadSets (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
+        (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) : Choice<Map<_,_>, string> =
         (* DeRemer and Penello's algorithm for computing LALR look-ahead sets. *)
 
         /// Denotes which nonterminals are nullable.
-        let nullable = PredictiveSets.computeNullable grammar.Productions
+        let nullable = PredictiveSets.nullable taggedGrammar
 
         /// The set of nonterminal transitions in the LR(0) parser table (i.e., the GOTO table).
         let nonterminalTransitions =
@@ -201,14 +207,14 @@ module Lalr1 =
         // D. Compute 'Read' using the SCC-based transitive closure algorithm.
         // If a cycle is detected, announce that the grammar is not LR(k) for any 'k'.
         // TODO : Implement cycle detection.
-        let Read = read (lr0ParserTable, nonterminalTransitions, nullable)
+        let Read = read lr0ParserTable nonterminalTransitions nullable
 
         // E. Compute 'includes' and 'lookback': one set of nonterminal transitions per
         // nonterminal transition and reduction, respectively, by inspection of each nonterminal
         // transition and the associated production right parts, and by considering
         // nullable nonterminals appropriately.
         let lookback, includes =
-            lookbackAndIncludes (grammar, lr0ParserTable, nonterminalTransitions, nullable)
+            lookbackAndIncludes taggedGrammar lr0ParserTable nonterminalTransitions nullable
 
         // F. Compute the transitive closure of the 'includes' relation (via the SCC algorithm)
         // to compute 'Follow'. Use the same sets as initialized in part B and completed in part D,
@@ -230,15 +236,13 @@ module Lalr1 =
 
     /// Creates an LALR(1) parser table from a grammar, it's LR(0) or SLR(1) parser table,
     /// and the LALR(1) look-ahead sets computed from the grammar and parser table.
-    let upgrade (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>,
-                 lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>,
-                 productionRuleIds : Map<(AugmentedNonterminal<'Nonterminal> * AugmentedSymbol<'Nonterminal, 'Terminal>[]), ProductionRuleId>,
-                 lookaheadSets)
+    let upgrade (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
+        (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) lookaheadSets
         : Lr0ParserTable<'Nonterminal, 'Terminal> =
         /// The predictive sets of the grammar.
         // OPTIMIZE : Don't recompute these -- if they've already been computed for SLR(1),
         // we should pass those in instead of recomputing them.
-        let predictiveSets = PredictiveSets.ofGrammar grammar
+        let predictiveSets = PredictiveSets.ofGrammar taggedGrammar
 
         // Use the LALR(1) lookahead sets to resolve conflicts in the LR(0) parser table.
         (lr0ParserTable, lr0ParserTable.ParserStates)
@@ -248,27 +252,26 @@ module Lalr1 =
                 // If the parser position is at the end of this item's production,
                 // remove the Reduce actions from the ACTION table for any terminals
                 // which aren't in this state/rule's lookahead set.
-                if int item.Position < Array.length item.Production then
+                let production = TagMap.find item.ProductionRuleIndex taggedGrammar.Productions
+                if int item.Position < Array.length production then
                     lr0ParserTable
                 else
                     /// This state/rule's look-ahead set.
                     let lookahead =
-                        Map.find (stateId, (item.Nonterminal, item.Production)) lookaheadSets
+                        let nonterminalIndex = TagMap.find item.ProductionRuleIndex taggedGrammar.NonterminalOfProduction
+                        Map.find (stateId, (nonterminalIndex, item.ProductionRuleIndex)) lookaheadSets
 
                     // Remove the unnecessary Reduce actions, thereby resolving some conflicts.
-                    let action =
-                        productionRuleIds
-                        |> Map.find (item.Nonterminal, item.Production)
-                        |> LrParserAction.Reduce
+                    let action = LrParserAction.Reduce item.ProductionRuleIndex
 
-                    (lr0ParserTable, grammar.Terminals)
-                    ||> Set.fold (fun lr0ParserTable terminal ->
+                    (lr0ParserTable, taggedGrammar.Terminals)
+                    ||> TagBimap.fold (fun lr0ParserTable terminalIndex _ ->
                         // Is this terminal in this state/rule's lookahead set?
-                        if Set.contains terminal lookahead then
+                        if Set.contains terminalIndex lookahead then
                             lr0ParserTable
                         else
                             // Remove the unnecessary Reduce action for this terminal.
-                            let key = stateId, terminal
+                            let key = stateId, terminalIndex
                             LrParserTable.RemoveAction (lr0ParserTable, key, action))
                         ))
 
