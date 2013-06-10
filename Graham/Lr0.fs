@@ -162,15 +162,12 @@ module Lr0 =
             |> closure taggedGrammar
 
     //
-    let rec private createTableImpl (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) workSet =
+    let rec private createTableImpl (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) eofIndex workSet =
         state {
         // If the work-set is empty, we're done creating the table.
         if TagSet.isEmpty workSet then
             return ()
         else
-            /// The tagged-index of the end-of-file marker.
-            let eofIndex = lazy (TagBimap.findValue EndOfFile taggedGrammar.Terminals)
-
             let! workSet =
                 (TagSet.empty, workSet)
                 ||> State.TagSet.fold (fun workSet stateId ->
@@ -211,7 +208,7 @@ module Lr0 =
                                 // Add actions to the table based on the next symbol to be parsed.
                                 match symbol with
                                 | Symbol.Terminal terminalIndex ->
-                                    if terminalIndex = Lazy.force eofIndex then
+                                    if terminalIndex = eofIndex then
                                         // When the end-of-file symbol is the next to be parsed,
                                         // add an 'accept' action to the table to indicate the
                                         // input has been parsed successfully.
@@ -267,7 +264,7 @@ module Lr0 =
                                 })})
 
             // Recurse with the updated table-generation state and work-set.
-            return! createTableImpl taggedGrammar workSet
+            return! createTableImpl taggedGrammar eofIndex workSet
         }
 
     /// Creates an LR(0) parser table from a tagged grammar.
@@ -299,7 +296,10 @@ module Lr0 =
 
                 LrTableGenState.stateId initialParserState
 
-            return! createTableImpl taggedGrammar (TagSet.singleton initialParserStateId)
+            /// The tagged-index of the end-of-file marker.
+            let eofIndex = TagBimap.findValue EndOfFile taggedGrammar.Terminals
+
+            return! createTableImpl taggedGrammar eofIndex (TagSet.singleton initialParserStateId)
             }
 
         // Execute the workflow to create the parser table.
