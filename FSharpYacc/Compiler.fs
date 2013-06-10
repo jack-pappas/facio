@@ -28,6 +28,78 @@ open Graham.LR
 open FSharpYacc.Ast
 
 
+/// Creates a rule-precedence map from a processed specification.
+let internal rulePrecedence (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+    (processedSpec : ProcessedSpecification<_,_>) =
+    (Map.empty, processedSpec.ProductionRules)
+    ||> Map.fold (fun rulePrecedence nonterminal rules ->
+        (rulePrecedence, rules)
+        ||> Array.fold (fun rulePrecedence rule ->
+            /// The identifier for this production rule.
+            let productionRuleId =
+                //
+                let augmentedKey =
+                    AugmentedNonterminal.Nonterminal nonterminal,
+                    rule.Symbols
+                    |> Array.map (function
+                        | Nonterminal nonterminal ->
+                            Nonterminal <| AugmentedNonterminal.Nonterminal nonterminal
+                        | Terminal terminal ->
+                            Terminal <| AugmentedTerminal.Terminal terminal)
+
+                Map.find augmentedKey productionRuleIds
+
+            /// The terminal whose associativity and precedence is impersonated by this production rule.
+            let precedenceTerminal =
+                // Does this rule have a precedence override declaration?
+                match Map.tryFind (nonterminal, rule.Symbols) processedSpec.ProductionRulePrecedenceOverrides with
+                | Some impersonatedTerminal ->
+                    Some impersonatedTerminal
+                | None ->
+                    // The precedence of a rule is the precedence of it's last (right-most) terminal.
+                    match System.Array.FindLastIndex (rule.Symbols, System.Predicate (function Terminal _ -> true | Nonterminal _ -> false)) with
+                    //match System.Array.FindIndex (rule.Symbols, (function Terminal _ -> true | Nonterminal _ -> false)) with
+                    | -1 ->
+                        // This rule does not contain any terminals, so it is not assigned a precedence.
+                        None
+                    | lastTerminalIndex ->
+                        match rule.Symbols.[lastTerminalIndex] with
+                        | Terminal terminal ->
+                            Some terminal
+                        | Nonterminal _ ->
+                            failwith "Found a nonterminal where a terminal was expected."
+
+            // If this rule can be assigned a precedence, add it to the rule precedence map now.
+            match precedenceTerminal with
+            | None ->
+                rulePrecedence
+            | Some precedenceTerminal ->
+                // The associativity and precedence of the impersonated terminal.
+                match Map.tryFind precedenceTerminal processedSpec.TerminalPrecedence with
+                | None ->
+                    // The terminal has no precedence, so the rule has no precedence.
+                    rulePrecedence
+                | Some impersonatedTerminalPrecedence ->
+                    // Add the precedence to the rule precedence map.
+                    Map.add productionRuleId impersonatedTerminalPrecedence rulePrecedence
+                ))
+
+/// Creates a PrecedenceSettings record from a ProcessedSpecification.
+let internal precedenceSettings (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+    (processedSpec : ProcessedSpecification<_,_>) : PrecedenceSettings =
+    //
+    let rulePrecedence = rulePrecedence taggedGrammar processedSpec
+
+    // Filter any "dummy" terminals out of the terminal precedence map.
+    let terminalPrecedence =
+        processedSpec.TerminalPrecedence
+        |> Map.filter (fun terminal _ ->
+            Map.containsKey terminal processedSpec.Terminals)
+
+    // Create and return a PrecedenceSettings record from the constructed precedence maps.
+    {   TerminalPrecedence = terminalPrecedence;
+        RulePrecedence = rulePrecedence; }
+
 /// Compiles a parser specification into a deterministic pushdown automaton (DPDA),
 /// then invokes a specified backend to generate code implementing the parser automaton.
 let compile (processedSpec : ProcessedSpecification<_,_>) (options : CompilationOptions) (logger : Logger) : Choice<_,_> =
@@ -49,11 +121,18 @@ let compile (processedSpec : ProcessedSpecification<_,_>) (options : Compilation
         
         TaggedGrammar.ofGrammar grammar
 
+    /// The predictive sets (FIRST, FOLLOW, NULLABLE) for the grammar.
+    let predictiveSets =
+        tprintf "  Creating predictive sets..."
+        let predictiveSets = Analysis.PredictiveSets.ofGrammar taggedGrammar
+        tprintfn "done."
+        predictiveSets
+
     // Create the precedence settings (precedence and associativity maps)
     // from the precompilation result.
     let precedenceSettings =
         tprintf "  Creating precedence settings..."
-        let precedenceSettings = Prepare.precedenceSettings taggedGrammar processedSpec
+        let precedenceSettings = precedenceSettings taggedGrammar processedSpec
         tprintfn "done."
         precedenceSettings
 
@@ -76,7 +155,7 @@ let compile (processedSpec : ProcessedSpecification<_,_>) (options : Compilation
     //
     let slr1Table =
         tprintf "  Upgrading the LR(0) parser table to SLR(1)..."
-        let slr1Table = Slr1.upgrade taggedGrammar lr0Table
+        let slr1Table = Slr1.upgrade taggedGrammar lr0Table (Some predictiveSets)
         tprintfn "done."
         slr1Table
 
@@ -98,7 +177,7 @@ let compile (processedSpec : ProcessedSpecification<_,_>) (options : Compilation
         //
         let lalr1Table =
             tprintf "  Upgrading the SLR(1) parser table to LALR(1)..."
-            let lalr1Table = Lalr1.upgrade taggedGrammar slr1Table lookaheadSets None
+            let lalr1Table = Lalr1.upgrade taggedGrammar slr1Table lookaheadSets (Some predictiveSets)
             tprintfn "done."
             lalr1Table
 

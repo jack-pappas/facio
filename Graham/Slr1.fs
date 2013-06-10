@@ -33,13 +33,16 @@ open Graham.Graph
 [<RequireQualifiedAccess>]
 module Slr1 =
     /// Given a grammar and it's LR(0) parser table, upgrades the table to SLR(1).
-    let upgrade (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
+    let upgrade (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
+        (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) predictiveSets =
         /// Predictive sets of the augmented grammar.
-        let predictiveSets = PredictiveSets.ofGrammar taggedGrammar
+        let predictiveSets =
+            predictiveSets
+            |> Option.fillWith (fun () ->
+                PredictiveSets.ofGrammar taggedGrammar)
 
-        // Upgrade the LR(0) parser table to SLR(1).
-        // If the table has already been upgraded to SLR(1) (or something
-        // more powerful, like LALR(1)), this has no effect.
+        // Upgrade the LR(0) parser table to SLR(1). If the table has already been upgraded
+        // to SLR(1) (or something more powerful, like LALR(1)), this will have no effect.
         (lr0ParserTable, lr0ParserTable.ParserStates)
         ||> TagBimap.fold (fun parserTable stateId items ->
             (parserTable, items)

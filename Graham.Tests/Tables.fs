@@ -223,7 +223,7 @@ let ``SLR table for Grammar 3.23`` () =
     let taggedGrammar = TaggedGrammar.ofGrammar Appel.``Grammar 3.23``
     let slr1ParserTable =
         let lr0ParserTable = Lr0.createTable taggedGrammar
-        Slr1.upgrade taggedGrammar lr0ParserTable
+        Slr1.upgrade taggedGrammar lr0ParserTable None
 
     // Verify the ACTION table.
     slr1ParserTable.ActionTable
