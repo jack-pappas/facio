@@ -34,7 +34,7 @@ module private FsYacc =
     open System
     open System.Diagnostics
     open Printf
-    open Graham.Grammar
+    open Graham
     open Graham.LR
     open BackendUtils.CodeGen
 

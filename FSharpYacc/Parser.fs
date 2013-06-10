@@ -25,7 +25,7 @@ limitations under the License.
 
 *)
 
-open Graham.Grammar
+open Graham
 open FSharpYacc.Ast
 
 // Turn off ML-compatibility-only warnings.
