@@ -48,30 +48,30 @@ module PredictiveSets =
 
     //
     let internal nullable (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) =
-        // TEMP : Until the code below is modified to use TaggedGrammar, down-convert to Grammar.
-        let grammar = TaggedGrammar.toGrammar taggedGrammar
-
         /// Implementation of the nullable-map-computing algorithm.
-        let rec computeNullable (nullable : Map<'Nonterminal, bool>) =
+        let rec computeNullable (nullable : TagMap<NonterminalIndexTag, bool>) =
             let nullable, updated =
-                ((nullable, false), grammar)
-                ||> Map.fold (fun (nullable, updated) nonterminal productions ->
+                ((nullable, false), taggedGrammar.ProductionsByNonterminal)
+                ||> TagMap.fold (fun (nullable, updated) nonterminalIndex nonterminalProductions ->
                     // If this nonterminal is already known to be nullable, skip it.
-                    if Map.find nonterminal nullable then
+                    if TagMap.find nonterminalIndex nullable then
                         nullable, updated
                     else
                         /// When set, denotes that this nonterminal is nullable.
                         let isNullable =
-                            productions
-                            |> Array.exists (Array.forall (function
-                                | Symbol.Terminal _ ->
-                                    false
-                                | Symbol.Nonterminal nontermId ->
-                                    Map.find nontermId nullable))
+                            nonterminalProductions
+                            |> TagSet.exists (fun ruleIndex ->
+                                taggedGrammar.Productions
+                                |> TagMap.find ruleIndex
+                                |> Array.forall (function
+                                    | Symbol.Terminal _ ->
+                                        false
+                                    | Symbol.Nonterminal nonterminalIndex ->
+                                        TagMap.find nonterminalIndex nullable))
 
                         // If this nonterminal is nullable, update its entry in the map.
                         if isNullable then
-                            Map.add nonterminal true nullable,
+                            TagMap.add nonterminalIndex true nullable,
                             true    // Denotes the map has been updated
                         else
                             nullable, updated)
@@ -84,59 +84,59 @@ module PredictiveSets =
             else
                 nullable
 
-        //
-        grammar
-        |> Map.map (fun _ _ -> false)
-        //
+        // OPTIMIZE : Use TagBimap.toMap here instead -- it's O(1) --
+        // then call TagMap.map to map the value to false.
+        (TagMap.empty, taggedGrammar.Nonterminals)
+        ||> TagBimap.fold (fun initialMap nonterminalIndex _ ->
+            TagMap.add nonterminalIndex false initialMap)
         |> computeNullable
 
     /// Determines if all symbols within the specified slice of a production are nullable.
-    let inline private allNullableInSlice (production : Symbol<'Nonterminal, 'Terminal>[], startInclusive, endInclusive, nullable : Map<'Nonterminal, bool>) =
+    let inline private allNullableInSlice (production : TaggedProductionRule, startInclusive, endInclusive, nullable : TagMap<NonterminalIndexTag, bool>) =
         (startInclusive, endInclusive)
         ||> Range.forall (fun index ->
             match production.[index] with
             | Symbol.Terminal _ ->
                 false
-            | Symbol.Nonterminal nontermId ->
-                Map.find nontermId nullable)
+            | Symbol.Nonterminal nonterminalIndex ->
+                TagMap.find nonterminalIndex nullable)
 
     //
-    let internal first (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) (nullable : Map<'Nonterminal, bool>) =
-        // TEMP : Until the code below is modified to use TaggedGrammar, down-convert to Grammar.
-        let grammar = TaggedGrammar.toGrammar taggedGrammar
-
+    let internal first (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) (nullable : TagMap<NonterminalIndexTag, bool>) =
         /// Implementation of the algorithm for computing the FIRST sets of the nonterminals.
-        let rec computeFirst (firstSets : Map<'Nonterminal, Set<'Terminal>>) =
+        let rec computeFirst (firstSets : TagMap<NonterminalIndexTag, TagSet<TerminalIndexTag>>) =
             let firstSets, updated =
-                ((firstSets, false), grammar)
-                ||> Map.fold (fun (firstSets, updated) nonterminal productions ->
-                    ((firstSets, updated), productions)
-                    ||> Array.fold (fun (firstSets, updated) production ->
+                ((firstSets, false), taggedGrammar.ProductionsByNonterminal)
+                ||> TagMap.fold (fun (firstSets, updated) nonterminal nonterminalProductions ->
+                    ((firstSets, updated), nonterminalProductions)
+                    ||> TagSet.fold (fun (firstSets, updated) ruleIndex ->
+                        let taggedProduction = TagMap.find ruleIndex taggedGrammar.Productions
+
                         let mutable firstSets = firstSets
                         let mutable updated = updated
 
-                        for i = 0 to Array.length production - 1 do
-                            if i = 0 || allNullableInSlice (production, 0, i - 1, nullable) then
+                        for i = 0 to Array.length taggedProduction - 1 do
+                            if i = 0 || allNullableInSlice (taggedProduction, 0, i - 1, nullable) then
                                 /// The FIRST set for the current nonterminal.
-                                let nontermFirstSet = Map.find nonterminal firstSets
+                                let nontermFirstSet = TagMap.find nonterminal firstSets
                                 
                                 /// The updated FIRST set for the current nonterminal.
                                 let nontermFirstSet' =
                                     /// The FIRST set for the i-th symbol in the production.
                                     let symbolFirstSet =
-                                        match production.[i] with
-                                        | Symbol.Terminal token ->
-                                            Set.singleton token
-                                        | Symbol.Nonterminal nontermId ->
-                                            Map.find nontermId firstSets
+                                        match taggedProduction.[i] with
+                                        | Symbol.Terminal terminalIndex ->
+                                            TagSet.singleton terminalIndex
+                                        | Symbol.Nonterminal nonterminalIndex ->
+                                            TagMap.find nonterminalIndex firstSets
                                     
-                                    Set.union nontermFirstSet symbolFirstSet
+                                    TagSet.union nontermFirstSet symbolFirstSet
 
                                 // Set the 'updated' flag iff the nonterminal's FIRST set
                                 // was actually changed.
                                 if nontermFirstSet <> nontermFirstSet' then
                                     updated <- true
-                                    firstSets <- Map.add nonterminal nontermFirstSet' firstSets
+                                    firstSets <- TagMap.add nonterminal nontermFirstSet' firstSets
 
                         // Pass the 'firstSets' map and the 'updated' flag to the
                         // next iteration of the fold.
@@ -150,82 +150,81 @@ module PredictiveSets =
             else
                 firstSets
 
-        //
-        grammar
-        |> Map.map (fun _ _ -> Set.empty)
-        //
+        // OPTIMIZE : Use TagBimap.toMap here instead -- it's O(1) --
+        // then call TagMap.map to map the value to TagSet.empty.
+        (TagMap.empty, taggedGrammar.Nonterminals)
+        ||> TagBimap.fold (fun initialMap nonterminalIndex _ ->
+            TagMap.add nonterminalIndex TagSet.empty initialMap)
         |> computeFirst
 
     //
     let internal follow (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
-                      (nullable : Map<AugmentedNonterminal<'Nonterminal>, bool>)
-                      (firstSets : Map<AugmentedNonterminal<'Nonterminal>, Set<AugmentedTerminal<'Terminal>>>) =
-        // TEMP : Until the code below is modified to use TaggedGrammar, down-convert to Grammar.
-        let grammar = TaggedGrammar.toGrammar taggedGrammar
-
+        (nullable : TagMap<NonterminalIndexTag, bool>) (firstSets : TagMap<NonterminalIndexTag, TagSet<TerminalIndexTag>>) =
         /// Implementation of the algorithm for computing the FOLLOW sets of the nonterminals.
-        let rec computeFollow (followSets : Map<AugmentedNonterminal<'Nonterminal>, Set<AugmentedTerminal<'Terminal>>>) =
+        let rec computeFollow (followSets : TagMap<NonterminalIndexTag, TagSet<TerminalIndexTag>>) =
             let followSets, updated =
-                ((followSets, false), grammar)
-                ||> Map.fold (fun (followSets, updated) nontermId productions ->
-                    ((followSets, updated), productions)
-                    ||> Array.fold (fun (followSets, updated) production ->
+                ((followSets, false), taggedGrammar.ProductionsByNonterminal)
+                ||> TagMap.fold (fun (followSets, updated) nonterminalIndex nonterminalProductions ->
+                    ((followSets, updated), nonterminalProductions)
+                    ||> TagSet.fold (fun (followSets, updated) ruleIndex ->
+                        let taggedProduction = TagMap.find ruleIndex taggedGrammar.Productions
+
                         let mutable followSets = followSets
                         let mutable updated = updated
 
-                        let productionLength = Array.length production
+                        let productionLength = Array.length taggedProduction
                         for i = 0 to productionLength - 1 do
                             // Only compute follow sets for non-terminals!
-                            match production.[i] with
+                            match taggedProduction.[i] with
                             | Symbol.Terminal _ -> ()
                             | Symbol.Nonterminal ithSymbolNontermId ->                            
                                 // If this nonterminal is the last symbol in the production, or all of the symbols
                                 // which follow it are nullable (i.e., they could all be empty), then the FOLLOW set
                                 // of this nonterminal must contain the FOLLOW set of the nonterminal producing this production.
                                 if i = productionLength - 1 ||
-                                    allNullableInSlice (production, i + 1, productionLength - 1, nullable) then
+                                    allNullableInSlice (taggedProduction, i + 1, productionLength - 1, nullable) then
                                     /// The FOLLOW set for the i-th symbol in the production.
-                                    let ithSymbolFollowSet = Map.find ithSymbolNontermId followSets
+                                    let ithSymbolFollowSet = TagMap.find ithSymbolNontermId followSets
 
                                     /// The updated FOLLOW set for the i-th symbol in the production.
                                     let ithSymbolFollowSet' =
                                         /// The FOLLOW set for the current nonterminal.
-                                        let nontermFollowSet = Map.find nontermId followSets
+                                        let nontermFollowSet = TagMap.find nonterminalIndex followSets
                                         // Merge it with the FOLLOW set for the i-th symbol.
-                                        Set.union ithSymbolFollowSet nontermFollowSet
+                                        TagSet.union ithSymbolFollowSet nontermFollowSet
 
                                     // Set the 'updated' flag iff the i-th symbol's FOLLOW set
                                     // was actually changed.
                                     if ithSymbolFollowSet <> ithSymbolFollowSet' then
                                         updated <- true
-                                        followSets <- Map.add ithSymbolNontermId ithSymbolFollowSet' followSets
+                                        followSets <- TagMap.add ithSymbolNontermId ithSymbolFollowSet' followSets
 
                                 // If there are any non-nullable symbols in the production which follow the i-th symbol,
                                 // then merge the FIRST set of the first of those non-nullable symbols into the FOLLOW set
                                 // of the i-th symbol; also merge the FIRST sets of any nullable symbols which appear
                                 // prior to the first non-nullable symbol.
                                 for j = i + 1 to productionLength - 1 do
-                                    if i + 1 = j || allNullableInSlice (production, i + 1, j - 1, nullable) then
+                                    if i + 1 = j || allNullableInSlice (taggedProduction, i + 1, j - 1, nullable) then
                                         /// The FOLLOW set for the i-th symbol in the production.
-                                        let ithSymbolFollowSet = Map.find ithSymbolNontermId followSets
+                                        let ithSymbolFollowSet = TagMap.find ithSymbolNontermId followSets
 
                                         /// The updated FOLLOW set for the i-th symbol in the production.
                                         let ithSymbolFollowSet' =
                                             /// The FIRST set for the j-th symbol in the production.
                                             let jthSymbolFirstSet =
-                                                match production.[j] with
-                                                | Symbol.Terminal token ->
-                                                    Set.singleton token
-                                                | Symbol.Nonterminal nontermId ->
-                                                    Map.find nontermId firstSets
+                                                match taggedProduction.[j] with
+                                                | Symbol.Terminal terminalIndex ->
+                                                    TagSet.singleton terminalIndex
+                                                | Symbol.Nonterminal nonterminalIndex ->
+                                                    TagMap.find nonterminalIndex firstSets
 
-                                            Set.union ithSymbolFollowSet jthSymbolFirstSet
+                                            TagSet.union ithSymbolFollowSet jthSymbolFirstSet
 
                                         // Set the 'updated' flag iff the i-th symbol's FOLLOW set
                                         // was actually changed.
                                         if ithSymbolFollowSet <> ithSymbolFollowSet' then
                                             updated <- true
-                                            followSets <- Map.add ithSymbolNontermId ithSymbolFollowSet' followSets
+                                            followSets <- TagMap.add ithSymbolNontermId ithSymbolFollowSet' followSets
 
                         // Pass the 'followSets' map and the 'updated' flag to the
                         // next iteration of the fold.
@@ -239,17 +238,19 @@ module PredictiveSets =
             else
                 followSets
 
-        //
-        grammar
-        |> Map.map (fun nonterminal _ ->
-            match nonterminal with
-            | AugmentedNonterminal.Start ->
-                // The FOLLOW set for the augmented start symbol
-                // is initialized with the end-of-file marker.
-                Set.singleton EndOfFile
-            | AugmentedNonterminal.Nonterminal _ ->
-                Set.empty)
-        //
+        (TagMap.empty, taggedGrammar.Nonterminals)
+        ||> TagBimap.fold (fun initialMap nonterminalIndex nonterminal ->
+            let initialSet =
+                match nonterminal with
+                | AugmentedNonterminal.Start ->
+                    // The FOLLOW set for the augmented start symbol
+                    // is initialized with the end-of-file marker.
+                    taggedGrammar.Terminals
+                    |> TagBimap.findValue EndOfFile
+                    |> TagSet.singleton
+                | AugmentedNonterminal.Nonterminal _ ->
+                    TagSet.empty
+            TagMap.add nonterminalIndex initialSet initialMap)
         |> computeFollow
 
     //
@@ -263,41 +264,10 @@ module PredictiveSets =
         /// The FOLLOW sets for the nonterminals in the grammar.
         let followSets = follow taggedGrammar nullable firstSets
 
-        (* TEMP :   Until the analysis functions are modified to use a TaggedGrammar
-                    (or TaggedAugmentedGrammar), we need to convert their results so
-                    they can be used with the newly re-defined PredictiveSets record. *)
-        let nullable' =
-            (TagMap.empty, nullable)
-            ||> Map.fold (fun nullable' nonterminal isNullable ->
-                let nonterminalIndex = TagBimap.findValue nonterminal taggedGrammar.Nonterminals
-                TagMap.add nonterminalIndex isNullable nullable')
-
-        let firstSets' =
-            (TagMap.empty, firstSets)
-            ||> Map.fold (fun firstSets' nonterminal terminals ->
-                let nonterminalIndex = TagBimap.findValue nonterminal taggedGrammar.Nonterminals
-                let terminals' =
-                    (TagSet.empty, terminals)
-                    ||> Set.fold (fun terminals' terminal ->
-                        let terminalIndex = TagBimap.findValue terminal taggedGrammar.Terminals
-                        TagSet.add terminalIndex terminals')
-                TagMap.add nonterminalIndex terminals' firstSets')
-
-        let followSets' =
-            (TagMap.empty, followSets)
-            ||> Map.fold (fun followSets' nonterminal terminals ->
-                let nonterminalIndex = TagBimap.findValue nonterminal taggedGrammar.Nonterminals
-                let terminals' =
-                    (TagSet.empty, terminals)
-                    ||> Set.fold (fun terminals' terminal ->
-                        let terminalIndex = TagBimap.findValue terminal taggedGrammar.Terminals
-                        TagSet.add terminalIndex terminals')
-                TagMap.add nonterminalIndex terminals' followSets')
-
         // Combine the computed sets into a PredictiveSets record and return it.
-        { Nullable = nullable';
-            First = firstSets';
-            Follow = followSets'; }
+        { Nullable = nullable;
+            First = firstSets;
+            Follow = followSets; }
 
 
 ///// Reachability analyses on context-free grammars.
