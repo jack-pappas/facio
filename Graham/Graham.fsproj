@@ -61,6 +61,7 @@
     <Compile Include="Lr0.fs" />
     <Compile Include="Slr1.fs" />
     <Compile Include="ConflictResolution.fs" />
+    <Compile Include="Lr1.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExtCore">
