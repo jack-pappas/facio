@@ -234,12 +234,15 @@ module Lalr1 =
     /// Creates an LALR(1) parser table from a grammar, it's LR(0) or SLR(1) parser table,
     /// and the LALR(1) look-ahead sets computed from the grammar and parser table.
     let upgrade (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
-        (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) lookaheadSets
+        (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) lookaheadSets predictiveSets
         : Lr0ParserTable<'Nonterminal, 'Terminal> =
         /// The predictive sets of the grammar.
         // OPTIMIZE : Don't recompute these -- if they've already been computed for SLR(1),
         // we should pass those in instead of recomputing them.
-        let predictiveSets = PredictiveSets.ofGrammar taggedGrammar
+        let predictiveSets =
+            predictiveSets
+            |> Option.fillWith (fun () ->
+                PredictiveSets.ofGrammar taggedGrammar)
 
         // Use the LALR(1) lookahead sets to resolve conflicts in the LR(0) parser table.
         (lr0ParserTable, lr0ParserTable.ParserStates)
