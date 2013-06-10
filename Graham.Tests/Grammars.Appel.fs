@@ -19,105 +19,80 @@ limitations under the License.
 /// Grammars from Andrew W. Appel's "Modern Compiler Implementation in ML".
 module Tests.Graham.Grammars.Appel
 
-open Graham.Grammar
+open Graham
 
 
 /// Grammar 3.5 from "Modern Compiler Implementation in ML".
 let ``Grammar 3.5`` =
     let ``Grammar 3.5`` =
         let E =
-            [|  [| Terminal "id" |];
-                [| Terminal "num" |];
-                [| Nonterminal 'E'; Terminal "*"; Nonterminal 'E' |];
-                [| Nonterminal 'E'; Terminal "/"; Nonterminal 'E' |];
-                [| Nonterminal 'E'; Terminal "+"; Nonterminal 'E' |];
-                [| Nonterminal 'E'; Terminal "-"; Nonterminal 'E' |];
-                [| Terminal "("; Nonterminal 'E'; Terminal ")" |]; |]
+            [|  [| Symbol.Terminal "id" |];
+                [| Symbol.Terminal "num" |];
+                [| Symbol.Nonterminal 'E'; Symbol.Terminal "*"; Symbol.Nonterminal 'E' |];
+                [| Symbol.Nonterminal 'E'; Symbol.Terminal "/"; Symbol.Nonterminal 'E' |];
+                [| Symbol.Nonterminal 'E'; Symbol.Terminal "+"; Symbol.Nonterminal 'E' |];
+                [| Symbol.Nonterminal 'E'; Symbol.Terminal "-"; Symbol.Nonterminal 'E' |];
+                [| Symbol.Terminal "("; Symbol.Nonterminal 'E'; Symbol.Terminal ")" |]; |]
 
-        let productions =
-            Map.empty
-            |> Map.add 'E' E
-
-        let nonterminals, terminals =
-            Grammar.SymbolSets productions
-
-        {   Terminals = terminals;
-            Nonterminals = nonterminals;
-            Productions = productions; }
+        Map.empty
+        |> Map.add 'E' E
 
     // Augment the grammar.
-    Grammar.Augment (``Grammar 3.5``, 'E')
+    Grammar.augment ``Grammar 3.5`` 'E'
 
 /// Grammar 3.8 from "Modern Compiler Implementation in ML".
 let ``Grammar 3.8`` =
     let ``Grammar 3.8`` =
         /// Factor.
         let F =
-            [|  [| Terminal "id" |];
-                [| Terminal "num" |];
-                [| Terminal "("; Nonterminal 'E'; Terminal ")" |]; |]
+            [|  [| Symbol.Terminal "id" |];
+                [| Symbol.Terminal "num" |];
+                [| Symbol.Terminal "("; Symbol.Nonterminal 'E'; Symbol.Terminal ")" |]; |]
 
         /// Term.
         let T =
-            [|  [| Nonterminal 'T'; Terminal "*"; Nonterminal 'F' |];
-                [| Nonterminal 'T'; Terminal "/"; Nonterminal 'F' |];
-                [| Nonterminal 'F' |]; |]
+            [|  [| Symbol.Nonterminal 'T'; Symbol.Terminal "*"; Symbol.Nonterminal 'F' |];
+                [| Symbol.Nonterminal 'T'; Symbol.Terminal "/"; Symbol.Nonterminal 'F' |];
+                [| Symbol.Nonterminal 'F' |]; |]
 
         /// Expression.
         let E =
-            [|  [| Nonterminal 'E'; Terminal "+"; Nonterminal 'T' |];
-                [| Nonterminal 'E'; Terminal "-"; Nonterminal 'T' |];
-                [| Nonterminal 'T' |]; |]
+            [|  [| Symbol.Nonterminal 'E'; Symbol.Terminal "+"; Symbol.Nonterminal 'T' |];
+                [| Symbol.Nonterminal 'E'; Symbol.Terminal "-"; Symbol.Nonterminal 'T' |];
+                [| Symbol.Nonterminal 'T' |]; |]
 
-        let productions =
-            Map.empty
-            |> Map.add 'E' E
-            |> Map.add 'T' T
-            |> Map.add 'F' F
-
-        let nonterminals, terminals =
-            Grammar.SymbolSets productions
-
-        // Create the grammar from the productions.
-        {   Terminals = terminals;
-            Nonterminals = nonterminals;
-            Productions = productions; }
+        Map.empty
+        |> Map.add 'E' E
+        |> Map.add 'T' T
+        |> Map.add 'F' F
 
     // Augment the grammar.
     // TODO : Make sure this start symbol is correct.
-    Grammar.Augment (``Grammar 3.8``, 'F')
+    Grammar.augment ``Grammar 3.8`` 'F'
 
 /// Grammar 3.12 from "Modern Compiler Implementation in ML".
 let ``Grammar 3.12`` =
     let ``Grammar 3.12`` =
         let Z =
-            [|  [| Terminal 'd' |];
-                [| Nonterminal 'X'; Nonterminal 'Y'; Nonterminal 'Z' |]; |]
+            [|  [| Symbol.Terminal 'd' |];
+                [| Symbol.Nonterminal 'X'; Symbol.Nonterminal 'Y'; Symbol.Nonterminal 'Z' |]; |]
 
         let Y =
             [|  [| (* Empty *) |];
-                [| Terminal 'c' |]; |]
+                [| Symbol.Terminal 'c' |]; |]
    
         let X =
-            [|  [| Nonterminal 'Y' |];
-                [| Terminal 'a' |]; |]
+            [|  [| Symbol.Nonterminal 'Y' |];
+                [| Symbol.Terminal 'a' |]; |]
 
-        let productions =
-            Map.empty
-            |> Map.add 'X' X
-            |> Map.add 'Y' Y
-            |> Map.add 'Z' Z
-
-        let nonterminals, terminals =
-            Grammar.SymbolSets productions
-
-        {   Terminals = terminals;
-            Nonterminals = nonterminals;
-            Productions = productions; }
+        Map.empty
+        |> Map.add 'X' X
+        |> Map.add 'Y' Y
+        |> Map.add 'Z' Z
 
     // Augment the grammar.
     // TODO : Make sure this start symbol is correct.
-    Grammar.Augment (``Grammar 3.12``, 'Z')
+    Grammar.augment ``Grammar 3.12`` 'Z'
 
 /// Grammar 3.20 from "Modern Compiler Implementation in ML".
 let ``Grammar 3.20`` =
@@ -125,27 +100,19 @@ let ``Grammar 3.20`` =
         // NOTE : This grammar does not include the first rule,
         // which is the production of the augmented start symbol.
         let S =
-            [|  [| Terminal "("; Nonterminal 'L'; Terminal ")"; |];
-                [| Terminal "x"; |]; |]
+            [|  [| Symbol.Terminal "("; Symbol.Nonterminal 'L'; Symbol.Terminal ")"; |];
+                [| Symbol.Terminal "x"; |]; |]
 
         let L =
-            [|  [| Nonterminal 'S'; |];
-                [| Nonterminal 'L'; Terminal ","; Nonterminal 'S'; |]; |]
+            [|  [| Symbol.Nonterminal 'S'; |];
+                [| Symbol.Nonterminal 'L'; Symbol.Terminal ","; Symbol.Nonterminal 'S'; |]; |]
 
-        let productions =
-            Map.empty
-            |> Map.add 'L' L
-            |> Map.add 'S' S
-
-        let nonterminals, terminals =
-            Grammar.SymbolSets productions
-
-        {   Terminals = terminals;
-            Nonterminals = nonterminals;
-            Productions = productions; }
+        Map.empty
+        |> Map.add 'L' L
+        |> Map.add 'S' S
 
     // Augment the grammar.
-    Grammar.Augment (``Grammar 3.20``, 'S')
+    Grammar.augment ``Grammar 3.20`` 'S'
 
 /// Grammar 3.23 from "Modern Compiler Implementation in ML".
 let ``Grammar 3.23`` =
@@ -153,26 +120,18 @@ let ``Grammar 3.23`` =
         // NOTE : This grammar does not include the first rule,
         // which is the production of the augmented start symbol.
         let E =
-            [|  [| Nonterminal 'T'; Terminal "+"; Nonterminal 'E'; |];
-                [| Nonterminal 'T' |]; |]
+            [|  [| Symbol.Nonterminal 'T'; Symbol.Terminal "+"; Symbol.Nonterminal 'E'; |];
+                [| Symbol.Nonterminal 'T' |]; |]
 
         let T =
-            [|  [| Terminal "x" |]; |]
+            [|  [| Symbol.Terminal "x" |]; |]
 
-        let productions =
-            Map.empty
-            |> Map.add 'E' E
-            |> Map.add 'T' T
-
-        let nonterminals, terminals =
-            Grammar.SymbolSets productions
-
-        {   Terminals = terminals;
-            Nonterminals = nonterminals;
-            Productions = productions; }
+        Map.empty
+        |> Map.add 'E' E
+        |> Map.add 'T' T
 
     // Augment the grammar.
-    Grammar.Augment (``Grammar 3.23``, 'E')
+    Grammar.augment ``Grammar 3.23`` 'E'
 
 /// Grammar 3.26 from "Modern Compiler Implementation in ML".
 let ``Grammar 3.26`` =
@@ -180,107 +139,81 @@ let ``Grammar 3.26`` =
         // NOTE : This grammar does not include the first
         // rule of the grammar, which is the augmented start production.
         let S =
-            [|  [| Nonterminal 'V'; Terminal "="; Nonterminal 'E'; |];
-                [| Nonterminal 'E' |]; |]
+            [|  [| Symbol.Nonterminal 'V'; Symbol.Terminal "="; Symbol.Nonterminal 'E'; |];
+                [| Symbol.Nonterminal 'E' |]; |]
 
         let E =
-            [|  [| Nonterminal 'V' |]; |]
+            [|  [| Symbol.Nonterminal 'V' |]; |]
 
         let V =
-            [|  [| Terminal "x" |];
-                [| Terminal "*"; Nonterminal 'E'; |]; |]
+            [|  [| Symbol.Terminal "x" |];
+                [| Symbol.Terminal "*"; Symbol.Nonterminal 'E'; |]; |]
 
-        let productions =
-            Map.empty
-            |> Map.add 'S' S
-            |> Map.add 'E' E
-            |> Map.add 'V' V
-
-        let nonterminals, terminals =
-            Grammar.SymbolSets productions
-
-        {   Terminals = terminals;
-            Nonterminals = nonterminals;
-            Productions = productions; }
+        Map.empty
+        |> Map.add 'S' S
+        |> Map.add 'E' E
+        |> Map.add 'V' V
 
     // Augment the grammar.
-    Grammar.Augment (``Grammar 3.26``, 'S')
+    Grammar.augment ``Grammar 3.26`` 'S'
 
 /// Grammar 3.30 from "Modern Compiler Implementation in ML".
 let ``Grammar 3.30`` =
     let ``Grammar 3.30`` =
         // prog
         let P =
-            [|  [| Nonterminal 'P' |]; |]
+            [|  [| Symbol.Nonterminal 'P' |]; |]
 
         // stm
         let S =
-            [|  [| Terminal "id"; Terminal ":="; Terminal "id"; |];
-                [| Terminal "while"; Terminal "id"; Terminal "do"; Nonterminal 'S'; |];
-                [| Terminal "begin"; Nonterminal 'L'; Terminal "end"; |];
-                [| Terminal "if"; Terminal "id"; Terminal "then"; Nonterminal 'S'; |];
-                [| Terminal "if"; Terminal "id"; Terminal "then"; Nonterminal 'S'; Terminal "else"; Nonterminal 'S'; |]; |]
+            [|  [| Symbol.Terminal "id"; Symbol.Terminal ":="; Symbol.Terminal "id"; |];
+                [| Symbol.Terminal "while"; Symbol.Terminal "id"; Symbol.Terminal "do"; Symbol.Nonterminal 'S'; |];
+                [| Symbol.Terminal "begin"; Symbol.Nonterminal 'L'; Symbol.Terminal "end"; |];
+                [| Symbol.Terminal "if"; Symbol.Terminal "id"; Symbol.Terminal "then"; Symbol.Nonterminal 'S'; |];
+                [| Symbol.Terminal "if"; Symbol.Terminal "id"; Symbol.Terminal "then"; Symbol.Nonterminal 'S'; Symbol.Terminal "else"; Symbol.Nonterminal 'S'; |]; |]
 
         // stmlist
         let L =
-            [|  [| Nonterminal 'S' |];
-                [| Nonterminal 'L'; Terminal ";"; Nonterminal 'S'; |]; |]
+            [|  [| Symbol.Nonterminal 'S' |];
+                [| Symbol.Nonterminal 'L'; Symbol.Terminal ";"; Symbol.Nonterminal 'S'; |]; |]
 
-        let productions =
-            Map.empty
-            |> Map.add 'P' P
-            |> Map.add 'S' S
-            |> Map.add 'L' L
-
-        let nonterminals, terminals =
-            Grammar.SymbolSets productions
-
-        {   Terminals = terminals;
-            Nonterminals = nonterminals;
-            Productions = productions; }
+        Map.empty
+        |> Map.add 'P' P
+        |> Map.add 'S' S
+        |> Map.add 'L' L
 
     // Augment the grammar.
-    Grammar.Augment (``Grammar 3.30``, 'P')
+    Grammar.augment ``Grammar 3.30`` 'P'
 
 /// Grammar 4.6 from "Modern Compiler Implementation in ML".
 let ``Grammar 4.6`` =
     let ``Grammar 4.6`` =
         let S =
-            [|  [| Nonterminal 'S'; Terminal ";"; Nonterminal 'S'; |];
-                [| Terminal "id"; Terminal ":="; Nonterminal 'E'; |];
-                [| Terminal "print"; Nonterminal 'L'; |]; |]
+            [|  [| Symbol.Nonterminal 'S'; Symbol.Terminal ";"; Symbol.Nonterminal 'S'; |];
+                [| Symbol.Terminal "id"; Symbol.Terminal ":="; Symbol.Nonterminal 'E'; |];
+                [| Symbol.Terminal "print"; Symbol.Nonterminal 'L'; |]; |]
 
         let E =
-            [|  [| Terminal "id"; |];
-                [| Terminal "num"; |];
-                [| Nonterminal 'E'; Nonterminal 'B'; Nonterminal 'E'; |];
-                [| Nonterminal 'S'; Terminal ","; Nonterminal 'E'; |]; |]
+            [|  [| Symbol.Terminal "id"; |];
+                [| Symbol.Terminal "num"; |];
+                [| Symbol.Nonterminal 'E'; Symbol.Nonterminal 'B'; Symbol.Nonterminal 'E'; |];
+                [| Symbol.Nonterminal 'S'; Symbol.Terminal ","; Symbol.Nonterminal 'E'; |]; |]
 
         let L =
             [|  [| (* Empty *) |];
-                [| Nonterminal 'L'; Nonterminal 'E'; |]; |]
+                [| Symbol.Nonterminal 'L'; Symbol.Nonterminal 'E'; |]; |]
 
         let B =
-            [|  [| Terminal "+"; |];
-                [| Terminal "-"; |];
-                [| Terminal "*"; |];
-                [| Terminal "/"; |]; |]
+            [|  [| Symbol.Terminal "+"; |];
+                [| Symbol.Terminal "-"; |];
+                [| Symbol.Terminal "*"; |];
+                [| Symbol.Terminal "/"; |]; |]
 
-        let productions =
-            Map.empty
-            |> Map.add 'S' S
-            |> Map.add 'E' E
-            |> Map.add 'L' L
-            |> Map.add 'B' B
-
-        let nonterminals, terminals =
-            Grammar.SymbolSets productions
-
-        {   Terminals = terminals;
-            Nonterminals = nonterminals;
-            Productions = productions; }
+        Map.empty
+        |> Map.add 'S' S
+        |> Map.add 'E' E
+        |> Map.add 'L' L
+        |> Map.add 'B' B
 
     // Augment the grammar.
-    Grammar.Augment (``Grammar 4.6``, 'S')
-
-
+    Grammar.augment ``Grammar 4.6`` 'S'

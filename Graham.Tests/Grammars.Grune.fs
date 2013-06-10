@@ -19,7 +19,7 @@ limitations under the License.
 /// Grammars from Dick Grune's "Parsing Techniques, A Practical Guide".
 module Tests.Graham.Grammars.Grune
 
-open Graham.Grammar
+open Graham
 
 
 /// Figure 4.4: A grammar describing numbers in scientific notation.
@@ -27,88 +27,70 @@ let ``Figure 4.4`` =
     let ``Figure 4.4`` =
         // NOTE : This is the start symbol.
         let Number =
-            [|  [| Nonterminal "Integer" |];
-                [| Nonterminal "Real" |];   |]
+            [|  [| Symbol.Nonterminal "Integer" |];
+                [| Symbol.Nonterminal "Real" |];   |]
 
         let Integer =
-            [|  [| Nonterminal "Digit" |];
-                [| Nonterminal "Integer"; Nonterminal "Digit" |];   |]
+            [|  [| Symbol.Nonterminal "Digit" |];
+                [| Symbol.Nonterminal "Integer"; Symbol.Nonterminal "Digit" |];   |]
 
         let Real =
-            [|  [| Nonterminal "Integer"; Nonterminal "Fraction"; Nonterminal "Scale" |];   |]
+            [|  [| Symbol.Nonterminal "Integer"; Symbol.Nonterminal "Fraction"; Symbol.Nonterminal "Scale" |];   |]
 
         let Fraction =
-            [|  [| Terminal '.'; Nonterminal "Integer" |];  |]
+            [|  [| Symbol.Terminal '.'; Symbol.Nonterminal "Integer" |];  |]
 
         let Scale =
-            [|  [| Terminal 'e'; Nonterminal "Sign"; Nonterminal "Integer" |];
-                [| Nonterminal "Empty" |];  |]
+            [|  [| Symbol.Terminal 'e'; Symbol.Nonterminal "Sign"; Symbol.Nonterminal "Integer" |];
+                [| Symbol.Nonterminal "Empty" |];  |]
 
         let Digit =
-            [|  [| Terminal '0' |];
-                [| Terminal '1' |];
-                [| Terminal '2' |];
-                [| Terminal '3' |];
-                [| Terminal '4' |];
-                [| Terminal '5' |];
-                [| Terminal '6' |];
-                [| Terminal '7' |];
-                [| Terminal '8' |];
-                [| Terminal '9' |]; |]
+            [|  [| Symbol.Terminal '0' |];
+                [| Symbol.Terminal '1' |];
+                [| Symbol.Terminal '2' |];
+                [| Symbol.Terminal '3' |];
+                [| Symbol.Terminal '4' |];
+                [| Symbol.Terminal '5' |];
+                [| Symbol.Terminal '6' |];
+                [| Symbol.Terminal '7' |];
+                [| Symbol.Terminal '8' |];
+                [| Symbol.Terminal '9' |]; |]
 
         let Empty =
             [|  [| |] |]
 
         let Sign =
-            [|  [| Terminal '+' |];
-                [| Terminal '-' |]; |]
+            [|  [| Symbol.Terminal '+' |];
+                [| Symbol.Terminal '-' |]; |]
 
-        let productions =
-            Map.empty
-            |> Map.add "Number" Number
-            |> Map.add "Integer" Integer
-            |> Map.add "Real" Real
-            |> Map.add "Fraction" Fraction
-            |> Map.add "Scale" Scale
-            |> Map.add "Digit" Digit
-            |> Map.add "Empty" Empty
-            |> Map.add "Sign" Sign
-
-        let nonterminals, terminals =
-            Grammar.SymbolSets productions
-
-        {   Terminals = terminals;
-            Nonterminals = nonterminals;
-            Productions = productions; }
+        Map.empty
+        |> Map.add "Number" Number
+        |> Map.add "Integer" Integer
+        |> Map.add "Real" Real
+        |> Map.add "Fraction" Fraction
+        |> Map.add "Scale" Scale
+        |> Map.add "Digit" Digit
+        |> Map.add "Empty" Empty
+        |> Map.add "Sign" Sign
 
     // Augment the grammar.
-    Grammar.Augment (``Figure 4.4``, "Number")
+    Grammar.augment ``Figure 4.4`` "Number"
 
 /// Figure 4.8: An example grammar to test epsilon-rule elimination schemes.
 let ``Figure 4.8`` =
     let S =
-        [|  [| Nonterminal 'L'; Terminal 'a'; Nonterminal 'M' |];   |]
+        [|  [| Symbol.Nonterminal 'L'; Symbol.Terminal 'a'; Symbol.Nonterminal 'M' |];   |]
 
     let L =
-        [|  [| Nonterminal 'L'; Nonterminal 'M' |];
+        [|  [| Symbol.Nonterminal 'L'; Symbol.Nonterminal 'M' |];
             [| |];  |]
 
     let M =
-        [|  [| Nonterminal 'M'; Nonterminal 'M' |];
+        [|  [| Symbol.Nonterminal 'M'; Symbol.Nonterminal 'M' |];
             [| |];  |]
 
-    let productions =
-        Map.empty
-        |> Map.add 'S' S
-        |> Map.add 'L' L
-        |> Map.add 'M' M
-
-    let nonterminals, terminals =
-        Grammar.SymbolSets productions
-
-    {   Terminals = terminals;
-        Nonterminals = nonterminals;
-        Productions = productions; }
-
-
+    Map.empty
+    |> Map.add 'S' S
+    |> Map.add 'L' L
+    |> Map.add 'M' M
 

@@ -19,40 +19,32 @@ limitations under the License.
 /// Miscellaneous grammars for testing purposes.
 module Tests.Graham.Grammars.Misc
 
-open Graham.Grammar
+open Graham
 
 
 /// Expression grammar used for testing ambiguity resolution.
 /// This grammar is not LR(k) for any value of 'k', but can be treated as
 /// an LR(k) grammar through the use of associativity/precedence declarations.
 let ambiguousExpression =
-    let ambiguousExpression =
-        let number =
-            [| for i in '0' .. '9' do yield [| Terminal i |] |]
+    let ambiguousExpression : Grammar<string, char> =
+        let number : ProductionRule<string, char>[] =
+            [| for i in '0' .. '9' do yield [| Symbol.Terminal i |] |]
 
-        let exp =
-            [|  [| Nonterminal "exp"; Terminal '+'; Nonterminal "exp" |];
-                [| Nonterminal "exp"; Terminal '-'; Nonterminal "exp" |];
-                [| Nonterminal "exp"; Terminal '*'; Nonterminal "exp" |];
-                [| Nonterminal "exp"; Terminal '/'; Nonterminal "exp" |];
-                [| Nonterminal "number" |];
-                [| Terminal '('; Nonterminal "exp"; Terminal ')' |];
-                [| Nonterminal "exp"; Terminal '^'; Nonterminal "exp" |];
-                [| Nonterminal "exp"; Terminal '='; Nonterminal "exp" |];
-                [| Terminal '!'; Nonterminal "exp" |]; |]
+        let exp : ProductionRule<string, char>[] =
+            [|  [| Symbol.Nonterminal "exp"; Symbol.Terminal '+'; Symbol.Nonterminal "exp" |];
+                [| Symbol.Nonterminal "exp"; Symbol.Terminal '-'; Symbol.Nonterminal "exp" |];
+                [| Symbol.Nonterminal "exp"; Symbol.Terminal '*'; Symbol.Nonterminal "exp" |];
+                [| Symbol.Nonterminal "exp"; Symbol.Terminal '/'; Symbol.Nonterminal "exp" |];
+                [| Symbol.Nonterminal "number" |];
+                [| Symbol.Terminal '('; Symbol.Nonterminal "exp"; Symbol.Terminal ')' |];
+                [| Symbol.Nonterminal "exp"; Symbol.Terminal '^'; Symbol.Nonterminal "exp" |];
+                [| Symbol.Nonterminal "exp"; Symbol.Terminal '='; Symbol.Nonterminal "exp" |];
+                [| Symbol.Terminal '!'; Symbol.Nonterminal "exp" |]; |]
 
-        let productions =
-            Map.empty
-            |> Map.add "number" number
-            |> Map.add "exp" exp
-
-        let nonterminals, terminals =
-            Grammar.SymbolSets productions
-
-        {   Terminals = terminals;
-            Nonterminals = nonterminals;
-            Productions = productions; }
+        Map.empty
+        |> Map.add "number" number
+        |> Map.add "exp" exp
 
     // Augment the grammar.
-    Grammar.Augment (ambiguousExpression, "exp")
+    Grammar.augment ambiguousExpression "exp"
 

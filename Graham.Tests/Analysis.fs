@@ -21,85 +21,102 @@ module Tests.Graham.Analysis
 open NUnit.Framework
 open FsUnit
 
-open Graham.Grammar
+open Graham
 open Graham.Analysis
 open Tests.Graham.Grammars
 
 
 [<TestCase>]
 let ``Analysis of Grammar 3.26`` () =
-    let grammar = Appel.``Grammar 3.26``
-    let predictiveSets = PredictiveSets.ofGrammar grammar
+    let taggedGrammar =
+        let grammar = Appel.``Grammar 3.26``
+        TaggedGrammar.ofGrammar grammar
+    let predictiveSets = PredictiveSets.ofGrammar taggedGrammar
 
     (* Verify the nullable map. *)
     // The nullable map should have exactly the same number
     // of entries as the grammar has non-terminals.
-    Map.count predictiveSets.Nullable
-    |> assertEqual (Set.count grammar.Nonterminals)
+    TagMap.count predictiveSets.Nullable
+    |> assertEqual (TagBimap.count taggedGrammar.Nonterminals)
 
     // All non-terminals should have an entry.
-    grammar.Nonterminals
-    |> Set.forall (fun nonterm ->
-        Map.containsKey nonterm predictiveSets.Nullable)
+    taggedGrammar.Nonterminals
+    |> TagBimap.forall (fun nonterminalIndex _ ->
+        TagMap.containsKey nonterminalIndex predictiveSets.Nullable)
     |> assertTrue
 
     // For this grammar, none of the non-terminals are nullable.
     predictiveSets.Nullable
-    |> Map.exists (fun _ v -> v)
+    |> TagMap.exists (fun _ v -> v)
     |> assertFalse
 
     (* Verify the FIRST sets of the nonterminals. *)
     // The map of FIRST sets should have exactly the same number
     // of entries as the grammar has non-terminals.
-    Map.count predictiveSets.First
-    |> assertEqual (Set.count grammar.Nonterminals)
+    TagMap.count predictiveSets.First
+    |> assertEqual (TagBimap.count taggedGrammar.Nonterminals)
 
     // All non-terminals should have an entry.
-    grammar.Nonterminals
-    |> Set.forall (fun nonterm ->
-        Map.containsKey nonterm predictiveSets.First)
+    taggedGrammar.Nonterminals
+    |> TagBimap.forall (fun nonterminalIndex _ ->
+        TagMap.containsKey nonterminalIndex predictiveSets.First)
     |> assertTrue
 
     // Verify the entries are correct.
     let firstSet =
-        Set.ofArray [|
-            AugmentedTerminal.Terminal "*";
+        [|  AugmentedTerminal.Terminal "*";
             AugmentedTerminal.Terminal "x"; |]
+        |> Set.ofArray 
+        |> Set.map (fun terminal ->
+            TagBimap.findValue terminal taggedGrammar.Terminals)
+        |> TagSet.ofSet
 
-    grammar.Nonterminals
-    |> Set.iter (fun nonterm ->
+    taggedGrammar.Nonterminals
+    |> TagBimap.iter (fun nonterminalIndex _ ->
         firstSet
-        |> assertEqual (Map.find nonterm predictiveSets.First))
+        |> assertEqual (TagMap.find nonterminalIndex predictiveSets.First))
         
     (* Verify the FOLLOW sets of the nonterminals. *)
     // The map of FOLLOW sets should have exactly the same number
     // of entries as the grammar has non-terminals.
-    Map.count predictiveSets.Follow
-    |> assertEqual (Set.count grammar.Nonterminals)
+    TagMap.count predictiveSets.Follow
+    |> assertEqual (TagBimap.count taggedGrammar.Nonterminals)
 
     // All non-terminals should have an entry.
-    grammar.Nonterminals
-    |> Set.forall (fun nonterm ->
-        Map.containsKey nonterm predictiveSets.Follow)
+    taggedGrammar.Nonterminals
+    |> TagBimap.forall (fun nonterminalIndex _ ->
+        TagMap.containsKey nonterminalIndex predictiveSets.Follow)
     |> assertTrue
 
     // Verify the entries are correct.
     [| AugmentedTerminal.Terminal "="; EndOfFile; |]
-    |> Set.ofArray
+    |> Array.map (fun terminal ->
+        TagBimap.findValue terminal taggedGrammar.Terminals)
+    |> TagSet.ofArray
     |> assertEqual
-        (Map.find (AugmentedNonterminal.Nonterminal 'E') predictiveSets.Follow)
+        (let nonterminalIndex = TagBimap.findValue (AugmentedNonterminal.Nonterminal 'E') taggedGrammar.Nonterminals in
+         TagMap.find nonterminalIndex predictiveSets.Follow)
 
     ([| EndOfFile; |] : AugmentedTerminal<string>[])
-    |> Set.ofArray
+    |> Array.map (fun terminal ->
+        TagBimap.findValue terminal taggedGrammar.Terminals)
+    |> TagSet.ofArray
     |> assertEqual
-        (Map.find (AugmentedNonterminal.Nonterminal 'S') predictiveSets.Follow)
+        (let nonterminalIndex = TagBimap.findValue (AugmentedNonterminal.Nonterminal 'S') taggedGrammar.Nonterminals in
+         TagMap.find nonterminalIndex predictiveSets.Follow)
 
     [| AugmentedTerminal.Terminal "="; EndOfFile; |]
-    |> Set.ofArray
+    |> Array.map (fun terminal ->
+        TagBimap.findValue terminal taggedGrammar.Terminals)
+    |> TagSet.ofArray
     |> assertEqual
-        (Map.find (AugmentedNonterminal.Nonterminal 'V') predictiveSets.Follow)
+        (let nonterminalIndex = TagBimap.findValue (AugmentedNonterminal.Nonterminal 'V') taggedGrammar.Nonterminals in
+         TagMap.find nonterminalIndex predictiveSets.Follow)
 
     ([| EndOfFile; |] : AugmentedTerminal<string>[])
-    |> Set.ofArray
+    |> Array.map (fun terminal ->
+        TagBimap.findValue terminal taggedGrammar.Terminals)
+    |> TagSet.ofArray
     |> assertEqual
-        (Map.find Start predictiveSets.Follow)
+        (let nonterminalIndex = TagBimap.findValue Start taggedGrammar.Nonterminals in
+         TagMap.find nonterminalIndex predictiveSets.Follow)

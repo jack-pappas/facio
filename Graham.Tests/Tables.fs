@@ -21,7 +21,7 @@ module Tests.Graham.Tables
 open NUnit.Framework
 open FsUnit
 
-open Graham.Grammar
+open Graham
 open Graham.Analysis
 open Graham.LR
 open Tests.Graham.Grammars
@@ -50,29 +50,45 @@ module private TableHelpers =
 module private Table =
     /// Add a terminal entry to the action table.
     let term (parserStateId : int) (terminal : 'Terminal) action
-        (table : Map<TerminalTransition<AugmentedTerminal<'Terminal>>, LrParserActionSet>) =
+        (table : Map<ParserStateIndex * AugmentedTerminal<'Terminal>, LrParserActionSet>) =
         /// The tagged parser state id.
-        let parserState = tag<ParserStateIdentifier> parserStateId
+        let parserState : ParserStateIndex = tag parserStateId
 
         table |> Map.add (parserState, AugmentedTerminal.Terminal terminal) action
 
     /// Add an EOF entry to the action table.
     let eof (parserStateId : int) action
-        (table : Map<TerminalTransition<AugmentedTerminal<'Terminal>>, LrParserActionSet>) =
+        (table : Map<ParserStateIndex * AugmentedTerminal<'Terminal>, LrParserActionSet>) =
         /// The tagged parser state id.
-        let parserState = tag<ParserStateIdentifier> parserStateId
+        let parserState : ParserStateIndex = tag parserStateId
 
         table |> Map.add (parserState, AugmentedTerminal.EndOfFile) action
 
     /// Add an entry to the GOTO table.
     let nterm (sourceStateId : int) (nonterminal : 'Nonterminal) (targetStateId : int)
-        (table : Map<NonterminalTransition<AugmentedNonterminal<'Nonterminal>>, ParserStateId>) =
+        (table : Map<ParserStateIndex * AugmentedNonterminal<'Nonterminal>, ParserStateIndex>) =
         /// The tagged source state id.
-        let sourceState = tag<ParserStateIdentifier> sourceStateId
+        let sourceState : ParserStateIndex = tag sourceStateId
         /// The tagged target state id.
-        let targetState = tag<ParserStateIdentifier> targetStateId
+        let targetState : ParserStateIndex = tag targetStateId
 
         table |> Map.add (sourceState, AugmentedNonterminal.Nonterminal nonterminal) targetState
+
+    //
+    let taggedAction (actionTable : Map<ParserStateIndex * AugmentedTerminal<'Terminal>, LrParserActionSet>)
+        (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) : Map<TerminalTransition, LrParserActionSet> =
+        (Map.empty, actionTable)
+        ||> Map.fold (fun taggedActionTable (parserStateIndex, terminal) actionSet ->
+            let terminalIndex = TagBimap.findValue terminal taggedGrammar.Terminals
+            Map.add (parserStateIndex, terminalIndex) actionSet taggedActionTable)
+
+    //
+    let taggedGoto (gotoTable : Map<ParserStateIndex * AugmentedNonterminal<'Nonterminal>, ParserStateIndex>)
+        (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) : Map<NonterminalTransition, ParserStateIndex> =
+        (Map.empty, gotoTable)
+        ||> Map.fold (fun taggedGotoTable (parserStateIndex, nonterminal) targetState ->
+            let nonterminalIndex = TagBimap.findValue nonterminal taggedGrammar.Nonterminals
+            Map.add (parserStateIndex, nonterminalIndex) targetState taggedGotoTable)
 
 
 [<TestCase>]
@@ -125,15 +141,16 @@ let ``LR(0) table for Grammar 3.20`` () =
         |> Table.nterm 3 'L' 5
         |> Table.nterm 6 'S' 8
 
-    let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.20``
+    let taggedGrammar = TaggedGrammar.ofGrammar Appel.``Grammar 3.20``
+    let lr0ParserTable = Lr0.createTable taggedGrammar
 
     // Verify the ACTION table.
     lr0ParserTable.ActionTable
-    |> should equal expectedActionTable
+    |> Collection.assertEqual (Table.taggedAction expectedActionTable taggedGrammar)
 
     // Verify the GOTO table.
     lr0ParserTable.GotoTable
-    |> should equal expectedGotoTable
+    |> Collection.assertEqual (Table.taggedGoto expectedGotoTable taggedGrammar)
 
 [<TestCase>]
 let ``LR(0) table for Grammar 3.23`` () =
@@ -165,16 +182,17 @@ let ``LR(0) table for Grammar 3.23`` () =
         |> Table.nterm 4 'E' 5
         |> Table.nterm 4 'T' 2
 
-    let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.23``
+    let taggedGrammar = TaggedGrammar.ofGrammar Appel.``Grammar 3.23``
+    let lr0ParserTable = Lr0.createTable taggedGrammar
     // table should have 6 states and 3 rules
 
     // Verify the ACTION table.
     lr0ParserTable.ActionTable
-    |> should equal expectedActionTable
+    |> Collection.assertEqual (Table.taggedAction expectedActionTable taggedGrammar)
 
     // Verify the GOTO table.
     lr0ParserTable.GotoTable
-    |> should equal expectedGotoTable
+    |> Collection.assertEqual (Table.taggedGoto expectedGotoTable taggedGrammar)
 
 [<TestCase>]
 let ``SLR table for Grammar 3.23`` () =
@@ -202,18 +220,18 @@ let ``SLR table for Grammar 3.23`` () =
         |> Table.nterm 4 'E' 5
         |> Table.nterm 4 'T' 2
 
+    let taggedGrammar = TaggedGrammar.ofGrammar Appel.``Grammar 3.23``
     let slr1ParserTable =
-        let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.23``
-        let productionRuleIds = Grammar.ProductionRuleIds Appel.``Grammar 3.23``
-        Slr1.upgrade (Appel.``Grammar 3.23``, lr0ParserTable, productionRuleIds)
+        let lr0ParserTable = Lr0.createTable taggedGrammar
+        Slr1.upgrade taggedGrammar lr0ParserTable
 
     // Verify the ACTION table.
     slr1ParserTable.ActionTable
-    |> should equal expectedActionTable
+    |> Collection.assertEqual (Table.taggedAction expectedActionTable taggedGrammar)
 
     // Verify the GOTO table.
     slr1ParserTable.GotoTable
-    |> should equal expectedGotoTable
+    |> Collection.assertEqual (Table.taggedGoto expectedGotoTable taggedGrammar)
 
 [<TestCase>]
 let ``LR(1) table for Grammar 3.26`` () =
@@ -270,16 +288,18 @@ let ``LR(1) table for Grammar 3.26`` () =
         |> Table.nterm 12 'E' 13
         |> Table.nterm 12 'V' 9
 
-    let parserTable = Lr1.createTable Appel.``Grammar 3.26``
+    let taggedGrammar = TaggedGrammar.ofGrammar Appel.``Grammar 3.26``
+    let parserTable = Lr1.createTable taggedGrammar
 
     // Verify the ACTION table.
     parserTable.ActionTable
-    |> should equal expectedActionTable
+    |> Collection.assertEqual (Table.taggedAction expectedActionTable taggedGrammar)
 
     // Verify the GOTO table.
     parserTable.GotoTable
-    |> should equal expectedGotoTable
+    |> Collection.assertEqual (Table.taggedGoto expectedGotoTable taggedGrammar)
 
+(*
 [<TestCase>]
 let ``LALR(1) table for Grammar 3.26`` () =
     let expectedActionTable =
@@ -323,23 +343,23 @@ let ``LALR(1) table for Grammar 3.26`` () =
         |> Table.nterm 6 'E' 9
         |> Table.nterm 6 'V' 7
 
+    let taggedGrammar = TaggedGrammar.ofGrammar Appel.``Grammar 3.26``
     let lalr1ParserTable =
-        let lr0ParserTable = Lr0.createTable Appel.``Grammar 3.26``
-        let productionRuleIds = Grammar.ProductionRuleIds Appel.``Grammar 3.26``
-        match Lalr1.lookaheadSets (Appel.``Grammar 3.26``, lr0ParserTable) with
+        let lr0ParserTable = Lr0.createTable taggedGrammar
+        match Lalr1.lookaheadSets taggedGrammar lr0ParserTable with
         | Choice2Of2 errMsg ->
             Assert.Fail errMsg
             // To satisfy F# type inference -- the test will actually fail on the Assert.Fail call.
             raise <| exn errMsg
 
         | Choice1Of2 lookaheadSets ->
-            Lalr1.upgrade (Appel.``Grammar 3.26``, lr0ParserTable, productionRuleIds, lookaheadSets)
+            Lalr1.upgrade taggedGrammar lr0ParserTable lookaheadSets
 
     // Verify the ACTION table.
     lalr1ParserTable.ActionTable
-    |> should equal expectedActionTable
+    |> Collection.assertEqual (Table.taggedAction expectedActionTable taggedGrammar)
 
     // Verify the GOTO table.
     lalr1ParserTable.GotoTable
-    |> should equal expectedGotoTable
-
+    |> Collection.assertEqual (Table.taggedGoto expectedGotoTable taggedGrammar)
+*)
