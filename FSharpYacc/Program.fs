@@ -149,7 +149,7 @@ module Program =
 
         // Precompile the parsed specification to validate and process it.
         let processedSpecification, validationMessages =
-            Compiler.precompile (parserSpec, options)
+            Prepare.precompile (parserSpec, options)
 
         // Display validation warning messages, if any.
         validationMessages.Warnings
@@ -165,7 +165,7 @@ module Program =
             1   // Exit code: Error
         | [] ->
             // Compile the processed specification.
-            match Compiler.compile (processedSpecification, options) with
+            match Compiler.compile processedSpecification options logger with
             | Choice2Of2 errorMessages ->
                 // Write the error messages to the console.
                 errorMessages

@@ -62,6 +62,7 @@
     <Compile Include="Ast.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="Lexer.fs" />
+    <Compile Include="Precompile.fs" />
     <Compile Include="Compiler.fs" />
     <Compile Include="Plugin.fs" />
     <Compile Include="Backend.Fsyacc.fs" />
