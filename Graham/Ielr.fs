@@ -18,9 +18,7 @@ limitations under the License.
 
 namespace Graham.Analysis
 
-open ExtCore
-open ExtCore.Collections
-open Graham.Grammar
+open Graham
 
 
 /// Computed tables used in the IELR(1) algorithm.

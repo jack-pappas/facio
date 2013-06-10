@@ -19,8 +19,6 @@ limitations under the License.
 //
 namespace Graham.Analysis
 
-open ExtCore
-open ExtCore.Collections
 open Graham
 
 

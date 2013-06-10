@@ -63,6 +63,8 @@
     <Compile Include="Lr1.fs" />
     <Compile Include="Lalr1.fs" />
     <Compile Include="ConflictResolution.fs" />
+    <Compile Include="LeftCorner.fs" />
+    <Compile Include="Ielr.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExtCore">

@@ -20,8 +20,6 @@ limitations under the License.
 namespace Graham.LR
 
 open System.Diagnostics
-open ExtCore
-open ExtCore.Collections
 open Graham
 open AugmentedPatterns
 open Graham.Analysis

@@ -16,21 +16,21 @@ limitations under the License.
 
 *)
 
-//
 namespace Graham.LeftCorner
 
-open Graham.Grammar
+open Graham
 open Graham.Analysis
+open Graham.LR
 
 
 /// An action which manipulates the state of the
 /// parser automaton for a left-corner parser.
 type LeftCornerParserAction =
     /// Shift into a state.
-    | Shift of ParserStateId
+    | Shift of ParserStateIndex
     /// Announce that the free position ("recognition point")
     /// has been reached for the specified rule.
-    | Announce of ProductionRuleId
+    | Announce of ProductionRuleIndex
     /// Accept.
     | Accept
 
@@ -55,32 +55,10 @@ type LeftCornerItem<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> = {
     //
-    Nonterminal : 'Nonterminal;
+    ProductionRuleIndex : ProductionRuleIndex;
     //
-    Production : Symbol<'Nonterminal, 'Terminal>[];
-    //
-    Position : int<ParserPosition>;
-} with
-    /// <inherit />
-    override this.ToString () =
-        let sb = System.Text.StringBuilder ()
-
-        // Add the nonterminal text and arrow to the StringBuilder.
-        sprintf "%O \u2192 " this.Nonterminal
-        |> sb.Append |> ignore
-
-        for i = 0 to Array.length this.Production do
-            if i < int this.Position then
-                this.Production.[i].ToString ()
-                |> sb.Append |> ignore
-            elif i = int this.Position then
-                // Append the dot character representing the parser position.
-                sb.Append "\u2022" |> ignore
-            else
-                this.Production.[i - 1].ToString ()
-                |> sb.Append |> ignore
-
-        sb.ToString ()
+    Position : ParserPosition;
+}
 
 /// A Left-Corner parser state -- i.e., a set of Left-Corner items.
 type LeftCornerParserState<'Nonterminal, 'Terminal
@@ -93,11 +71,11 @@ type LeftCornerParserTable<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> = {
     //
-    ParserStates : Map<ParserStateId, LeftCornerParserState<'Nonterminal, 'Terminal>>;
+    ParserStates : Map<ParserStateIndex, LeftCornerParserState<'Nonterminal, 'Terminal>>;
     //
-    ActionTable : Map<ParserStateId * 'Terminal, Set<LeftCornerParserAction>>;
+    ActionTable : Map<TerminalTransition, Set<LeftCornerParserAction>>;
     //
-    GotoTable : Map<ParserStateId * 'Nonterminal, ParserStateId>;    
+    GotoTable : Map<NonterminalTransition, ParserStateIndex>;    
 }
 
 /// Parser-generators for left-corner grammars.
