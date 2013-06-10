@@ -168,6 +168,9 @@ module Lr0 =
         if TagSet.isEmpty workSet then
             return ()
         else
+            /// The tagged-index of the end-of-file marker.
+            let eofIndex = lazy (TagBimap.findValue EndOfFile taggedGrammar.Terminals)
+
             let! workSet =
                 (TagSet.empty, workSet)
                 ||> State.TagSet.fold (fun workSet stateId ->
@@ -187,12 +190,19 @@ module Lr0 =
                             match LrItem.CurrentSymbol item taggedGrammar with
                             | None ->
                                 // Add a 'reduce' action to the ACTION table for each terminal (token) in the grammar.
-                                do! grammar.Terminals
-                                    |> State.Set.iter (fun terminal ->
-                                        state {
-                                        let key = stateId, terminal
-                                        do! LrTableGenState.reduce key item.ProductionRuleIndex
-                                        })
+                                (* TEMP : Change this to use State.TagBimap.iter instead of manually handling the state. *)
+
+                                let! state = State.getState
+                                do!
+                                    (state, taggedGrammar.Terminals)
+                                    ||> TagBimap.fold (fun state terminalIndex _ ->
+                                        // state {
+                                        let key = stateId, terminalIndex
+                                        //do! LrTableGenState.reduce key item.ProductionRuleIndex
+                                        LrTableGenState.reduce key item.ProductionRuleIndex state
+                                        |> snd)
+                                        //})
+                                    |> State.setState
 
                                 // Return the current workset.
                                 return workSet
@@ -200,42 +210,42 @@ module Lr0 =
                             | Some symbol ->
                                 // Add actions to the table based on the next symbol to be parsed.
                                 match symbol with
-                                | Symbol.Terminal EndOfFile ->
-                                    // When the end-of-file symbol is the next to be parsed,
-                                    // add an 'accept' action to the table to indicate the
-                                    // input has been parsed successfully.
-                                    do! LrTableGenState.accept stateId taggedGrammar
+                                | Symbol.Terminal terminalIndex ->
+                                    if terminalIndex = Lazy.force eofIndex then
+                                        // When the end-of-file symbol is the next to be parsed,
+                                        // add an 'accept' action to the table to indicate the
+                                        // input has been parsed successfully.
+                                        do! LrTableGenState.accept stateId taggedGrammar
 
-                                    // Return the current workset.
-                                    return workSet
+                                        // Return the current workset.
+                                        return workSet
+                                    else
+                                        /// The state (set of items) transitioned into
+                                        /// via the edge labeled with this symbol.
+                                        let targetState = Item.goto symbol stateItems taggedGrammar
 
-                                | Symbol.Terminal (Terminal _ as token) ->
+                                        /// The identifier of the target state.
+                                        let! isNewState, targetStateId = LrTableGenState.stateId targetState
+
+                                        // If this is a new state, add it to the list of states which need to be visited.
+                                        let workSet =
+                                            if isNewState then
+                                                TagSet.add targetStateId workSet
+                                            else workSet
+
+                                        // The next symbol to be parsed is a terminal (token),
+                                        // so add a 'shift' action to this entry of the table.
+                                        do!
+                                            let key = stateId, terminalIndex
+                                            LrTableGenState.shift key targetStateId
+
+                                        // Return the current workset.
+                                        return workSet
+
+                                | Symbol.Nonterminal nonterminalIndex ->
                                     /// The state (set of items) transitioned into
                                     /// via the edge labeled with this symbol.
-                                    let targetState = Item.goto symbol stateItems grammar.Productions
-
-                                    /// The identifier of the target state.
-                                    let! isNewState, targetStateId = LrTableGenState.stateId targetState
-
-                                    // If this is a new state, add it to the list of states which need to be visited.
-                                    let workSet =
-                                        if isNewState then
-                                            TagSet.add targetStateId workSet
-                                        else workSet
-
-                                    // The next symbol to be parsed is a terminal (token),
-                                    // so add a 'shift' action to this entry of the table.
-                                    do!
-                                        let key = stateId, token
-                                        LrTableGenState.shift key targetStateId
-
-                                    // Return the current workset.
-                                    return workSet
-
-                                | Symbol.Nonterminal nonterm ->
-                                    /// The state (set of items) transitioned into
-                                    /// via the edge labeled with this symbol.
-                                    let targetState = Item.goto symbol stateItems grammar.Productions
+                                    let targetState = Item.goto symbol stateItems taggedGrammar
 
                                     /// The identifier of the target state.
                                     let! isNewState, targetStateId = LrTableGenState.stateId targetState
@@ -249,7 +259,7 @@ module Lr0 =
                                     // The next symbol to be parsed is a nonterminal,
                                     // so add a 'goto' action to this entry of the table.
                                     do!
-                                        let key = stateId, nonterm
+                                        let key = stateId, nonterminalIndex
                                         LrTableGenState.goto key targetStateId
 
                                     // Return the current workset.

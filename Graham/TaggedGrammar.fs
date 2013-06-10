@@ -149,6 +149,11 @@ module TaggedGrammar =
                             TagMap.add nonterminalIndex nonterminalProductions taggedGrammar.ProductionsByNonterminal;
                         }))
 
+    //
+    [<CompiledName("ToGrammar")>]
+    let toGrammar (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) : Grammar<'Nonterminal, 'Terminal> =
+        notImpl "TaggedGrammar.toGrammar"
+
 
 /// A tagged, augmented grammar.
 type TaggedAugmentedGrammar<'Nonterminal, 'Terminal

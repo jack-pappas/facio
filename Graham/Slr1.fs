@@ -37,7 +37,7 @@ module Slr1 =
     /// Given a grammar and it's LR(0) parser table, upgrades the table to SLR(1).
     let upgrade (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
         /// Predictive sets of the augmented grammar.
-        let predictiveSets = PredictiveSets.ofGrammar grammar
+        let predictiveSets = PredictiveSets.ofGrammar <| TaggedGrammar.toGrammar taggedGrammar
 
         // Upgrade the LR(0) parser table to SLR(1).
         // If the table has already been upgraded to SLR(1) (or something

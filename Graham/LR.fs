@@ -479,7 +479,7 @@ module LrTableGenState =
 
     /// Add an 'accept' action to the ACTION table.
     let accept (sourceState : ParserStateIndex) (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
-        (state : LrTableGenState<AugmentedTerminal<'Nonterminal>, AugmentedTerminal<'Terminal>, 'Lookahead>) =
+        (state : LrTableGenState<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>, 'Lookahead>) =
         /// The transition key for the ACTION table.
         let key =
             let eofIndex = TagBimap.findValue EndOfFile taggedGrammar.Terminals
