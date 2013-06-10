@@ -47,7 +47,10 @@ module PredictiveSets =
                     avoid re-processing values which haven't changed. *)
 
     //
-    let internal nullable (grammar : Grammar<'Nonterminal, 'Terminal>) =
+    let internal nullable (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) =
+        // TEMP : Until the code below is modified to use TaggedGrammar, down-convert to Grammar.
+        let grammar = TaggedGrammar.toGrammar taggedGrammar
+
         /// Implementation of the nullable-map-computing algorithm.
         let rec computeNullable (nullable : Map<'Nonterminal, bool>) =
             let nullable, updated =
@@ -98,7 +101,10 @@ module PredictiveSets =
                 Map.find nontermId nullable)
 
     //
-    let internal first (grammar : Grammar<'Nonterminal, 'Terminal>) (nullable : Map<'Nonterminal, bool>) =
+    let internal first (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) (nullable : Map<'Nonterminal, bool>) =
+        // TEMP : Until the code below is modified to use TaggedGrammar, down-convert to Grammar.
+        let grammar = TaggedGrammar.toGrammar taggedGrammar
+
         /// Implementation of the algorithm for computing the FIRST sets of the nonterminals.
         let rec computeFirst (firstSets : Map<'Nonterminal, Set<'Terminal>>) =
             let firstSets, updated =
@@ -151,9 +157,12 @@ module PredictiveSets =
         |> computeFirst
 
     //
-    let internal follow (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>)
+    let internal follow (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
                       (nullable : Map<AugmentedNonterminal<'Nonterminal>, bool>)
                       (firstSets : Map<AugmentedNonterminal<'Nonterminal>, Set<AugmentedTerminal<'Terminal>>>) =
+        // TEMP : Until the code below is modified to use TaggedGrammar, down-convert to Grammar.
+        let grammar = TaggedGrammar.toGrammar taggedGrammar
+
         /// Implementation of the algorithm for computing the FOLLOW sets of the nonterminals.
         let rec computeFollow (followSets : Map<AugmentedNonterminal<'Nonterminal>, Set<AugmentedTerminal<'Terminal>>>) =
             let followSets, updated =
@@ -244,21 +253,19 @@ module PredictiveSets =
         |> computeFollow
 
     //
-    let ofGrammar (grammar : AugmentedGrammar<'Nonterminal, 'Terminal>) =
+    let ofGrammar (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) =
         /// Map denoting which nonterminals in the grammar are nullable.
-        let nullable = nullable grammar
+        let nullable = nullable taggedGrammar
 
         /// The FIRST sets for the nonterminals in the grammar.
-        let firstSets = first grammar nullable
+        let firstSets = first taggedGrammar nullable
 
         /// The FOLLOW sets for the nonterminals in the grammar.
-        let followSets = follow grammar nullable firstSets
+        let followSets = follow taggedGrammar nullable firstSets
 
         (* TEMP :   Until the analysis functions are modified to use a TaggedGrammar
                     (or TaggedAugmentedGrammar), we need to convert their results so
                     they can be used with the newly re-defined PredictiveSets record. *)
-        let taggedGrammar = TaggedGrammar.ofGrammar grammar
-
         let nullable' =
             (TagMap.empty, nullable)
             ||> Map.fold (fun nullable' nonterminal isNullable ->

@@ -294,7 +294,7 @@ module Lr1 =
         // TODO
 
         /// Analysis of the augmented grammar.
-        let predictiveSets = PredictiveSets.ofGrammar <| TaggedGrammar.toGrammar taggedGrammar
+        let predictiveSets = PredictiveSets.ofGrammar taggedGrammar
 
         let workflow =
             state {
