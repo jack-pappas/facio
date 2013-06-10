@@ -77,7 +77,7 @@
       <Private>True</Private>
     </ProjectReference>
     <Reference Include="ExtCore">
-      <HintPath>..\packages\ExtCore.0.8.25\lib\net40\ExtCore.dll</HintPath>
+      <HintPath>..\packages\ExtCore.0.8.26\lib\net40\ExtCore.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="mscorlib" />
