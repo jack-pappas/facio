@@ -118,11 +118,8 @@ module Lalr1 =
 
                     // Add edges to the 'includes' relation graph.
                     let includes, j =
-                        // OPTIMIZE : Use Range.fold here instead of creating 'rhsPositions' then folding over it.
-                        let rhsPositions = seq {
-                            int item.Position .. Array.length itemProduction - 1 }
-                        ((includes, stateId), rhsPositions)
-                        ||> Seq.fold (fun (includes, j) position ->
+                        (int item.Position, Array.length itemProduction - 1, (includes, stateId))
+                        |||> Range.fold (fun (includes, j) position ->
                             let t = itemProduction.[position]
                             let includes =
                                 // Only care about nonterminal transitions here
