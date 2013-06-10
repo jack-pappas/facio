@@ -36,6 +36,10 @@ type TerminalIndex = int<TerminalIndexTag>
 /// The zero-based index of a production rule.
 type ProductionRuleIndex = int<ProductionRuleIndexTag>
 
+/// A production rule where the nonterminal and terminal symbols
+/// have been replaced by their respective tagged-indices.
+type TaggedProductionRule = Symbol<NonterminalIndex, TerminalIndex>[]
+
 /// A context-free grammar (CFG) where each nonterminal, terminal, and production rule
 /// has been indexed and tagged. This allows for efficient implementations of the grammar
 /// analyses and parser-generation algorithms no matter which types are used for the
@@ -50,7 +54,7 @@ type TaggedGrammar<'Nonterminal, 'Terminal
     
     (* TODO : Change this so the value is a vector (from ExtCore) instead of an array, because it should be immutable. *)
     /// The production rules of the grammar.
-    Productions : TagMap<ProductionRuleIndexTag, Symbol<NonterminalIndex, TerminalIndex>[]>;
+    Productions : TagMap<ProductionRuleIndexTag, TaggedProductionRule>;
     
     (* OPTIMIZE : Can we implement a "TagMultiBimap" data structure to combine and simplify the next two fields? *)
     /// Maps the index of each nonterminal in the grammar to the set of production rules
@@ -119,7 +123,7 @@ module TaggedGrammar =
                 ||> Array.fold (fun taggedGrammar productionRule ->
                     /// A copy of the production rule, where the original nonterminal and terminal
                     /// symbols have been replaced by their respective tagged-indices.
-                    let taggedProductionRule =
+                    let taggedProductionRule : TaggedProductionRule =
                         productionRule
                         |> Array.map (function
                             | Nonterminal nonterminal ->

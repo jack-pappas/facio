@@ -90,11 +90,17 @@ type AugmentedSymbol<'Nonterminal, 'Terminal
     and 'Terminal : comparison> =
     Symbol<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
 
+/// The right-hand-side (RHS) of a production rule within a context-free grammar (CFG).
+type ProductionRule<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
+    Symbol<'Nonterminal, 'Terminal>[]
+
 /// A context-free grammar (CFG).
 type Grammar<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
-    Map<'Nonterminal, Symbol<'Nonterminal, 'Terminal>[][]>
+    Map<'Nonterminal, ProductionRule<'Nonterminal, 'Terminal>[]>
 
 /// A grammar augmented with the "start" symbol and the end-of-file marker.
 type AugmentedGrammar<'Nonterminal, 'Terminal

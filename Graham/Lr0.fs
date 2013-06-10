@@ -287,10 +287,10 @@ module Lr0 =
                     ||> TagSet.fold (fun items ruleIndex ->
                         // Create an 'item', with the parser position at
                         // the beginning of the production.
-                        let item =
-                            {   ProductionRuleIndex = ruleIndex;
-                                Position = GenericZero;
-                                Lookahead = (); }
+                        let item = {
+                            ProductionRuleIndex = ruleIndex;
+                            Position = GenericZero;
+                            Lookahead = (); }
                         Set.add item items)
                     |> Item.closure taggedGrammar
 
