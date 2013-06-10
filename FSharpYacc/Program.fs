@@ -149,7 +149,7 @@ module Program =
 
         // Precompile the parsed specification to validate and process it.
         let processedSpecification, validationMessages =
-            Prepare.precompile (parserSpec, options)
+            Precompile.specification parserSpec
 
         // Display validation warning messages, if any.
         validationMessages.Warnings

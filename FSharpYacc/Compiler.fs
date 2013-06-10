@@ -28,7 +28,6 @@ open Graham.LR
 open FSharpYacc.Ast
 
 
-
 /// Compiles a parser specification into a deterministic pushdown automaton (DPDA),
 /// then invokes a specified backend to generate code implementing the parser automaton.
 let compile (processedSpec : ProcessedSpecification<_,_>) (options : CompilationOptions) (logger : Logger) : Choice<_,_> =
@@ -36,9 +35,10 @@ let compile (processedSpec : ProcessedSpecification<_,_>) (options : Compilation
 
     /// The tagged grammar.
     let taggedGrammar =
-        /// The grammar created from the parser specification.
+        /// The grammar created from the parser specification and augmented with
+        /// a starting production and the end-of-file marker.
         let grammar =
-            //
+            /// The grammar created from the parser specification.
             let rawGrammar : Grammar<_,_> =
                 processedSpec.ProductionRules
                 |> Map.map (fun _ rules ->
