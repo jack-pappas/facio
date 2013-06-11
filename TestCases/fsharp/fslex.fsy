@@ -1,11 +1,8 @@
 %{
 (* (c) Microsoft Corporation 2005-2008.  *)
 
-open FSharpx.Text.Lexing
-open FSharpx.Text.Parsing.ParseHelpers
-
-open FSharpx.Text.Lexing.FsLex
-open FSharpx.Text.Lexing.FsLex.Ast
+open FSharp.PowerPack.FsLex
+open FSharp.PowerPack.FsLex.AST
 
 %} 
 
@@ -22,7 +19,7 @@ open FSharpx.Text.Lexing.FsLex.Ast
 %left regexp_seq
 %nonassoc regexp_opt
 %nonassoc regexp_plus regexp_star
-%%      
+%%
 
 spec: codeopt Macros RULE Rules codeopt { { TopCode=$1;Macros=$2;Rules=$4;BottomCode=$5 } }
 codeopt: CODE { $1 } | { "", (parseState.ResultRange |> fst) }

@@ -27,7 +27,7 @@ let letter = ['A'-'Z'] | ['a'-'z']
 let digit = ['0'-'9']
 let whitespace = [' ' '\t']
 let newline = ('\n' | '\r' '\n')
-let ident_start_char = letter
+let ident_start_char = letter       
 let ident_char = ( ident_start_char| digit | ['\'' '_'] )
 let ident = ident_start_char ident_char*
 
@@ -46,7 +46,7 @@ rule token = parse
  | '<' { LESS }
  | '>' { GREATER }
  | ';' { SEMI }
- | '{' { let p = lexbuf.StartPos in
+ | '{' { let p = lexbuf.StartPos in 
          let buff = (new StringBuilder 100) in
          // adjust the first line to get even indentation for all lines w.r.t. the left hand margin
          buff.Append (String.replicate (lexbuf.StartPos.Column+1) " ")  |> ignore;
@@ -58,84 +58,79 @@ rule token = parse
  | "/*" { ignore(comment lexbuf); token lexbuf }
  | "//" [^'\n''\r']* {  token lexbuf  }
  | ':' { COLON }
- | _ { unexpected_char lexbuf }
- | eof { EOF  }
+ | _ { unexpected_char lexbuf }     
+ | eof { EOF  }  
 
 and fs_type = parse
   | '<' { incr typeDepth; appendBuf(lexeme lexbuf); fs_type lexbuf}
-
-  (* When '->' is used inside a %type declaration, it needs to be matched
-     specially, otherwise it'll be caught by the '>' pattern. *)
-  | "->" { appendBuf(lexeme lexbuf); fs_type lexbuf }
-
   | '>'
-    { decr typeDepth;
+    { decr typeDepth; 
       if !typeDepth = 0
-      then Some(string str_buf)
+      then Some(string str_buf) 
       else appendBuf(lexeme lexbuf); fs_type lexbuf }
   | _ { appendBuf(lexeme lexbuf); fs_type lexbuf } 
-
+                                   
 and header p buff = parse
  | "%}" { HEADER (buff.ToString(), p) }
- | newline { newline lexbuf;
-             ignore <| buff.Append System.Environment.NewLine;
+ | newline { newline lexbuf; 
+             ignore <| buff.Append System.Environment.NewLine; 
              header p buff lexbuf }
- | (whitespace | letter | digit) +
-      { ignore <| buff.Append (lexeme lexbuf);
+ | (whitespace | letter | digit) +  
+      { ignore <| buff.Append (lexeme lexbuf); 
         header p buff lexbuf }
  | "//" [^'\n''\r']*
-      { ignore <| buff.Append (lexeme lexbuf);
+      { ignore <| buff.Append (lexeme lexbuf); 
         header p buff lexbuf }
  | "'\"'" | "'\\\"'"
-      { ignore <| buff.Append (lexeme lexbuf);
+      { ignore <| buff.Append (lexeme lexbuf); 
         header p buff lexbuf }
- | "\""
-      { ignore <| buff.Append (lexeme lexbuf);
-        ignore(codestring buff lexbuf);
+ | "\"" 
+      { ignore <| buff.Append (lexeme lexbuf); 
+        ignore(codestring buff lexbuf); 
         header p buff lexbuf }
  | eof { EOF }
- | _ { ignore <| buff.Append(lexeme lexbuf).[0];
+ | _ { ignore <| buff.Append(lexeme lexbuf).[0]; 
        header p buff lexbuf }
 and code p buff = parse
  | "}" { CODE (buff.ToString(), p) }
- | "{" { ignore <| buff.Append (lexeme lexbuf);
-         ignore(code p buff lexbuf);
-         ignore <| buff.Append "}";
+ | "{" { ignore <| buff.Append (lexeme lexbuf); 
+         ignore(code p buff lexbuf); 
+         ignore <| buff.Append "}"; 
          code p buff lexbuf }
- | newline { newline lexbuf;
-             ignore <| buff.Append System.Environment.NewLine;
+ | newline { newline lexbuf; 
+             ignore <| buff.Append System.Environment.NewLine; 
              code p buff lexbuf }
  | "'\"'" | "'\\\"'"
-      { ignore <| buff.Append (lexeme lexbuf);
+      { ignore <| buff.Append (lexeme lexbuf); 
         code p buff lexbuf }
- | "\"" { ignore <| buff.Append (lexeme lexbuf);
-          ignore(codestring buff lexbuf);
+ | "\"" { ignore <| buff.Append (lexeme lexbuf); 
+          ignore(codestring buff lexbuf); 
           code p buff lexbuf }
- | (whitespace | letter | digit) +
-   { ignore <| buff.Append (lexeme lexbuf);
+ | (whitespace | letter | digit) +  
+   { ignore <| buff.Append (lexeme lexbuf); 
      code p buff lexbuf }
  | "//" [^'\n''\r']*
-   { ignore <| buff.Append (lexeme lexbuf);
+   { ignore <| buff.Append (lexeme lexbuf); 
      code p buff lexbuf }
  | eof { EOF }
- | _ { ignore <| buff.Append(lexeme lexbuf).[0];
+ | _ { ignore <| buff.Append(lexeme lexbuf).[0]; 
        code p buff lexbuf }
 
 
 and codestring buff = parse
  |  '\\' ('"' | '\\')
    { ignore <| buff.Append (lexeme lexbuf); 
-     codestring buff lexbuf }
+     codestring buff lexbuf } 
  | '"' { ignore <| buff.Append (lexeme lexbuf); 
          buff.ToString() }
- | newline { newline lexbuf;
-             ignore <| buff.Append System.Environment.NewLine;
+ | newline { newline lexbuf; 
+             ignore <| buff.Append System.Environment.NewLine; 
              codestring buff lexbuf }
- | (whitespace | letter | digit) +
-   { ignore <| buff.Append (lexeme lexbuf);
+ | (whitespace | letter | digit) +  
+   { ignore <| buff.Append (lexeme lexbuf); 
      codestring buff lexbuf }
  | eof { failwith "unterminated string in code" }
- | _ { ignore <| buff.Append(lexeme lexbuf).[0];
+ | _ { ignore <| buff.Append(lexeme lexbuf).[0]; 
        codestring buff lexbuf }
 
 
