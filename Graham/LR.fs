@@ -42,18 +42,27 @@ type ParserPosition = int<ParserPositionTag>
 type ParserStateIndex = int<ParserStateIndexTag>
 
 /// An LR(k) item.
-[<DebuggerDisplay("{DebuggerDisplay,nq}")>]
+[<Struct>]
 type LrItem<'Nonterminal, 'Terminal, 'Lookahead
     when 'Nonterminal : comparison
     and 'Terminal : comparison
-    and 'Lookahead : comparison> = {
+    and 'Lookahead : comparison> =
     //
-    ProductionRuleIndex : ProductionRuleIndex;
+    val ProductionRuleIndex : ProductionRuleIndex
     //
-    Position : ParserPosition;
+    val Position : ParserPosition
     //
-    Lookahead : 'Lookahead;
-} with
+    val Lookahead : 'Lookahead
+
+    //
+    new (productionRuleIndex : ProductionRuleIndex, position : ParserPosition, lookahead : 'Lookahead) =
+        { ProductionRuleIndex = productionRuleIndex; Position = position; Lookahead = lookahead; }
+with
+    //
+    static member NextPosition (item : LrItem<'Nonterminal, 'Terminal, 'Lookahead>) =
+        let newPosition = item.Position + 1<_>
+        LrItem (item.ProductionRuleIndex, newPosition, item.Lookahead)
+
     //
     static member CurrentSymbol (item : LrItem<'Nonterminal, 'Terminal, 'Lookahead>)
         (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) : Symbol<_,_> option =

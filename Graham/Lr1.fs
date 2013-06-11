@@ -147,10 +147,7 @@ module Lr1 =
                                     // possibly follow this nonterminal.
                                     (pendingItems, firstSetOfRemainingSymbols)
                                     ||> TagSet.fold (fun pendingItems nonterminalFollowTokenIndex ->
-                                        let newItem = {
-                                            ProductionRuleIndex = ruleIndex;
-                                            Position = GenericZero;
-                                            Lookahead = nonterminalFollowTokenIndex; }
+                                        let newItem = LrItem (ruleIndex, GenericZero, nonterminalFollowTokenIndex)
 
                                         // Only add this item to the worklist if it hasn't been seen yet.
                                         if Set.contains newItem items then pendingItems
@@ -180,9 +177,7 @@ module Lr1 =
                 // to the right of the symbol and add it to the updated items set.
                 match LrItem.CurrentSymbol item taggedGrammar with
                 | Some sym when sym = symbol ->
-                    let updatedItem =
-                        { item with
-                            Position = item.Position + 1<_>; }
+                    let updatedItem = LrItem.NextPosition item
                     Set.add updatedItem updatedItems
 
                 | _ ->
@@ -311,15 +306,12 @@ module Lr1 =
 
                     (Set.empty, startItems)
                     ||> TagSet.fold (fun items ruleIndex ->
-                        // Create an 'item', with the parser position at
-                        // the beginning of the production.
-                        let item = {
-                            ProductionRuleIndex = ruleIndex;
-                            Position = GenericZero;
-                            // Any token can be used here, because the end-of-file symbol
-                            // (in the augmented start production) will never be shifted.
-                            // We use the EndOfFile token itself here to keep the code generic.
-                            Lookahead = eofIndex; }
+                        // Create an 'item', with the parser position at the beginning of the production.
+                        // Any terminal can be used as the lookahead here, because the end-of-file symbol
+                        // (in the augmented start production) will never be shifted.
+                        // However, we use the EndOfFile token itself here because it allows the code to
+                        // be generic (since we don't need to choose one of the actual terminals).
+                        let item = LrItem (ruleIndex, GenericZero, eofIndex)
                         Set.add item items)
                     |> Item.closure taggedGrammar predictiveSets
 

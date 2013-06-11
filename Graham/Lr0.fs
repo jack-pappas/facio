@@ -27,23 +27,28 @@ open Graham.Analysis
 open Graham.Graph
 
 
+/// Represents an empty lookahead.
+/// This is an optimized representation used for the lookahead field
+/// of an LR(0) item to minimize memory usage.
+type EmptyLookahead = unit      // byte
+
 /// An LR(0) item.
 type Lr0Item<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
-    LrItem<'Nonterminal, 'Terminal, unit>
+    LrItem<'Nonterminal, 'Terminal, EmptyLookahead>
 
 /// An LR(0) parser state -- i.e., a set of LR(0) items.
 type Lr0ParserState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
-    LrParserState<'Nonterminal, 'Terminal, unit>
+    LrParserState<'Nonterminal, 'Terminal, EmptyLookahead>
 
 /// LR(0) parser table generation state.
 type Lr0TableGenState<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
-    LrTableGenState<'Nonterminal, 'Terminal, unit>
+    LrTableGenState<'Nonterminal, 'Terminal, EmptyLookahead>
 
 /// An LR(0) parser table.
 type Lr0ParserTable<'Nonterminal, 'Terminal
@@ -52,7 +57,7 @@ type Lr0ParserTable<'Nonterminal, 'Terminal
     LrParserTable<
         AugmentedNonterminal<'Nonterminal>,
         AugmentedTerminal<'Terminal>,
-        unit>
+        EmptyLookahead>
 
 /// LR(0) parser tables.
 [<RequireQualifiedAccess>]
@@ -119,10 +124,7 @@ module Lr0 =
 
                                 (pendingItems, nonterminalProductions)
                                 ||> TagSet.fold (fun pendingItems ruleIndex ->
-                                    let newItem = {
-                                        ProductionRuleIndex = ruleIndex;
-                                        Position = GenericZero;
-                                        Lookahead = (); }
+                                    let newItem = LrItem (ruleIndex, GenericZero, ())
 
                                     // Only add this item to the worklist if it hasn't been seen yet.
                                     if Set.contains newItem items then pendingItems
@@ -153,7 +155,7 @@ module Lr0 =
                 match LrItem.CurrentSymbol item taggedGrammar with
                 | Some sym when sym = symbol ->
                     let updatedItem =
-                        { item with Position = item.Position + 1<_>; }
+                        LrItem.NextPosition item
                     Set.add updatedItem updatedItems
 
                 | _ ->
@@ -287,10 +289,7 @@ module Lr0 =
                     ||> TagSet.fold (fun items ruleIndex ->
                         // Create an 'item', with the parser position at
                         // the beginning of the production.
-                        let item = {
-                            ProductionRuleIndex = ruleIndex;
-                            Position = GenericZero;
-                            Lookahead = (); }
+                        let item = LrItem (ruleIndex, GenericZero, ())
                         Set.add item items)
                     |> Item.closure taggedGrammar
 
