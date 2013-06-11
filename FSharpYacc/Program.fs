@@ -158,7 +158,7 @@ module Program =
         // If there are any validation _errors_ display them and abort compilation.
         match validationMessages.Errors with
         | (_ :: _) as errorMessages ->
-            // Write the error messages to the console.
+            // Write the error messages to the logger.
             errorMessages
             |> List.iter logger.Error
 

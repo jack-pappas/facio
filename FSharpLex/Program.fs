@@ -52,6 +52,7 @@ module internal AssemblyInfo =
 module Program =
     open System.ComponentModel.Composition
     open System.ComponentModel.Composition.Hosting
+    open NLog
     open ExtCore.Args
     open FSharpLex.Plugin
 
@@ -110,6 +111,9 @@ module Program =
         elif not <| System.IO.File.Exists inputFile then
             invalidArg "inputFile" "No lexer specification exists at the specified path."
 
+        /// Used for writing messages to the console or log file.
+        let logger = LogManager.GetCurrentClassLogger ()
+
         // TEMP : This is hard-coded for now, but eventually we'll make it
         // so the user can specify which backend(s) to use.
         /// Compiler backends.
@@ -137,20 +141,21 @@ module Program =
                         |> List.rev; }
 
             with ex ->
-                printfn "Error: %s" ex.Message
+                logger.FatalException ("Unable to parse the specification file.", ex)
                 exit 1
 
         // Compile the parsed specification.
         match Compile.lexerSpec lexerSpec options with
         | Choice2Of2 errorMessages ->
-            // Write the error messages to the console.
-            // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
+            // Write the error messages to the logger.
             errorMessages
-            |> Array.iter (printfn "Error: %s")
+            |> Array.iter logger.Error
 
             1   // Exit code: Error
 
         | Choice1Of2 compiledLexerSpec ->
+            logger.Info "Start: Invoke the selected backend."
+
             // TEMP : Invoke the various backends "manually".
             // Eventually we'll modify this so the user can specify the backend to use.
             backends.FslexBackend.EmitCompiledSpecification (
@@ -160,6 +165,8 @@ module Program =
 //            backends.GraphBackend.EmitCompiledSpecification (
 //                compiledLexerSpec,
 //                options)
+
+            logger.Info "End: Invoke the selected backend."
 
             0   // Exit code: Success
 
