@@ -735,8 +735,11 @@ module private FsYacc =
                     let explicitActionCount =
                         allTerminals
                         |> Set.filter (fun terminal ->
-                            let terminalIndex = TagBimap.findValue terminal taggedGrammar.Terminals
-                            Map.containsKey (stateId, terminalIndex) parserTable.ActionTable)
+                            // Implicit terminals, such as "error", aren't included here.
+                            match TagBimap.tryFindValue terminal taggedGrammar.Terminals with
+                            | None -> false
+                            | Some terminalIndex ->
+                                Map.containsKey (stateId, terminalIndex) parserTable.ActionTable)
                         |> Set.count
 
                     let mostFrequentActionValue, entries =
@@ -868,24 +871,9 @@ module private FsYacc =
             // NOTE : The length of this array should be equal to the number of parser states.
             let immediateActions = Array.zeroCreate <| TagBimap.count parserTable.ParserStates
 
-            // TEMP : Remove this once we rewrite the rest of this code to work with
-            // an augmented grammar instead of the "raw" grammar.
-            let productionRuleIndices =
-                let startSymbolCount = Set.count processedSpec.StartSymbols
-                ((Map.empty, startSymbolCount), processedSpec.ProductionRules)
-                ||> Map.fold (fun productionIndices_productionIndex nonterminal rules ->
-                    (productionIndices_productionIndex, rules)
-                    ||> Array.fold (fun (productionIndices, productionIndex) rule ->
-                        Map.add (nonterminal, rule.Symbols) productionIndex productionIndices,
-                        productionIndex + 1))
-                // Discard the production index counter.
-                |> fst
-
             /// The tagged-index of the Start nonterminal.
             let startNonterminalIndex = TagBimap.findValue AugmentedNonterminal.Start taggedGrammar.Nonterminals
             
-            notImpl ""
-(*
             parserTable.ParserStates
             |> TagBimap.iter (fun parserStateId items ->
                 // Set the array element corresponding to this parser state.
@@ -912,21 +900,15 @@ module private FsYacc =
                             EnumToValue ActionValue.Accept
 
                         elif int item.Position = Array.length itemProduction then
-                            /// The (augmented) symbols in this production rule.
-                            let symbols = deaugmentSymbols itemProduction
-
-                            // The index of the production rule to reduce by.
-                            Map.find (nonterminal, symbols) productionRuleIndices
-                            |> Int32WithMeasure
                             // Return a value representing a Reduce action with this production rule.
-                            |> Reduce
+                            Reduce item.ProductionRuleIndex
                             |> actionValue
                             |> EnumToValue
 
                         else
                             // Return the value which indicates this parser state has no immediate action.
                             EnumToValue ActionValue.Any)
-*)
+
             // Return the constructed array.
             immediateActions
 

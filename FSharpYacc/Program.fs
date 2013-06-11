@@ -176,14 +176,17 @@ module Program =
                 1   // Exit code: Error
 
             | Choice1Of2 parserTable ->
-                printfn "Compilation successful."
+                logger.Info "Start: Invoke the selected backend."
+
                 // TEMP : Invoke the fsyacc-compatible backend.
                 // Eventually we'll implement a way for the user to select the backend(s) to use.
-//                backends.FsyaccBackend.Invoke (
-//                    processedSpecification,
-//                    taggedGrammar,
-//                    parserTable,
-//                    options)
+                backends.FsyaccBackend.Invoke (
+                    processedSpecification,
+                    taggedGrammar,
+                    parserTable,
+                    options)
+
+                logger.Info "End: Invoke the selected backend."
 
                 0   // Exit code: Success
 
