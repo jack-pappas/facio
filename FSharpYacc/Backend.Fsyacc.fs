@@ -764,14 +764,17 @@ module private FsYacc =
                             |> Array.map (fun terminal ->
                                 let terminalTag = Map.find terminal tokenTags
                                 let action =
-                                    let terminalIndex = TagBimap.findValue terminal taggedGrammar.Terminals
-                                    match Map.tryFind (stateId, terminalIndex) parserTable.ActionTable with
+                                    match TagBimap.tryFindValue terminal taggedGrammar.Terminals with
                                     | None ->
                                         ActionValue.Error
-                                    | Some (Action action) ->
-                                        actionValue action
-                                    | Some (Conflict _) ->
-                                        failwithf "Conflicting actions on terminal %O in state #%i." terminal (int stateId)
+                                    | Some terminalIndex ->
+                                        match Map.tryFind (stateId, terminalIndex) parserTable.ActionTable with
+                                        | None ->
+                                            ActionValue.Error
+                                        | Some (Action action) ->
+                                            actionValue action
+                                        | Some (Conflict _) ->
+                                            failwithf "Conflicting actions on terminal %O in state #%i." terminal (int stateId)
                                 (Checked.uint16 terminalTag), (EnumToValue action))
                             |> Array.sortWith (fun (tag1, _) (tag2, _) ->
                                 compare tag1 tag2)

@@ -142,8 +142,38 @@ let taggedGrammar (processedSpec : ProcessedSpecification<_,_>) =
 
         // Augment the grammar.
         Grammar.augmentWith rawGrammar processedSpec.StartSymbols
-        
-    TaggedGrammar.ofGrammar grammar
+
+    /// The tagged grammar created from the parser specification.
+    let taggedGrammar = TaggedGrammar.ofGrammar grammar
+
+    // For completeness, make sure all terminals and nonterminals declared in the specification
+    // are included in the tagged grammar. This ensures that declared terminals and nonterminals
+    // which aren't used in any production rules are still included in the tagged grammar, which
+    // is important for certain backends (and for various grammar analyses).
+    let taggedGrammar =
+        (taggedGrammar, processedSpec.Terminals)
+        ||> Map.fold (fun taggedGrammar terminal _ ->
+            let augmentedTerminal = AugmentedTerminal.Terminal terminal
+            if TagBimap.containsValue augmentedTerminal taggedGrammar.Terminals then
+                taggedGrammar
+            else
+                let terminalIndex = tag <| TagBimap.count taggedGrammar.Terminals
+                { taggedGrammar with
+                    Terminals = TagBimap.add terminalIndex augmentedTerminal taggedGrammar.Terminals; })
+
+    let taggedGrammar =
+        (taggedGrammar, processedSpec.Nonterminals)
+        ||> Map.fold (fun taggedGrammar nonterminal _ ->
+            let augmentedNonterminal = AugmentedNonterminal.Nonterminal nonterminal
+            if TagBimap.containsValue augmentedNonterminal taggedGrammar.Nonterminals then
+                taggedGrammar
+            else
+                let nonterminalIndex = tag <| TagBimap.count taggedGrammar.Nonterminals
+                { taggedGrammar with
+                    Nonterminals = TagBimap.add nonterminalIndex augmentedNonterminal taggedGrammar.Nonterminals; })
+
+    // Return the tagged grammar.
+    taggedGrammar
 
 //
 let private logInfo (logger : Logger) description (generator : unit -> 'T) : 'T =
