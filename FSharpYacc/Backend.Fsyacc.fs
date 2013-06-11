@@ -219,7 +219,7 @@ module private FsYacc =
         // Emit the 'tables' record.
         fprintfn writer "let tables () : %s.Tables<_> = {" parsingNamespace
         IndentedTextWriter.indented writer <| fun writer ->
-            writer.WriteLine "reductions = _fsyacc_reductions ();"
+            writer.WriteLine "reductions = _fsyacc_reductions;"
             writer.WriteLine "endOfInputTag = _fsyacc_endOfInputTag;"
             writer.WriteLine "tagOfToken = tagOfToken;"
             writer.WriteLine "dataOfToken = _fsyacc_dataOfToken;"
@@ -267,7 +267,7 @@ module private FsYacc =
     /// used by the generated parser into an IndentedTextWriter.
     let private parserTypes (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
         // Emit the token type declaration.
-        comment writer "This type is the type of tokens accepted by the parser"
+        quickSummary writer "This type is the type of tokens accepted by the parser."
         unionTypeDecl "token" true processedSpec.Terminals writer
         writer.WriteLine ()
 
@@ -1038,7 +1038,7 @@ module private FsYacc =
             |> sprintf "raise (%s.Accept (Microsoft.FSharp.Core.Operators.box _1))"
 
         // _fsyacc_reductions
-        writer.WriteLine "let private _fsyacc_reductions () = [|"
+        writer.WriteLine "let private _fsyacc_reductions = [|"
         IndentedTextWriter.indented writer <| fun writer ->
             // Emit actions for the augmented starting nonterminals.
             processedSpec.StartSymbols
