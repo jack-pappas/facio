@@ -11,10 +11,9 @@ namespace Microsoft.FSharp.Text.Parsing
 open Microsoft.FSharp.Text.Lexing
 #endif
 
-
-
 open System
 open System.Collections.Generic
+open System.Diagnostics
 
 #if INTERNALIZED_POWER_PACK
 type internal IParseState = 
@@ -116,8 +115,9 @@ type internal Stack<'a>(n)  =
         
     member buf.IsEmpty = (count = 0)
     member buf.PrintStack() = 
-        for i = 0 to (count - 1) do 
-            System.Console.Write("{0}{1}",(contents.[i]),if i=count-1 then ":" else "-") 
+        for i = 0 to count - 1 do
+            String.Format ("{0}{1}",contents.[i],if i=count-1 then ":" else "-")
+            |> Debug.Write
           
 exception RecoverableParseError
 exception Accept of obj
@@ -219,7 +219,7 @@ module Implementation =
         let localStore = new Dictionary<string,obj>() in
         localStore.["LexBuffer"] <- lexbuf;
 #if DEBUG
-        if Flags.debug then System.Console.WriteLine("\nParser: interpret tables");
+        if Flags.debug then Debug.WriteLine("\nParser: interpret tables");
 #endif
         let stateStack : Stack<int> = new Stack<_>(100)
         stateStack.Push(initialState);
@@ -274,19 +274,20 @@ module Implementation =
         let rec popStackUntilErrorShifted(tokenOpt) =
             // Keep popping the stack until the "error" terminal is shifted
 #if DEBUG
-            if Flags.debug then System.Console.WriteLine("popStackUntilErrorShifted");
+            if Flags.debug then Debug.WriteLine("popStackUntilErrorShifted");
 #endif
             if stateStack.IsEmpty then 
 #if DEBUG
                 if Flags.debug then 
-                    System.Console.WriteLine("state stack empty during error recovery - generating parse error");
+                    Debug.WriteLine("state stack empty during error recovery - generating parse error");
 #endif
                 failwith "parse error";
             
             let currState = stateStack.Peep()
 #if DEBUG
             if Flags.debug then 
-                System.Console.WriteLine("In state {0} during error recovery", currState);
+                String.Format("In state {0} during error recovery", currState)
+                |> Debug.WriteLine
 #endif
             
             let action = actionTable.Read(currState, tables.tagOfErrorTerminal)
@@ -299,7 +300,7 @@ module Implementation =
                     actionKind (actionTable.Read(nextState, tables.tagOfToken(token))) = shiftFlag) then
 
 #if DEBUG
-                if Flags.debug then System.Console.WriteLine("shifting error, continuing with error recovery");
+                if Flags.debug then Debug.WriteLine("shifting error, continuing with error recovery");
 #endif
                 let nextState = actionValue action 
                 // The "error" non terminal needs position information, though it tends to be unreliable.
@@ -311,7 +312,7 @@ module Implementation =
                     failwith "parse error";
 #if DEBUG
                 if Flags.debug then 
-                    System.Console.WriteLine("popping stack during error recovery");
+                    Debug.WriteLine("popping stack during error recovery");
 #endif
                 valueStack.Pop();
                 stateStack.Pop();
@@ -323,7 +324,7 @@ module Implementation =
             else
                 let state = stateStack.Peep()
 #if DEBUG
-                if Flags.debug then (Console.Write("{0} value(state), state ",valueStack.Count); stateStack.PrintStack())
+                if Flags.debug then (Debug.Write (String.Format ("{0} value(state), state ",valueStack.Count)); stateStack.PrintStack())
 #endif
                 let action = 
                     let immediateAction = int tables.immediateActions.[state]
@@ -360,7 +361,7 @@ module Implementation =
                     if errorSuppressionCountDown > 0 then 
                         errorSuppressionCountDown <- errorSuppressionCountDown - 1;
 #if DEBUG
-                        if Flags.debug then Console.WriteLine("shifting, reduced errorRecoverylevel to {0}\n", errorSuppressionCountDown);
+                        if Flags.debug then Debug.WriteLine (String.Format ("shifting, reduced errorRecoverylevel to {0}\n", errorSuppressionCountDown));
 #endif
                     let nextState = actionValue action                                     
                     if not haveLookahead then failwith "shift on end of input!";
@@ -368,7 +369,7 @@ module Implementation =
                     valueStack.Push(ValueInfo(data, lookaheadStartPos, lookaheadEndPos));
                     stateStack.Push(nextState);                                                                
 #if DEBUG
-                    if Flags.debug then Console.WriteLine("shift/consume input {0}, shift to state {1}", report haveLookahead lookaheadToken, nextState);
+                    if Flags.debug then Debug.WriteLine (String.Format ("shift/consume input {0}, shift to state {1}", report haveLookahead lookaheadToken, nextState));
 #endif
                     haveLookahead <- false
 
@@ -378,7 +379,7 @@ module Implementation =
                     let n = int tables.reductionSymbolCounts.[prod]
                        // pop the symbols, populate the values and populate the locations                              
 #if DEBUG
-                    if Flags.debug then Console.Write("reduce popping {0} values/states, lookahead {1}", n, report haveLookahead lookaheadToken);
+                    if Flags.debug then Debug.Write (String.Format ("reduce popping {0} values/states, lookahead {1}", n, report haveLookahead lookaheadToken));
 #endif
                     
                     lhsPos.[0] <- Position.Empty;                                                                     
@@ -403,7 +404,7 @@ module Implementation =
                         let newGotoState = gotoTable.Read(int tables.productionToNonTerminalTable.[prod], currState)
                         stateStack.Push(newGotoState)
 #if DEBUG
-                        if Flags.debug then Console.WriteLine(" goto state {0}", newGotoState)
+                        if Flags.debug then Debug.WriteLine (String.Format (" goto state {0}", newGotoState))
 #endif
                     with                                                                                              
                     | Accept res ->                                                                            
@@ -411,19 +412,21 @@ module Implementation =
                           valueStack.Push(ValueInfo(res, lhsPos.[0], lhsPos.[1])) 
                     | RecoverableParseError ->
 #if DEBUG
-                          if Flags.debug then Console.WriteLine("RecoverableParseErrorException...\n");
+                          if Flags.debug then Debug.WriteLine("RecoverableParseErrorException...\n");
 #endif
                           popStackUntilErrorShifted(None);
                           // User code raised a Parse_error. Don't report errors again until three tokens have been shifted 
                           errorSuppressionCountDown <- 3
                 elif kind = errorFlag then (
 #if DEBUG
-                    if Flags.debug then Console.Write("ErrorFlag... ");
+                    if Flags.debug then Debug.Write("ErrorFlag... ");
 #endif
                     // Silently discard inputs and don't report errors 
                     // until three tokens in a row have been shifted 
 #if DEBUG
-                    if Flags.debug then printfn "error on token '%A' " (if haveLookahead then Some(lookaheadToken) else None);
+                    if Flags.debug then
+                        sprintf "error on token '%A' " (if haveLookahead then Some(lookaheadToken) else None)
+                        |> Debug.WriteLine
 #endif
                     if errorSuppressionCountDown > 0 then 
                         // If we're in the end-of-file count down then we're very keen to 'Accept'.
@@ -431,7 +434,7 @@ module Implementation =
                         // and an EOF token. 
                         if inEofCountDown && eofCountDown < 10 then 
 #if DEBUG
-                            if Flags.debug then printfn "poppin stack, lokking to shift both 'error' and that token, during end-of-file error recovery" ;
+                            if Flags.debug then Debug.WriteLine "poppin stack, lokking to shift both 'error' and that token, during end-of-file error recovery" ;
 #endif
                             popStackUntilErrorShifted(if haveLookahead then Some(lookaheadToken) else None);
 
@@ -440,7 +443,9 @@ module Implementation =
                             failwith "parse error: unexpected end of file"
                             
 #if DEBUG
-                        if Flags.debug then printfn "discarding token '%A' during error suppression" (if haveLookahead then Some(lookaheadToken) else None);
+                        if Flags.debug then
+                            sprintf "discarding token '%A' during error suppression" (if haveLookahead then Some(lookaheadToken) else None)
+                            |> Debug.WriteLine
 #endif
                         // Discard the token
                         haveLookahead <- false
@@ -480,14 +485,14 @@ module Implementation =
                         popStackUntilErrorShifted(None);
                         errorSuppressionCountDown <- 3;
 #if DEBUG
-                        if Flags.debug then System.Console.WriteLine("generated syntax error and shifted error token, haveLookahead = {0}\n", haveLookahead);
+                        if Flags.debug then Debug.WriteLine (String.Format ("generated syntax error and shifted error token, haveLookahead = {0}\n", haveLookahead));
 #endif
                     )
                 ) elif kind = acceptFlag then 
                     finished <- true
 #if DEBUG
                 else
-                  if Flags.debug then System.Console.WriteLine("ALARM!!! drop through case in parser");  
+                  if Flags.debug then Debug.WriteLine("ALARM!!! drop through case in parser");  
 #endif
         done;                                                                                                     
         // OK, we're done - read off the overall generated value
