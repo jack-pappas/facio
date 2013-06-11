@@ -153,10 +153,34 @@ module TaggedGrammar =
                             TagMap.add nonterminalIndex nonterminalProductions taggedGrammar.ProductionsByNonterminal;
                         }))
 
-    //
+    /// Create a grammar from a tagged grammar.
     [<CompiledName("ToGrammar")>]
     let toGrammar (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) : Grammar<'Nonterminal, 'Terminal> =
-        notImpl "TaggedGrammar.toGrammar"
+        (Map.empty, taggedGrammar.Nonterminals)
+        ||> TagBimap.fold (fun grammar nonterminalIndex nonterminal ->
+            /// The production rules for this nonterminal.
+            let productionRules =
+                taggedGrammar.ProductionsByNonterminal
+                |> TagMap.find nonterminalIndex
+                |> TagSet.toArray
+                |> Array.map (fun productionRuleIndex ->
+                    // Get the production rule, then map its symbols back to
+                    // the original nonterminals and terminals.
+                    taggedGrammar.Productions
+                    |> TagMap.find productionRuleIndex
+                    |> Array.map (function
+                        | Symbol.Terminal terminalIndex ->
+                            taggedGrammar.Terminals
+                            |> TagBimap.find terminalIndex
+                            |> Symbol.Terminal
+
+                        | Symbol.Nonterminal nonterminalIndex ->
+                            taggedGrammar.Nonterminals
+                            |> TagBimap.find nonterminalIndex
+                            |> Symbol.Nonterminal))
+
+            // Add the production rules for this nonterminal to the grammar.
+            Map.add nonterminal productionRules grammar)
 
 
 /// A tagged, augmented grammar.
