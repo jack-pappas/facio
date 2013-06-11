@@ -19,7 +19,17 @@ limitations under the License.
 //
 module BackendUtils.CodeGen
 
-open System.CodeDom.Compiler
+
+/// Function operators related to the System.IO.TextWriter type.
+[<RequireQualifiedAccess>]
+module TextWriter =
+    open System.IO
+
+    //
+    let trailingNewLine (tw : ('W :> TextWriter)) (f : 'W -> 'T) : 'T =
+        let result = f tw
+        tw.WriteLine ()
+        result
 
 
 /// Functional operators for working with instances of
@@ -71,13 +81,4 @@ open System.CodeDom.Compiler
 let inline indent (itw : IndentedTextWriter) (f : IndentedTextWriter -> 'T) =
     IndentedTextWriter.indented itw f
 
-
-////
-//[<RequireQualifiedAccess>]
-//module DocComment =
-//    //
-//    let summary str (indentingWriter : IndentedTextWriter) =
-//
-//    //
-//    let remarks str (indentingWriter : IndentedTextWriter) =
 

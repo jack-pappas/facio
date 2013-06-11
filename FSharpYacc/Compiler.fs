@@ -84,13 +84,31 @@ let internal rulePrecedence (processedSpec : ProcessedSpecification<NonterminalI
                     TagMap.add productionRuleId impersonatedTerminalPrecedence rulePrecedence
                 ))
 
+//
+[<System.Obsolete("This function is deprecated. A replacement which uses TaggedGrammar should be implemented and used instead.")>]
+let private productionRuleIds (grammar : Grammar<'Nonterminal, 'Terminal>) =
+    (Map.empty, grammar)
+    ||> Map.fold (fun productionRuleIds nonterminal rules ->
+        (productionRuleIds, rules)
+        ||> Array.fold (fun productionRuleIds ruleRhs ->
+            /// The identifier for this production rule.
+            let productionRuleId : ProductionRuleIndex =
+                tag <| Map.count productionRuleIds
+
+            // Add this identifier to the map.
+            Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
+
 /// Creates a PrecedenceSettings record from a ProcessedSpecification.
 let internal precedenceSettings (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
     (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>) : PrecedenceSettings =
     //
     let rulePrecedence =
-        notImpl "Compile.precedenceSettings"
-        let productionRuleIds = Map.empty
+        let productionRuleIds =
+            // TEMP : Remove this -- it would be much more efficient to implement a new function
+            // which operates directly on the TaggedGrammar instead of down-converting to Grammar.
+            taggedGrammar
+            |> TaggedGrammar.toGrammar
+            |> productionRuleIds
         
         rulePrecedence processedSpec productionRuleIds
 
@@ -110,41 +128,46 @@ let internal precedenceSettings (taggedGrammar : TaggedAugmentedGrammar<Nontermi
     {   TerminalPrecedence = terminalPrecedence;
         RulePrecedence = rulePrecedence; }
 
+/// <summary>Compiles a parser specification into a tagged grammar.</summary>
+/// <param name="processedSpec">The processed parser specification.</param>
+let taggedGrammar (processedSpec : ProcessedSpecification<_,_>) =
+    /// The grammar created from the parser specification and augmented with
+    /// a starting production and the end-of-file marker.
+    let grammar =
+        /// The grammar created from the parser specification.
+        let rawGrammar : Grammar<_,_> =
+            processedSpec.ProductionRules
+            |> Map.map (fun _ rules ->
+                rules |> Array.map (fun rule -> rule.Symbols))
+
+        // Augment the grammar.
+        Grammar.augmentWith rawGrammar processedSpec.StartSymbols
+        
+    TaggedGrammar.ofGrammar grammar
+
+//
+let private logInfo (logger : Logger) description (generator : unit -> 'T) : 'T =
+    logger.Info ("Start: " + description)
+    let result = generator ()
+    logger.Info ("End: " + description)
+    result
+
+/// <summary>
 /// Compiles a parser specification into a deterministic pushdown automaton (DPDA),
 /// then invokes a specified backend to generate code implementing the parser automaton.
-let compile (processedSpec : ProcessedSpecification<_,_>) (options : CompilationOptions) (logger : Logger) : Choice<_,_> =
-    tprintfn "Compiling the parser specification..."
-
-    /// The tagged grammar.
-    let taggedGrammar =
-        /// The grammar created from the parser specification and augmented with
-        /// a starting production and the end-of-file marker.
-        let grammar =
-            /// The grammar created from the parser specification.
-            let rawGrammar : Grammar<_,_> =
-                processedSpec.ProductionRules
-                |> Map.map (fun _ rules ->
-                    rules |> Array.map (fun rule -> rule.Symbols))
-
-            // Augment the grammar.
-            Grammar.augmentWith rawGrammar processedSpec.StartSymbols
-        
-        TaggedGrammar.ofGrammar grammar
+/// </summary>
+/// <param name="processedSpec">The processed parser specification.</param>
+/// <param name="taggedGrammar">The tagged grammar created from the processed parser specification.</param>
+/// <param name="options">Compiler options.</param>
+/// <param name="logger">Records information about the compilation process.</param>
+let compile (processedSpec : ProcessedSpecification<_,_>) (taggedGrammar : TaggedGrammar<_,_>) (options : CompilationOptions) (logger : Logger) : Choice<_,_> =
+    choice {
+    logger.Info "Start: Compilation of parser specification."
 
     /// The predictive sets (FIRST, FOLLOW, NULLABLE) for the grammar.
     let predictiveSets =
-        tprintf "  Creating predictive sets..."
-        let predictiveSets = Analysis.PredictiveSets.ofGrammar taggedGrammar
-        tprintfn "done."
-        predictiveSets
-
-    // Create the precedence settings (precedence and associativity maps)
-    // from the precompilation result.
-    let precedenceSettings =
-        tprintf "  Creating precedence settings..."
-        let precedenceSettings = precedenceSettings taggedGrammar processedSpec
-        tprintfn "done."
-        precedenceSettings
+        logInfo logger "Compute the predictive sets of the grammar." <| fun () ->
+            Analysis.PredictiveSets.ofGrammar taggedGrammar
 
     (*  Create the LR(0) automaton from the grammar; report the number of states and
         the number of S/R and R/R conflicts. If there are any conflicts, apply the
@@ -154,64 +177,53 @@ let compile (processedSpec : ProcessedSpecification<_,_>) (options : Compilation
     
     /// The LR(0) parser table.
     let lr0Table =
-        tprintf "  Creating the LR(0) parser table..."
-        let lr0Table = Lr0.createTable taggedGrammar
-        tprintfn "done."
-        lr0Table
+        logInfo logger "Create the LR(0) parser table." <| fun () ->
+            Lr0.createTable taggedGrammar
 
     (*  Upgrade the LR(0) automaton to SLR(1); report the remaining number of S/R and
         R/R conflicts. If there aren't any remaining conflicts, report that the grammar
         is SLR(1) and return. *)
     //
     let slr1Table =
-        tprintf "  Upgrading the LR(0) parser table to SLR(1)..."
-        let slr1Table = Slr1.upgrade taggedGrammar lr0Table (Some predictiveSets)
-        tprintfn "done."
-        slr1Table
+        logInfo logger "Upgrade the LR(0) parser table to SLR(1)." <| fun () ->
+            Slr1.upgrade taggedGrammar lr0Table (Some predictiveSets)
 
     (*  Upgrade the LR(0)/SLR(1) automaton to LALR(1); report the remaining number of
         S/R and R/R conflicts. If there aren't any remaining conflicts, report that the
         grammar is LALR(1) and return. *)
     //
-    let lalrLookaheadSets =
-        tprintf "  Computing LALR(1) look-ahead sets..."
-        let lalrLookaheadSets = Lalr1.lookaheadSets taggedGrammar slr1Table
-        tprintfn "done."
-        lalrLookaheadSets
+    let! lalrLookaheadSets =
+        logInfo logger "Compute LALR(1) look-ahead sets." <| fun () ->
+            Lalr1.lookaheadSets taggedGrammar slr1Table
 
-    // If we detected that the grammar is not LR(k), stop and return an error message.
-    match lalrLookaheadSets with
-    | Choice2Of2 errorMessage ->
-        Choice2Of2 [errorMessage]
-    | Choice1Of2 lookaheadSets ->
-        //
-        let lalr1Table =
-            tprintf "  Upgrading the SLR(1) parser table to LALR(1)..."
-            let lalr1Table = Lalr1.upgrade taggedGrammar slr1Table lookaheadSets (Some predictiveSets)
-            tprintfn "done."
-            lalr1Table
+    //
+    let lalr1Table =
+        logInfo logger "Upgrade the SLR(1) parser table to LALR(1)." <| fun () ->
+            Lalr1.upgrade taggedGrammar slr1Table lalrLookaheadSets (Some predictiveSets)
 
-        (* Apply precedence settings to resolve as many conflicts as possible. *)
-        /// The LALR(1) parser table, after applying precedence settings.
-        let lalr1Table =
-            tprintf "  Applying precedence declarations..."
+    (* Apply precedence settings to resolve as many conflicts as possible. *)
+
+    // Create the precedence settings (precedence and associativity maps) from the processed specification.
+    let precedenceSettings =
+        logInfo logger "Compile precedence settings." <| fun () ->
+            precedenceSettings taggedGrammar processedSpec
+
+    /// The LALR(1) parser table, after applying precedence settings.
+    let lalr1Table =
+        logInfo logger "Apply precedence declarations." <| fun () ->
             // Apply precedences to resolve conflicts.
-            let lalr1Table = ConflictResolution.applyPrecedence lalr1Table precedenceSettings
-            tprintfn "done."
-            lalr1Table
+            ConflictResolution.applyPrecedence lalr1Table precedenceSettings
             
-        (*  If we reach this point, the grammar is not LALR(1), but we can still create a
-            parser by taking certain actions to resolve any remaining conflicts.
-            Emit a _warning_ message for each of these conflicts, specifying the action
-            we've taken to resolve it. *)
-        //
-        let lalr1Table =
-            tprintf "  Using default strategy to solve any remaining conflicts..."
-            let lalr1Table = ConflictResolution.resolveConflicts lalr1Table
-            tprintfn "done."
-            lalr1Table
+    (*  If we reach this point, the grammar is not LALR(1), but we can still create a
+        parser by taking certain actions to resolve any remaining conflicts.
+        Emit a _warning_ message for each of these conflicts, specifying the action
+        we've taken to resolve it. *)
+    //
+    let lalr1Table =
+        logInfo logger "Use default strategy to solve remaining conflicts." <| fun () ->
+            ConflictResolution.resolveConflicts lalr1Table
 
-        // Return the compiled parser table.
-        tprintfn "Finished compiling the parser specification."
-        Choice1Of2 lalr1Table
-
+    // Return the compiled parser table.
+    logger.Info "End: Compilation of parser specification."
+    return lalr1Table
+    }

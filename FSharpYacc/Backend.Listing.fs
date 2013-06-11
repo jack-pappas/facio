@@ -27,11 +27,8 @@ open FSharpYacc.Compiler
 open Graham
 open Graham.Graph
 
-(* TODO :   Move this backend into a separate assembly so the 'fsharplex' project
-            won't have a dependency on System.Xml.dll. *)
-(* TODO :   Implement a backend for the dot (graphviz) format. *)
-
-
+// TEMP : Remove this once this backend is actually implemented -- it just suppresses unused-variable warnings for now.
+#nowarn "1182"
 
 
 /// A backend which emits a yacc-style "listing" of the items
@@ -39,24 +36,10 @@ open Graham.Graph
 //[<Export(typeof<IBackend>)>]
 type TableListingBackend () =
     interface IBackend with
-        member this.Invoke (processedSpec, parserTable, options) : unit =
+        member this.Invoke (processedSpec, taggedGrammar, parserTable, options) : unit =
             // TODO
             notImpl "TableListingBackend.Invoke"
 
-//            /// Compilation options specific to this backend.
-//            let fsyaccOptions =
-//                match options.FsyaccBackendOptions with
-//                | None ->
-//                    raise <| exn "No backend-specific options were provided."
-//                | Some options ->
-//                    options
-//
-//            // Generate the code and write it to the specified file.
-//            using (File.CreateText fsyaccOptions.OutputPath) <| fun streamWriter ->
-//                use indentedTextWriter =
-//                    // Set the indentation to the standard F# indent (4 spaces).
-//                    new IndentedTextWriter (streamWriter, "    ")
-//
-//                FsYacc.emit (processedSpec, parserTable) (fsyaccOptions, indentedTextWriter)
+
 
 

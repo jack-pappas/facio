@@ -164,22 +164,26 @@ module Program =
 
             1   // Exit code: Error
         | [] ->
+            /// The tagged-grammar created from the processed specification.
+            let taggedGrammar = Compiler.taggedGrammar processedSpecification
+
             // Compile the processed specification.
-            match Compiler.compile processedSpecification options logger with
-            | Choice2Of2 errorMessages ->
-                // Write the error messages to the console.
-                errorMessages
-                |> List.iter logger.Error
+            match Compiler.compile processedSpecification taggedGrammar options logger with
+            | Choice2Of2 errorMessage ->
+                // Write the error message to the console.
+                logger.Error errorMessage
 
                 1   // Exit code: Error
 
             | Choice1Of2 parserTable ->
+                printfn "Compilation successful."
                 // TEMP : Invoke the fsyacc-compatible backend.
                 // Eventually we'll implement a way for the user to select the backend(s) to use.
-                backends.FsyaccBackend.Invoke (
-                    processedSpecification,
-                    parserTable,
-                    options)
+//                backends.FsyaccBackend.Invoke (
+//                    processedSpecification,
+//                    taggedGrammar,
+//                    parserTable,
+//                    options)
 
                 0   // Exit code: Success
 

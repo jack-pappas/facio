@@ -38,6 +38,128 @@ module private FsYacc =
     open Graham.LR
     open BackendUtils.CodeGen
 
+
+    /// Creates a Map whose keys are the values of the given Map.
+    /// The value associated with each key is None.
+    let private valueMap (map : Map<'Key, 'T>) : Map<'T, 'U option> =
+        (Map.empty, map)
+        ||> Map.fold (fun valueMap _ value ->
+            Map.add value None valueMap)
+
+    /// "Flattens" an array of tuples into an array of values.
+    let private flattenTupleArray (array : ('T * 'T)[]) =
+        let len = Array.length array
+        let flattened = Array.zeroCreate <| 2 * len
+        for i = 0 to len - 1 do
+            let a, b = array.[i]
+            let idx = 2 * i
+            flattened.[idx] <- a
+            flattened.[idx + 1] <- b
+        flattened
+
+    /// Compute the number of consecutive space characters starting at the beginning of a string.
+    /// If the string is empty or contains only space characters, this function returns None.
+    let private countLeadingSpaces str =
+        let mutable index = 0
+        let mutable foundNonSpace = false
+        let len = String.length str
+        while index < len && not foundNonSpace do
+            // Is the current character a space character?
+            if str.[index] = ' ' then
+                index <- index + 1
+            else
+                foundNonSpace <- true
+
+        // If all of the characters in the string are space characters,
+        // return None. Note this also correctly handles empty strings.
+        if index = len then
+            None
+        else
+            Some <| uint32 index
+
+    /// Replaces the tab characters in a string with some equivalent tab string.
+    let inline private replaceTabs tabString (str : string) =
+        str.Replace ("\t", tabString)
+
+    /// Emit a formatted string as a single-line F# comment into an IndentedTextWriter.
+    let inline private comment (writer : IndentedTextWriter) fmt : ^T =
+        writer.Write "// "
+        fprintfn writer fmt
+
+    /// Emits a formatted string as a quick-summary (F# triple-slash comment) into an IndentedTextWriter.
+    let inline private quickSummary (writer : IndentedTextWriter) fmt : ^T =
+        fmt |> Printf.ksprintf (fun str ->
+            // OPTIMIZE : Use the String.Split.iter function from ExtCore.
+            // Split the string into individual lines.
+            str.Split ([| "\r\n"; "\r"; "\n" |], System.StringSplitOptions.None)
+            // Write the lines to the IndentedTextWriter as triple-slash comments.
+            |> Array.iter (fun line ->
+                writer.Write "/// "
+                writer.WriteLine (line.Trim ())
+                ))
+
+    /// <summary>Emits the declaration of a discriminated union type into an IndentedTextWriter.</summary>
+    /// <param name="typeName">The name of the type.</param>
+    /// <param name="isPublic">When set, the type will be publicly-visible.</param>
+    /// <param name="cases">A map containing the names (and types, if applicable) of the cases.</param>
+    /// <param name="writer">The IndentedTextWriter into which to write the code.</param>
+    let private unionTypeDecl (typeName : string) isPublic (cases : Map<string, string option>) (writer : IndentedTextWriter) =
+        // Write the type declaration
+        if isPublic then
+            sprintf "type %s =" typeName
+        else
+            sprintf "type private %s =" typeName
+        |> writer.WriteLine
+
+        // Write the type cases
+        IndentedTextWriter.indented writer <| fun writer ->
+            cases
+            |> Map.iter (fun caseName caseType ->
+                match caseType with
+                | None ->
+                    "| " + caseName
+                | Some caseType ->
+                    // NOTE : The parentheses here are actually quite important -- if the token type
+                    // is a tuple, then wrapping it in parenthesis makes the F# compiler treat it as
+                    // a single value. This reduces performance, but makes emitting some of the
+                    // pattern-matching clauses in the other functions much simpler.
+                    sprintf "| %s of (%s)" caseName caseType
+                |> writer.WriteLine)
+
+    /// Emits code which declares a literal integer value into a TextWriter.
+    let private intLiteralDecl name isPublic (value : int) (writer : #TextWriter) =
+        // Preconditions
+        if System.String.IsNullOrWhiteSpace name then
+            invalidArg "name" "The variable name cannot be null/empty/whitespace."
+
+        if isPublic then
+            sprintf "let [<Literal>] %s = %i" name value
+        else
+            sprintf "let [<Literal>] private %s = %i" name value
+        |> writer.WriteLine
+
+    /// Emits code which creates an array of UInt16 constants into a TextWriter.
+    let private oneLineArrayUInt16 name isPublic (array : uint16[]) (writer : #TextWriter) =
+        // Preconditions
+        if System.String.IsNullOrWhiteSpace name then
+            invalidArg "name" "The variable name cannot be null/empty/whitespace."
+
+        // Emit the 'let' binding and opening bracket of the array.
+        if isPublic then
+            sprintf "let %s = [| " name
+        else
+            sprintf "let private %s = [| " name
+        |> writer.Write
+
+        // Emit the array values.
+        array
+        |> Array.iter (fun x ->
+            writer.Write (x.ToString() + "us; "))
+
+        // Emit the closing bracket of the array.
+        writer.WriteLine "|]"
+
+
     //
     let [<Literal>] private defaultLexingNamespace = "Microsoft.FSharp.Text.Lexing"
     //
@@ -83,102 +205,6 @@ module private FsYacc =
         /// The error terminal.
         | Error
 
-    /// Emit a formatted string as a single-line F# comment into an IndentedTextWriter.
-    let inline private comment (writer : IndentedTextWriter) fmt : ^T =
-        writer.Write "// "
-        fprintfn writer fmt
-
-    /// Emits a formatted string as a quick-summary (F# triple-slash comment) into an IndentedTextWriter.
-    let inline private quickSummary (writer : IndentedTextWriter) fmt : ^T =
-        fmt |> Printf.ksprintf (fun str ->
-            // OPTIMIZE : Use the String.Split.iter function from ExtCore.
-            // Split the string into individual lines.
-            str.Split ([| "\r\n"; "\r"; "\n" |], System.StringSplitOptions.None)
-            // Write the lines to the IndentedTextWriter as triple-slash comments.
-            |> Array.iter (fun line ->
-                writer.Write "/// "
-                writer.WriteLine (line.Trim ())
-                ))
-
-    /// <summary>Emits the declaration of a discriminated union type into an IndentedTextWriter.</summary>
-    /// <param name="typeName">The name of the type.</param>
-    /// <param name="isPublic">When set, the type will be publicly-visible.</param>
-    /// <param name="cases">A map containing the names (and types, if applicable) of the cases.</param>
-    /// <param name="writer">The IndentedTextWriter into which to write the code.</param>
-    let private unionTypeDecl (typeName : string, isPublic, cases : Map<string, string option>) (writer : IndentedTextWriter) =
-        // Write the type declaration
-        if isPublic then
-            sprintf "type %s =" typeName
-        else
-            sprintf "type private %s =" typeName
-        |> writer.WriteLine
-
-        // Write the type cases
-        IndentedTextWriter.indented writer <| fun writer ->
-            cases
-            |> Map.iter (fun caseName caseType ->
-                match caseType with
-                | None ->
-                    "| " + caseName
-                | Some caseType ->
-                    // NOTE : The parentheses here are actually quite important -- if the token type
-                    // is a tuple, then wrapping it in parenthesis makes the F# compiler treat it as
-                    // a single value. This reduces performance, but makes emitting some of the
-                    // pattern-matching clauses in the other functions much simpler.
-                    sprintf "| %s of (%s)" caseName caseType
-                |> writer.WriteLine)
-
-    /// Emits code which declares a literal integer value into a TextWriter.
-    let private intLiteralDecl (name, isPublic, value : int) (writer : #TextWriter) =
-        // Preconditions
-        if System.String.IsNullOrWhiteSpace name then
-            invalidArg "name" "The variable name cannot be null/empty/whitespace."
-
-        if isPublic then
-            sprintf "let [<Literal>] %s = %i" name value
-        else
-            sprintf "let [<Literal>] private %s = %i" name value
-        |> writer.WriteLine
-
-    /// Emits code which creates an array of UInt16 constants into a TextWriter.
-    let private oneLineArrayUInt16 (name, isPublic, array : uint16[]) (writer : #TextWriter) =
-        // Preconditions
-        if System.String.IsNullOrWhiteSpace name then
-            invalidArg "name" "The variable name cannot be null/empty/whitespace."
-
-        // Emit the 'let' binding and opening bracket of the array.
-        if isPublic then
-            sprintf "let %s = [| " name
-        else
-            sprintf "let private %s = [| " name
-        |> writer.Write
-
-        // Emit the array values.
-        array
-        |> Array.iter (fun x ->
-            writer.Write (x.ToString() + "us; "))
-
-        // Emit the closing bracket of the array.
-        writer.WriteLine "|]"
-
-    /// Creates a Map whose keys are the values of the given Map.
-    /// The value associated with each key is None.
-    let private valueMap (map : Map<'Key, 'T>) : Map<'T, 'U option> =
-        (Map.empty, map)
-        ||> Map.fold (fun valueMap _ value ->
-            Map.add value None valueMap)
-
-    /// "Flattens" an array of tuples into an array of values.
-    let private flattenTupleArray (array : ('T * 'T)[]) =
-        let len = Array.length array
-        let flattened = Array.zeroCreate <| 2 * len
-        for i = 0 to len - 1 do
-            let a, b = array.[i]
-            let idx = 2 * i
-            flattened.[idx] <- a
-            flattened.[idx + 1] <- b
-        flattened
-
     /// The name of the end-of-input terminal.
     let [<Literal>] private endOfInputTerminal : TerminalIdentifier = "end_of_input"
     /// The name of the error terminal.
@@ -186,8 +212,7 @@ module private FsYacc =
 
     /// Emits F# code which creates the 'tables' record and defines the
     /// parser functions into an IndentedTextWriter.
-    let private tablesRecordAndParserFunctions
-                    typedStartSymbols terminalCount (options, writer : IndentedTextWriter) =
+    let private tablesRecordAndParserFunctions typedStartSymbols terminalCount (options, writer : IndentedTextWriter) =
         /// The namespace where the parser interpreter can be found.
         let parsingNamespace = defaultArg options.ParserInterpreterNamespace defaultParsingNamespace
 
@@ -243,7 +268,7 @@ module private FsYacc =
     let private parserTypes (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
         // Emit the token type declaration.
         comment writer "This type is the type of tokens accepted by the parser"
-        unionTypeDecl ("token", true, processedSpec.Terminals) writer
+        unionTypeDecl "token" true processedSpec.Terminals writer
         writer.WriteLine ()
 
         /// Maps terminals (tokens) to symbolic token names.
@@ -257,7 +282,7 @@ module private FsYacc =
 
         // Emit the symbolic token-name type declaration.
         quickSummary writer "This type is used to give symbolic names to token indexes, useful for error messages."
-        unionTypeDecl ("tokenId", false, valueMap symbolicTokenNames) writer
+        unionTypeDecl "tokenId" false (valueMap symbolicTokenNames) writer
         writer.WriteLine ()
 
         /// Maps nonterminal identifiers to symbolic nonterminal names.
@@ -279,7 +304,7 @@ module private FsYacc =
                     Map.add ("NONTERM__start" + startSymbol) None symbolicNonterminals)
 
                 // Write the type declaration.
-            unionTypeDecl ("nonterminalId", false, symbolicNonterminals) writer
+            unionTypeDecl "nonterminalId" false symbolicNonterminals writer
         writer.WriteLine ()
 
         /// Integer indices (tags) of terminals (tokens).
@@ -331,7 +356,7 @@ module private FsYacc =
         writer.WriteLine ()
 
         /// Maps production indices to the symbolic name of the nonterminal produced by each production rule.
-        let productionIndices =
+        let productionIndices : Map<int, string> =
             let productionIndices_productionIndex =
                 ((Map.empty, 0), processedSpec.StartSymbols)
                 ||> Set.fold (fun (productionIndices, productionIndex) startSymbol ->
@@ -379,10 +404,10 @@ module private FsYacc =
         writer.WriteLine ()
 
         // Emit constants for "end-of-input" and "tag of error terminal"
-        intLiteralDecl ("_fsyacc_endOfInputTag", false,
-            Map.find endOfInputTerminal tokenTags) writer
-        intLiteralDecl ("_fsyacc_tagOfErrorTerminal", false,
-            Map.find errorTerminal tokenTags) writer
+        intLiteralDecl "_fsyacc_endOfInputTag" false
+            (Map.find endOfInputTerminal tokenTags) writer
+        intLiteralDecl "_fsyacc_tagOfErrorTerminal" false
+            (Map.find errorTerminal tokenTags) writer
         writer.WriteLine ()
 
         // Emit the token -> token-name function.
@@ -445,9 +470,10 @@ module private FsYacc =
                 table-computing function then emits code to create the tables into an IndentedTextWriter. *)
 
     /// Emits F# code which creates the parser tables into an IndentedTextWriter.
-    let private parserTables (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
-                              parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>,
-                              productionIndices : Map<_,_>) (writer : IndentedTextWriter) =
+    let private parserTables (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+        (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
+        (productionIndices : Map<int, string>) (writer : IndentedTextWriter) =
         // _fsyacc_gotos
         // _fsyacc_sparseGotoTableRowOffsets
         let _fsyacc_gotos, _fsyacc_sparseGotoTableRowOffsets =
@@ -510,10 +536,8 @@ module private FsYacc =
             "One or more of the offsets in '_fsyacc_gotos' \
              is greater than the length of '_fsyacc_sparseGotoTableRowOffsets'.")
 
-        oneLineArrayUInt16 ("_fsyacc_gotos", false,
-            _fsyacc_gotos) writer
-        oneLineArrayUInt16 ("_fsyacc_sparseGotoTableRowOffsets", false,
-            _fsyacc_sparseGotoTableRowOffsets) writer
+        oneLineArrayUInt16 "_fsyacc_gotos" false _fsyacc_gotos writer
+        oneLineArrayUInt16 "_fsyacc_sparseGotoTableRowOffsets" false _fsyacc_sparseGotoTableRowOffsets writer
 
 
         (* _fsyacc_stateToProdIdxsTableElements *)
@@ -573,8 +597,7 @@ module private FsYacc =
                 // Store the elements for this state into the 'elements' array.
                 items
                 |> Set.iter (fun item ->
-                    productionRuleIndices
-                    |> Map.find (item.Nonterminal, item.Production)
+                    item.ProductionRuleIndex
                     |> Checked.uint16
                     |> stateToProdIdxsTableElements.Add))
 
@@ -589,15 +612,15 @@ module private FsYacc =
             "One or more of the offsets in '_fsyacc_stateToProdIdxsTableRowOffsets' \
              is greater than the length of '_fsyacc_stateToProdIdxsTableElements'.")
 
-        oneLineArrayUInt16 ("_fsyacc_stateToProdIdxsTableElements", false,
-            _fsyacc_stateToProdIdxsTableElements) writer
-        oneLineArrayUInt16 ("_fsyacc_stateToProdIdxsTableRowOffsets", false,
-            _fsyacc_stateToProdIdxsTableRowOffsets) writer
+        oneLineArrayUInt16 "_fsyacc_stateToProdIdxsTableElements" false
+            _fsyacc_stateToProdIdxsTableElements writer
+        oneLineArrayUInt16 "_fsyacc_stateToProdIdxsTableRowOffsets" false
+            _fsyacc_stateToProdIdxsTableRowOffsets writer
 
 
         (* _fsyacc_action_rows *)
-        intLiteralDecl ("_fsyacc_action_rows", false,
-            TagBimap.count parserTable.ParserStates) writer
+        intLiteralDecl "_fsyacc_action_rows" false
+            (TagBimap.count parserTable.ParserStates) writer
 
 
         (* _fsyacc_actionTableElements *)
@@ -697,6 +720,8 @@ module private FsYacc =
                     /// The terminals for which the most-frequent action is taken in this parser state.
                     let mostFrequentActionTerminals =
                         Map.find mostFrequentAction terminalsByAction
+                        |> Set.map (fun terminalIndex ->
+                            TagBimap.find terminalIndex taggedGrammar.Terminals)
 
                     /// The total number of parser actions for this state, excluding implicit error actions.
                     let totalActionCount = Map.find stateId actionsByState
@@ -710,7 +735,8 @@ module private FsYacc =
                     let explicitActionCount =
                         allTerminals
                         |> Set.filter (fun terminal ->
-                            Map.containsKey (stateId, terminal) parserTable.ActionTable)
+                            let terminalIndex = TagBimap.findValue terminal taggedGrammar.Terminals
+                            Map.containsKey (stateId, terminalIndex) parserTable.ActionTable)
                         |> Set.count
 
                     let mostFrequentActionValue, entries =
@@ -720,8 +746,10 @@ module private FsYacc =
                             EnumToValue ActionValue.Error,
                             Map.find stateId actionsByState
                             |> List.toArray
-                            |> Array.map (fun (terminal, action) ->
-                                let terminalTag = Map.find terminal tokenTags
+                            |> Array.map (fun (terminalIndex, action) ->
+                                let terminalTag =
+                                    let terminal = TagBimap.find terminalIndex taggedGrammar.Terminals
+                                    Map.find terminal tokenTags
                                 let action = EnumToValue (actionValue action)
                                 (Checked.uint16 terminalTag), action)
                             |> Array.sortWith (fun (tag1, _) (tag2, _) ->
@@ -733,7 +761,8 @@ module private FsYacc =
                             |> Array.map (fun terminal ->
                                 let terminalTag = Map.find terminal tokenTags
                                 let action =
-                                    match Map.tryFind (stateId, terminal) parserTable.ActionTable with
+                                    let terminalIndex = TagBimap.findValue terminal taggedGrammar.Terminals
+                                    match Map.tryFind (stateId, terminalIndex) parserTable.ActionTable with
                                     | None ->
                                         ActionValue.Error
                                     | Some (Action action) ->
@@ -754,7 +783,7 @@ module private FsYacc =
                 // Initialize to roughly the correct size (to avoid multiple small reallocations).
                 ResizeArray (6 * compressedActionTable.Count)
 
-            let actionTableRowOffsets = Array.zeroCreate compressedActionTable.Count
+            let actionTableRowOffsets = Array.zeroCreate <| Map.count compressedActionTable
 
             compressedActionTable
             |> Map.iter (fun stateId elements ->
@@ -771,15 +800,15 @@ module private FsYacc =
             "One or more of the offsets in '_fsyacc_actionTableRowOffsets' \
              is greater than the length of '_fsyacc_actionTableElements'.")
 
-        oneLineArrayUInt16 ("_fsyacc_actionTableElements", false,
-            _fsyacc_actionTableElements) writer
-        oneLineArrayUInt16 ("_fsyacc_actionTableRowOffsets", false,
-            _fsyacc_actionTableRowOffsets) writer
+        oneLineArrayUInt16 "_fsyacc_actionTableElements" false
+            _fsyacc_actionTableElements writer
+        oneLineArrayUInt16 "_fsyacc_actionTableRowOffsets" false
+            _fsyacc_actionTableRowOffsets writer
 
 
         (* _fsyacc_reductionSymbolCounts *)
         let _fsyacc_reductionSymbolCounts =
-            let symbolCounts = ResizeArray (productionIndices.Count)
+            let symbolCounts = ResizeArray (Map.count productionIndices)
 
             // The productions created by the start symbols reduce a single value --
             // the start symbols (nonterminals) themselves.
@@ -790,17 +819,17 @@ module private FsYacc =
             processedSpec.ProductionRules
             |> Map.iter (fun _ rules ->
                 rules |> Array.iter (fun rule ->
-                    rule.Symbols |> Array.length |> uint16 |> symbolCounts.Add))
+                    symbolCounts.Add (uint16 <| Array.length rule.Symbols)))
 
             // Return the symbol count.
             symbolCounts.ToArray ()
 
-        oneLineArrayUInt16 ("_fsyacc_reductionSymbolCounts", false,
-            _fsyacc_reductionSymbolCounts) writer
+        oneLineArrayUInt16 "_fsyacc_reductionSymbolCounts" false
+            _fsyacc_reductionSymbolCounts writer
 
         (* _fsyacc_productionToNonTerminalTable *)
         let _fsyacc_productionToNonTerminalTable =
-            let productionToNonTerminalTable = Array.zeroCreate productionIndices.Count
+            let productionToNonTerminalTable = Array.zeroCreate <| Map.count productionIndices
 
             // The augmented start symbol will always have nonterminal index 0
             // so we don't actually have to write anything to the array for the
@@ -816,7 +845,7 @@ module private FsYacc =
                 // Set the next 'ruleCount' elements in the array to this nonterminal's index.
                 for i = 0 to ruleCount - 1 do
                     productionToNonTerminalTable.[prodRuleIndex + i] <-
-                        uint16 nonterminalIndex
+                        Checked.uint16 nonterminalIndex
 
                 // Update the counters before the next iteration.
                 nonterminalIndex + 1,
@@ -827,8 +856,8 @@ module private FsYacc =
             // Return the array.
             productionToNonTerminalTable
 
-        oneLineArrayUInt16 ("_fsyacc_productionToNonTerminalTable", false,
-            _fsyacc_productionToNonTerminalTable) writer
+        oneLineArrayUInt16 "_fsyacc_productionToNonTerminalTable" false
+            _fsyacc_productionToNonTerminalTable writer
 
 
         (* _fsyacc_immediateActions *)
@@ -852,6 +881,11 @@ module private FsYacc =
                 // Discard the production index counter.
                 |> fst
 
+            /// The tagged-index of the Start nonterminal.
+            let startNonterminalIndex = TagBimap.findValue AugmentedNonterminal.Start taggedGrammar.Nonterminals
+            
+            notImpl ""
+(*
             parserTable.ParserStates
             |> TagBimap.iter (fun parserStateId items ->
                 // Set the array element corresponding to this parser state.
@@ -864,17 +898,22 @@ module private FsYacc =
                         /// The single item in this parser state.
                         let item = Set.minElement items
 
+                        /// The nonterminal produced by this item's production rule.
+                        let itemNonterminalIndex = TagMap.find item.ProductionRuleIndex taggedGrammar.NonterminalOfProduction
+
+                        /// This item's production rule.
+                        let itemProduction = TagMap.find item.ProductionRuleIndex taggedGrammar.Productions
+
                         // Is the parser position at the end of the production rule?
                         // (Or, if it's one of the starting productions -- the next-to-last position).
-                        match item.Nonterminal with
-                        | AugmentedNonterminal.Start when int item.Position = (Array.length item.Production - 1) ->
+                        if itemNonterminalIndex = startNonterminalIndex &&
+                            int item.Position = (Array.length itemProduction - 1) then
                             // This state should have an immediate Accept action.
                             EnumToValue ActionValue.Accept
 
-                        | AugmentedNonterminal.Nonterminal nonterminal
-                            when int item.Position = Array.length item.Production ->
+                        elif int item.Position = Array.length itemProduction then
                             /// The (augmented) symbols in this production rule.
-                            let symbols = deaugmentSymbols item.Production
+                            let symbols = deaugmentSymbols itemProduction
 
                             // The index of the production rule to reduce by.
                             Map.find (nonterminal, symbols) productionRuleIndices
@@ -884,45 +923,20 @@ module private FsYacc =
                             |> actionValue
                             |> EnumToValue
 
-                        | _ ->
+                        else
                             // Return the value which indicates this parser state has no immediate action.
                             EnumToValue ActionValue.Any)
-
+*)
             // Return the constructed array.
             immediateActions
 
-        oneLineArrayUInt16 ("_fsyacc_immediateActions", false,
-            _fsyacc_immediateActions) writer
-
-    /// Compute the number of consecutive space characters starting at the beginning of a string.
-    /// If the string is empty or contains only space characters, this function returns None.
-    let private countLeadingSpaces str =
-        let mutable index = 0
-        let mutable foundNonSpace = false
-        let len = String.length str
-        while index < len && not foundNonSpace do
-            // Is the current character a space character?
-            if str.[index] = ' ' then
-                index <- index + 1
-            else
-                foundNonSpace <- true
-
-        // If all of the characters in the string are space characters,
-        // return None. Note this also correctly handles empty strings.
-        if index = len then
-            None
-        else
-            Some <| uint32 index
-
-    /// Replaces the tab characters in a string with some equivalent tab string.
-    let inline private replaceTabs tabString (str : string) =
-        str.Replace ("\t", tabString)
+        oneLineArrayUInt16 "_fsyacc_immediateActions" false
+            _fsyacc_immediateActions writer
 
     /// Emits F# code for a single reduction action into an IndentedTextWriter.
-    let private reduction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
-                           nonterminal : NonterminalIdentifier,
-                           symbols : Symbol<NonterminalIdentifier, TerminalIdentifier>[],
-                           action : CodeFragment) (options, writer : IndentedTextWriter) : unit =
+    let private reduction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>) (nonterminal : NonterminalIdentifier)
+        (symbols : Symbol<NonterminalIdentifier, TerminalIdentifier>[]) (action : CodeFragment) (options, writer : IndentedTextWriter) : unit =
         // Write the function declaration for this semantic action.
         fprintfn writer "(fun (parseState : %s.IParseState) ->"
             <| defaultArg options.ParserInterpreterNamespace defaultParsingNamespace
@@ -969,6 +983,7 @@ module private FsYacc =
         let trimmedActionLines =
             /// The individual lines of the reduction action code,
             /// annotated with the number of leading spaces on that line.
+            // OPTIMIZE : Use functions from ExtCore.String.Split here to avoid creating unnecessary strings.
             let annotatedActionLines =
                 action.Split ([| "\r\n"; "\n"; "\r" |], StringSplitOptions.None)
                 |> Array.map (fun line ->
@@ -1029,12 +1044,13 @@ module private FsYacc =
 
     /// Emits the user-defined semantic actions for the reductions.
     let private reductions (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-                           (options, writer : IndentedTextWriter) : unit =
+        (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>) (options, writer : IndentedTextWriter) : unit =
         /// The default action to execute when a production rule
         /// has no semantic action code associated with it.
         let defaultAction =
-            sprintf "raise (%s.Accept (Microsoft.FSharp.Core.Operators.box _1))"
-                <| defaultArg options.ParserInterpreterNamespace defaultParsingNamespace
+            options.ParserInterpreterNamespace
+            |> Option.fill defaultParsingNamespace
+            |> sprintf "raise (%s.Accept (Microsoft.FSharp.Core.Operators.box _1))"
 
         // _fsyacc_reductions
         writer.WriteLine "let private _fsyacc_reductions () = [|"
@@ -1043,7 +1059,7 @@ module private FsYacc =
             processedSpec.StartSymbols
             |> Set.iter (fun startSymbol ->
                 let startNonterminal = "_start" + startSymbol
-                reduction (processedSpec, startNonterminal, [| Symbol.Nonterminal startSymbol |], defaultAction) (options, writer))
+                reduction processedSpec taggedGrammar startNonterminal [| Symbol.Nonterminal startSymbol |] defaultAction (options, writer))
 
             // Emit the actions for each of the production rules.
             processedSpec.ProductionRules
@@ -1051,10 +1067,11 @@ module private FsYacc =
                 rules |> Array.iter (fun rule ->
                     let action =
                         // Replace the symbol placeholders; e.g., change $2 to _2
-                        let action = Option.map replaceSymbolPlaceholders rule.Action
-                        defaultArg action defaultAction
+                        rule.Action
+                        |> Option.map replaceSymbolPlaceholders
+                        |> Option.fill defaultAction
 
-                    reduction (processedSpec, nonterminal, rule.Symbols, action) (options, writer)))
+                    reduction processedSpec taggedGrammar nonterminal rule.Symbols action (options, writer)))
             
             // Emit the closing bracket of the array.
             writer.WriteLine "|]"
@@ -1063,22 +1080,23 @@ module private FsYacc =
         writer.WriteLine ()
 
     /// Emits code for an fsyacc-compatible parser into an IndentedTextWriter.
-    let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
-                parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
-             (options : FsyaccBackendOptions, writer : IndentedTextWriter) : unit =
+    let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+        (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
+        (options : FsyaccBackendOptions, writer : IndentedTextWriter) : unit =
         (* Emit the module declaration. *)
+        do
+            quickSummary writer "Implementation file for parser generated by the fsyacc-compatibility backend for fsharpyacc."
 
-        quickSummary writer "Implementation file for parser generated by the fsyacc-compatibility backend for fsharpyacc."
-
-        /// The name of the emitted parser module.
-        let parserModuleName =
-            defaultArg options.ModuleName "Parser"
+            /// The name of the emitted parser module.
+            let parserModuleName =
+                defaultArg options.ModuleName "Parser"
         
-        if options.InternalModule then
-            fprintfn writer "module internal %s" parserModuleName
-        else
-            fprintfn writer "module %s" parserModuleName
-        writer.WriteLine ()
+            if options.InternalModule then
+                fprintfn writer "module internal %s" parserModuleName
+            else
+                fprintfn writer "module %s" parserModuleName
+            writer.WriteLine ()
 
         // Emit a "nowarn" directive to disable a certain type-related warning message.
         fprintf writer "#nowarn \"%i\" " 64
@@ -1103,6 +1121,7 @@ module private FsYacc =
             // We split the code into individual lines, then write them one at a time to the
             // IndentedTextWriter; this ensures that the newlines are correct for this system
             // and also that the indentation level is correct.
+            // OPTIMIZE : Use String.Split.iter from ExtCore.
             header.Split ([| "\r\n"; "\r"; "\n" |], StringSplitOptions.None)
             |> Array.iter (fun codeLine ->
                 // TODO : Trim the lines? We'd have to process the entire array first
@@ -1112,13 +1131,13 @@ module private FsYacc =
 
             writer.WriteLine ())
 
-        // Emit the parser types (e.g., the token type).
-        let productionIndices =
-            parserTypes processedSpec writer
+        do
+            // Emit the parser types (e.g., the token type).
+            let productionIndices = parserTypes processedSpec writer
 
-        // Emit the parser tables.
-        parserTables (processedSpec, parserTable, productionIndices) writer
-        reductions processedSpec (options, writer)
+            // Emit the parser tables.
+            parserTables processedSpec taggedGrammar parserTable productionIndices writer
+            reductions processedSpec taggedGrammar (options, writer)
 
         do
             // Emit the parser "tables" record and parser functions.
@@ -1143,12 +1162,13 @@ module private FsYacc =
         // output text remaining in it's internal buffer.
         writer.Flush ()
 
+
 /// A backend which emits code implementing a table-based pattern matcher
 /// compatible with 'fsyacc' and the table interpreters in the F# PowerPack.
 [<Export(typeof<IBackend>)>]
 type FsyaccBackend () =
     interface IBackend with
-        member this.Invoke (processedSpec, parserTable, options) : unit =
+        member this.Invoke (processedSpec, taggedGrammar, parserTable, options) : unit =
             /// Compilation options specific to this backend.
             let fsyaccOptions =
                 match options.FsyaccBackendOptions with
@@ -1163,5 +1183,5 @@ type FsyaccBackend () =
                     // Set the indentation to the standard F# indent (4 spaces).
                     new IndentedTextWriter (streamWriter, "    ")
 
-                FsYacc.emit (processedSpec, parserTable) (fsyaccOptions, indentedTextWriter)
+                FsYacc.emit processedSpec taggedGrammar parserTable (fsyaccOptions, indentedTextWriter)
 
