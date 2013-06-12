@@ -349,9 +349,7 @@ module private FsYacc =
         /// Computes the GOTO table for the parser, then emits it as a sparse (compressed)
         /// table into the generated parser code.
         let private emitGotoTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
-            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
-            augmentedTerminalTags (productionIndices : IntMap<string>) (writer : IndentedTextWriter) =
+            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
             // _fsyacc_gotos
             // _fsyacc_sparseGotoTableRowOffsets
             let _fsyacc_gotos, _fsyacc_sparseGotoTableRowOffsets =
@@ -418,10 +416,8 @@ module private FsYacc =
             oneLineArrayUInt16 "_fsyacc_sparseGotoTableRowOffsets" false _fsyacc_sparseGotoTableRowOffsets writer
 
         //
-        let private emitStateToProductionIndicesTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
-            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
-            augmentedTerminalTags (productionIndices : IntMap<string>) (writer : IndentedTextWriter) =
+        let private emitStateToProductionIndicesTable
+            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
             (* _fsyacc_stateToProdIdxsTableElements *)
             (* _fsyacc_stateToProdIdxsTableRowOffsets *)
             let _fsyacc_stateToProdIdxsTableElements, _fsyacc_stateToProdIdxsTableRowOffsets =
@@ -472,7 +468,7 @@ module private FsYacc =
         let private emitActionTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
-            augmentedTerminalTags (productionIndices : IntMap<string>) (writer : IndentedTextWriter) =
+            augmentedTerminalTags (writer : IndentedTextWriter) =
             (* _fsyacc_actionTableElements *)
             (* _fsyacc_actionTableRowOffsets *)
             let _fsyacc_actionTableElements, _fsyacc_actionTableRowOffsets =
@@ -777,13 +773,13 @@ module private FsYacc =
                 (TagBimap.count parserTable.ParserStates) writer
 
             // Emit the GOTO table.
-            emitGotoTable processedSpec taggedGrammar parserTable augmentedTerminalTags productionIndices writer
+            emitGotoTable processedSpec parserTable writer
             
             // Emit the state->production-indices table.
-            emitStateToProductionIndicesTable processedSpec taggedGrammar parserTable augmentedTerminalTags productionIndices writer
+            emitStateToProductionIndicesTable parserTable writer
 
             // Emit the ACTION table.
-            emitActionTable processedSpec taggedGrammar parserTable augmentedTerminalTags productionIndices writer
+            emitActionTable processedSpec taggedGrammar parserTable augmentedTerminalTags writer
             
             // Emit the reduction symbol counts.
             emitReductionSymbolCounts processedSpec taggedGrammar parserTable augmentedTerminalTags productionIndices writer
@@ -796,9 +792,10 @@ module private FsYacc =
 
 
     /// Emits F# code for a single reduction action into an IndentedTextWriter.
-    let private reduction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-        (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>) (nonterminal : NonterminalIdentifier)
-        (symbols : Symbol<NonterminalIdentifier, TerminalIdentifier>[]) (action : CodeFragment) (options, writer : IndentedTextWriter) : unit =
+    let private reduction (nonterminal : NonterminalIdentifier) (symbols : Symbol<NonterminalIdentifier, TerminalIdentifier>[]) (action : CodeFragment)
+        (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+        (options, writer : IndentedTextWriter) : unit =
         // Write the function declaration for this semantic action.
         fprintfn writer "(fun (parseState : %s.IParseState) ->"
             <| defaultArg options.ParserInterpreterNamespace defaultParsingNamespace
@@ -921,19 +918,20 @@ module private FsYacc =
             processedSpec.StartSymbols
             |> Set.iter (fun startSymbol ->
                 let startNonterminal = "_start" + startSymbol
-                reduction processedSpec taggedGrammar startNonterminal [| Symbol.Nonterminal startSymbol |] defaultAction (options, writer))
+                reduction startNonterminal [| Symbol.Nonterminal startSymbol |] defaultAction processedSpec taggedGrammar (options, writer))
 
             // Emit the actions for each of the production rules.
             processedSpec.ProductionRules
             |> Map.iter (fun nonterminal rules ->
                 rules |> Array.iter (fun rule ->
-                    let action =
-                        // Replace the symbol placeholders; e.g., change $2 to _2
+                    /// The rule action, where the symbol placeholders have been replaced by
+                    /// the names of variables within the generated code (e.g., $2 changed to _2).
+                    let ruleAction =
                         rule.Action
                         |> Option.map replaceSymbolPlaceholders
                         |> Option.fill defaultAction
 
-                    reduction processedSpec taggedGrammar nonterminal rule.Symbols action (options, writer)))
+                    reduction nonterminal rule.Symbols ruleAction processedSpec taggedGrammar (options, writer)))
             
             // Emit the closing bracket of the array.
             writer.WriteLine "|]"
