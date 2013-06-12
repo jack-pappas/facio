@@ -34,6 +34,9 @@ open FSharpYacc.Plugin
 module private Emit =
     open BackendUtils.CodeGen
 
+    /// Character sequences representing "newline" for various platforms.
+    let newlines = [| "\r\n"; "\n"; "\r" |]
+
     /// Emit a formatted string as a single-line F# comment into an IndentedTextWriter.
     let inline comment (writer : IndentedTextWriter) fmt : ^T =
         writer.Write "// "
@@ -41,11 +44,11 @@ module private Emit =
 
     /// Emits a formatted string as a quick-summary (F# triple-slash comment) into an IndentedTextWriter.
     let inline quickSummary (writer : IndentedTextWriter) fmt : ^T =
-        fmt |> Printf.ksprintf (fun str ->
-            // OPTIMIZE : Use the String.Split.iter function from ExtCore.
-            // Split the string into individual lines.
-            str.Split ([| "\r\n"; "\r"; "\n" |], System.StringSplitOptions.None)
-            // Write the lines to the IndentedTextWriter as triple-slash comments.
+        fmt |> Printf.ksprintf (fun summaryComment ->
+            // Split the string into individual lines, then write the lines
+            // to the IndentedTextWriter as triple-slash documentation comments.
+            // OPTIMIZE : Use the String.Split.iter and Substring.trim functions from ExtCore.
+            summaryComment.Split (newlines, System.StringSplitOptions.None)
             |> Array.iter (fun line ->
                 writer.Write "/// "
                 writer.WriteLine (line.Trim ())
@@ -192,7 +195,6 @@ module private FsYacc =
     let [<Literal>] private endOfInputTerminal : TerminalIdentifier = "end_of_input"
     /// The name of the error terminal.
     let [<Literal>] private errorTerminal : TerminalIdentifier = "error"
-
     
     //
     [<RequireQualifiedAccess>]
@@ -522,8 +524,11 @@ module private FsYacc =
                 |> Map.map (fun _ actions ->
                     List.length actions)
 *)
+            (* OPTIMIZE :   Combine the code within the two Map.map calls below, to avoid
+                            creating an intermediate map which is immediately consumed. *)
+
             /// The most-frequent parser action (if any) for each parser state.
-            let mostFrequentAction =
+            let mostFrequentActionByState =
                 terminalsByActionByState
                 |> Map.map (fun _ terminalsByAction ->
                     (None, terminalsByAction)
@@ -540,7 +545,7 @@ module private FsYacc =
                     |> Option.map fst
                     |> Option.get)
 
-            mostFrequentAction
+            mostFrequentActionByState
             |> Map.map (fun stateId mostFrequentAction ->
                 /// The terminals for which each action is executed in this state.
                 let terminalsByAction =
@@ -849,11 +854,18 @@ module private FsYacc =
         /// The individual lines of the reduction action code, trimmed to remove a number of
         /// leading spaces common to all non-empty/non-whitespace lines.
         let trimmedActionLines =
+            (* OPTIMIZE :   Use functions from ExtCore.String.Split to re-implement the code below so it doesn't
+                            create tons of unnecessary strings. *)
+            (* OPTIMIZE :   If the computation of 'trimmedActionLines' were moved down to where it's used, we could
+                            use the ExtCore.String.Split functions to eliminate the creation of those strings too --
+                            we'd simply adjust the indentation on the substring supplied by the String.Split function
+                            then use the substring extension methods from ExtCore to write the adjusted substring
+                            into the TextWriter. *)
+
             /// The individual lines of the reduction action code,
             /// annotated with the number of leading spaces on that line.
-            // OPTIMIZE : Use functions from ExtCore.String.Split here to avoid creating unnecessary strings.
             let annotatedActionLines =
-                action.Split ([| "\r\n"; "\n"; "\r" |], StringSplitOptions.None)
+                action.Split (Emit.newlines, StringSplitOptions.None)
                 |> Array.map (fun line ->
                     // First replace any tab characters in the string.
                     let line = replaceTabs "    " line
@@ -862,21 +874,19 @@ module private FsYacc =
         
             /// The minimum number of spaces on the left side of any line of code.
             let minIndentation =
-                let minIndentation =
-                    (None, annotatedActionLines)
-                    ||> Array.fold (fun x (_, y) ->
-                        match x, y with
-                        | None, None ->
-                            None
-                        | (Some _ as x), None ->
-                            x
-                        | None, (Some _ as y) ->
-                            y
-                        | Some x, Some y ->
-                            Some <| min x y)
-
+                (None, annotatedActionLines)
+                ||> Array.fold (fun x (_, y) ->
+                    match x, y with
+                    | None, None ->
+                        None
+                    | (Some _ as x), None ->
+                        x
+                    | None, (Some _ as y) ->
+                        y
+                    | Some x, Some y ->
+                        Some <| min x y)
                 // Default to zero (0) indentation.
-                defaultArg minIndentation GenericZero
+                |> Option.fill GenericZero
 
             // Remove the same amount of indentation from every non-empty line.
             annotatedActionLines
@@ -1046,13 +1056,14 @@ module private FsYacc =
             // IndentedTextWriter; this ensures that the newlines are correct for this system
             // and also that the indentation level is correct.
             // OPTIMIZE : Use String.Split.iter from ExtCore.
-            header.Split ([| "\r\n"; "\r"; "\n" |], StringSplitOptions.None)
+            header.Split (Emit.newlines, StringSplitOptions.None)
             |> Array.iter (fun codeLine ->
-                // TODO : Trim the lines? We'd have to process the entire array first
-                // to determine the "base" indentation level, then trim only that much
-                // from the front of each string.
+                (* TODO :   Trim the lines of code here, as done for the user-specified actions.
+                            We'd have to process the entire array first to determine the "base"
+                            indentation level, then trim only that much from the front of each string. *)
                 writer.WriteLine codeLine)
 
+            // Emit a blank line to separate the header from the compiler-generated parser code.
             writer.WriteLine ())
 
         do
