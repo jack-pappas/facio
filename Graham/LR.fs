@@ -133,6 +133,12 @@ with
             let shift = sprintf "s%i/" (untag shiftStateId)
             shift + reductions
 
+    /// The number of actions in the set.
+    member this.Count
+        with get () =
+            TagSet.count this.Reductions + (
+                if Option.isSome this.Shift then 1 else 0)
+
 /// A non-empty set of LrParserActions representing the
 /// action(s) to take for a specific parser state.
 type LrParserActionSet =
@@ -148,6 +154,14 @@ type LrParserActionSet =
             action.ToString ()
         | Conflict conflict ->
             conflict.ToString ()
+
+    /// The number of actions in the set.
+    member this.Count
+        with get () =
+            match this with
+            | Action _ -> 1
+            | Conflict conflictSet ->
+                conflictSet.Count
 
     /// Creates a new LrParserActionSet with the given action removed;
     /// returns None if the resulting action set would be empty.
