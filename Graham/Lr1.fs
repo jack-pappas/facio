@@ -49,10 +49,7 @@ type Lr1TableGenState<'Nonterminal, 'Terminal
 type Lr1ParserTable<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
-    LrParserTable<
-        AugmentedNonterminal<'Nonterminal>,
-        AugmentedTerminal<'Terminal>,
-        TerminalIndex>
+    LrParserTable<'Nonterminal, 'Terminal, TerminalIndex>
 
 /// LR(1) parser tables.
 [<RequireQualifiedAccess>]
@@ -104,7 +101,7 @@ module Lr1 =
             firstSetOfString TagSet.empty startIndex
 
         /// Computes the LR(1) closure of a set of items.
-        let rec private closureImpl (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) predictiveSets items pendingItems
+        let rec private closureImpl (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) predictiveSets items pendingItems
             : LrParserState<_,_,_> =
             match pendingItems with
             | [] ->
@@ -163,13 +160,13 @@ module Lr1 =
                 closureImpl taggedGrammar predictiveSets items (List.rev pendingItems)
 
         /// Computes the LR(1) closure of a set of items.
-        let closure (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) predictiveSets items =
+        let closure (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) predictiveSets items =
             // Call the recursive implementation, starting with the specified initial item set.
             closureImpl taggedGrammar predictiveSets Set.empty (Set.toList items)
 
         /// Moves the 'dot' (the current parser position) past the
         /// specified symbol for each item in a set of items.
-        let goto symbol items (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) predictiveSets =
+        let goto symbol items (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) predictiveSets =
             (Set.empty, items)
             ||> Set.fold (fun updatedItems item ->
                 // If the next symbol to be parsed in the production is the
@@ -187,7 +184,7 @@ module Lr1 =
 
 
     /// Create an LR(1) parser table for the specified grammar.
-    let rec private createTableImpl (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) predictiveSets eofIndex workSet =
+    let rec private createTableImpl (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) predictiveSets eofIndex workSet =
         state {
         // If the work-set is empty, we're finished creating the table.
         if TagSet.isEmpty workSet then
@@ -283,7 +280,7 @@ module Lr1 =
         }
 
     /// Create an LR(1) parser table for the specified grammar.
-    let createTable (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
+    let createTable (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>)
         : Lr1ParserTable<'Nonterminal, 'Terminal> =
         // Preconditions
         // TODO

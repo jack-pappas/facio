@@ -94,7 +94,7 @@ module Lalr1 =
         Relation.digraph (nonterminalTransitions, reads, directRead)
 
     /// Compute the 'includes' and 'lookback' relations needed to compute the look-ahead sets for a grammar.
-    let private lookbackAndIncludes (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
+    let private lookbackAndIncludes (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>)
                                     (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>)
                                     (nonterminalTransitions : Set<NonterminalTransition>)
                                     (nullable : TagMap<NonterminalIndexTag, bool>) =
@@ -186,7 +186,7 @@ module Lalr1 =
                 for the remaining states. *)
 
     /// Computes the LALR(1) look-ahead (LA) sets given a grammar and its LR(0) parser table.
-    let lookaheadSets (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
+    let lookaheadSets (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>)
         (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) : Choice<Map<_,_>, string> =
         (* DeRemer and Penello's algorithm for computing LALR look-ahead sets. *)
 
@@ -231,7 +231,7 @@ module Lalr1 =
 
     /// Creates an LALR(1) parser table from a grammar, it's LR(0) or SLR(1) parser table,
     /// and the LALR(1) look-ahead sets computed from the grammar and parser table.
-    let upgrade (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
+    let upgrade (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>)
         (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) lookaheadSets predictiveSets
         : Lr0ParserTable<'Nonterminal, 'Terminal> =
         /// The predictive sets of the grammar.

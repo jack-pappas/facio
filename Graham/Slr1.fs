@@ -33,7 +33,7 @@ open Graham.Graph
 [<RequireQualifiedAccess>]
 module Slr1 =
     /// Given a grammar and it's LR(0) parser table, upgrades the table to SLR(1).
-    let upgrade (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
+    let upgrade (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>)
         (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) predictiveSets =
         /// Predictive sets of the augmented grammar.
         let predictiveSets =

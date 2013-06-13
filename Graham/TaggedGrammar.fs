@@ -52,11 +52,12 @@ type TaggedGrammar<'Nonterminal, 'Terminal
     /// The terminals of the grammar.
     Terminals : TagBimap<TerminalIndexTag, 'Terminal>;
     
-    (* TODO : Change this so the value is a vector (from ExtCore) instead of an array, because it should be immutable. *)
     /// The production rules of the grammar.
+    // TODO : Change this so the value is a vector (from ExtCore) instead of an array, because it should be immutable.
     Productions : TagMap<ProductionRuleIndexTag, TaggedProductionRule>;
     
     (* OPTIMIZE : Can we implement a "TagMultiBimap" data structure to combine and simplify the next two fields? *)
+
     /// Maps the index of each nonterminal in the grammar to the set of production rules
     /// which produce the nonterminal when matched.
     ProductionsByNonterminal : TagMap<NonterminalIndexTag, TagSet<ProductionRuleIndexTag>>;
@@ -154,6 +155,9 @@ module TaggedGrammar =
                         }))
 
     /// Create a grammar from a tagged grammar.
+    [<System.Obsolete(
+       "This function should not be used except as a temporary aid for adapting \
+        newer code based on TaggedGrammar to work with older code based on Grammar.")>]
     [<CompiledName("ToGrammar")>]
     let toGrammar (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) : Grammar<'Nonterminal, 'Terminal> =
         (Map.empty, taggedGrammar.Nonterminals)
@@ -183,9 +187,185 @@ module TaggedGrammar =
             Map.add nonterminal productionRules grammar)
 
 
-/// A tagged, augmented grammar.
-type TaggedAugmentedGrammar<'Nonterminal, 'Terminal
+/// A context-free grammar (CFG) where each nonterminal, terminal, and production rule
+/// has been indexed and tagged. The grammar is "augmented" with an additional
+/// nonterminal representing the start symbol, production rules associated with that
+/// nonterminal, and an additional terminal representing the end-of-file marker.
+/// Compared with TaggedGrammar, AugmentedTaggedGrammar also contains information about
+/// the starting productions of a grammar and the declared types of the grammar's
+/// terminals and nonterminals.
+type AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType
     when 'Nonterminal : comparison
-    and 'Terminal : comparison> =
-    TaggedGrammar<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
+    and 'Terminal : comparison> = {
+    /// The nonterminals of the grammar.
+    Nonterminals : TagBimap<NonterminalIndexTag, AugmentedNonterminal<'Nonterminal>>;
+    /// The terminals of the grammar.
+    Terminals : TagBimap<TerminalIndexTag, AugmentedTerminal<'Terminal>>;
+    
+    /// The production rules of the grammar.
+    // TODO : Change this so the value is a vector (from ExtCore) instead of an array, because it should be immutable.
+    Productions : TagMap<ProductionRuleIndexTag, TaggedProductionRule>;
+    
+    (* OPTIMIZE : Can we implement a "TagMultiBimap" data structure to combine and simplify the next two fields? *)
+
+    /// Maps the index of each nonterminal in the grammar to the set of production rules
+    /// which produce the nonterminal when matched.
+    ProductionsByNonterminal : TagMap<NonterminalIndexTag, TagSet<ProductionRuleIndexTag>>;
+    /// Given a production-rule-index, returns the nonterminal-index produced by the rule when matched.
+    NonterminalOfProduction : TagMap<ProductionRuleIndexTag, NonterminalIndex>;
+
+    /// The set of starting nonterminals for the grammar.
+    /// That is, the set of nonterminals which can represent a completely-parsed input string.
+    /// Invariant: This set cannot be empty.
+    StartNonterminals : TagSet<NonterminalIndexTag>;
+    /// The declared type, if any, for the nonterminals of the grammar.
+    /// This map only contains entries for nonterminals which have an explicitly-declared type.
+    NonterminalTypes : TagMap<NonterminalIndexTag, 'DeclaredType>;
+    /// The declared type, if any, for the terminals of the grammar.
+    /// This map only contains entries for terminals which have an explicitly-declared type.
+    TerminalTypes : TagMap<TerminalIndexTag, 'DeclaredType>;
+}
+
+/// Functional operators related to the AugmentedTaggedGrammar<_,_> type.
+[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module AugmentedTaggedGrammar =
+    /// An empty tagged, augmented grammar.
+    [<CompiledName("Empty")>]
+    let empty<'Nonterminal, 'Terminal, 'DeclaredType
+        when 'Nonterminal : comparison
+        and 'Terminal : comparison>
+        : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType> =
+      { Nonterminals = TagBimap.empty;
+        Terminals = TagBimap.empty;
+        Productions = TagMap.empty;
+        ProductionsByNonterminal = TagMap.empty;
+        NonterminalOfProduction = TagMap.empty;
+        StartNonterminals = TagSet.empty;
+        NonterminalTypes = TagMap.empty;
+        TerminalTypes = TagMap.empty; }
+
+    /// <summary>Augments a Grammar with a unique "start" symbol and the end-of-file marker.</summary>
+    /// <param name="taggedGrammar">The grammar to be augmented.</param>
+    /// <param name="startingNonterminals">The parser will begin parsing with any one of these symbols.</param>
+    /// <returns>A grammar augmented with the Start symbol and the EndOfFile marker.</returns>
+    [<CompiledName("AugmentWith")>]
+    let augmentWith (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) (startingNonterminals : Set<'Nonterminal>)
+        : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType> =
+        // Preconditions
+        if Set.isEmpty startingNonterminals then
+            invalidArg "startingNonterminals" "The set of starting nonterminals is empty."
+
+        (*  Based on the input grammar, create a new grammar with an additional
+            nonterminal and production rules for the start symbol and an additional
+            terminal representing the end-of-file marker. *)
+
+        let nonterminals' =
+            (TagBimap.empty, taggedGrammar.Nonterminals)
+            ||> TagBimap.fold (fun nonterminals' nonterminalIndex nonterminal ->
+                let nonterminal' = AugmentedNonterminal.Nonterminal nonterminal
+                TagBimap.add (nonterminalIndex + 1<_>) nonterminal' nonterminals')
+            // The start symbol is assigned an index of zero (0).
+            |> TagBimap.add 0<_> Start
+
+        let terminals' =
+            // OPTIMIZE : Use TagBimap.map from ExtCore.
+            let terminals' =
+                (TagBimap.empty, taggedGrammar.Terminals)
+                ||> TagBimap.fold (fun terminals' terminalIndex terminal ->
+                    TagBimap.add terminalIndex (AugmentedTerminal.Terminal terminal) terminals')
+            
+            // Add the end-of-file marker.
+            TagBimap.add (tag <| TagBimap.count terminals') EndOfFile terminals'
+            
+        /// The tagged-indices of the starting nonterminals.
+        let startingNonterminals' =
+            (TagSet.empty, startingNonterminals)
+            ||> Set.fold (fun startingNonterminals nonterminal ->
+                let nonterminal' = AugmentedNonterminal.Nonterminal nonterminal
+                match TagBimap.tryFindValue nonterminal' nonterminals' with
+                | Some nonterminalIndex ->
+                    TagSet.add nonterminalIndex startingNonterminals
+                | None ->
+                    let msg = sprintf "The set of starting nonterminals contains an item '%O' which is not a nonterminal of the grammar." nonterminal
+                    raise <| exn msg)
+
+        let startSymbolProductionCount = TagSet.count startingNonterminals'
+
+        let productions' =
+            let productions' =
+                let endOfFileTerminalIndex = TagBimap.findValue EndOfFile terminals'
+                // OPTIMIZE : Use TagMap.foldi from ExtCore.
+                (TagMap.empty, startingNonterminals')
+                ||> TagSet.fold (fun productions' startingNonterminalIndex ->
+                    let productionRule =
+                        [|  Symbol.Nonterminal startingNonterminalIndex;
+                            Symbol.Terminal endOfFileTerminalIndex; |]
+                    TagMap.add (tag <| TagMap.count productions') productionRule productions')
+            
+            (productions', taggedGrammar.Productions)
+            ||> TagMap.fold (fun productions' productionIndex productionRule ->
+                let productionIndex' = productionIndex + tag startSymbolProductionCount
+                let productionRule' =
+                    // Remember, we incremented the nonterminal indices when adding the Start nonterminal,
+                    // so we need to adjust the production rules to match.
+                    productionRule
+                    |> Array.map (function
+                        | Symbol.Terminal _ as terminal ->
+                            terminal
+                        | Symbol.Nonterminal nonterminalIndex ->
+                            Symbol.Nonterminal (nonterminalIndex + 1<_>))
+
+                // Add the updated production index and rule to the augmented production map.
+                TagMap.add productionIndex' productionRule' productions')
+
+        let startNonterminalIndex = TagBimap.findValue Start nonterminals'
+        
+        let productionsByNonterminal' =
+            let productionsByNonterminal' =
+                // Add the productions for the Start nonterminal to an empty map.
+                (0, startSymbolProductionCount - 1, TagSet.empty)
+                |||> Range.fold (fun startProductions i -> TagSet.add (tag i) startProductions)
+                |> TagMap.singleton startNonterminalIndex
+
+            (productionsByNonterminal', taggedGrammar.ProductionsByNonterminal)
+            ||> TagMap.fold (fun productionsByNonterminal' nonterminalIndex productionIndices ->
+                let nonterminalIndex' = nonterminalIndex + 1<_>
+                let productionIndices' =
+                    productionIndices
+                    |> TagSet.map (fun productionIndex ->
+                        productionIndex + tag startSymbolProductionCount)
+
+                // Add the updated production index and production-index set to the map.
+                TagMap.add nonterminalIndex' productionIndices' productionsByNonterminal')
+            
+        let nonterminalOfProduction' =
+            let nonterminalOfProduction' =
+                // Add the productions for the Start nonterminal to an empty map.
+                (0, startSymbolProductionCount - 1, TagMap.empty)
+                |||> Range.fold (fun nonterminalOfProduction i ->
+                    TagMap.add (tag i) startNonterminalIndex nonterminalOfProduction)
+
+            (nonterminalOfProduction', taggedGrammar.NonterminalOfProduction)
+            ||> TagMap.fold (fun nonterminalOfProduction' productionIndex nonterminalIndex ->
+                let productionIndex' = productionIndex + tag startSymbolProductionCount
+                let nonterminalIndex' = nonterminalIndex + 1<_>
+                TagMap.add productionIndex' nonterminalIndex' nonterminalOfProduction')
+
+        {   Nonterminals = nonterminals';
+            Terminals = terminals';
+            Productions = productions';
+            ProductionsByNonterminal = productionsByNonterminal';
+            NonterminalOfProduction = nonterminalOfProduction';
+            StartNonterminals = startingNonterminals';
+            NonterminalTypes = TagMap.empty;
+            TerminalTypes = TagMap.empty; }
+                            
+    /// <summary>Augments a Grammar with a unique "start" symbol and the end-of-file marker.</summary>
+    /// <param name="taggedGrammar">The grammar to be augmented.</param>
+    /// <param name="startingNonterminal">The parser will begin parsing with this symbol.</param>
+    /// <returns>A grammar augmented with the Start symbol and the EndOfFile marker.</returns>
+    [<CompiledName("Augment")>]
+    let augment (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) startingNonterminal
+        : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType> =
+        augmentWith taggedGrammar (Set.singleton startingNonterminal)
 

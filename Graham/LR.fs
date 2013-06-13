@@ -65,7 +65,7 @@ with
 
     //
     static member CurrentSymbol (item : LrItem<'Nonterminal, 'Terminal, 'Lookahead>)
-        (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) : Symbol<_,_> option =
+        (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) : Symbol<_,_> option =
         // Get the production from the tagged grammar.
         match TagMap.tryFind item.ProductionRuleIndex taggedGrammar.Productions with
         | None ->
@@ -499,8 +499,8 @@ module LrTableGenState =
                 invalidOp msg
 
     /// Add an 'accept' action to the ACTION table.
-    let accept (sourceState : ParserStateIndex) (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
-        (state : LrTableGenState<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>, 'Lookahead>) =
+    let accept (sourceState : ParserStateIndex) (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>)
+        (state : LrTableGenState<'Nonterminal, 'Terminal, 'Lookahead>) =
         /// The transition key for the ACTION table.
         let key =
             let eofIndex = TagBimap.findValue EndOfFile taggedGrammar.Terminals

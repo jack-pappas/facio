@@ -45,7 +45,7 @@ module PredictiveSets =
                     avoid re-processing values which haven't changed. *)
 
     //
-    let internal nullable (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) =
+    let internal nullable (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) =
         /// Implementation of the nullable-map-computing algorithm.
         let rec computeNullable (nullable : TagMap<NonterminalIndexTag, bool>) =
             let nullable, updated =
@@ -100,7 +100,7 @@ module PredictiveSets =
                 TagMap.find nonterminalIndex nullable)
 
     //
-    let internal first (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) (nullable : TagMap<NonterminalIndexTag, bool>) =
+    let internal first (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) (nullable : TagMap<NonterminalIndexTag, bool>) =
         /// Implementation of the algorithm for computing the FIRST sets of the nonterminals.
         let rec computeFirst (firstSets : TagMap<NonterminalIndexTag, TagSet<TerminalIndexTag>>) =
             let firstSets, updated =
@@ -156,7 +156,7 @@ module PredictiveSets =
         |> computeFirst
 
     //
-    let internal follow (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
+    let internal follow (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>)
         (nullable : TagMap<NonterminalIndexTag, bool>) (firstSets : TagMap<NonterminalIndexTag, TagSet<TerminalIndexTag>>) =
         /// Implementation of the algorithm for computing the FOLLOW sets of the nonterminals.
         let rec computeFollow (followSets : TagMap<NonterminalIndexTag, TagSet<TerminalIndexTag>>) =
@@ -252,7 +252,7 @@ module PredictiveSets =
         |> computeFollow
 
     //
-    let ofGrammar (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) =
+    let ofGrammar (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) =
         /// Map denoting which nonterminals in the grammar are nullable.
         let nullable = nullable taggedGrammar
 

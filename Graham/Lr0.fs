@@ -54,10 +54,7 @@ type Lr0TableGenState<'Nonterminal, 'Terminal
 type Lr0ParserTable<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
-    LrParserTable<
-        AugmentedNonterminal<'Nonterminal>,
-        AugmentedTerminal<'Terminal>,
-        EmptyLookahead>
+    LrParserTable<'Nonterminal, 'Terminal, EmptyLookahead>
 
 /// LR(0) parser tables.
 [<RequireQualifiedAccess>]
@@ -67,7 +64,7 @@ module Lr0 =
     module private ParserState =
         //
         let isReduceState (parserState : Lr0ParserState<'Nonterminal, 'Terminal>)
-            (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) =
+            (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) =
             // A parser state is a 'reduce state' if any of its items
             // have a parser position past the end of the production.
             parserState
@@ -96,7 +93,7 @@ module Lr0 =
                 | Nonterminal _ -> false
 *)
         /// Computes the LR(0) closure of a set of items using a worklist-style algorithm.
-        let rec private closureImpl (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) items pendingItems : LrParserState<_,_,_> =
+        let rec private closureImpl (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) items pendingItems : LrParserState<_,_,_> =
             match pendingItems with
             | [] ->
                 items
@@ -140,13 +137,13 @@ module Lr0 =
                 closureImpl taggedGrammar items (List.rev pendingItems)
 
         /// Computes the LR(0) closure of a set of items.
-        let closure (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) items =
+        let closure (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) items =
             // Call the recursive implementation, starting with the specified initial item set.
             closureImpl taggedGrammar Set.empty (Set.toList items)
 
         /// Moves the 'dot' (the current parser position) past the
         /// specified symbol for each item in a set of items.
-        let goto symbol items (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) : LrParserState<_,_,_> =
+        let goto symbol items (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) : LrParserState<_,_,_> =
             (Set.empty, items)
             ||> Set.fold (fun updatedItems (item : LrItem<_,_,_>) ->
                 // If the next symbol to be parsed in the production is the
@@ -164,7 +161,7 @@ module Lr0 =
             |> closure taggedGrammar
 
     //
-    let rec private createTableImpl (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) eofIndex workSet =
+    let rec private createTableImpl (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) eofIndex workSet =
         state {
         // If the work-set is empty, we're done creating the table.
         if TagSet.isEmpty workSet then
@@ -270,7 +267,7 @@ module Lr0 =
         }
 
     /// Creates an LR(0) parser table from a tagged grammar.
-    let createTable (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>)
+    let createTable (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>)
         : Lr0ParserTable<'Nonterminal, 'Terminal> =
         // Preconditions
         // TODO
@@ -289,7 +286,7 @@ module Lr0 =
                     ||> TagSet.fold (fun items ruleIndex ->
                         // Create an 'item', with the parser position at
                         // the beginning of the production.
-                        let item = LrItem (ruleIndex, GenericZero, ())
+                        let item : Lr0Item<_,_> = LrItem (ruleIndex, GenericZero, ())
                         Set.add item items)
                     |> Item.closure taggedGrammar
 
