@@ -34,6 +34,9 @@ open FSharpYacc.Plugin
 module private Emit =
     open BackendUtils.CodeGen
 
+    /// The indentation string used when emitting code.
+    let [<Literal>] indent = "    "
+
     /// Character sequences representing "newline" for various platforms.
     let newlines = [| "\r\n"; "\n"; "\r" |]
 
@@ -482,6 +485,14 @@ module private FsYacc =
                 |> Set.add (AugmentedTerminal.Terminal errorTerminal)
                 |> Set.add EndOfFile
 
+            // Make sure the tagged grammar has been modified to include the implicit fsyacc terminals.
+            Debug.Assert (
+                TagBimap.containsValue (AugmentedTerminal.Terminal errorTerminal) taggedGrammar.Terminals,
+                "The augmented tagged grammar does not include the implicit 'error' terminal.")
+            Debug.Assert (
+                TagBimap.containsValue (AugmentedTerminal.Terminal endOfInputTerminal) taggedGrammar.Terminals,
+                "The augmented tagged grammar does not include the implicit 'end-of-input' terminal.")
+
             //
             let actionsByState =
                 // OPTIMIZE : Some of the computations below could be merged together to
@@ -569,11 +580,8 @@ module private FsYacc =
                 let explicitActionCount =
                     allTerminals
                     |> Set.filter (fun terminal ->
-                        // Implicit terminals, such as "error", aren't included here.
-                        match TagBimap.tryFindValue terminal taggedGrammar.Terminals with
-                        | None -> false
-                        | Some terminalIndex ->
-                            Map.containsKey (stateId, terminalIndex) parserTable.ActionTable)
+                        let terminalIndex = TagBimap.findValue terminal taggedGrammar.Terminals
+                        Map.containsKey (stateId, terminalIndex) parserTable.ActionTable)
                     |> Set.count
 
                 let mostFrequentActionValue, entries =
@@ -782,6 +790,14 @@ module private FsYacc =
             (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
             augmentedTerminalTags (productionIndices : IntMap<string>) (writer : IndentedTextWriter) =
+            // Make sure the tagged grammar has been modified to include the implicit fsyacc terminals.
+            Debug.Assert (
+                TagBimap.containsValue (AugmentedTerminal.Terminal errorTerminal) taggedGrammar.Terminals,
+                "The augmented tagged grammar does not include the implicit 'error' terminal.")
+            Debug.Assert (
+                TagBimap.containsValue (AugmentedTerminal.Terminal endOfInputTerminal) taggedGrammar.Terminals,
+                "The augmented tagged grammar does not include the implicit 'end-of-input' terminal.")
+
             (* _fsyacc_action_rows *)
             intLiteralDecl "_fsyacc_action_rows" false
                 (TagBimap.count parserTable.ParserStates) writer
@@ -868,7 +884,7 @@ module private FsYacc =
                 action.Split (Emit.newlines, StringSplitOptions.None)
                 |> Array.map (fun line ->
                     // First replace any tab characters in the string.
-                    let line = replaceTabs "    " line
+                    let line = replaceTabs Emit.indent line
                     let leadingSpaces = countLeadingSpaces line
                     line, leadingSpaces)
         
@@ -1189,7 +1205,7 @@ type FsYaccBackend () =
             using (File.CreateText fsyaccOptions.OutputPath) <| fun streamWriter ->
                 use indentedTextWriter =
                     // Set the indentation to the standard F# indent (4 spaces).
-                    new IndentedTextWriter (streamWriter, "    ")
+                    new IndentedTextWriter (streamWriter, Emit.ind)
 
                 FsYacc.emit processedSpec taggedGrammar parserTable (fsyaccOptions, indentedTextWriter)
 
