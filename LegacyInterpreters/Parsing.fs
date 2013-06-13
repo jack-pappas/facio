@@ -277,8 +277,8 @@ module Implementation =
             Debug.WriteLineIf (Flags.debug, "popStackUntilErrorShifted")
 
             if stateStack.IsEmpty then 
-                Debug.WriteLineIf (Flags.debug, "state stack empty during error recovery - generating parse error")
-                failwith "parse error";
+                Debug.WriteLineIf (Flags.debug, "state stack empty during error recovery - raising parse error")
+                failwith "Parse Error: The parser's state stack is empty."
             
             let currState = stateStack.Peep()
             Debug.WriteLineIf (Flags.debug,
@@ -300,8 +300,8 @@ module Implementation =
                 valueStack.Push(ValueInfo(box (), lexbuf.StartPos, lexbuf.EndPos))
                 stateStack.Push nextState
             else
-                if valueStack.IsEmpty then 
-                    failwith "parse error"
+                if valueStack.IsEmpty then
+                    failwith "Parse Error: The parser's value stack is empty."
 
                 Debug.WriteLineIf (Flags.debug, "popping stack during error recovery")
                 valueStack.Pop()
