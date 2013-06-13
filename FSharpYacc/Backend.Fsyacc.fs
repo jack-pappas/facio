@@ -647,7 +647,7 @@ module private FsYacc =
 
                 compressedActionTable
                 |> Map.iter (fun stateId elements ->
-                    actionTableRowOffsets.[int stateId] <- Checked.uint16 <| actionTableElements.Count / 2
+                    actionTableRowOffsets.[int stateId] <- Checked.uint16 <| (ResizeArray.length actionTableElements / 2)
                     actionTableElements.AddRange elements)
 
                 actionTableElements.ToArray (),
@@ -669,10 +669,10 @@ module private FsYacc =
         let private emitReductionSymbolCounts (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
-            augmentedTerminalTags (productionIndices : IntMap<string>) (writer : IndentedTextWriter) =
+            (productionCount : int) (writer : IndentedTextWriter) =
             (* _fsyacc_reductionSymbolCounts *)
             let _fsyacc_reductionSymbolCounts =
-                let symbolCounts = ResizeArray (IntMap.count productionIndices)
+                let symbolCounts = ResizeArray productionCount
 
                 // The productions created by the start symbols reduce a single value --
                 // the start symbols (nonterminals) themselves.
@@ -695,10 +695,10 @@ module private FsYacc =
         let emitProductionToNonterminalTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
-            augmentedTerminalTags (productionIndices : IntMap<string>) (writer : IndentedTextWriter) =
+            productionCount (writer : IndentedTextWriter) =
             (* _fsyacc_productionToNonTerminalTable *)
             let _fsyacc_productionToNonTerminalTable =
-                let productionToNonTerminalTable = Array.zeroCreate <| IntMap.count productionIndices
+                let productionToNonTerminalTable = Array.zeroCreate productionCount
 
                 // The augmented start symbol will always have nonterminal index 0
                 // so we don't actually have to write anything to the array for the
@@ -731,8 +731,7 @@ module private FsYacc =
         //
         let emitImmediateActions (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
-            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
-            augmentedTerminalTags (productionIndices : IntMap<string>) (writer : IndentedTextWriter) =
+            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
             (* _fsyacc_immediateActions *)
             let _fsyacc_immediateActions =
                 // When a state contains a single item whose parser position ("dot")
@@ -812,13 +811,13 @@ module private FsYacc =
             emitActionTable processedSpec taggedGrammar parserTable augmentedTerminalTags writer
             
             // Emit the reduction symbol counts.
-            emitReductionSymbolCounts processedSpec taggedGrammar parserTable augmentedTerminalTags productionIndices writer
+            emitReductionSymbolCounts processedSpec taggedGrammar parserTable (IntMap.count productionIndices) writer
 
             // Emit the production-index->nonterminal table.
-            emitProductionToNonterminalTable processedSpec taggedGrammar parserTable augmentedTerminalTags productionIndices writer
+            emitProductionToNonterminalTable processedSpec taggedGrammar parserTable (IntMap.count productionIndices) writer
             
             // Emit the immediate actions table.
-            emitImmediateActions processedSpec taggedGrammar parserTable augmentedTerminalTags productionIndices writer
+            emitImmediateActions processedSpec taggedGrammar parserTable writer
 
 
     /// Emits F# code for a single reduction action into an IndentedTextWriter.
