@@ -23,7 +23,7 @@ open Graham
 
 
 /// Grammar 3.5 from "Modern Compiler Implementation in ML".
-let ``Grammar 3.5`` =
+let ``Grammar 3.5`` : AugmentedTaggedGrammar<_,_,unit> =
     let ``Grammar 3.5`` =
         let E =
             [|  [| Symbol.Terminal "id" |];
@@ -37,11 +37,12 @@ let ``Grammar 3.5`` =
         Map.empty
         |> Map.add 'E' E
 
-    // Augment the grammar.
-    Grammar.augment ``Grammar 3.5`` 'E'
+    // Tag, then augment the grammar.
+    let taggedGrammar = TaggedGrammar.ofGrammar ``Grammar 3.5``
+    AugmentedTaggedGrammar.augment taggedGrammar 'E'
 
 /// Grammar 3.8 from "Modern Compiler Implementation in ML".
-let ``Grammar 3.8`` =
+let ``Grammar 3.8`` : AugmentedTaggedGrammar<_,_,unit> =
     let ``Grammar 3.8`` =
         /// Factor.
         let F =
@@ -66,12 +67,13 @@ let ``Grammar 3.8`` =
         |> Map.add 'T' T
         |> Map.add 'F' F
 
-    // Augment the grammar.
+    // Tag, then augment the grammar.
     // TODO : Make sure this start symbol is correct.
-    Grammar.augment ``Grammar 3.8`` 'F'
+    let taggedGrammar = TaggedGrammar.ofGrammar ``Grammar 3.8``
+    AugmentedTaggedGrammar.augment taggedGrammar 'F'
 
 /// Grammar 3.12 from "Modern Compiler Implementation in ML".
-let ``Grammar 3.12`` =
+let ``Grammar 3.12`` : AugmentedTaggedGrammar<_,_,unit> =
     let ``Grammar 3.12`` =
         let Z =
             [|  [| Symbol.Terminal 'd' |];
@@ -90,12 +92,13 @@ let ``Grammar 3.12`` =
         |> Map.add 'Y' Y
         |> Map.add 'Z' Z
 
-    // Augment the grammar.
+    // Tag, then augment the grammar.
     // TODO : Make sure this start symbol is correct.
-    Grammar.augment ``Grammar 3.12`` 'Z'
+    let taggedGrammar = TaggedGrammar.ofGrammar ``Grammar 3.12``
+    AugmentedTaggedGrammar.augment taggedGrammar 'Z'
 
 /// Grammar 3.20 from "Modern Compiler Implementation in ML".
-let ``Grammar 3.20`` =
+let ``Grammar 3.20`` : AugmentedTaggedGrammar<_,_,unit> =
     let ``Grammar 3.20`` =
         // NOTE : This grammar does not include the first rule,
         // which is the production of the augmented start symbol.
@@ -111,11 +114,12 @@ let ``Grammar 3.20`` =
         |> Map.add 'L' L
         |> Map.add 'S' S
 
-    // Augment the grammar.
-    Grammar.augment ``Grammar 3.20`` 'S'
+    // Tag, then augment the grammar.
+    let taggedGrammar = TaggedGrammar.ofGrammar ``Grammar 3.20``
+    AugmentedTaggedGrammar.augment taggedGrammar 'S'
 
 /// Grammar 3.23 from "Modern Compiler Implementation in ML".
-let ``Grammar 3.23`` =
+let ``Grammar 3.23`` : AugmentedTaggedGrammar<_,_,unit> =
     let ``Grammar 3.23`` =
         // NOTE : This grammar does not include the first rule,
         // which is the production of the augmented start symbol.
@@ -130,11 +134,12 @@ let ``Grammar 3.23`` =
         |> Map.add 'E' E
         |> Map.add 'T' T
 
-    // Augment the grammar.
-    Grammar.augment ``Grammar 3.23`` 'E'
+    // Tag, then augment the grammar.
+    let taggedGrammar = TaggedGrammar.ofGrammar ``Grammar 3.23``
+    AugmentedTaggedGrammar.augment taggedGrammar 'E'
 
 /// Grammar 3.26 from "Modern Compiler Implementation in ML".
-let ``Grammar 3.26`` =
+let ``Grammar 3.26`` : AugmentedTaggedGrammar<_,_,unit> =
     let ``Grammar 3.26`` =
         // NOTE : This grammar does not include the first
         // rule of the grammar, which is the augmented start production.
@@ -154,11 +159,12 @@ let ``Grammar 3.26`` =
         |> Map.add 'E' E
         |> Map.add 'V' V
 
-    // Augment the grammar.
-    Grammar.augment ``Grammar 3.26`` 'S'
+    // Tag, then augment the grammar.
+    let taggedGrammar = TaggedGrammar.ofGrammar ``Grammar 3.26``
+    AugmentedTaggedGrammar.augment taggedGrammar 'S'
 
 /// Grammar 3.30 from "Modern Compiler Implementation in ML".
-let ``Grammar 3.30`` =
+let ``Grammar 3.30`` : AugmentedTaggedGrammar<_,_,unit> =
     let ``Grammar 3.30`` =
         // prog
         let P =
@@ -182,11 +188,12 @@ let ``Grammar 3.30`` =
         |> Map.add 'S' S
         |> Map.add 'L' L
 
-    // Augment the grammar.
-    Grammar.augment ``Grammar 3.30`` 'P'
+    // Tag, then augment the grammar.
+    let taggedGrammar = TaggedGrammar.ofGrammar ``Grammar 3.30``
+    AugmentedTaggedGrammar.augment taggedGrammar 'P'
 
 /// Grammar 4.6 from "Modern Compiler Implementation in ML".
-let ``Grammar 4.6`` =
+let ``Grammar 4.6`` : AugmentedTaggedGrammar<_,_,unit> =
     let ``Grammar 4.6`` =
         let S =
             [|  [| Symbol.Nonterminal 'S'; Symbol.Terminal ";"; Symbol.Nonterminal 'S'; |];
@@ -215,5 +222,6 @@ let ``Grammar 4.6`` =
         |> Map.add 'L' L
         |> Map.add 'B' B
 
-    // Augment the grammar.
-    Grammar.augment ``Grammar 4.6`` 'S'
+    // Tag, then augment the grammar.
+    let taggedGrammar = TaggedGrammar.ofGrammar ``Grammar 4.6``
+    AugmentedTaggedGrammar.augment taggedGrammar 'S'

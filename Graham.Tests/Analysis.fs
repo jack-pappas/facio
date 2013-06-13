@@ -28,9 +28,7 @@ open Tests.Graham.Grammars
 
 [<TestCase>]
 let ``Analysis of Grammar 3.26`` () =
-    let taggedGrammar =
-        let grammar = Appel.``Grammar 3.26``
-        TaggedGrammar.ofGrammar grammar
+    let taggedGrammar = Appel.``Grammar 3.26``
     let predictiveSets = PredictiveSets.ofGrammar taggedGrammar
 
     (* Verify the nullable map. *)

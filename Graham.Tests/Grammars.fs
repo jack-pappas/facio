@@ -25,7 +25,7 @@ open Graham
 /// Expression grammar used for testing ambiguity resolution.
 /// This grammar is not LR(k) for any value of 'k', but can be treated as
 /// an LR(k) grammar through the use of associativity/precedence declarations.
-let ambiguousExpression =
+let ambiguousExpression : AugmentedTaggedGrammar<_,_,unit> =
     let ambiguousExpression : Grammar<string, char> =
         let number : ProductionRule<string, char>[] =
             [| for i in '0' .. '9' do yield [| Symbol.Terminal i |] |]
@@ -45,6 +45,8 @@ let ambiguousExpression =
         |> Map.add "number" number
         |> Map.add "exp" exp
 
-    // Augment the grammar.
-    Grammar.augment ambiguousExpression "exp"
+    // Tag, then augment the grammar.
+    let taggedGrammar = TaggedGrammar.ofGrammar ambiguousExpression
+    AugmentedTaggedGrammar.augment taggedGrammar "exp"
+
 

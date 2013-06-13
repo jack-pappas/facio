@@ -76,7 +76,7 @@ module private Table =
 
     //
     let taggedAction (actionTable : Map<ParserStateIndex * AugmentedTerminal<'Terminal>, LrParserActionSet>)
-        (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) : Map<TerminalTransition, LrParserActionSet> =
+        (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) : Map<TerminalTransition, LrParserActionSet> =
         (Map.empty, actionTable)
         ||> Map.fold (fun taggedActionTable (parserStateIndex, terminal) actionSet ->
             let terminalIndex = TagBimap.findValue terminal taggedGrammar.Terminals
@@ -84,7 +84,7 @@ module private Table =
 
     //
     let taggedGoto (gotoTable : Map<ParserStateIndex * AugmentedNonterminal<'Nonterminal>, ParserStateIndex>)
-        (taggedGrammar : TaggedAugmentedGrammar<'Nonterminal, 'Terminal>) : Map<NonterminalTransition, ParserStateIndex> =
+        (taggedGrammar : AugmentedTaggedGrammar<'Nonterminal, 'Terminal, 'DeclaredType>) : Map<NonterminalTransition, ParserStateIndex> =
         (Map.empty, gotoTable)
         ||> Map.fold (fun taggedGotoTable (parserStateIndex, nonterminal) targetState ->
             let nonterminalIndex = TagBimap.findValue nonterminal taggedGrammar.Nonterminals
@@ -141,7 +141,7 @@ let ``LR(0) table for Grammar 3.20`` () =
         |> Table.nterm 3 'L' 5
         |> Table.nterm 6 'S' 8
 
-    let taggedGrammar = TaggedGrammar.ofGrammar Appel.``Grammar 3.20``
+    let taggedGrammar = Appel.``Grammar 3.20``
     let lr0ParserTable = Lr0.createTable taggedGrammar
 
     // Verify the ACTION table.
@@ -182,7 +182,7 @@ let ``LR(0) table for Grammar 3.23`` () =
         |> Table.nterm 4 'E' 5
         |> Table.nterm 4 'T' 2
 
-    let taggedGrammar = TaggedGrammar.ofGrammar Appel.``Grammar 3.23``
+    let taggedGrammar = Appel.``Grammar 3.23``
     let lr0ParserTable = Lr0.createTable taggedGrammar
     // table should have 6 states and 3 rules
 
@@ -220,7 +220,7 @@ let ``SLR table for Grammar 3.23`` () =
         |> Table.nterm 4 'E' 5
         |> Table.nterm 4 'T' 2
 
-    let taggedGrammar = TaggedGrammar.ofGrammar Appel.``Grammar 3.23``
+    let taggedGrammar = Appel.``Grammar 3.23``
     let slr1ParserTable =
         let lr0ParserTable = Lr0.createTable taggedGrammar
         Slr1.upgrade taggedGrammar lr0ParserTable None
@@ -288,7 +288,7 @@ let ``LR(1) table for Grammar 3.26`` () =
         |> Table.nterm 12 'E' 13
         |> Table.nterm 12 'V' 9
 
-    let taggedGrammar = TaggedGrammar.ofGrammar Appel.``Grammar 3.26``
+    let taggedGrammar = Appel.``Grammar 3.26``
     let parserTable = Lr1.createTable taggedGrammar
 
     // Verify the ACTION table.
@@ -342,7 +342,7 @@ let ``LALR(1) table for Grammar 3.26`` () =
         |> Table.nterm 6 'E' 9
         |> Table.nterm 6 'V' 7
 
-    let taggedGrammar = TaggedGrammar.ofGrammar Appel.``Grammar 3.26``
+    let taggedGrammar = Appel.``Grammar 3.26``
     let lalr1ParserTable =
         let lr0ParserTable = Lr0.createTable taggedGrammar
         match Lalr1.lookaheadSets taggedGrammar lr0ParserTable with
@@ -352,7 +352,7 @@ let ``LALR(1) table for Grammar 3.26`` () =
             raise <| exn errMsg
 
         | Choice1Of2 lookaheadSets ->
-            Lalr1.upgrade taggedGrammar lr0ParserTable lookaheadSets
+            Lalr1.upgrade taggedGrammar lr0ParserTable lookaheadSets None
 
     // Verify the ACTION table.
     lalr1ParserTable.ActionTable

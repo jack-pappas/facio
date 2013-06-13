@@ -23,7 +23,7 @@ open Graham
 
 
 /// Figure 4.4: A grammar describing numbers in scientific notation.
-let ``Figure 4.4`` =
+let ``Figure 4.4`` : AugmentedTaggedGrammar<_,_,unit> =
     let ``Figure 4.4`` =
         // NOTE : This is the start symbol.
         let Number =
@@ -73,8 +73,9 @@ let ``Figure 4.4`` =
         |> Map.add "Empty" Empty
         |> Map.add "Sign" Sign
 
-    // Augment the grammar.
-    Grammar.augment ``Figure 4.4`` "Number"
+    // Tag, then augment the grammar.
+    let taggedGrammar = TaggedGrammar.ofGrammar ``Figure 4.4``
+    AugmentedTaggedGrammar.augment taggedGrammar "Number"
 
 /// Figure 4.8: An example grammar to test epsilon-rule elimination schemes.
 let ``Figure 4.8`` =
