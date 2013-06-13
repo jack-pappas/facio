@@ -209,18 +209,17 @@ module Implementation =
 
     [<NoEquality; NoComparison>]
     [<Struct>]
-    type ValueInfo = 
+    type ValueInfo =
         val value: obj
         val startPos: Position
         val endPos: Position
         new(value,startPos,endPos) = { value=value; startPos=startPos;endPos=endPos }
 
-    let interpret (tables: Tables<'tok>) lexer (lexbuf : LexBuffer<_>) initialState =                                                                      
-        let localStore = new Dictionary<string,obj>() in
-        localStore.["LexBuffer"] <- lexbuf;
-#if DEBUG
-        if Flags.debug then Debug.WriteLine("\nParser: interpret tables");
-#endif
+    let interpret (tables: Tables<'tok>) lexer (lexbuf : LexBuffer<_>) initialState =
+        Debug.WriteLineIf (Flags.debug, "\nParser: interpret tables")
+        
+        let localStore = new Dictionary<string,obj>()
+        localStore.["LexBuffer"] <- lexbuf
         let stateStack : Stack<int> = new Stack<_>(100)
         stateStack.Push(initialState);
         let valueStack = new Stack<ValueInfo>(100)
@@ -263,6 +262,8 @@ module Implementation =
             }       
 
 #if DEBUG
+        let iterations = ref 0
+
         let report haveLookahead lookaheadToken = 
             if haveLookahead then sprintf "%A" lookaheadToken 
             else "[TBC]"
@@ -273,24 +274,17 @@ module Implementation =
         // This is used at end-of-file to make sure we can shift both the 'error' token and the 'EOF' token.
         let rec popStackUntilErrorShifted(tokenOpt) =
             // Keep popping the stack until the "error" terminal is shifted
-#if DEBUG
-            if Flags.debug then Debug.WriteLine("popStackUntilErrorShifted");
-#endif
+            Debug.WriteLineIf (Flags.debug, "popStackUntilErrorShifted")
+
             if stateStack.IsEmpty then 
-#if DEBUG
-                if Flags.debug then 
-                    Debug.WriteLine("state stack empty during error recovery - generating parse error");
-#endif
+                Debug.WriteLineIf (Flags.debug, "state stack empty during error recovery - generating parse error")
                 failwith "parse error";
             
             let currState = stateStack.Peep()
-#if DEBUG
-            if Flags.debug then 
-                String.Format("In state {0} during error recovery", currState)
-                |> Debug.WriteLine
-#endif
+            Debug.WriteLineIf (Flags.debug,
+                String.Format ("In state {0} during error recovery", currState))
             
-            let action = actionTable.Read(currState, tables.tagOfErrorTerminal)
+            let action = actionTable.Read (currState, tables.tagOfErrorTerminal)
             
             if actionKind action = shiftFlag &&  
                 (match tokenOpt with 
@@ -299,32 +293,32 @@ module Implementation =
                     let nextState = actionValue action 
                     actionKind (actionTable.Read(nextState, tables.tagOfToken(token))) = shiftFlag) then
 
-#if DEBUG
-                if Flags.debug then Debug.WriteLine("shifting error, continuing with error recovery");
-#endif
+                Debug.WriteLineIf (Flags.debug, "shifting error, continuing with error recovery")
                 let nextState = actionValue action 
                 // The "error" non terminal needs position information, though it tends to be unreliable.
                 // Use the StartPos/EndPos from the lex buffer
-                valueStack.Push(ValueInfo(box (), lexbuf.StartPos, lexbuf.EndPos));
-                stateStack.Push(nextState)
+                valueStack.Push(ValueInfo(box (), lexbuf.StartPos, lexbuf.EndPos))
+                stateStack.Push nextState
             else
                 if valueStack.IsEmpty then 
-                    failwith "parse error";
-#if DEBUG
-                if Flags.debug then 
-                    Debug.WriteLine("popping stack during error recovery");
-#endif
-                valueStack.Pop();
-                stateStack.Pop();
-                popStackUntilErrorShifted(tokenOpt)
+                    failwith "parse error"
 
-        while not finished do                                                                                    
+                Debug.WriteLineIf (Flags.debug, "popping stack during error recovery")
+                valueStack.Pop()
+                stateStack.Pop()
+                popStackUntilErrorShifted tokenOpt
+
+        while not finished do
+            incr iterations
             if stateStack.IsEmpty then 
                 finished <- true
             else
                 let state = stateStack.Peep()
 #if DEBUG
-                if Flags.debug then (Debug.Write (String.Format ("{0} value(state), state ",valueStack.Count)); stateStack.PrintStack())
+                if Flags.debug then
+                    Debug.WriteLineIf (lexbuf.IsPastEndOfStream, "The lexer buffer has reached the end of the input stream.")
+                    Debug.Write (String.Format ("{0} value(state), state ", valueStack.Count))
+                    stateStack.PrintStack()
 #endif
                 let action = 
                     let immediateAction = int tables.immediateActions.[state]
@@ -334,93 +328,90 @@ module Implementation =
                         immediateAction
                     else
                         // Lookahead required to determine action 
-                        if not haveLookahead then 
-                            if lexbuf.IsPastEndOfStream then 
+                        if not haveLookahead then
+                            if lexbuf.IsPastEndOfStream then
                                 // When the input runs out, keep supplying the last token for eofCountDown times
                                 if eofCountDown>0 then
                                     haveLookahead <- true
                                     eofCountDown <- eofCountDown - 1
                                     inEofCountDown <- true
-                                else 
+                                else
                                     haveLookahead <- false
-                            else 
+                            else
                                 lookaheadToken <- lexer lexbuf
                                 lookaheadStartPos <- lexbuf.StartPos
                                 lookaheadEndPos <- lexbuf.EndPos
-                                haveLookahead <- true;
+                                haveLookahead <- true
 
-                        let tag = 
-                            if haveLookahead then tables.tagOfToken lookaheadToken 
-                            else tables.endOfInputTag   
+                        let tag =
+                            if haveLookahead then tables.tagOfToken lookaheadToken
+                            else tables.endOfInputTag
                                     
-                        // Printf.printf "state %d\n" state  
+                        // Printf.printf "state %d\n" state
                         actionTable.Read(state,tag)
                         
-                let kind = actionKind action 
+                let kind = actionKind action
                 if kind = shiftFlag then (
-                    if errorSuppressionCountDown > 0 then 
-                        errorSuppressionCountDown <- errorSuppressionCountDown - 1;
-#if DEBUG
-                        if Flags.debug then Debug.WriteLine (String.Format ("shifting, reduced errorRecoverylevel to {0}\n", errorSuppressionCountDown));
-#endif
-                    let nextState = actionValue action                                     
+                    if errorSuppressionCountDown > 0 then
+                        errorSuppressionCountDown <- errorSuppressionCountDown - 1
+                        Debug.WriteLineIf (Flags.debug,
+                            String.Format ("shifting, reduced errorRecoverylevel to {0}\n", errorSuppressionCountDown))
+
+                    let nextState = actionValue action
                     if not haveLookahead then failwith "shift on end of input!";
                     let data = tables.dataOfToken lookaheadToken
                     valueStack.Push(ValueInfo(data, lookaheadStartPos, lookaheadEndPos));
-                    stateStack.Push(nextState);                                                                
-#if DEBUG
-                    if Flags.debug then Debug.WriteLine (String.Format ("shift/consume input {0}, shift to state {1}", report haveLookahead lookaheadToken, nextState));
-#endif
+                    stateStack.Push(nextState)
+                    Debug.WriteLineIf (Flags.debug,
+                        String.Format ("shift/consume input {0}, shift to state {1}", report haveLookahead lookaheadToken, nextState))
+
                     haveLookahead <- false
 
                 ) elif kind = reduceFlag then
                     let prod = actionValue action                                     
                     let reduction = reductions.[prod]                                                             
                     let n = int tables.reductionSymbolCounts.[prod]
-                       // pop the symbols, populate the values and populate the locations                              
-#if DEBUG
-                    if Flags.debug then Debug.Write (String.Format ("reduce popping {0} values/states, lookahead {1}", n, report haveLookahead lookaheadToken));
-#endif
+
+                    // pop the symbols, populate the values and populate the locations
+                    Debug.WriteIf (Flags.debug,
+                        String.Format ("reduce popping {0} values/states, lookahead {1}", n, report haveLookahead lookaheadToken))
                     
-                    lhsPos.[0] <- Position.Empty;                                                                     
-                    lhsPos.[1] <- Position.Empty;  
-                    for i = 0 to n - 1 do                                                                             
-                        if valueStack.IsEmpty then failwith "empty symbol stack";
+                    lhsPos.[0] <- Position.Empty
+                    lhsPos.[1] <- Position.Empty
+                    for i = 0 to n - 1 do
+                        if valueStack.IsEmpty then
+                            failwith "empty symbol stack"
                         let topVal = valueStack.Peep()
                         valueStack.Pop();
                         stateStack.Pop();
                         ruleValues.[(n-i)-1] <- topVal.value;  
                         ruleStartPoss.[(n-i)-1] <- topVal.startPos;  
                         ruleEndPoss.[(n-i)-1] <- topVal.endPos;  
-                        if lhsPos.[1] = Position.Empty then lhsPos.[1] <- topVal.endPos;
-                        if not (topVal.startPos = Position.Empty) then lhsPos.[0] <- topVal.startPos
-                    done;                                                                                           
+                        if lhsPos.[1] = Position.Empty then
+                            lhsPos.[1] <- topVal.endPos
+                        if not (topVal.startPos = Position.Empty) then
+                            lhsPos.[0] <- topVal.startPos
                     
                     try                                                                                               
-                          // Printf.printf "reduce %d\n" prod;                                                       
-                        let redResult = reduction parseState                                                          
-                        valueStack.Push(ValueInfo(redResult, lhsPos.[0], lhsPos.[1]));
+                          // Printf.printf "reduce %d\n" prod;
+                        let redResult = reduction parseState
+                        valueStack.Push(ValueInfo(redResult, lhsPos.[0], lhsPos.[1]))
                         let currState = stateStack.Peep()
                         let newGotoState = gotoTable.Read(int tables.productionToNonTerminalTable.[prod], currState)
                         stateStack.Push(newGotoState)
-#if DEBUG
-                        if Flags.debug then Debug.WriteLine (String.Format (" goto state {0}", newGotoState))
-#endif
+                        Debug.WriteLineIf (Flags.debug, String.Format (" goto state {0}", newGotoState))
                     with                                                                                              
                     | Accept res ->                                                                            
                           finished <- true;                                                                             
                           valueStack.Push(ValueInfo(res, lhsPos.[0], lhsPos.[1])) 
                     | RecoverableParseError ->
-#if DEBUG
-                          if Flags.debug then Debug.WriteLine("RecoverableParseErrorException...\n");
-#endif
+                          Debug.WriteLineIf (Flags.debug, "RecoverableParseErrorException...\n");
                           popStackUntilErrorShifted(None);
                           // User code raised a Parse_error. Don't report errors again until three tokens have been shifted 
                           errorSuppressionCountDown <- 3
                 elif kind = errorFlag then (
-#if DEBUG
-                    if Flags.debug then Debug.Write("ErrorFlag... ");
-#endif
+                    Debug.WriteIf (Flags.debug, "ErrorFlag... ");
+
                     // Silently discard inputs and don't report errors 
                     // until three tokens in a row have been shifted 
 #if DEBUG
@@ -432,14 +423,12 @@ module Implementation =
                         // If we're in the end-of-file count down then we're very keen to 'Accept'.
                         // We can only do this by repeatedly popping the stack until we can shift both an 'error' token
                         // and an EOF token. 
-                        if inEofCountDown && eofCountDown < 10 then 
-#if DEBUG
-                            if Flags.debug then Debug.WriteLine "poppin stack, lokking to shift both 'error' and that token, during end-of-file error recovery" ;
-#endif
+                        if inEofCountDown && eofCountDown < 10 then
+                            Debug.WriteLineIf (Flags.debug, "poppin stack, lokking to shift both 'error' and that token, during end-of-file error recovery")
                             popStackUntilErrorShifted(if haveLookahead then Some(lookaheadToken) else None);
 
                         // If we don't haveLookahead then the end-of-file count down is over and we have no further options.
-                        if not haveLookahead then 
+                        if not haveLookahead then
                             failwith "parse error: unexpected end of file"
                             
 #if DEBUG
@@ -483,18 +472,14 @@ module Implementation =
                         let errorContext = new ParseErrorContext<'tok>(stateStack,parseState, reduceTokens,currentToken,reducibleProductions, shiftableTokens, "syntax error")
                         tables.parseError(errorContext);
                         popStackUntilErrorShifted(None);
-                        errorSuppressionCountDown <- 3;
-#if DEBUG
-                        if Flags.debug then Debug.WriteLine (String.Format ("generated syntax error and shifted error token, haveLookahead = {0}\n", haveLookahead));
-#endif
+                        errorSuppressionCountDown <- 3
+                        Debug.WriteLineIf (Flags.debug, String.Format ("generated syntax error and shifted error token, haveLookahead = {0}\n", haveLookahead));
                     )
                 ) elif kind = acceptFlag then 
                     finished <- true
-#if DEBUG
                 else
-                  if Flags.debug then Debug.WriteLine("ALARM!!! drop through case in parser");  
-#endif
-        done;                                                                                                     
+                    Debug.WriteLineIf (Flags.debug, "ALARM!!! drop through case in parser")
+        done;
         // OK, we're done - read off the overall generated value
         valueStack.Peep().value
 
