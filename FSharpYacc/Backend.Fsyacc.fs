@@ -1205,7 +1205,7 @@ type FsYaccBackend () =
             using (File.CreateText fsyaccOptions.OutputPath) <| fun streamWriter ->
                 use indentedTextWriter =
                     // Set the indentation to the standard F# indent (4 spaces).
-                    new IndentedTextWriter (streamWriter, Emit.ind)
+                    new IndentedTextWriter (streamWriter, Emit.indent)
 
                 FsYacc.emit processedSpec taggedGrammar parserTable (fsyaccOptions, indentedTextWriter)
 
