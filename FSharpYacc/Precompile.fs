@@ -56,7 +56,7 @@ type ProcessedSpecification<'Nonterminal, 'Terminal
     TerminalPrecedence : Map<'Terminal, Associativity * AbsolutePrecedenceLevel>;
     /// For production rules with a %prec declaration, maps the production rule
     /// to the terminal specified in the declaration.
-    ProductionRulePrecedenceOverrides : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], 'Terminal>;
+    ProductionRulePrecedenceOverrides : Map<'Nonterminal * ProductionRule<'Nonterminal, 'Terminal>, 'Terminal>;
 }
 
 //
