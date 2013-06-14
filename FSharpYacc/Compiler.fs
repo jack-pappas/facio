@@ -28,105 +28,110 @@ open Graham.LR
 open FSharpYacc.Ast
 
 
-/// Creates a rule-precedence map from a processed specification.
-let internal rulePrecedence (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-    (productionRuleIds : Map<AugmentedNonterminal<_> * AugmentedSymbol<_,_>[], ProductionRuleIndex>) =
-    (TagMap.empty, processedSpec.ProductionRules)
-    ||> Map.fold (fun rulePrecedence nonterminal rules ->
-        (rulePrecedence, rules)
-        ||> Array.fold (fun rulePrecedence rule ->
-            /// The identifier for this production rule.
-            let productionRuleId =
-                //
-                let augmentedKey =
-                    AugmentedNonterminal.Nonterminal nonterminal,
-                    rule.Symbols
-                    |> Array.map (function
-                        | Symbol.Nonterminal nonterminal ->
-                            Symbol.Nonterminal <| AugmentedNonterminal.Nonterminal nonterminal
-                        | Symbol.Terminal terminal ->
-                            Symbol.Terminal <| AugmentedTerminal.Terminal terminal)
-
-                Map.find augmentedKey productionRuleIds
-
-            /// The terminal whose associativity and precedence is impersonated by this production rule.
-            let precedenceTerminal =
-                // Does this rule have a precedence override declaration?
-                match Map.tryFind (nonterminal, rule.Symbols) processedSpec.ProductionRulePrecedenceOverrides with
-                | Some impersonatedTerminal ->
-                    Some impersonatedTerminal
-                | None ->
-                    // The precedence of a rule is the precedence of it's last (right-most) terminal.
-                    match System.Array.FindLastIndex (rule.Symbols, System.Predicate (function Symbol.Terminal _ -> true | Symbol.Nonterminal _ -> false)) with
-                    //match System.Array.FindIndex (rule.Symbols, (function Symbol.Terminal _ -> true | Symbol.Nonterminal _ -> false)) with
-                    | -1 ->
-                        // This rule does not contain any terminals, so it is not assigned a precedence.
-                        None
-                    | lastTerminalIndex ->
-                        match rule.Symbols.[lastTerminalIndex] with
-                        | Symbol.Terminal terminal ->
-                            Some terminal
-                        | Symbol.Nonterminal _ ->
-                            failwith "Found a nonterminal where a terminal was expected."
-
-            // If this rule can be assigned a precedence, add it to the rule precedence map now.
-            match precedenceTerminal with
-            | None ->
-                rulePrecedence
-            | Some precedenceTerminal ->
-                // The associativity and precedence of the impersonated terminal.
-                match Map.tryFind precedenceTerminal processedSpec.TerminalPrecedence with
-                | None ->
-                    // The terminal has no precedence, so the rule has no precedence.
-                    rulePrecedence
-                | Some impersonatedTerminalPrecedence ->
-                    // Add the precedence to the rule precedence map.
-                    TagMap.add productionRuleId impersonatedTerminalPrecedence rulePrecedence
-                ))
+(* TODO :   Move the implementation of the rule-precedence-map creation into Graham. *)
 
 //
-[<System.Obsolete("This function is deprecated. A replacement which uses TaggedGrammar should be implemented and used instead.")>]
-let private productionRuleIds (grammar : Grammar<'Nonterminal, 'Terminal>) =
-    (Map.empty, grammar)
-    ||> Map.fold (fun productionRuleIds nonterminal rules ->
-        (productionRuleIds, rules)
-        ||> Array.fold (fun productionRuleIds ruleRhs ->
-            /// The identifier for this production rule.
-            let productionRuleId : ProductionRuleIndex =
-                tag <| Map.count productionRuleIds
+[<RequireQualifiedAccess>]
+module internal PrecedenceSettings =
+    /// Creates a rule-precedence map from a processed specification.
+    let private rulePrecedence (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        (productionRuleIds : Map<AugmentedNonterminal<_> * AugmentedSymbol<_,_>[], ProductionRuleIndex>) =
+        (TagMap.empty, processedSpec.ProductionRules)
+        ||> Map.fold (fun rulePrecedence nonterminal rules ->
+            (rulePrecedence, rules)
+            ||> Array.fold (fun rulePrecedence rule ->
+                /// The identifier for this production rule.
+                let productionRuleId =
+                    //
+                    let augmentedKey =
+                        AugmentedNonterminal.Nonterminal nonterminal,
+                        rule.Symbols
+                        |> Array.map (function
+                            | Symbol.Nonterminal nonterminal ->
+                                Symbol.Nonterminal <| AugmentedNonterminal.Nonterminal nonterminal
+                            | Symbol.Terminal terminal ->
+                                Symbol.Terminal <| AugmentedTerminal.Terminal terminal)
 
-            // Add this identifier to the map.
-            Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
+                    Map.find augmentedKey productionRuleIds
 
-/// Creates a PrecedenceSettings record from a ProcessedSpecification.
-let internal precedenceSettings (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
-    (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>) : PrecedenceSettings =
+                /// The terminal whose associativity and precedence is impersonated by this production rule.
+                let precedenceTerminal =
+                    // Does this rule have a precedence override declaration?
+                    match Map.tryFind (nonterminal, rule.Symbols) processedSpec.ProductionRulePrecedenceOverrides with
+                    | Some impersonatedTerminal ->
+                        Some impersonatedTerminal
+                    | None ->
+                        // The precedence of a rule is the precedence of it's last (right-most) terminal.
+                        match System.Array.FindLastIndex (rule.Symbols, System.Predicate (function Symbol.Terminal _ -> true | Symbol.Nonterminal _ -> false)) with
+                        //match System.Array.FindIndex (rule.Symbols, (function Symbol.Terminal _ -> true | Symbol.Nonterminal _ -> false)) with
+                        | -1 ->
+                            // This rule does not contain any terminals, so it is not assigned a precedence.
+                            None
+                        | lastTerminalIndex ->
+                            match rule.Symbols.[lastTerminalIndex] with
+                            | Symbol.Terminal terminal ->
+                                Some terminal
+                            | Symbol.Nonterminal _ ->
+                                failwith "Found a nonterminal where a terminal was expected."
+
+                // If this rule can be assigned a precedence, add it to the rule precedence map now.
+                match precedenceTerminal with
+                | None ->
+                    rulePrecedence
+                | Some precedenceTerminal ->
+                    // The associativity and precedence of the impersonated terminal.
+                    match Map.tryFind precedenceTerminal processedSpec.TerminalPrecedence with
+                    | None ->
+                        // The terminal has no precedence, so the rule has no precedence.
+                        rulePrecedence
+                    | Some impersonatedTerminalPrecedence ->
+                        // Add the precedence to the rule precedence map.
+                        TagMap.add productionRuleId impersonatedTerminalPrecedence rulePrecedence
+                    ))
+
     //
-    let rulePrecedence =
-        let productionRuleIds =
-            // TEMP : Remove this -- it would be much more efficient to implement a new function
-            // which operates directly on the TaggedGrammar instead of down-converting to Grammar.
-            taggedGrammar
-            |> TaggedGrammar.toGrammar
-            |> productionRuleIds
+    [<System.Obsolete("This function is deprecated. A replacement which uses TaggedGrammar should be implemented and used instead.")>]
+    let private productionRuleIds (grammar : Grammar<'Nonterminal, 'Terminal>) =
+        (Map.empty, grammar)
+        ||> Map.fold (fun productionRuleIds nonterminal rules ->
+            (productionRuleIds, rules)
+            ||> Array.fold (fun productionRuleIds ruleRhs ->
+                /// The identifier for this production rule.
+                let productionRuleId : ProductionRuleIndex =
+                    tag <| Map.count productionRuleIds
+
+                // Add this identifier to the map.
+                Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
+
+    /// Creates a PrecedenceSettings record from a ProcessedSpecification.
+    let internal create (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+        (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>) : PrecedenceSettings =
+        //
+        let rulePrecedence =
+            let productionRuleIds =
+                // TEMP : Remove this -- it would be much more efficient to implement a new function
+                // which operates directly on the TaggedGrammar instead of down-converting to Grammar.
+                taggedGrammar
+                |> TaggedGrammar.toGrammar
+                |> productionRuleIds
         
-        rulePrecedence processedSpec productionRuleIds
+            rulePrecedence processedSpec productionRuleIds
 
-    // Filter any "dummy" terminals out of the terminal precedence map.
-    let terminalPrecedence =
+        // Filter any "dummy" terminals out of the terminal precedence map.
         let terminalPrecedence =
-            processedSpec.TerminalPrecedence
-            |> Map.filter (fun terminal _ ->
-                Map.containsKey terminal processedSpec.Terminals)
+            let terminalPrecedence =
+                processedSpec.TerminalPrecedence
+                |> Map.filter (fun terminal _ ->
+                    Map.containsKey terminal processedSpec.Terminals)
 
-        (TagMap.empty, terminalPrecedence)
-        ||> Map.fold (fun terminalPrecedence terminal value ->
-            let terminalIndex = TagBimap.findValue (AugmentedTerminal.Terminal terminal) taggedGrammar.Terminals
-            TagMap.add terminalIndex value terminalPrecedence)
+            (TagMap.empty, terminalPrecedence)
+            ||> Map.fold (fun terminalPrecedence terminal value ->
+                let terminalIndex = TagBimap.findValue (AugmentedTerminal.Terminal terminal) taggedGrammar.Terminals
+                TagMap.add terminalIndex value terminalPrecedence)
 
-    // Create and return a PrecedenceSettings record from the constructed precedence maps.
-    {   TerminalPrecedence = terminalPrecedence;
-        RulePrecedence = rulePrecedence; }
+        // Create and return a PrecedenceSettings record from the constructed precedence maps.
+        {   TerminalPrecedence = terminalPrecedence;
+            RulePrecedence = rulePrecedence; }
 
 /// <summary>Compiles a parser specification into a tagged grammar.</summary>
 /// <param name="processedSpec">The processed parser specification.</param>
@@ -190,7 +195,8 @@ let private logInfo (logger : Logger) description (generator : unit -> 'T) : 'T 
 /// <param name="taggedGrammar">The tagged grammar created from the processed parser specification.</param>
 /// <param name="options">Compiler options.</param>
 /// <param name="logger">Records information about the compilation process.</param>
-let compile (processedSpec : ProcessedSpecification<_,_>) (taggedGrammar : TaggedGrammar<_,_>) (options : CompilationOptions) (logger : Logger) : Choice<_,_> =
+let compile (processedSpec : ProcessedSpecification<_,_>) (taggedGrammar : AugmentedTaggedGrammar<_,_,_>)
+    (options : CompilationOptions) (logger : Logger) : Choice<_,_> =
     choice {
     logger.Info "Start: Compilation of parser specification."
 
@@ -236,7 +242,7 @@ let compile (processedSpec : ProcessedSpecification<_,_>) (taggedGrammar : Tagge
     // Create the precedence settings (precedence and associativity maps) from the processed specification.
     let precedenceSettings =
         logInfo logger "Compile precedence settings." <| fun () ->
-            precedenceSettings taggedGrammar processedSpec
+            PrecedenceSettings.create taggedGrammar processedSpec
 
     /// The LALR(1) parser table, after applying precedence settings.
     let lalr1Table =
