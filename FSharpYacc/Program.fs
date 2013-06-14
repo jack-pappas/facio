@@ -119,12 +119,14 @@ module Program =
 
         /// The parsed parser specification.
         let parserSpec =
+            logger.Info "Start: Read the parser specification."
             try
                 let stream, reader, lexbuf =
                     UnicodeFileAsLexbuf (inputFile, None)
                 use stream = stream
                 use reader = reader
                 let parserSpec = Parser.spec Lexer.token lexbuf
+                logger.Info "End: Read the parser specification."
 
                 // TEMP : Need to do a little massaging of the Specification for now to put some lists in the correct order.
                 { parserSpec with
@@ -149,7 +151,9 @@ module Program =
 
         // Precompile the parsed specification to validate and process it.
         let processedSpecification, validationMessages =
+            logger.Info "Start: Validate/precompile the parser specification."
             Precompile.specification parserSpec
+        logger.Info "End: Validate/precompile the parser specification."
 
         // Display validation warning messages, if any.
         validationMessages.Warnings
@@ -213,6 +217,7 @@ module Program =
         let parserInterpreterNamespace = ref None
         //let inputCodePage = ref None
         let inputFile = ref None
+        let nologo = ref false
 
         /// Command-line options.
         let usage =
@@ -237,6 +242,8 @@ module Program =
                      The default is '%s'." defaultParserInterpreterNamespace);
 //                ArgInfo.Create ("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
 //                    "Assume input lexer specification file is encoded with the given codepage.");
+                ArgInfo.Create ("--nologo", ArgType.Unit (fun () -> nologo := true),
+                    "Doesn't show the banner text when launching the compiler.");
                 |]
 
         // Parses argument values which aren't specified by flags.
@@ -252,6 +259,8 @@ module Program =
 
         // Parse the command-line arguments.
         ArgParser.Parse (usage, plainArgParser, "fsharpyacc <filename>")
+
+        (* TODO :   Unless the --nologo flag was specified, print the name and version of the compiler. *)
 
         // Validate the parsed arguments.
         // TODO
