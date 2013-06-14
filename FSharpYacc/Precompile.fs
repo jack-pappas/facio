@@ -41,21 +41,22 @@ type ProcessedProductionRule<'Nonterminal, 'Terminal
 type ProcessedSpecification<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> = {
-    //
-    Header : CodeFragment option;
-    /// The nonterminals declared by the specification, and their declared type (if provided).
-    Nonterminals : Map<'Nonterminal, DeclaredType option>;
     /// The terminals declared by the specification, and their declared type (if provided).
     Terminals : Map<'Terminal, DeclaredType option>;
+    /// The nonterminals declared by the specification, and their declared type (if provided).
+    Nonterminals : Map<'Nonterminal, DeclaredType option>;
     //
     ProductionRules : Map<'Nonterminal, ProcessedProductionRule<'Nonterminal, 'Terminal>[]>;
+    //
+    StartSymbols : Set<'Nonterminal>;
+    
+    //
+    Header : CodeFragment option;
     //
     TerminalPrecedence : Map<'Terminal, Associativity * AbsolutePrecedenceLevel>;
     /// For production rules with a %prec declaration, maps the production rule
     /// to the terminal specified in the declaration.
     ProductionRulePrecedenceOverrides : Map<'Nonterminal * Symbol<'Nonterminal, 'Terminal>[], 'Terminal>;
-    //
-    StartSymbols : Set<'Nonterminal>;
 }
 
 //

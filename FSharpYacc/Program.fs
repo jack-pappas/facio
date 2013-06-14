@@ -164,8 +164,8 @@ module Program =
 
             1   // Exit code: Error
         | [] ->
-            /// The tagged-grammar created from the processed specification.
-            let taggedGrammar = Compiler.taggedGrammar processedSpecification
+            /// The augmented, tagged grammar created from the parser specification.
+            let taggedGrammar = Compiler.specToGrammar processedSpecification
 
             // Compile the processed specification.
             match Compiler.compile processedSpecification taggedGrammar options logger with

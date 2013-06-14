@@ -205,7 +205,7 @@ module private FsYacc =
         /// Emits F# code declaring terminal (token) and nonterminal types
         /// used by the generated parser into an IndentedTextWriter.
         let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             symbolicTokenNames symbolicNonterminalNames tokenTags productionIndices (writer : IndentedTextWriter) =
             (* TODO :   Modify the code below to use taggedGrammar instead of 'tokenTags' and 'productionIndices'.
                         Then, those parameters can be removed. *)
@@ -473,7 +473,7 @@ module private FsYacc =
 
         //
         let private computeCompressedActionTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) augmentedTerminalTags =
             /// The set of all terminals in the augmented grammar (including the fsyacc error terminal).
             // TODO : Re-implement this based on taggedGrammar instead of processedSpec.
@@ -629,7 +629,7 @@ module private FsYacc =
 
         //
         let private emitActionTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
             augmentedTerminalTags (writer : IndentedTextWriter) =
             (* _fsyacc_actionTableElements *)
@@ -667,7 +667,7 @@ module private FsYacc =
 
         //
         let private emitReductionSymbolCounts (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
             (productionCount : int) (writer : IndentedTextWriter) =
             (* _fsyacc_reductionSymbolCounts *)
@@ -693,7 +693,7 @@ module private FsYacc =
 
         //
         let emitProductionToNonterminalTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
             productionCount (writer : IndentedTextWriter) =
             (* _fsyacc_productionToNonTerminalTable *)
@@ -730,7 +730,7 @@ module private FsYacc =
 
         //
         let emitImmediateActions (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
             (* _fsyacc_immediateActions *)
             let _fsyacc_immediateActions =
@@ -786,7 +786,7 @@ module private FsYacc =
 
         /// Emits F# code which creates the parser tables into an IndentedTextWriter.
         let computeAndEmit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
             augmentedTerminalTags (productionIndices : IntMap<string>) (writer : IndentedTextWriter) =
             // Make sure the tagged grammar has been modified to include the implicit fsyacc terminals.
@@ -823,7 +823,7 @@ module private FsYacc =
     /// Emits F# code for a single reduction action into an IndentedTextWriter.
     let private reduction (nonterminal : NonterminalIdentifier) (symbols : Symbol<NonterminalIdentifier, TerminalIdentifier>[]) (action : CodeFragment)
         (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-        (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+        (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
         (options, writer : IndentedTextWriter) : unit =
         // Write the function declaration for this semantic action.
         options.ParserInterpreterNamespace
@@ -939,7 +939,7 @@ module private FsYacc =
 
     /// Emits the user-defined semantic actions for the reductions.
     let private reductions (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-        (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>) (options, writer : IndentedTextWriter) : unit =
+        (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>) (options, writer : IndentedTextWriter) : unit =
         /// The default action to execute when a production rule
         /// has no semantic action code associated with it.
         let defaultAction =
@@ -1032,7 +1032,7 @@ module private FsYacc =
 
     /// Emits code for an fsyacc-compatible parser into an IndentedTextWriter.
     let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-        (taggedGrammar : TaggedAugmentedGrammar<NonterminalIdentifier, TerminalIdentifier>)
+        (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
         (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
         (options : FsyaccBackendOptions, writer : IndentedTextWriter) : unit =
         (* Emit the module declaration. *)

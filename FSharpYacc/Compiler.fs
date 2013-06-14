@@ -33,9 +33,12 @@ open FSharpYacc.Ast
 //
 [<RequireQualifiedAccess>]
 module internal PrecedenceSettings =
+(*
     /// Creates a rule-precedence map from a processed specification.
     let private rulePrecedence (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-        (productionRuleIds : Map<AugmentedNonterminal<_> * AugmentedSymbol<_,_>[], ProductionRuleIndex>) =
+        (productionRuleIds : Map<AugmentedNonterminal<_> * AugmentedProductionRule<_,_>, ProductionRuleIndex>)
+        : TagMap<ProductionRuleIndexTag, Associativity * AbsolutePrecedenceLevel> =
+
         (TagMap.empty, processedSpec.ProductionRules)
         ||> Map.fold (fun rulePrecedence nonterminal rules ->
             (rulePrecedence, rules)
@@ -103,21 +106,50 @@ module internal PrecedenceSettings =
                 // Add this identifier to the map.
                 Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
 
+*)
+
+
+    /// Creates a rule-precedence map from a tagged, augmented grammar.
+    let private rulePrecedence (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+        (terminalPrecedence : TagMap<TerminalIndexTag, Associativity * AbsolutePrecedenceLevel>)
+        (productionRulePrecedenceOverrides : TagMap<ProductionRuleIndexTag, TerminalIndex>)
+        : TagMap<ProductionRuleIndexTag, Associativity * AbsolutePrecedenceLevel> =
+
+
+
+        notImpl ""
+        
+    //
+    let private terminalPrecedence (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+        (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        : TagMap<TerminalIndexTag, Associativity * AbsolutePrecedenceLevel> =
+        // TODO
+        notImpl "PrecedenceSettings.terminalPrecedence"
+
+    //
+    let private productionRulePrecedenceOverrides (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+        (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        : TagMap<ProductionRuleIndexTag, TerminalIndex> =
+        // TODO
+        notImpl "PrecedenceSettings.productionRulePrecedenceOverrides"
+
     /// Creates a PrecedenceSettings record from a ProcessedSpecification.
     let internal create (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
         (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>) : PrecedenceSettings =
+        /// The terminal precedence map from the ProcessedSpecification,
+        /// converted to use the tagged-indices from the tagged-grammar.
+        let terminalPrecedence = terminalPrecedence taggedGrammar processedSpec
+
         //
         let rulePrecedence =
-            let productionRuleIds =
-                // TEMP : Remove this -- it would be much more efficient to implement a new function
-                // which operates directly on the TaggedGrammar instead of down-converting to Grammar.
-                taggedGrammar
-                |> TaggedGrammar.toGrammar
-                |> productionRuleIds
+            let productionRulePrecedenceOverrides =
+                productionRulePrecedenceOverrides taggedGrammar processedSpec
         
-            rulePrecedence processedSpec productionRuleIds
+            rulePrecedence taggedGrammar terminalPrecedence productionRulePrecedenceOverrides
 
         // Filter any "dummy" terminals out of the terminal precedence map.
+        // NOTE : This must be done _AFTER_ the rule-precedence map is created,
+        // because it relies on the dummy terminals to work correctly.
         let terminalPrecedence =
             let terminalPrecedence =
                 processedSpec.TerminalPrecedence
@@ -133,58 +165,13 @@ module internal PrecedenceSettings =
         {   TerminalPrecedence = terminalPrecedence;
             RulePrecedence = rulePrecedence; }
 
-/// <summary>Compiles a parser specification into a tagged grammar.</summary>
-/// <param name="processedSpec">The processed parser specification.</param>
-let taggedGrammar (processedSpec : ProcessedSpecification<_,_>) =
-    /// The grammar created from the parser specification and augmented with
-    /// a starting production and the end-of-file marker.
-    let grammar =
-        /// The grammar created from the parser specification.
-        let rawGrammar : Grammar<_,_> =
-            processedSpec.ProductionRules
-            |> Map.map (fun _ rules ->
-                rules |> Array.map (fun rule -> rule.Symbols))
 
-        // Augment the grammar.
-        Grammar.augmentWith rawGrammar processedSpec.StartSymbols
-
-    /// The tagged grammar created from the parser specification.
-    let taggedGrammar = TaggedGrammar.ofGrammar grammar
-
-    // For completeness, make sure all terminals and nonterminals declared in the specification
-    // are included in the tagged grammar. This ensures that declared terminals and nonterminals
-    // which aren't used in any production rules are still included in the tagged grammar, which
-    // is important for certain backends (and for various grammar analyses).
-    let taggedGrammar =
-        (taggedGrammar, processedSpec.Terminals)
-        ||> Map.fold (fun taggedGrammar terminal _ ->
-            let augmentedTerminal = AugmentedTerminal.Terminal terminal
-            if TagBimap.containsValue augmentedTerminal taggedGrammar.Terminals then
-                taggedGrammar
-            else
-                let terminalIndex = tag <| TagBimap.count taggedGrammar.Terminals
-                { taggedGrammar with
-                    Terminals = TagBimap.add terminalIndex augmentedTerminal taggedGrammar.Terminals; })
-
-    let taggedGrammar =
-        (taggedGrammar, processedSpec.Nonterminals)
-        ||> Map.fold (fun taggedGrammar nonterminal _ ->
-            let augmentedNonterminal = AugmentedNonterminal.Nonterminal nonterminal
-            if TagBimap.containsValue augmentedNonterminal taggedGrammar.Nonterminals then
-                taggedGrammar
-            else
-                let nonterminalIndex = tag <| TagBimap.count taggedGrammar.Nonterminals
-                { taggedGrammar with
-                    Nonterminals = TagBimap.add nonterminalIndex augmentedNonterminal taggedGrammar.Nonterminals; })
-
-    // Return the tagged grammar.
-    taggedGrammar
-
-//
-let private logInfo (logger : Logger) description (generator : unit -> 'T) : 'T =
-    logger.Info ("Start: " + description)
+/// Invokes a function. An information message is written to a Logger before the
+/// function is invoked then again when it returns.
+let private logInfo (logger : Logger) message (generator : unit -> 'T) : 'T =
+    logger.Info ("Start: " + message)
     let result = generator ()
-    logger.Info ("End: " + description)
+    logger.Info ("End: " + message)
     result
 
 /// <summary>
@@ -263,3 +250,44 @@ let compile (processedSpec : ProcessedSpecification<_,_>) (taggedGrammar : Augme
     logger.Info "End: Compilation of parser specification."
     return lalr1Table
     }
+
+/// <summary>Compiles a parser specification into an augmented, tagged grammar.</summary>
+/// <param name="processedSpec">The processed parser specification.</param>
+let specToGrammar (processedSpec : ProcessedSpecification<_,_>)
+    : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType> =
+    /// The grammar created from the parser specification.
+    let rawGrammar : Grammar<_,_> =
+        processedSpec.ProductionRules
+        |> Map.map (fun _ rules ->
+            rules |> Array.map (fun rule -> rule.Symbols))
+
+    /// The tagged grammar created from the parser specification.
+    let taggedGrammar = TaggedGrammar.ofGrammar rawGrammar
+
+    // For completeness, make sure all terminals and nonterminals declared in the specification
+    // are included in the tagged grammar. This ensures that declared terminals and nonterminals
+    // which aren't used in any production rules are still included in the tagged grammar, which
+    // is important for certain backends (and for various grammar analyses).
+    let taggedGrammar =
+        (taggedGrammar, processedSpec.Terminals)
+        ||> Map.fold (fun taggedGrammar terminal _ ->
+            if TagBimap.containsValue terminal taggedGrammar.Terminals then
+                taggedGrammar
+            else
+                let terminalIndex = tag <| TagBimap.count taggedGrammar.Terminals
+                { taggedGrammar with
+                    Terminals = TagBimap.add terminalIndex terminal taggedGrammar.Terminals; })
+
+    let taggedGrammar =
+        (taggedGrammar, processedSpec.Nonterminals)
+        ||> Map.fold (fun taggedGrammar nonterminal _ ->
+            if TagBimap.containsValue nonterminal taggedGrammar.Nonterminals then
+                taggedGrammar
+            else
+                let nonterminalIndex = tag <| TagBimap.count taggedGrammar.Nonterminals
+                { taggedGrammar with
+                    Nonterminals = TagBimap.add nonterminalIndex nonterminal taggedGrammar.Nonterminals; })
+
+    // Augment the tagged grammar with the Start nonterminal, EndOfFile terminal,
+    // and new production rules for the Start nonterminal.
+    AugmentedTaggedGrammar.augmentWith taggedGrammar processedSpec.StartSymbols

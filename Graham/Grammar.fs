@@ -83,13 +83,6 @@ type Symbol<'Nonterminal, 'Terminal
             AugmentedTerminal.Terminal token
             |> Symbol.Terminal
 
-/// A symbol within a context-free grammar (CFG) augmented with
-/// the start symbol and end-of-file marker.
-type AugmentedSymbol<'Nonterminal, 'Terminal
-    when 'Nonterminal : comparison
-    and 'Terminal : comparison> =
-    Symbol<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
-
 /// The right-hand-side (RHS) of a production rule within a context-free grammar (CFG).
 type ProductionRule<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
@@ -101,6 +94,19 @@ type Grammar<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> =
     Map<'Nonterminal, ProductionRule<'Nonterminal, 'Terminal>[]>
+
+/// A symbol within a context-free grammar (CFG) augmented with
+/// the start symbol and end-of-file marker.
+type AugmentedSymbol<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
+    Symbol<AugmentedNonterminal<'Nonterminal>, AugmentedTerminal<'Terminal>>
+
+/// A production rule comprised of augmented symbols.
+type AugmentedProductionRule<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> =
+    AugmentedSymbol<'Nonterminal, 'Terminal>[]
 
 /// A grammar augmented with the "start" symbol and the end-of-file marker.
 type AugmentedGrammar<'Nonterminal, 'Terminal
@@ -158,6 +164,8 @@ module Grammar =
     /// <param name="grammar">The grammar to be augmented.</param>
     /// <param name="startSymbols">The parser will begin parsing with any one of these symbols.</param>
     /// <returns>A grammar augmented with the Start symbol and the EndOfFile marker.</returns>
+    [<System.Obsolete("Grammars should no longer be augmented. Instead, create a TaggedGrammar from the \
+        Grammar, then use AugmentedTaggedGrammar.augmentWith to augment the TaggedGrammar.")>]
     [<CompiledName("AugmentWith")>]
     let augmentWith (grammar : Grammar<'Nonterminal, 'Terminal>) (startSymbols : Set<'Nonterminal>)
         : AugmentedGrammar<'Nonterminal, 'Terminal> =
@@ -186,6 +194,8 @@ module Grammar =
     /// <param name="grammar">The grammar to be augmented.</param>
     /// <param name="startSymbol">The parser will begin parsing with this symbol.</param>
     /// <returns>A grammar augmented with the Start symbol and the EndOfFile marker.</returns>
+    [<System.Obsolete("Grammars should no longer be augmented. Instead, create a TaggedGrammar from the \
+        Grammar, then use AugmentedTaggedGrammar.augment to augment the TaggedGrammar.")>]
     [<CompiledName("Augment")>]
     let augment (grammar : Grammar<'Nonterminal, 'Terminal>) (startSymbol : 'Nonterminal)
         : AugmentedGrammar<'Nonterminal, 'Terminal> =
