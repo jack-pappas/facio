@@ -34,64 +34,6 @@ open FSharpYacc.Ast
 [<RequireQualifiedAccess>]
 module internal PrecedenceSettings =
 (*
-    /// Creates a rule-precedence map from a processed specification.
-    let private rulePrecedence (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-        (productionRuleIds : Map<AugmentedNonterminal<_> * AugmentedProductionRule<_,_>, ProductionRuleIndex>)
-        : TagMap<ProductionRuleIndexTag, Associativity * AbsolutePrecedenceLevel> =
-
-        (TagMap.empty, processedSpec.ProductionRules)
-        ||> Map.fold (fun rulePrecedence nonterminal rules ->
-            (rulePrecedence, rules)
-            ||> Array.fold (fun rulePrecedence rule ->
-                /// The identifier for this production rule.
-                let productionRuleId =
-                    //
-                    let augmentedKey =
-                        AugmentedNonterminal.Nonterminal nonterminal,
-                        rule.Symbols
-                        |> Array.map (function
-                            | Symbol.Nonterminal nonterminal ->
-                                Symbol.Nonterminal <| AugmentedNonterminal.Nonterminal nonterminal
-                            | Symbol.Terminal terminal ->
-                                Symbol.Terminal <| AugmentedTerminal.Terminal terminal)
-
-                    Map.find augmentedKey productionRuleIds
-
-                /// The terminal whose associativity and precedence is impersonated by this production rule.
-                let precedenceTerminal =
-                    // Does this rule have a precedence override declaration?
-                    match Map.tryFind (nonterminal, rule.Symbols) processedSpec.ProductionRulePrecedenceOverrides with
-                    | Some impersonatedTerminal ->
-                        Some impersonatedTerminal
-                    | None ->
-                        // The precedence of a rule is the precedence of it's last (right-most) terminal.
-                        match System.Array.FindLastIndex (rule.Symbols, System.Predicate (function Symbol.Terminal _ -> true | Symbol.Nonterminal _ -> false)) with
-                        //match System.Array.FindIndex (rule.Symbols, (function Symbol.Terminal _ -> true | Symbol.Nonterminal _ -> false)) with
-                        | -1 ->
-                            // This rule does not contain any terminals, so it is not assigned a precedence.
-                            None
-                        | lastTerminalIndex ->
-                            match rule.Symbols.[lastTerminalIndex] with
-                            | Symbol.Terminal terminal ->
-                                Some terminal
-                            | Symbol.Nonterminal _ ->
-                                failwith "Found a nonterminal where a terminal was expected."
-
-                // If this rule can be assigned a precedence, add it to the rule precedence map now.
-                match precedenceTerminal with
-                | None ->
-                    rulePrecedence
-                | Some precedenceTerminal ->
-                    // The associativity and precedence of the impersonated terminal.
-                    match Map.tryFind precedenceTerminal processedSpec.TerminalPrecedence with
-                    | None ->
-                        // The terminal has no precedence, so the rule has no precedence.
-                        rulePrecedence
-                    | Some impersonatedTerminalPrecedence ->
-                        // Add the precedence to the rule precedence map.
-                        TagMap.add productionRuleId impersonatedTerminalPrecedence rulePrecedence
-                    ))
-
     //
     [<System.Obsolete("This function is deprecated. A replacement which uses TaggedGrammar should be implemented and used instead.")>]
     let private productionRuleIds (grammar : Grammar<'Nonterminal, 'Terminal>) =
@@ -105,20 +47,51 @@ module internal PrecedenceSettings =
 
                 // Add this identifier to the map.
                 Map.add (nonterminal, ruleRhs) productionRuleId productionRuleIds))
-
 *)
-
 
     /// Creates a rule-precedence map from a tagged, augmented grammar.
     let private rulePrecedence (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
         (terminalPrecedence : TagMap<TerminalIndexTag, Associativity * AbsolutePrecedenceLevel>)
         (productionRulePrecedenceOverrides : TagMap<ProductionRuleIndexTag, TerminalIndex>)
         : TagMap<ProductionRuleIndexTag, Associativity * AbsolutePrecedenceLevel> =
+        (TagMap.empty, taggedGrammar.Productions)
+        ||> TagMap.fold (fun rulePrecedence ruleIndex rule ->
+            /// The terminal whose associativity and precedence is impersonated by this production rule.
+            let precedenceTerminal =
+                // Does this rule have a precedence override declaration?
+                match TagMap.tryFind ruleIndex productionRulePrecedenceOverrides with
+                | Some impersonatedTerminalIndex ->
+                    Some impersonatedTerminalIndex
+                | None ->
+                    // The precedence of a rule is the precedence of it's last (right-most) terminal.
+                    // OPTIMIZE : Use Array.chooseBack from ExtCore.
+                    match System.Array.FindLastIndex (rule, System.Predicate (function Symbol.Terminal _ -> true | Symbol.Nonterminal _ -> false)) with
+                    //match System.Array.FindIndex (rule, (function Symbol.Terminal _ -> true | Symbol.Nonterminal _ -> false)) with
+                    | -1 ->
+                        // This rule does not contain any terminals, so it is not assigned a precedence.
+                        None
+                    | indexOfLastTerminal ->
+                        match rule.[indexOfLastTerminal] with
+                        | Symbol.Terminal terminalIndex ->
+                            Some terminalIndex
+                        | Symbol.Nonterminal _ ->
+                            failwith "Found a nonterminal where a terminal was expected."
 
+            // If this rule can be assigned a precedence, add it to the rule precedence map now.
+            match precedenceTerminal with
+            | None ->
+                rulePrecedence
+            | Some precedenceTerminal ->
+                // The associativity and precedence of the impersonated terminal.
+                match TagMap.tryFind precedenceTerminal terminalPrecedence with
+                | None ->
+                    // The terminal has no precedence, so the rule has no precedence.
+                    rulePrecedence
+                | Some impersonatedTerminalPrecedence ->
+                    // Add the precedence to the rule precedence map.
+                    TagMap.add ruleIndex impersonatedTerminalPrecedence rulePrecedence
+                )
 
-
-        notImpl ""
-        
     //
     let private terminalPrecedence (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
         (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
@@ -142,10 +115,8 @@ module internal PrecedenceSettings =
 
         //
         let rulePrecedence =
-            let productionRulePrecedenceOverrides =
-                productionRulePrecedenceOverrides taggedGrammar processedSpec
-        
-            rulePrecedence taggedGrammar terminalPrecedence productionRulePrecedenceOverrides
+            productionRulePrecedenceOverrides taggedGrammar processedSpec
+            |> rulePrecedence taggedGrammar terminalPrecedence
 
         // Filter any "dummy" terminals out of the terminal precedence map.
         // NOTE : This must be done _AFTER_ the rule-precedence map is created,
