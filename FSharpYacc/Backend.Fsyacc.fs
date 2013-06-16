@@ -214,7 +214,7 @@ module private FsYacc =
             "TOKEN_" + suffix
                 
         //
-        let private symbolicNonterminalName (nonterminal : NonterminalIdentifier) =
+        let (*private*) symbolicNonterminalName (nonterminal : NonterminalIdentifier) =
             "NONTERM_" + nonterminal
 
         //
@@ -225,10 +225,7 @@ module private FsYacc =
         /// used by the generated parser into an IndentedTextWriter.
         let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
-            //(symbolicTokenNames : TagMap<_,_>) (symbolicNonterminalNames : TagMap<_,_>)
-            symbolicNonterminalOfProduction (writer : IndentedTextWriter) =
-            (* TODO :   Modify the code below to use taggedGrammar instead of 'tokenTags' and 'productionIndices'.
-                        Then, those parameters can be removed. *)
+            (writer : IndentedTextWriter) =
 
             // Emit the token type declaration.
             quickSummary writer "This type is the type of tokens accepted by the parser."
@@ -321,6 +318,35 @@ module private FsYacc =
                                  the non-terminal that would be produced by that production."
             writer.WriteLine "let private prodIdxToNonTerminal = function"
             IndentedTextWriter.indented writer <| fun writer ->
+                /// Maps production indices to the symbolic name of the nonterminal produced by each production rule.
+                // TODO : Remove this -- modify the code below to use TaggedGrammar instead.
+                let symbolicNonterminalOfProduction : IntMap<string> =
+                    let productionIndices_productionIndex =
+                        ((IntMap.empty, 0), processedSpec.StartSymbols)
+                        ||> Set.fold (fun (productionIndices, productionIndex) startingNonterminal ->
+                            /// The symbolic name of the nonterminal produced by this start symbol.
+                            let symbolicStartingNonterminalName = symbolicStartingNonterminalName startingNonterminal
+                    
+                            // Increment the production index for the next iteration.
+                            IntMap.add productionIndex symbolicStartingNonterminalName productionIndices,
+                            productionIndex + 1)
+
+                    // Add the production rules.
+                    (productionIndices_productionIndex, processedSpec.ProductionRules)
+                    ||> Map.fold (fun productionIndices_productionIndex nonterminal rules ->
+                        /// The symbolic name of this nonterminal.
+                        let nonterminalSymbolicName = symbolicNonterminalName nonterminal
+
+                        // OPTIMIZE : There's no need to fold over the array of rules, since the
+                        // only thing that matters is the _number_ of rules.
+                        // Replace this with a call to Range.fold.
+                        (productionIndices_productionIndex, rules)
+                        ||> Array.fold (fun (productionIndices, productionIndex) _ ->
+                            IntMap.add productionIndex nonterminalSymbolicName productionIndices,
+                            productionIndex + 1))
+                    // Discard the production index counter.
+                    |> fst
+
                 // Emit cases based on the production-index -> symbolic-nonterminal-name map.
                 symbolicNonterminalOfProduction
                 |> IntMap.iter (fun productionIndex nonterminalSymbolicName ->
@@ -516,76 +542,52 @@ module private FsYacc =
                 _fsyacc_stateToProdIdxsTableRowOffsets writer
 
         //
-        let private computeCompressedActionTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        let private computeCompressedActionTable
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
-            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) augmentedTerminalTags =
+            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) =
             /// The set of all terminals in the augmented grammar (including the fsyacc error terminal).
-            // TODO : Re-implement this based on taggedGrammar instead of processedSpec.
             let allTerminals =
-                (Set.empty, processedSpec.Terminals)
-                ||> Map.fold (fun otherActionTerminals terminal _ ->
-                    Set.add (AugmentedTerminal.Terminal terminal) otherActionTerminals)
-                // Add the error and end-of-input terminals.
-                |> Set.add (AugmentedTerminal.Terminal errorTerminal)
-                |> Set.add EndOfFile
-
-            // Make sure the tagged grammar has been modified to include the implicit fsyacc terminals.
-            Debug.Assert (
-                TagBimap.containsValue (AugmentedTerminal.Terminal errorTerminal) taggedGrammar.Terminals,
-                "The augmented tagged grammar does not include the implicit 'error' terminal.")
+                (TagSet.empty, taggedGrammar.Terminals)
+                ||> TagBimap.fold (fun allTerminals terminalIndex _ ->
+                    TagSet.add terminalIndex allTerminals)
 
             //
-            let actionsByState =
-                // OPTIMIZE : Some of the computations below could be merged together to
-                // avoid creating intermediate data structures (and avoid unnecessary calculations).
-                (Map.empty, parserTable.ActionTable)
-                ||> Map.fold (fun parserActionsByState (stateId, terminal) actionSet ->
-                    match actionSet with
-                    | Conflict _ ->
-                        let msg = sprintf "Conflicting actions on terminal %O in state #%i." terminal (int stateId)
-                        raise <| exn msg
-                    | Action action ->
-                        let stateActions =
-                            let value = terminal, action
-                            match Map.tryFind stateId parserActionsByState with
-                            | None ->
-                                [value]
-                            | Some stateActions ->
-                                value :: stateActions
+            (TagMap.empty, parserTable.ActionTable)
+            ||> Map.fold (fun parserActionsByState (stateId, terminalIndex) actionSet ->
+                match actionSet with
+                | Conflict _ ->
+                    let msg = sprintf "Conflicting actions on terminal %O in state #%i." terminalIndex (int stateId)
+                    raise <| exn msg
+                | Action parserAction ->
+                    let stateActions =
+                        let value = terminalIndex, parserAction
+                        match TagMap.tryFind stateId parserActionsByState with
+                        | None ->
+                            [value]
+                        | Some stateActions ->
+                            value :: stateActions
 
-                        Map.add stateId stateActions parserActionsByState)
-
+                    TagMap.add stateId stateActions parserActionsByState)
             //
-            let terminalsByActionByState =
-                actionsByState
-                |> Map.map (fun _ actions ->
+            |> TagMap.map (fun stateId actions ->
+                //
+                let terminalsByAction =
                     (Map.empty, actions)
                     ||> List.fold (fun terminalsByAction (terminal, action) ->
                         let terminals =
                             match Map.tryFind action terminalsByAction with
                             | None ->
-                                Set.singleton terminal
+                                TagSet.singleton terminal
                             | Some terminals ->
-                                Set.add terminal terminals
+                                TagSet.add terminal terminals
 
-                        Map.add action terminals terminalsByAction))
-(*
-            /// The total number of parser actions (excluding implicit error actions) for each parser state.
-            let actionCountByState =
-                actionsByState
-                |> Map.map (fun _ actions ->
-                    List.length actions)
-*)
-            (* OPTIMIZE :   Combine the code within the two Map.map calls below, to avoid
-                            creating an intermediate map which is immediately consumed. *)
+                        Map.add action terminals terminalsByAction)
 
-            /// The most-frequent parser action (if any) for each parser state.
-            let mostFrequentActionByState =
-                terminalsByActionByState
-                |> Map.map (fun _ terminalsByAction ->
+                /// The most-frequent parser action (if any) for this parser state.
+                let mostFrequentAction =
                     (None, terminalsByAction)
                     ||> Map.fold (fun mostFrequent action terminals ->
-                        let terminalCount = Set.count terminals
+                        let terminalCount = TagSet.count terminals
                         match mostFrequent with
                         | None ->
                             Some (action, terminalCount)
@@ -595,72 +597,61 @@ module private FsYacc =
                             else
                                 mostFrequent)
                     |> Option.map fst
-                    |> Option.get)
-
-            mostFrequentActionByState
-            |> Map.map (fun stateId mostFrequentAction ->
-                /// The terminals for which each action is executed in this state.
-                let terminalsByAction =
-                    Map.find stateId terminalsByActionByState
+                    |> Option.get
 
                 /// The terminals for which the most-frequent action is taken in this parser state.
                 let mostFrequentActionTerminals =
                     Map.find mostFrequentAction terminalsByAction
-                    |> Set.map (fun terminalIndex ->
-                        TagBimap.find terminalIndex taggedGrammar.Terminals)
-(*
-                /// The total number of parser actions for this state, excluding implicit error actions.
-                let totalActionCount = Map.find stateId actionsByState
-*)
+
                 /// The terminals for which the most-frequent action is NOT taken.
                 let otherActionTerminals =
-                    Set.difference allTerminals mostFrequentActionTerminals
+                    TagSet.difference allTerminals mostFrequentActionTerminals
 
                 // We only bother "factoring" out the most-frequent action when doing so actually saves space;
                 // i.e., when the most-frequent action covers a greater number of terminals than the implicit error action.
                 let explicitActionCount =
                     allTerminals
-                    |> Set.filter (fun terminal ->
-                        let terminalIndex = TagBimap.findValue terminal taggedGrammar.Terminals
+                    |> TagSet.filter (fun terminalIndex ->
                         Map.containsKey (stateId, terminalIndex) parserTable.ActionTable)
-                    |> Set.count
+                    |> TagSet.count
 
                 let mostFrequentActionValue, entries =
-                    let errorActionCount = (Set.count allTerminals) - explicitActionCount
-                    if Set.count mostFrequentActionTerminals <= errorActionCount then
+                    let errorActionCount = (TagSet.count allTerminals) - explicitActionCount
+                    if TagSet.count mostFrequentActionTerminals <= errorActionCount then
                         // No space savings, leave the error action.
-                        EnumToValue ActionValue.Error,
-                        Map.find stateId actionsByState
-                        |> List.toArray
-                        |> Array.map (fun (terminalIndex, action) ->
-                            let terminalTag =
-                                let terminal = TagBimap.find terminalIndex taggedGrammar.Terminals
-                                Map.find terminal augmentedTerminalTags
-                            let action = EnumToValue (actionValue action)
-                            (Checked.uint16 terminalTag), action)
-                        |> Array.sortWith (fun (tag1, _) (tag2, _) ->
+                        let entries =
+                            actions
+                            // NOTE : The reversal isn't important here since we're going to sort the
+                            // array right away anyway. List.revMapIntoArray just avoids creating
+                            // an intermediate list with List.map, then calling List.toArray.
+                            |> List.revMapIntoArray (fun (terminalIndex, action) ->
+                                let action = EnumToValue (actionValue action)
+                                (Checked.uint16 terminalIndex), action)
+                        entries
+                        |> Array.sortInPlaceWith (fun (tag1, _) (tag2, _) ->
                             compare tag1 tag2)
+
+                        EnumToValue ActionValue.Error, entries
                     else
-                        EnumToValue (actionValue mostFrequentAction),
-                        otherActionTerminals
-                        |> Set.toArray
-                        |> Array.map (fun terminal ->
-                            let terminalTag = Map.find terminal augmentedTerminalTags
-                            let action =
-                                match TagBimap.tryFindValue terminal taggedGrammar.Terminals with
-                                | None ->
-                                    ActionValue.Error
-                                | Some terminalIndex ->
+                        let entries =
+                            otherActionTerminals
+                            |> TagSet.toArray
+                            |> Array.map (fun terminalIndex ->
+                                let action =
                                     match Map.tryFind (stateId, terminalIndex) parserTable.ActionTable with
                                     | None ->
                                         ActionValue.Error
                                     | Some (Action action) ->
                                         actionValue action
                                     | Some (Conflict _) ->
+                                        let terminal = TagBimap.find terminalIndex taggedGrammar.Terminals
                                         failwithf "Conflicting actions on terminal %O in state #%i." terminal (int stateId)
-                            (Checked.uint16 terminalTag), (EnumToValue action))
-                        |> Array.sortWith (fun (tag1, _) (tag2, _) ->
+                                (Checked.uint16 terminalIndex), (EnumToValue action))
+                        entries
+                        |> Array.sortInPlaceWith (fun (tag1, _) (tag2, _) ->
                             compare tag1 tag2)
+
+                        EnumToValue (actionValue mostFrequentAction), entries
 
                 // The entries for this state.
                 Array.append [|
@@ -669,25 +660,25 @@ module private FsYacc =
                     (flattenTupleArray entries))
 
         //
-        let private emitActionTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        let private emitActionTable
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
-            augmentedTerminalTags (writer : IndentedTextWriter) =
+            (writer : IndentedTextWriter) =
             (* _fsyacc_actionTableElements *)
             (* _fsyacc_actionTableRowOffsets *)
             let _fsyacc_actionTableElements, _fsyacc_actionTableRowOffsets =
                 //
                 let compressedActionTable =
-                    computeCompressedActionTable processedSpec taggedGrammar parserTable augmentedTerminalTags
+                    computeCompressedActionTable taggedGrammar parserTable
 
                 let actionTableElements =
                     // Initialize to roughly the correct size (to avoid multiple small reallocations).
-                    ResizeArray (6 * compressedActionTable.Count)
+                    ResizeArray (6 * (TagMap.count compressedActionTable))
 
-                let actionTableRowOffsets = Array.zeroCreate <| Map.count compressedActionTable
+                let actionTableRowOffsets = Array.zeroCreate <| TagMap.count compressedActionTable
 
                 compressedActionTable
-                |> Map.iter (fun stateId elements ->
+                |> TagMap.iter (fun stateId elements ->
                     actionTableRowOffsets.[int stateId] <- Checked.uint16 <| (ResizeArray.length actionTableElements / 2)
                     actionTableElements.AddRange elements)
 
@@ -770,7 +761,7 @@ module private FsYacc =
                 _fsyacc_productionToNonTerminalTable writer
 
         //
-        let emitImmediateActions (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        let emitImmediateActions
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
             (* _fsyacc_immediateActions *)
@@ -828,13 +819,7 @@ module private FsYacc =
         /// Emits F# code which creates the parser tables into an IndentedTextWriter.
         let computeAndEmit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
-            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
-            augmentedTerminalTags (productionIndices : IntMap<string>) (writer : IndentedTextWriter) =
-            // Make sure the tagged grammar has been modified to include the implicit fsyacc terminals.
-            Debug.Assert (
-                TagBimap.containsValue (AugmentedTerminal.Terminal errorTerminal) taggedGrammar.Terminals,
-                "The augmented tagged grammar does not include the implicit 'error' terminal.")
-
+            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
             (* _fsyacc_action_rows *)
             intLiteralDecl "_fsyacc_action_rows" false
                 (TagBimap.count parserTable.ParserStates) writer
@@ -846,16 +831,16 @@ module private FsYacc =
             emitStateToProductionIndicesTable parserTable writer
 
             // Emit the ACTION table.
-            emitActionTable processedSpec taggedGrammar parserTable augmentedTerminalTags writer
+            emitActionTable taggedGrammar parserTable writer
             
             // Emit the reduction symbol counts.
-            emitReductionSymbolCounts processedSpec taggedGrammar parserTable (IntMap.count productionIndices) writer
+            emitReductionSymbolCounts processedSpec taggedGrammar parserTable (TagMap.count taggedGrammar.Productions) writer
 
             // Emit the production-index->nonterminal table.
-            emitProductionToNonterminalTable processedSpec taggedGrammar parserTable (IntMap.count productionIndices) writer
+            emitProductionToNonterminalTable processedSpec taggedGrammar parserTable (TagMap.count taggedGrammar.Productions) writer
             
             // Emit the immediate actions table.
-            emitImmediateActions processedSpec taggedGrammar parserTable writer
+            emitImmediateActions taggedGrammar parserTable writer
 
 
     /// Emits F# code for a single reduction action into an IndentedTextWriter.
@@ -1122,85 +1107,29 @@ module private FsYacc =
             // Emit a blank line to separate the header from the compiler-generated parser code.
             writer.WriteLine ())
 
-        do
-            (* TODO :   The 'tokenTags' and 'productionIndices' variables can be removed once
-                        the 'parserTypes' and 'parserTables' functions have been modified to
-                        get the information they need from 'taggedGrammar'. *)
+        // Emit the parser types (e.g., the token type).
+        ParserTypes.emit processedSpec taggedGrammar writer
 
-            /// Maps nonterminal identifiers to symbolic nonterminal names.
-            let symbolicNonterminalNames =
-                processedSpec.Nonterminals
-                |> Map.map (fun nonterminalName _ ->
-                    "NONTERM_" + nonterminalName)
+        // Emit the parser tables.
+        ParserTables.computeAndEmit processedSpec taggedGrammar parserTable writer
 
-            /// Maps production indices to the symbolic name of the nonterminal produced by each production rule.
-            let symbolicNonterminalOfProduction : IntMap<string> =
-                let productionIndices_productionIndex =
-                    ((IntMap.empty, 0), processedSpec.StartSymbols)
-                    ||> Set.fold (fun (productionIndices, productionIndex) startingNonterminal ->
-                        /// The symbolic name of the nonterminal produced by this start symbol.
-                        let symbolicStartingNonterminalName = ParserTypes.symbolicStartingNonterminalName startingNonterminal
-                    
-                        // Increment the production index for the next iteration.
-                        IntMap.add productionIndex symbolicStartingNonterminalName productionIndices,
-                        productionIndex + 1)
-
-                // Add the production rules.
-                (productionIndices_productionIndex, processedSpec.ProductionRules)
-                ||> Map.fold (fun productionIndices_productionIndex nonterminal rules ->
-                    /// The symbolic name of this nonterminal.
-                    let nonterminalSymbolicName = Map.find nonterminal symbolicNonterminalNames
-
-                    // OPTIMIZE : There's no need to fold over the array of rules, since the
-                    // only thing that matters is the _number_ of rules.
-                    // Replace this with a call to Range.fold.
-                    (productionIndices_productionIndex, rules)
-                    ||> Array.fold (fun (productionIndices, productionIndex) _ ->
-                        IntMap.add productionIndex nonterminalSymbolicName productionIndices,
-                        productionIndex + 1))
-                // Discard the production index counter.
-                |> fst
-
-            // Emit the parser types (e.g., the token type).
-            ParserTypes.emit processedSpec taggedGrammar symbolicNonterminalOfProduction writer
-
-            do
-                /// Integer indices (tags) of the augmented terminals (tokens).
-                let augmentedTerminalTags =
-                    ((Map.empty, 0), processedSpec.Terminals)
-                    ||> Map.fold (fun (tokenTags, index) terminal _ ->
-                        Map.add (AugmentedTerminal.Terminal terminal) index tokenTags,
-                        index + 1)
-                    // Add the end-of-input and error terminals and discard the index value.
-                    |> fun (tokenTags, index) ->
-                        tokenTags
-                        |> Map.add (AugmentedTerminal.Terminal errorTerminal) index
-                        |> Map.add EndOfFile (index + 1)
-
-                // Emit the parser tables.
-                ParserTables.computeAndEmit processedSpec taggedGrammar parserTable augmentedTerminalTags symbolicNonterminalOfProduction writer
-
-            // Emit the reduction functions (i.e., the user-specified actions / code fragments).
-            reductions processedSpec taggedGrammar (options, writer)
+        // Emit the reduction functions (i.e., the user-specified actions / code fragments).
+        reductions processedSpec taggedGrammar (options, writer)
 
         do
             // Emit the parser "tables" record and parser functions.
-            let terminalCount =
-                // TEMP : Add 2 to account for the end-of-input and error tokens.
-                processedSpec.Terminals.Count + 2
-
             let typedStartSymbols =
                 (Map.empty, processedSpec.StartSymbols)
-                ||> Set.fold (fun typedStartSymbols startSymbol ->
+                ||> Set.fold (fun typedStartSymbols startingNonterminal ->
                     let startSymbolType =
-                        Map.find startSymbol processedSpec.Nonterminals
+                        Map.find startingNonterminal processedSpec.Nonterminals
                         // Start symbols are required to have a type, so if this breaks
                         // the problem is in the validation stage of the compiler.
                         |> Option.get
 
-                    Map.add startSymbol startSymbolType typedStartSymbols)
+                    Map.add startingNonterminal startSymbolType typedStartSymbols)
 
-            tablesRecordAndParserFunctions typedStartSymbols terminalCount (options, writer)
+            tablesRecordAndParserFunctions typedStartSymbols (TagBimap.count taggedGrammar.Terminals) (options, writer)
 
         // Flush the writer before returning, to force it to write any
         // output text remaining in it's internal buffer.
