@@ -319,41 +319,53 @@ module private FsYacc =
             writer.WriteLine "let private prodIdxToNonTerminal = function"
             IndentedTextWriter.indented writer <| fun writer ->
                 /// Maps production indices to the symbolic name of the nonterminal produced by each production rule.
-                // TODO : Remove this -- modify the code below to use TaggedGrammar instead.
-                let symbolicNonterminalOfProduction : IntMap<string> =
-                    let productionIndices_productionIndex =
-                        ((IntMap.empty, 0), processedSpec.StartSymbols)
-                        ||> Set.fold (fun (productionIndices, productionIndex) startingNonterminal ->
-                            /// The symbolic name of the nonterminal produced by this start symbol.
-                            let symbolicStartingNonterminalName = symbolicStartingNonterminalName startingNonterminal
-                    
-                            // Increment the production index for the next iteration.
-                            IntMap.add productionIndex symbolicStartingNonterminalName productionIndices,
-                            productionIndex + 1)
+                // OPTIMIZE : Change this to just iterate over the productions and emit the cases
+                // instead of creating an intermediate map and iterating over it.
+                let symbolicNonterminalOfProduction : TagMap<_,string> =
+                    (TagMap.empty, taggedGrammar.ProductionsByNonterminal)
+                    ||> TagMap.fold (fun symbolicNonterminalOfProduction nonterminalIndex nonterminalRuleIndices ->
+                        // The production rules for the augmented Start symbol need to be handled specially.
+                        match TagBimap.find nonterminalIndex taggedGrammar.Nonterminals with
+                        | AugmentedNonterminal.Start ->
+                            (symbolicNonterminalOfProduction, nonterminalRuleIndices)
+                            ||> TagSet.fold (fun symbolicNonterminalOfProductions ruleIndex ->
+                                /// The "true" (i.e., non-augmented) nonterminal produced by this rule.
+                                let nonterminal =
+                                    let nonterminalIndex =
+                                        match Array.first <| TagMap.find ruleIndex taggedGrammar.Productions with
+                                        | Symbol.Nonterminal nonterminalIndex ->
+                                            nonterminalIndex
+                                        | Symbol.Terminal terminalIndex ->
+                                            let msg =
+                                                let terminal = TagBimap.find terminalIndex taggedGrammar.Terminals
+                                                sprintf "A starting production rule must begin with a nonterminal, but the terminal '%A' was found instead." terminal
+                                            raise <| exn msg
 
-                    // Add the production rules.
-                    (productionIndices_productionIndex, processedSpec.ProductionRules)
-                    ||> Map.fold (fun productionIndices_productionIndex nonterminal rules ->
-                        /// The symbolic name of this nonterminal.
-                        let nonterminalSymbolicName = symbolicNonterminalName nonterminal
+                                    match TagBimap.find nonterminalIndex taggedGrammar.Nonterminals with
+                                    | AugmentedNonterminal.Start ->
+                                        failwith "Found the Start symbol where a non-augmented nonterminal was expected."
+                                    | AugmentedNonterminal.Nonterminal nonterminal ->
+                                        nonterminal
 
-                        // OPTIMIZE : There's no need to fold over the array of rules, since the
-                        // only thing that matters is the _number_ of rules.
-                        // Replace this with a call to Range.fold.
-                        (productionIndices_productionIndex, rules)
-                        ||> Array.fold (fun (productionIndices, productionIndex) _ ->
-                            IntMap.add productionIndex nonterminalSymbolicName productionIndices,
-                            productionIndex + 1))
-                    // Discard the production index counter.
-                    |> fst
+                                /// The symbolic name for this starting nonterminal.
+                                let symbolicStartingNonterminalName = symbolicStartingNonterminalName nonterminal
 
-                // Emit cases based on the production-index -> symbolic-nonterminal-name map.
+                                // Add the production-rule-index and symbolic starting nonterminal name to the map.
+                                TagMap.add ruleIndex symbolicStartingNonterminalName symbolicNonterminalOfProductions)
+
+                        | AugmentedNonterminal.Nonterminal nonterminal ->
+                            let symbolicNonterminalName = symbolicNonterminalName nonterminal
+                            (symbolicNonterminalOfProduction, nonterminalRuleIndices)
+                            ||> TagSet.fold (fun symbolicNonterminalOfProductions ruleIndex ->
+                                TagMap.add ruleIndex symbolicNonterminalName symbolicNonterminalOfProductions))
+
+                // Emit cases based on the production-rule-index -> symbolic-nonterminal-name map.
                 symbolicNonterminalOfProduction
-                |> IntMap.iter (fun productionIndex nonterminalSymbolicName ->
-                    sprintf "| %i -> %s" productionIndex nonterminalSymbolicName
+                |> TagMap.iter (fun productionRuleIndex nonterminalSymbolicName ->
+                    sprintf "| %i -> %s" (untag productionRuleIndex) nonterminalSymbolicName
                     |> writer.WriteLine)
 
-                // Emit a catch-all case to handle invalid values.
+                // Emit a catch-all case to handle invalid inputs to the function.
                 let catchAllVariableName = "prodIdx"
                 writer.WriteLine ("| " + catchAllVariableName + " ->")
                 IndentedTextWriter.indented writer <| fun writer ->
@@ -610,6 +622,7 @@ module private FsYacc =
                 // We only bother "factoring" out the most-frequent action when doing so actually saves space;
                 // i.e., when the most-frequent action covers a greater number of terminals than the implicit error action.
                 let explicitActionCount =
+                    // OPTIMIZE : Use TagSet.countWith from ExtCore.
                     allTerminals
                     |> TagSet.filter (fun terminalIndex ->
                         Map.containsKey (stateId, terminalIndex) parserTable.ActionTable)
@@ -701,10 +714,11 @@ module private FsYacc =
         let private emitReductionSymbolCounts (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
-            (productionCount : int) (writer : IndentedTextWriter) =
+            (writer : IndentedTextWriter) =
             (* _fsyacc_reductionSymbolCounts *)
             let _fsyacc_reductionSymbolCounts =
-                let symbolCounts = ResizeArray productionCount
+                // OPTIMIZE : We can probably just use an array here, it shouldn't need resizing.
+                let symbolCounts = ResizeArray (TagMap.count taggedGrammar.Productions)
 
                 // The productions created by the start symbols reduce a single value --
                 // the start symbols (nonterminals) themselves.
@@ -727,10 +741,10 @@ module private FsYacc =
         let emitProductionToNonterminalTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
-            productionCount (writer : IndentedTextWriter) =
+            (writer : IndentedTextWriter) =
             (* _fsyacc_productionToNonTerminalTable *)
             let _fsyacc_productionToNonTerminalTable =
-                let productionToNonTerminalTable = Array.zeroCreate productionCount
+                let productionToNonTerminalTable = Array.zeroCreate (TagMap.count taggedGrammar.Productions)
 
                 // The augmented start symbol will always have nonterminal index 0
                 // so we don't actually have to write anything to the array for the
@@ -834,10 +848,10 @@ module private FsYacc =
             emitActionTable taggedGrammar parserTable writer
             
             // Emit the reduction symbol counts.
-            emitReductionSymbolCounts processedSpec taggedGrammar parserTable (TagMap.count taggedGrammar.Productions) writer
+            emitReductionSymbolCounts processedSpec taggedGrammar parserTable writer
 
             // Emit the production-index->nonterminal table.
-            emitProductionToNonterminalTable processedSpec taggedGrammar parserTable (TagMap.count taggedGrammar.Productions) writer
+            emitProductionToNonterminalTable processedSpec taggedGrammar parserTable writer
             
             // Emit the immediate actions table.
             emitImmediateActions taggedGrammar parserTable writer
