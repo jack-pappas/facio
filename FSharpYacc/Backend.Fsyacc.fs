@@ -439,8 +439,6 @@ module private FsYacc =
         /// table into the generated parser code.
         let private emitGotoTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
-            // _fsyacc_gotos
-            // _fsyacc_sparseGotoTableRowOffsets
             let _fsyacc_gotos, _fsyacc_sparseGotoTableRowOffsets =
                 /// The source and target states of GOTO transitions over each nonterminal.
                 let gotoEdges =
@@ -507,8 +505,6 @@ module private FsYacc =
         //
         let private emitStateToProductionIndicesTable
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
-            (* _fsyacc_stateToProdIdxsTableElements *)
-            (* _fsyacc_stateToProdIdxsTableRowOffsets *)
             let _fsyacc_stateToProdIdxsTableElements, _fsyacc_stateToProdIdxsTableRowOffsets =
                 let parserStates =
                     TagBimap.toArray parserTable.ParserStates
@@ -675,10 +671,7 @@ module private FsYacc =
         //
         let private emitActionTable
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
-            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
-            (writer : IndentedTextWriter) =
-            (* _fsyacc_actionTableElements *)
-            (* _fsyacc_actionTableRowOffsets *)
+            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
             let _fsyacc_actionTableElements, _fsyacc_actionTableRowOffsets =
                 //
                 let compressedActionTable =
@@ -713,10 +706,9 @@ module private FsYacc =
         //
         let private emitReductionSymbolCounts (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
-            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
             (writer : IndentedTextWriter) =
-            (* _fsyacc_reductionSymbolCounts *)
             let _fsyacc_reductionSymbolCounts =
+                (* TODO : Modify the code below to use 'taggedGrammar' instead of 'processedSpec'. *)
                 // OPTIMIZE : We can probably just use an array here, it shouldn't need resizing.
                 let symbolCounts = ResizeArray (TagMap.count taggedGrammar.Productions)
 
@@ -740,10 +732,9 @@ module private FsYacc =
         //
         let emitProductionToNonterminalTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
-            (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>)
             (writer : IndentedTextWriter) =
-            (* _fsyacc_productionToNonTerminalTable *)
             let _fsyacc_productionToNonTerminalTable =
+                (* TODO : Modify the code below to use 'taggedGrammar' instead of 'processedSpec'. *)
                 let productionToNonTerminalTable = Array.zeroCreate (TagMap.count taggedGrammar.Productions)
 
                 // The augmented start symbol will always have nonterminal index 0
@@ -778,7 +769,6 @@ module private FsYacc =
         let emitImmediateActions
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
-            (* _fsyacc_immediateActions *)
             let _fsyacc_immediateActions =
                 // When a state contains a single item whose parser position ("dot")
                 // is at the end of the production rule, a Reduce or Accept will be
@@ -848,10 +838,10 @@ module private FsYacc =
             emitActionTable taggedGrammar parserTable writer
             
             // Emit the reduction symbol counts.
-            emitReductionSymbolCounts processedSpec taggedGrammar parserTable writer
+            emitReductionSymbolCounts processedSpec taggedGrammar writer
 
             // Emit the production-index->nonterminal table.
-            emitProductionToNonterminalTable processedSpec taggedGrammar parserTable writer
+            emitProductionToNonterminalTable processedSpec taggedGrammar writer
             
             // Emit the immediate actions table.
             emitImmediateActions taggedGrammar parserTable writer
