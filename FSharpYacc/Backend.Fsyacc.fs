@@ -202,11 +202,31 @@ module private FsYacc =
     //
     [<RequireQualifiedAccess>]
     module internal ParserTypes =
+        //
+        let private symbolicTerminalName terminal =
+            let suffix =
+                match terminal with
+                | AugmentedTerminal.EndOfFile ->
+                    endOfInputTerminal
+                | AugmentedTerminal.Terminal (terminal : TerminalIdentifier) ->
+                    terminal
+
+            "TOKEN_" + suffix
+                
+        //
+        let private symbolicNonterminalName (nonterminal : NonterminalIdentifier) =
+            "NONTERM_" + nonterminal
+
+        //
+        let (*private*) symbolicStartingNonterminalName (startingNonterminal : NonterminalIdentifier) =
+            "NONTERM__start" + startingNonterminal
+
         /// Emits F# code declaring terminal (token) and nonterminal types
         /// used by the generated parser into an IndentedTextWriter.
         let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
-            symbolicTokenNames symbolicNonterminalNames tokenTags productionIndices (writer : IndentedTextWriter) =
+            //(symbolicTokenNames : TagMap<_,_>) (symbolicNonterminalNames : TagMap<_,_>)
+            symbolicNonterminalOfProduction (writer : IndentedTextWriter) =
             (* TODO :   Modify the code below to use taggedGrammar instead of 'tokenTags' and 'productionIndices'.
                         Then, those parameters can be removed. *)
 
@@ -215,25 +235,44 @@ module private FsYacc =
             unionTypeDecl "token" true processedSpec.Terminals writer
             writer.WriteLine ()
 
-            // Emit the symbolic token-name type declaration.
-            quickSummary writer "This type is used to give symbolic names to token indexes, useful for error messages."
-            unionTypeDecl "tokenId" false (valueMap symbolicTokenNames) writer
-            writer.WriteLine ()
+            do
+                let symbolicTerminalNamesAndTypes =
+                    (Set.empty, taggedGrammar.Terminals)
+                    ||> TagBimap.fold (fun symbolicTerminalNames _ terminal ->
+                        Set.add (symbolicTerminalName terminal) symbolicTerminalNames)
+                    // Create a map using the set as the key set, and where each value is None.
+                    |> Map.ofKeys (fun _ -> None)
 
-            // Emit the symbolic nonterminal type declaration.
-            quickSummary writer "This type is used to give symbolic names to token indexes, useful for error messages."
+                // Emit the symbolic token-name type declaration.
+                quickSummary writer "This type is used to give symbolic names to token indexes, useful for error messages."
+                unionTypeDecl "tokenId" false symbolicTerminalNamesAndTypes writer
+                writer.WriteLine ()
+
             do
                 /// The symbolic nonterminals. All values in this map are None
                 /// since the cases don't carry values.
-                let symbolicNonterminals =
-                    let symbolicNonterminals = valueMap symbolicNonterminalNames
-                    // Add cases for the starting symbols.
-                    (symbolicNonterminals, processedSpec.StartSymbols)
-                    ||> Set.fold (fun symbolicNonterminals startSymbol ->
-                        Map.add ("NONTERM__start" + startSymbol) None symbolicNonterminals)
+                let symbolicNonterminalNamesAndTypes =
+                    (Set.empty, taggedGrammar.Nonterminals)
+                    ||> TagBimap.fold (fun symbolicNonterminalNames _ nonterminal ->
+                        match nonterminal with
+                        | AugmentedNonterminal.Start ->
+                            // Add a symbolic nonterminal for each of the starting nonterminals.
+                            (symbolicNonterminalNames, taggedGrammar.StartNonterminals)
+                            ||> TagSet.fold (fun symbolicNonterminalNames startingNonterminalIndex ->
+                                match TagBimap.find startingNonterminalIndex taggedGrammar.Nonterminals with
+                                | AugmentedNonterminal.Start ->
+                                    failwith "Unexpectedly found the Start nonterminal in the tagged grammar's set of starting nonterminals."
+                                | AugmentedNonterminal.Nonterminal startingNonterminal ->
+                                    Set.add (symbolicStartingNonterminalName startingNonterminal) symbolicNonterminalNames)
 
-                    // Write the type declaration.
-                unionTypeDecl "nonterminalId" false symbolicNonterminals writer
+                        | AugmentedNonterminal.Nonterminal nonterminal ->
+                            Set.add (symbolicNonterminalName nonterminal) symbolicNonterminalNames)
+                    // Create a map using the set as the key set, and where each value is None.
+                    |> Map.ofKeys (fun _ -> None)
+
+                // Emit the symbolic nonterminal type declaration.
+                quickSummary writer "This type is used to give symbolic names to token indexes, useful for error messages."
+                unionTypeDecl "nonterminalId" false symbolicNonterminalNamesAndTypes writer
             writer.WriteLine ()
          
             // Emit the token -> token-tag function.
@@ -241,15 +280,20 @@ module private FsYacc =
             writer.WriteLine "let private tagOfToken = function"
             IndentedTextWriter.indented writer <| fun writer ->
                 // Emit a case for each terminal (token).
-                processedSpec.Terminals
-                |> Map.iter (fun tokenName tokenType ->
-                    let tagValue = Map.find tokenName tokenTags
-                    match tokenType with
-                    | None ->
-                        sprintf "| %s -> %i" tokenName tagValue
-                    | Some _ ->
-                        sprintf "| %s _ -> %i" tokenName tagValue
-                    |> writer.WriteLine)
+                taggedGrammar.Terminals
+                |> TagBimap.iter (fun terminalIndex terminal ->
+                    match terminal with
+                    | EndOfFile -> ()
+                    | Terminal terminal ->
+                        // Don't emit cases for the built-in (implicit) terminals.
+                        if terminal <> errorTerminal then
+                            // TODO : Get the terminal type (if any) from the TaggedGrammar, not processedSpec.
+                            match Map.tryFind terminal processedSpec.Terminals with
+                            | None ->
+                                sprintf "| %s -> %i" terminal (untag terminalIndex)
+                            | Some _ ->
+                                sprintf "| %s _ -> %i" terminal (untag terminalIndex)
+                            |> writer.WriteLine)
             writer.WriteLine ()
 
             // Emit the token-tag -> symbolic-token-name function.
@@ -257,10 +301,10 @@ module private FsYacc =
             writer.WriteLine "let private tokenTagToTokenId = function"
             IndentedTextWriter.indented writer <| fun writer ->
                 // Emit a case for each terminal (token).
-                tokenTags
-                |> Map.iter (fun tokenName tagValue ->
-                    Map.find tokenName symbolicTokenNames
-                    |> sprintf "| %i -> %s" tagValue
+                taggedGrammar.Terminals
+                |> TagBimap.iter (fun terminalIndex terminal ->
+                    let symbolicTerminalName = symbolicTerminalName terminal
+                    sprintf "| %i -> %s" (untag terminalIndex) symbolicTerminalName
                     |> writer.WriteLine)
 
                 // Emit a catch-all case to handle invalid values.
@@ -278,7 +322,7 @@ module private FsYacc =
             writer.WriteLine "let private prodIdxToNonTerminal = function"
             IndentedTextWriter.indented writer <| fun writer ->
                 // Emit cases based on the production-index -> symbolic-nonterminal-name map.
-                productionIndices
+                symbolicNonterminalOfProduction
                 |> IntMap.iter (fun productionIndex nonterminalSymbolicName ->
                     sprintf "| %i -> %s" productionIndex nonterminalSymbolicName
                     |> writer.WriteLine)
@@ -294,9 +338,9 @@ module private FsYacc =
 
             // Emit constants for "end-of-input" and "tag of error terminal"
             intLiteralDecl "_fsyacc_endOfInputTag" false
-                (Map.find endOfInputTerminal tokenTags) writer
+                (untag <| TagBimap.findValue AugmentedTerminal.EndOfFile taggedGrammar.Terminals) writer
             intLiteralDecl "_fsyacc_tagOfErrorTerminal" false
-                (Map.find errorTerminal tokenTags) writer
+                (untag <| TagBimap.findValue (AugmentedTerminal.Terminal errorTerminal) taggedGrammar.Terminals) writer
             writer.WriteLine ()
 
             // Emit the token -> token-name function.
@@ -389,7 +433,7 @@ module private FsYacc =
 
                 // Add entries for the rest of the nonterminals.
                 (startSymbolCount, gotoEdges)
-                ||> Map.fold (fun nonterminalIndex nonterminal edges ->
+                ||> Map.fold (fun nonterminalIndex _ edges ->
                     // Store the starting index (in the sparse GOTO table) for this nonterminal.
                     offsets.[nonterminalIndex] <- Checked.uint16 (gotos.Count / 2)
 
@@ -489,9 +533,6 @@ module private FsYacc =
             Debug.Assert (
                 TagBimap.containsValue (AugmentedTerminal.Terminal errorTerminal) taggedGrammar.Terminals,
                 "The augmented tagged grammar does not include the implicit 'error' terminal.")
-            Debug.Assert (
-                TagBimap.containsValue (AugmentedTerminal.Terminal endOfInputTerminal) taggedGrammar.Terminals,
-                "The augmented tagged grammar does not include the implicit 'end-of-input' terminal.")
 
             //
             let actionsByState =
@@ -793,9 +834,6 @@ module private FsYacc =
             Debug.Assert (
                 TagBimap.containsValue (AugmentedTerminal.Terminal errorTerminal) taggedGrammar.Terminals,
                 "The augmented tagged grammar does not include the implicit 'error' terminal.")
-            Debug.Assert (
-                TagBimap.containsValue (AugmentedTerminal.Terminal endOfInputTerminal) taggedGrammar.Terminals,
-                "The augmented tagged grammar does not include the implicit 'end-of-input' terminal.")
 
             (* _fsyacc_action_rows *)
             intLiteralDecl "_fsyacc_action_rows" false
@@ -1088,14 +1126,6 @@ module private FsYacc =
             (* TODO :   The 'tokenTags' and 'productionIndices' variables can be removed once
                         the 'parserTypes' and 'parserTables' functions have been modified to
                         get the information they need from 'taggedGrammar'. *)
-            /// Maps terminals (tokens) to symbolic token names.
-            let symbolicTerminalNames =
-                processedSpec.Terminals
-                // Add the end-of-input and error terminals to the map.
-                |> Map.add endOfInputTerminal None
-                |> Map.add errorTerminal None
-                |> Map.map (fun terminalName _ ->
-                    "TOKEN_" + terminalName)
 
             /// Maps nonterminal identifiers to symbolic nonterminal names.
             let symbolicNonterminalNames =
@@ -1103,28 +1133,16 @@ module private FsYacc =
                 |> Map.map (fun nonterminalName _ ->
                     "NONTERM_" + nonterminalName)
 
-            /// Integer indices (tags) of terminals (tokens).
-            let terminalTags =
-                ((Map.empty, 0), processedSpec.Terminals)
-                ||> Map.fold (fun (tokenTags, index) terminal _ ->
-                    Map.add terminal index tokenTags,
-                    index + 1)
-                // Add the end-of-input and error terminals and discard the index value.
-                |> fun (tokenTags, index) ->
-                    tokenTags
-                    |> Map.add errorTerminal index
-                    |> Map.add endOfInputTerminal (index + 1)
-
             /// Maps production indices to the symbolic name of the nonterminal produced by each production rule.
-            let productionIndices : IntMap<string> =
+            let symbolicNonterminalOfProduction : IntMap<string> =
                 let productionIndices_productionIndex =
                     ((IntMap.empty, 0), processedSpec.StartSymbols)
-                    ||> Set.fold (fun (productionIndices, productionIndex) startSymbol ->
+                    ||> Set.fold (fun (productionIndices, productionIndex) startingNonterminal ->
                         /// The symbolic name of the nonterminal produced by this start symbol.
-                        let nonterminalName = "NONTERM__start" + startSymbol
+                        let symbolicStartingNonterminalName = ParserTypes.symbolicStartingNonterminalName startingNonterminal
                     
                         // Increment the production index for the next iteration.
-                        IntMap.add productionIndex nonterminalName productionIndices,
+                        IntMap.add productionIndex symbolicStartingNonterminalName productionIndices,
                         productionIndex + 1)
 
                 // Add the production rules.
@@ -1144,7 +1162,7 @@ module private FsYacc =
                 |> fst
 
             // Emit the parser types (e.g., the token type).
-            ParserTypes.emit processedSpec taggedGrammar symbolicTerminalNames symbolicNonterminalNames terminalTags productionIndices writer
+            ParserTypes.emit processedSpec taggedGrammar symbolicNonterminalOfProduction writer
 
             do
                 /// Integer indices (tags) of the augmented terminals (tokens).
@@ -1160,7 +1178,7 @@ module private FsYacc =
                         |> Map.add EndOfFile (index + 1)
 
                 // Emit the parser tables.
-                ParserTables.computeAndEmit processedSpec taggedGrammar parserTable augmentedTerminalTags productionIndices writer
+                ParserTables.computeAndEmit processedSpec taggedGrammar parserTable augmentedTerminalTags symbolicNonterminalOfProduction writer
 
             // Emit the reduction functions (i.e., the user-specified actions / code fragments).
             reductions processedSpec taggedGrammar (options, writer)
@@ -1193,10 +1211,6 @@ module private FsYacc =
 /// compatible with 'fsyacc' and the table interpreters in the F# PowerPack.
 [<Export(typeof<IBackend>)>]
 type FsYaccBackend () =
-
-
-
-
     interface IBackend with
         member this.Invoke (processedSpec, taggedGrammar, parserTable, options) : unit =
             /// Compilation options specific to this backend.

@@ -48,6 +48,10 @@ type FsyaccBackendOptions = {
 //
 type ParserType =
     //
+    | Lr0
+    //
+    | Slr1
+    //
     | Lalr1
 
 /// Parser compilation options.
