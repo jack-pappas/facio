@@ -905,9 +905,117 @@ module private Reductions =
     open Graham.LR
     open BackendUtils.CodeGen
 
+
+    //
+    let private emitFormattedReductionActionCode (action : CodeFragment) (writer : IndentedTextWriter) =
+        (*  Split 'action' into multiple lines. Determine the minimum amount of whitespace
+            which appears on the left of any line in the action, but do not consider blank
+            lines. Then, trim this minimum amount of whitespace from the left side of each
+            line. When this is done, the action can be written line-by-line using the standard
+            'writer.WriteLine' method of the IndentedTextWriter, and the generated code will
+            have the correct indentation. *)
+
+        /// The individual lines of the reduction action code, trimmed to remove a number of
+        /// leading spaces common to all non-empty/non-whitespace lines.
+        let trimmedActionLines =
+            (* OPTIMIZE :   Use functions from ExtCore.String.Split to re-implement the code below so it doesn't
+                            create tons of unnecessary strings. *)
+            (* OPTIMIZE :   If the computation of 'trimmedActionLines' were moved down to where it's used, we could
+                            use the ExtCore.String.Split functions to eliminate the creation of those strings too --
+                            we'd simply adjust the indentation on the substring supplied by the String.Split function
+                            then use the substring extension methods from ExtCore to write the adjusted substring
+                            into the TextWriter. *)
+
+            /// The individual lines of the reduction action code,
+            /// annotated with the number of leading spaces on that line.
+            let annotatedActionLines =
+                action.Split (Emit.newlines, System.StringSplitOptions.None)
+                |> Array.map (fun line ->
+                    // First replace any tab characters in the string.
+                    let line = replaceTabs Emit.indent line
+                    let leadingSpaces = countLeadingSpaces line
+                    line, leadingSpaces)
+        
+            /// The minimum number of spaces on the left side of any line of code.
+            let minIndentation =
+                (None, annotatedActionLines)
+                ||> Array.fold (fun x (_, y) ->
+                    match x, y with
+                    | None, None ->
+                        None
+                    | (Some _ as x), None ->
+                        x
+                    | None, (Some _ as y) ->
+                        y
+                    | Some x, Some y ->
+                        Some <| min x y)
+                // Default to zero (0) indentation.
+                |> Option.fill GenericZero
+
+            // Remove the same amount of indentation from every non-empty line.
+            annotatedActionLines
+            |> Array.map (fun (line, leadingSpaces) ->
+                match leadingSpaces with
+                | None ->
+                    assert (System.String.IsNullOrWhiteSpace line)
+                    String.empty
+                | Some _ ->
+                    // Remove the computed number of spaces from the left side of this line.
+                    line.Substring (int minIndentation))
+
+        // Write the trimmed action-code lines to the IndentedTextWriter one-by-one.
+        // This ensures they're indented correctly with respect to the rest of the emitted code.
+        trimmedActionLines
+        |> Array.iter writer.WriteLine
+
+    //
+    let private nonterminalDataType isStartingNonterminal nonterminalIndex taggedGrammar =
+        taggedGrammar.NonterminalTypes
+        |> TagMap.tryFind nonterminalIndex
+        |> Option.fillWith (fun () ->
+            let startNonterminal =
+                let startNonterminal =
+                    match TagBimap.find nonterminalIndex taggedGrammar.Nonterminals with
+                    | AugmentedNonterminal.Start -> failwith "Found the Start nonterminal where only non-augmented nonterminals were expected."
+                    | AugmentedNonterminal.Nonterminal nonterminal ->
+                        nonterminal
+
+                // If this nonterminal is a starting nonterminal, prefix it with a special marker.
+                // NOTE : A declared nonterminal may be used as both a starting nonterminal and a
+                // "normal" nonterminal -- which is why we need to pass a flag in here instead of
+                // just checking against the taggedGrammar.
+                if isStartingNonterminal then
+                    "_start" + startNonterminal
+                else startNonterminal
+
+            // Create a generic type parameter to use for this nonterminal and let
+            // the F# compiler use type inference to figure out what type it should be.
+            "'" + startNonterminal)
+
+    //
+    let private emitSymbolDataRetrivals (rule : TaggedProductionRule)
+        (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+        (writer : IndentedTextWriter) =
+        // Emit code to get the values of symbols carrying data values.
+        rule
+        |> Array.iteri (fun idx symbol ->
+            match symbol with
+            | Symbol.Nonterminal nonterminalIndex ->
+                // Wrap the value in Some; nonterminals will always have a type associated with them --
+                // either the declared type or the generic type we created for it.
+                Some <| nonterminalDataType false nonterminalIndex taggedGrammar
+
+            | Symbol.Terminal terminalIndex ->
+                taggedGrammar.TerminalTypes
+                |> TagMap.tryFind terminalIndex
+            // Emit a let-binding to get the value of this symbol if it carries any data.
+            |> Option.iter (fun symbolType ->
+                fprintfn writer "let _%d = (let data = parseState.GetInput(%d) in (Microsoft.FSharp.Core.Operators.unbox data : %s)) in"
+                    (idx + 1) (idx + 1) symbolType))
+
     /// Emits F# code for a single reduction action into an IndentedTextWriter.
-    let private reduction (nonterminal : NonterminalIdentifier) (symbols : Symbol<NonterminalIdentifier, TerminalIdentifier>[]) (action : CodeFragment)
-        (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+    // <param name="nonterminalDataType">The type of the value carried by the nonterminal produced by this rule.</param>
+    let private reduction (nonterminalDataType : DeclaredType) (symbols : TaggedProductionRule) (action : CodeFragment)
         (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
         (options, writer : IndentedTextWriter) : unit =
         // Write the function declaration for this semantic action.
@@ -917,90 +1025,8 @@ module private Reductions =
 
         IndentedTextWriter.indented writer <| fun writer ->
             // Emit code to get the values of symbols carrying data values.
-            symbols
-            |> Array.iteri (fun idx symbol ->
-                match symbol with
-                | Symbol.Nonterminal nonterminal ->
-                    match Map.find nonterminal processedSpec.Nonterminals with
-                    | (Some _) as declaredType ->
-                        declaredType
-                    | None ->
-                        // Create a generic type parameter to use for this nonterminal and let
-                        // the F# compiler use type inference to figure out what type it should be.
-                        Some <| "'" + nonterminal
-                | Symbol.Terminal terminal ->
-                    Map.find terminal processedSpec.Terminals
-                // Emit a let-binding to get the value of this symbol if it carries any data.
-                |> Option.iter (fun symbolType ->
-                    fprintfn writer "let _%d = (let data = parseState.GetInput(%d) in (Microsoft.FSharp.Core.Operators.unbox data : %s)) in"
-                        (idx + 1) (idx + 1) symbolType))
+            emitSymbolDataRetrivals symbols taggedGrammar writer
 
-            /// The type of the value carried by the nonterminal produced by this rule.
-            let nonterminalValueType =
-                match Map.tryFind nonterminal processedSpec.Nonterminals with
-                | Some (Some declaredType) ->
-                    declaredType
-                | None
-                | Some None ->
-                    // Create a generic type parameter to use for this nonterminal and let
-                    // the F# compiler use type inference to figure out what type it should be.
-                    "'" + nonterminal
-
-            (*  Split 'action' into multiple lines. Determine the minimum amount of whitespace
-                which appears on the left of any line in the action, but do not consider blank
-                lines. Then, trim this minimum amount of whitespace from the left side of each
-                line. When this is done, the action can be written line-by-line using the standard
-                'writer.WriteLine' method of the IndentedTextWriter, and the generated code will
-                have the correct indentation. *)
-
-            /// The individual lines of the reduction action code, trimmed to remove a number of
-            /// leading spaces common to all non-empty/non-whitespace lines.
-            let trimmedActionLines =
-                (* OPTIMIZE :   Use functions from ExtCore.String.Split to re-implement the code below so it doesn't
-                                create tons of unnecessary strings. *)
-                (* OPTIMIZE :   If the computation of 'trimmedActionLines' were moved down to where it's used, we could
-                                use the ExtCore.String.Split functions to eliminate the creation of those strings too --
-                                we'd simply adjust the indentation on the substring supplied by the String.Split function
-                                then use the substring extension methods from ExtCore to write the adjusted substring
-                                into the TextWriter. *)
-
-                /// The individual lines of the reduction action code,
-                /// annotated with the number of leading spaces on that line.
-                let annotatedActionLines =
-                    action.Split (Emit.newlines, System.StringSplitOptions.None)
-                    |> Array.map (fun line ->
-                        // First replace any tab characters in the string.
-                        let line = replaceTabs Emit.indent line
-                        let leadingSpaces = countLeadingSpaces line
-                        line, leadingSpaces)
-        
-                /// The minimum number of spaces on the left side of any line of code.
-                let minIndentation =
-                    (None, annotatedActionLines)
-                    ||> Array.fold (fun x (_, y) ->
-                        match x, y with
-                        | None, None ->
-                            None
-                        | (Some _ as x), None ->
-                            x
-                        | None, (Some _ as y) ->
-                            y
-                        | Some x, Some y ->
-                            Some <| min x y)
-                    // Default to zero (0) indentation.
-                    |> Option.fill GenericZero
-
-                // Remove the same amount of indentation from every non-empty line.
-                annotatedActionLines
-                |> Array.map (fun (line, leadingSpaces) ->
-                    match leadingSpaces with
-                    | None ->
-                        assert (System.String.IsNullOrWhiteSpace line)
-                        String.empty
-                    | Some _ ->
-                        // Remove the computed number of spaces from the left side of this line.
-                        line.Substring (int minIndentation))
-            
             // Emit the semantic action code, wrapped in a bit of code which boxes the return value.
             writer.WriteLine "Microsoft.FSharp.Core.Operators.box"
             IndentedTextWriter.indented writer <| fun writer ->
@@ -1008,19 +1034,69 @@ module private Reductions =
                 IndentedTextWriter.indented writer <| fun writer ->
                     writer.WriteLine "("
                     IndentedTextWriter.indented writer <| fun writer ->
-                        // Write the trimmed action-code lines to the IndentedTextWriter one-by-one.
+                        // Format the user-defined semantic action code for the reduction,
+                        // then emit it into the IndentedTextWriter.
                         // This ensures they're indented correctly with respect to the rest of the emitted code.
-                        trimmedActionLines
-                        |> Array.iter writer.WriteLine
+                        emitFormattedReductionActionCode action writer
                     writer.WriteLine ")"
 
                 // Emit the nonterminal type for this production rule.
-                fprintfn writer ": %s))" nonterminalValueType
+                fprintfn writer ": %s))" nonterminalDataType
 
     /// Replaces the placeholders for symbols in production rules
     /// (e.g., $2) with valid F# value identifiers.
     let inline private replaceSymbolPlaceholders (code : CodeFragment) =
         System.Text.RegularExpressions.Regex.Replace (code, "\$(?=\d+)", "_")
+
+    //
+    let private semanticActionsByProductionRuleIndex (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+        : TagMap<ProductionRuleIndexTag, CodeFragment> =
+        (TagMap.empty, taggedGrammar.ProductionsByNonterminal)
+        ||> TagMap.fold (fun productionRuleSemanticActions nonterminalIndex ruleIndices ->
+            match TagBimap.find nonterminalIndex taggedGrammar.Nonterminals with
+            | AugmentedNonterminal.Start ->
+                productionRuleSemanticActions
+            | AugmentedNonterminal.Nonterminal nonterminal ->
+                (productionRuleSemanticActions, ruleIndices)
+                ||> TagSet.fold (fun productionRuleSemanticActions ruleIndex ->
+                    //
+                    let ruleAction =
+                        let taggedRule = TagMap.find ruleIndex taggedGrammar.Productions
+
+                        processedSpec.ProductionRules
+                        |> Map.find nonterminal
+                        |> Array.pick (fun rule ->
+                            // Determine if this rule (from the ProcessedSpec) is equal to
+                            // the one for this tagged production rule. 
+                            if Array.length taggedRule <> Array.length rule.Symbols then None
+                            else
+                                let rulesEqual =
+                                    (taggedRule, rule.Symbols)
+                                    ||> Array.forall2 (fun taggedSymbol symbol ->
+                                        match taggedSymbol, symbol with
+                                        | Symbol.Nonterminal nonterminalIndex, Symbol.Nonterminal nonterminal ->
+                                            match TagBimap.find nonterminalIndex taggedGrammar.Nonterminals with
+                                            | AugmentedNonterminal.Start -> false
+                                            | AugmentedNonterminal.Nonterminal nonterminal' ->
+                                                nonterminal' = nonterminal
+                                        | Symbol.Terminal terminalIndex, Symbol.Terminal terminal ->
+                                            match TagBimap.find terminalIndex taggedGrammar.Terminals with
+                                            | AugmentedTerminal.EndOfFile -> false
+                                            | AugmentedTerminal.Terminal terminal' ->
+                                                terminal' = terminal
+                                        | _ ->
+                                            false)
+
+                                if rulesEqual then Some rule.Action else None)
+                    
+                    // If the rule has an associated semantic action, add it to the map.
+                    match ruleAction with
+                    | None ->
+                        productionRuleSemanticActions
+                    | Some ruleAction ->
+                        // Add the semantic action for this rule to the map.
+                        TagMap.add ruleIndex ruleAction productionRuleSemanticActions))
 
     /// Emits the user-defined semantic actions for the reductions.
     let emitReductionActions (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
@@ -1032,27 +1108,53 @@ module private Reductions =
             |> Option.fill defaultParsingNamespace
             |> sprintf "raise (%s.Accept (Microsoft.FSharp.Core.Operators.box _1))"
 
+        //
+        let productionRuleSemanticActions =
+            semanticActionsByProductionRuleIndex processedSpec taggedGrammar
+
         // _fsyacc_reductions
         writer.WriteLine "let private _fsyacc_reductions = [|"
         IndentedTextWriter.indented writer <| fun writer ->
-            // Emit actions for the augmented starting nonterminals.
-            processedSpec.StartSymbols
-            |> Set.iter (fun startSymbol ->
-                let startNonterminal = "_start" + startSymbol
-                reduction startNonterminal [| Symbol.Nonterminal startSymbol |] defaultAction processedSpec taggedGrammar (options, writer))
+            /// The index of the augmented Start nonterminal.
+            let startSymbolNonterminalIndex = TagBimap.findValue Start taggedGrammar.Nonterminals
 
-            // Emit the actions for each of the production rules.
-            processedSpec.ProductionRules
-            |> Map.iter (fun nonterminal rules ->
-                rules |> Array.iter (fun rule ->
+            // Emit actions for the production rules.
+            taggedGrammar.Productions
+            |> TagMap.iter (fun ruleIndex rule ->
+                /// The index of the nonterminal produced by this rule.
+                let nonterminalIndex = TagMap.find ruleIndex taggedGrammar.NonterminalOfProduction
+
+                // Actions for the augmented starting productions are handled
+                // a bit differently than those for the declared production rules.
+                if nonterminalIndex = startSymbolNonterminalIndex then
+                    /// The index of the *declared* nonterminal produced by this rule.
+                    let startingNonterminalIndex =
+                        match Array.first rule with
+                        | Symbol.Nonterminal nonterminalIndex ->
+                            nonterminalIndex
+                        | Symbol.Terminal terminalIndex ->
+                            let msg = sprintf "Found a terminal (Index = %i) within an augmented starting production rule." (untag terminalIndex)
+                            raise <| exn msg
+
+                    let nonterminalDataType =
+                        nonterminalDataType true startingNonterminalIndex taggedGrammar
+
+                    // NOTE : We don't pass the rule itself here because it contains the
+                    // augmented EndOfFile terminal, which isn't a declared terminal.
+                    reduction nonterminalDataType [| Symbol.Nonterminal startingNonterminalIndex |] defaultAction taggedGrammar (options, writer)
+                else
                     /// The rule action, where the symbol placeholders have been replaced by
                     /// the names of variables within the generated code (e.g., $2 changed to _2).
                     let ruleAction =
-                        rule.Action
+                        productionRuleSemanticActions
+                        |> TagMap.tryFind ruleIndex
                         |> Option.map replaceSymbolPlaceholders
                         |> Option.fill defaultAction
 
-                    reduction nonterminal rule.Symbols ruleAction processedSpec taggedGrammar (options, writer)))
+                    //
+                    let nonterminalDataType = nonterminalDataType false nonterminalIndex taggedGrammar
+
+                    reduction nonterminalDataType rule ruleAction taggedGrammar (options, writer))
             
             // Emit the closing bracket of the array.
             writer.WriteLine "|]"

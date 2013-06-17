@@ -154,38 +154,6 @@ module TaggedGrammar =
                             TagMap.add nonterminalIndex nonterminalProductions taggedGrammar.ProductionsByNonterminal;
                         }))
 
-    /// Create a grammar from a tagged grammar.
-    [<System.Obsolete(
-       "This function should not be used except as a temporary aid for adapting \
-        newer code based on TaggedGrammar to work with older code based on Grammar.")>]
-    [<CompiledName("ToGrammar")>]
-    let toGrammar (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) : Grammar<'Nonterminal, 'Terminal> =
-        (Map.empty, taggedGrammar.Nonterminals)
-        ||> TagBimap.fold (fun grammar nonterminalIndex nonterminal ->
-            /// The production rules for this nonterminal.
-            let productionRules =
-                taggedGrammar.ProductionsByNonterminal
-                |> TagMap.find nonterminalIndex
-                |> TagSet.toArray
-                |> Array.map (fun productionRuleIndex ->
-                    // Get the production rule, then map its symbols back to
-                    // the original nonterminals and terminals.
-                    taggedGrammar.Productions
-                    |> TagMap.find productionRuleIndex
-                    |> Array.map (function
-                        | Symbol.Terminal terminalIndex ->
-                            taggedGrammar.Terminals
-                            |> TagBimap.find terminalIndex
-                            |> Symbol.Terminal
-
-                        | Symbol.Nonterminal nonterminalIndex ->
-                            taggedGrammar.Nonterminals
-                            |> TagBimap.find nonterminalIndex
-                            |> Symbol.Nonterminal))
-
-            // Add the production rules for this nonterminal to the grammar.
-            Map.add nonterminal productionRules grammar)
-
 
 /// A context-free grammar (CFG) where each nonterminal, terminal, and production rule
 /// has been indexed and tagged. The grammar is "augmented" with an additional
