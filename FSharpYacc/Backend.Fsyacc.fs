@@ -576,8 +576,7 @@ module internal ParserTables =
     let private emitStateToProductionIndicesTable
         (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
         let _fsyacc_stateToProdIdxsTableElements, _fsyacc_stateToProdIdxsTableRowOffsets =
-            let parserStates =
-                TagBimap.toArray parserTable.ParserStates
+            let parserStates = TagBimap.toArray parserTable.ParserStates
 
             let stateToProdIdxsTableElements =
                 // Initialize to a reasonable size to avoid small re-allocations.
@@ -591,17 +590,18 @@ module internal ParserTables =
             |> Array.iteri (fun idx (_, items) ->
                 // Record the starting index (offset) for this state.
                 stateToProdIdxsTableRowOffsets.[idx] <-
-                    Checked.uint16 stateToProdIdxsTableElements.Count
+                    ResizeArray.length stateToProdIdxsTableElements
+                    |> Checked.uint16
 
                 // Add the number of elements for this state to the 'elements' array.
-                stateToProdIdxsTableElements.Add (Checked.uint16 <| Set.count items)
+                stateToProdIdxsTableElements
+                |> ResizeArray.add (Checked.uint16 <| Set.count items)
 
                 // Store the elements for this state into the 'elements' array.
                 items
                 |> Set.iter (fun item ->
-                    item.ProductionRuleIndex
-                    |> Checked.uint16
-                    |> stateToProdIdxsTableElements.Add))
+                    stateToProdIdxsTableElements
+                    |> ResizeArray.add (Checked.uint16 item.ProductionRuleIndex)))
 
             // Return the constructed arrays.
             stateToProdIdxsTableElements.ToArray (),
