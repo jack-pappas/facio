@@ -510,7 +510,7 @@ module private FsYacc =
 
         /// Computes the GOTO table for the parser, then emits it as a sparse (compressed)
         /// table into the generated parser code.
-        let private emitGotoTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        let private emitGotoTable startSymbolCount
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
             let _fsyacc_gotos, _fsyacc_sparseGotoTableRowOffsets =
                 /// The source and target states of GOTO transitions over each nonterminal.
@@ -528,7 +528,6 @@ module private FsYacc =
                         // Update the map with the new set of edges for this nonterminal.
                         Map.add nonterminal edges gotoEdges)
 
-                let startSymbolCount = Set.count processedSpec.StartSymbols
                 let gotos =
                     // Initialize to a reasonable size to avoid small re-allocations.
                     ResizeArray (4 * gotoEdges.Count)
@@ -777,63 +776,46 @@ module private FsYacc =
                 _fsyacc_actionTableRowOffsets writer
 
         //
-        let private emitReductionSymbolCounts (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        let private emitReductionSymbolCounts
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (writer : IndentedTextWriter) =
             let _fsyacc_reductionSymbolCounts =
-                (* TODO : Modify the code below to use 'taggedGrammar' instead of 'processedSpec'. *)
-                // OPTIMIZE : We can probably just use an array here, it shouldn't need resizing.
-                let symbolCounts = ResizeArray (TagMap.count taggedGrammar.Productions)
+                let symbolCounts = Array.zeroCreate <| TagMap.count taggedGrammar.Productions
 
-                // The productions created by the start symbols reduce a single value --
-                // the start symbols (nonterminals) themselves.
-                for i = 0 to (Set.count processedSpec.StartSymbols) - 1 do
-                    symbolCounts.Add 1us
+                let eofTerminalIndex = TagBimap.findValue EndOfFile taggedGrammar.Terminals
+                taggedGrammar.Productions
+                |> TagMap.iter (fun ruleIndex rule ->
+                    symbolCounts.[untag ruleIndex] <-
+                        // The EndOfFile marker is not included in the count.
+                        rule
+                        |> Array.countWith (function
+                            | Symbol.Nonterminal _ -> true
+                            | Symbol.Terminal terminalIndex ->
+                                terminalIndex <> eofTerminalIndex)
+                        |> Checked.uint16)
 
-                // Add the number of symbols in each production rule.
-                processedSpec.ProductionRules
-                |> Map.iter (fun _ rules ->
-                    rules |> Array.iter (fun rule ->
-                        symbolCounts.Add (uint16 <| Array.length rule.Symbols)))
-
-                // Return the symbol count.
-                symbolCounts.ToArray ()
+                symbolCounts
 
             oneLineArrayUInt16 "_fsyacc_reductionSymbolCounts" false
                 _fsyacc_reductionSymbolCounts writer
 
         //
-        let emitProductionToNonterminalTable (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
-            (writer : IndentedTextWriter) =
+        let emitProductionIndexToNonterminalIndexTable
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>) (writer : IndentedTextWriter) =
             let _fsyacc_productionToNonTerminalTable =
-                (* TODO : Modify the code below to use 'taggedGrammar' instead of 'processedSpec'. *)
-                let productionToNonTerminalTable = Array.zeroCreate (TagMap.count taggedGrammar.Productions)
+                let productionIndexToNonterminalIndexTable =
+                    Array.zeroCreate (TagMap.count taggedGrammar.Productions)
 
-                // The augmented start symbol will always have nonterminal index 0
-                // so we don't actually have to write anything to the array for the
-                // elements corresponding to it's production rules (because those
-                // elements will already be zeroed-out).
-
-                // Add the nonterminal indices for each production rule.
-                ((1, Set.count processedSpec.StartSymbols), processedSpec.ProductionRules)
-                ||> Map.fold (fun (nonterminalIndex, prodRuleIndex) _ rules ->
-                    /// The number of production rules for this nonterminal.
-                    let ruleCount = Array.length rules
-
-                    // Set the next 'ruleCount' elements in the array to this nonterminal's index.
-                    for i = 0 to ruleCount - 1 do
-                        productionToNonTerminalTable.[prodRuleIndex + i] <-
-                            Checked.uint16 nonterminalIndex
-
-                    // Update the counters before the next iteration.
-                    nonterminalIndex + 1,
-                    prodRuleIndex + ruleCount)
-                // Discard the counters.
-                |> ignore
+                taggedGrammar.ProductionsByNonterminal
+                |> TagMap.iter (fun nonterminalIndex ruleIndices ->
+                    ruleIndices
+                    |> TagSet.iter (fun ruleIndex ->
+                        productionIndexToNonterminalIndexTable.[untag ruleIndex] <-
+                            Checked.uint16 <| untag nonterminalIndex
+                        ))
 
                 // Return the array.
-                productionToNonTerminalTable
+                productionIndexToNonterminalIndexTable
 
             oneLineArrayUInt16 "_fsyacc_productionToNonTerminalTable" false
                 _fsyacc_productionToNonTerminalTable writer
@@ -894,15 +876,14 @@ module private FsYacc =
                 _fsyacc_immediateActions writer
 
         /// Emits F# code which creates the parser tables into an IndentedTextWriter.
-        let computeAndEmit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+        let computeAndEmit (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (parserTable : Lr0ParserTable<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
             (* _fsyacc_action_rows *)
             intLiteralDecl "_fsyacc_action_rows" false
                 (TagBimap.count parserTable.ParserStates) writer
 
             // Emit the GOTO table.
-            emitGotoTable processedSpec parserTable writer
+            emitGotoTable (TagSet.count taggedGrammar.StartNonterminals) parserTable writer
             
             // Emit the state->production-indices table.
             emitStateToProductionIndicesTable parserTable writer
@@ -911,10 +892,10 @@ module private FsYacc =
             emitActionTable taggedGrammar parserTable writer
             
             // Emit the reduction symbol counts.
-            emitReductionSymbolCounts processedSpec taggedGrammar writer
+            emitReductionSymbolCounts taggedGrammar writer
 
-            // Emit the production-index->nonterminal table.
-            emitProductionToNonterminalTable processedSpec taggedGrammar writer
+            // Emit the production-index->nonterminal-index table.
+            emitProductionIndexToNonterminalIndexTable taggedGrammar writer
             
             // Emit the immediate actions table.
             emitImmediateActions taggedGrammar parserTable writer
@@ -1188,7 +1169,7 @@ module private FsYacc =
         ParserTypes.emit taggedGrammar writer
 
         // Emit the parser tables.
-        ParserTables.computeAndEmit processedSpec taggedGrammar parserTable writer
+        ParserTables.computeAndEmit taggedGrammar parserTable writer
 
         // Emit the reduction functions (i.e., the user-specified actions / code fragments).
         reductions processedSpec taggedGrammar (options, writer)
