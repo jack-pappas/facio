@@ -221,58 +221,63 @@ module private FsYacc =
         let (*private*) symbolicStartingNonterminalName (startingNonterminal : NonterminalIdentifier) =
             "NONTERM__start" + startingNonterminal
 
-        /// Emits F# code declaring terminal (token) and nonterminal types
-        /// used by the generated parser into an IndentedTextWriter.
-        let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        /// Emit the token type declaration.
+        let private emitTokenTypeDecl (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (writer : IndentedTextWriter) =
-
-            // Emit the token type declaration.
             quickSummary writer "This type is the type of tokens accepted by the parser."
             unionTypeDecl "token" true processedSpec.Terminals writer
             writer.WriteLine ()
 
-            do
-                let symbolicTerminalNamesAndTypes =
-                    (Set.empty, taggedGrammar.Terminals)
-                    ||> TagBimap.fold (fun symbolicTerminalNames _ terminal ->
-                        Set.add (symbolicTerminalName terminal) symbolicTerminalNames)
-                    // Create a map using the set as the key set, and where each value is None.
-                    |> Map.ofKeys (fun _ -> None)
+        // Emit the symbolic token-name type declaration.
+        let private emitSymbolicTokenNameTypeDecl (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+            (writer : IndentedTextWriter) =
+            let symbolicTerminalNamesAndTypes =
+                (Set.empty, taggedGrammar.Terminals)
+                ||> TagBimap.fold (fun symbolicTerminalNames _ terminal ->
+                    Set.add (symbolicTerminalName terminal) symbolicTerminalNames)
+                // Create a map using the set as the key set, and where each value is None.
+                |> Map.ofKeys (fun _ -> None)
 
-                // Emit the symbolic token-name type declaration.
-                quickSummary writer "This type is used to give symbolic names to token indexes, useful for error messages."
-                unionTypeDecl "tokenId" false symbolicTerminalNamesAndTypes writer
-                writer.WriteLine ()
-
-            do
-                /// The symbolic nonterminals. All values in this map are None
-                /// since the cases don't carry values.
-                let symbolicNonterminalNamesAndTypes =
-                    (Set.empty, taggedGrammar.Nonterminals)
-                    ||> TagBimap.fold (fun symbolicNonterminalNames _ nonterminal ->
-                        match nonterminal with
-                        | AugmentedNonterminal.Start ->
-                            // Add a symbolic nonterminal for each of the starting nonterminals.
-                            (symbolicNonterminalNames, taggedGrammar.StartNonterminals)
-                            ||> TagSet.fold (fun symbolicNonterminalNames startingNonterminalIndex ->
-                                match TagBimap.find startingNonterminalIndex taggedGrammar.Nonterminals with
-                                | AugmentedNonterminal.Start ->
-                                    failwith "Unexpectedly found the Start nonterminal in the tagged grammar's set of starting nonterminals."
-                                | AugmentedNonterminal.Nonterminal startingNonterminal ->
-                                    Set.add (symbolicStartingNonterminalName startingNonterminal) symbolicNonterminalNames)
-
-                        | AugmentedNonterminal.Nonterminal nonterminal ->
-                            Set.add (symbolicNonterminalName nonterminal) symbolicNonterminalNames)
-                    // Create a map using the set as the key set, and where each value is None.
-                    |> Map.ofKeys (fun _ -> None)
-
-                // Emit the symbolic nonterminal type declaration.
-                quickSummary writer "This type is used to give symbolic names to token indexes, useful for error messages."
-                unionTypeDecl "nonterminalId" false symbolicNonterminalNamesAndTypes writer
+            // Emit the symbolic token-name type declaration.
+            quickSummary writer "This type is used to give symbolic names to token indexes, useful for error messages."
+            unionTypeDecl "tokenId" false symbolicTerminalNamesAndTypes writer
             writer.WriteLine ()
-         
-            // Emit the token -> token-tag function.
+
+        //
+        let private emitSymbolicNonterminalTypeDecl (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+            (writer : IndentedTextWriter) =
+            /// The symbolic nonterminals. All values in this map are None
+            /// since the cases don't carry values.
+            let symbolicNonterminalNamesAndTypes =
+                (Set.empty, taggedGrammar.Nonterminals)
+                ||> TagBimap.fold (fun symbolicNonterminalNames _ nonterminal ->
+                    match nonterminal with
+                    | AugmentedNonterminal.Start ->
+                        // Add a symbolic nonterminal for each of the starting nonterminals.
+                        (symbolicNonterminalNames, taggedGrammar.StartNonterminals)
+                        ||> TagSet.fold (fun symbolicNonterminalNames startingNonterminalIndex ->
+                            match TagBimap.find startingNonterminalIndex taggedGrammar.Nonterminals with
+                            | AugmentedNonterminal.Start ->
+                                failwith "Unexpectedly found the Start nonterminal in the tagged grammar's set of starting nonterminals."
+                            | AugmentedNonterminal.Nonterminal startingNonterminal ->
+                                Set.add (symbolicStartingNonterminalName startingNonterminal) symbolicNonterminalNames)
+
+                    | AugmentedNonterminal.Nonterminal nonterminal ->
+                        Set.add (symbolicNonterminalName nonterminal) symbolicNonterminalNames)
+                // Create a map using the set as the key set, and where each value is None.
+                |> Map.ofKeys (fun _ -> None)
+
+            // Emit the symbolic nonterminal type declaration.
+            quickSummary writer "This type is used to give symbolic names to token indexes, useful for error messages."
+            unionTypeDecl "nonterminalId" false symbolicNonterminalNamesAndTypes writer
+
+        // Emit the token -> token-tag function.
+        let private emitTokenToTokenTagLookupFunction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+            (writer : IndentedTextWriter) =
             quickSummary writer "Maps tokens to integer indexes."
             writer.WriteLine "let private tagOfToken = function"
             IndentedTextWriter.indented writer <| fun writer ->
@@ -291,9 +296,11 @@ module private FsYacc =
                             | Some _ ->
                                 sprintf "| %s _ -> %i" terminal (untag terminalIndex)
                             |> writer.WriteLine)
-            writer.WriteLine ()
 
-            // Emit the token-tag -> symbolic-token-name function.
+        // Emit the token-tag -> symbolic-token-name function.
+        let private emitTokenTagToSymTokenNameLookupFunction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+            (writer : IndentedTextWriter) =
             quickSummary writer "Maps integer indices to symbolic token ids."
             writer.WriteLine "let private tokenTagToTokenId = function"
             IndentedTextWriter.indented writer <| fun writer ->
@@ -311,9 +318,12 @@ module private FsYacc =
                     // When the catch-all is matched, it should raise an exception.
                     writer.WriteLine (
                         "failwithf \"tokenTagToTokenId: Invalid token. (Tag = %i)\" " + catchAllVariableName)
-            writer.WriteLine ()
 
-            // Emit the production-index -> symbolic-nonterminal-name function.
+        // Emit the production-index -> symbolic-nonterminal-name function.
+        let private emitProdIdxToSymNonterminalNameLookupFunction
+            (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+            (writer : IndentedTextWriter) =
             quickSummary writer "Maps production indexes returned in syntax errors to strings representing
                                  the non-terminal that would be produced by that production."
             writer.WriteLine "let private prodIdxToNonTerminal = function"
@@ -372,16 +382,11 @@ module private FsYacc =
                     // When the catch-all is matched, it should raise an exception.
                     writer.WriteLine (
                         "failwithf \"prodIdxToNonTerminal: Invalid production index. (Index = %i)\" " + catchAllVariableName)
-            writer.WriteLine ()
 
-            // Emit constants for "end-of-input" and "tag of error terminal"
-            intLiteralDecl "_fsyacc_endOfInputTag" false
-                (untag <| TagBimap.findValue AugmentedTerminal.EndOfFile taggedGrammar.Terminals) writer
-            intLiteralDecl "_fsyacc_tagOfErrorTerminal" false
-                (untag <| TagBimap.findValue (AugmentedTerminal.Terminal errorTerminal) taggedGrammar.Terminals) writer
-            writer.WriteLine ()
-
-            // Emit the token -> token-name function.
+        // Emit the token -> token-name function.
+        let private emitTokenToTokenNameLookupFunction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+            (writer : IndentedTextWriter) =
             quickSummary writer "Gets the name of a token as a string."
             writer.WriteLine "let token_to_string = function"
             IndentedTextWriter.indented writer <| fun writer ->
@@ -394,9 +399,11 @@ module private FsYacc =
                     | Some _ ->
                         sprintf "| %s _ -> \"%s\"" tokenName tokenName
                     |> writer.WriteLine)
-            writer.WriteLine ()
 
-            // Emit the function for getting the token data.
+        // Emit the function for getting the token data.
+        let private emitTokenDataGetterFunction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+            (writer : IndentedTextWriter) =
             quickSummary writer "Gets the data carried by a token as an object."
             writer.WriteLine "let private _fsyacc_dataOfToken = function"
             IndentedTextWriter.indented writer <| fun writer ->
@@ -409,6 +416,48 @@ module private FsYacc =
                     | Some _ ->
                         sprintf "| %s _fsyacc_x -> box _fsyacc_x" tokenName
                     |> writer.WriteLine)
+
+        /// Emits F# code declaring terminal (token) and nonterminal types
+        /// used by the generated parser into an IndentedTextWriter.
+        let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+            (writer : IndentedTextWriter) =
+
+            // Emit the token type declaration.
+            emitTokenTypeDecl processedSpec taggedGrammar writer
+
+            // Emit the symbolic token-name type declaration.
+            emitSymbolicTokenNameTypeDecl processedSpec taggedGrammar writer
+
+            // Emit the symbolic nonterminal type declaration.
+            emitSymbolicNonterminalTypeDecl processedSpec taggedGrammar writer
+            writer.WriteLine ()
+         
+            // Emit the token -> token-tag function.
+            emitTokenToTokenTagLookupFunction processedSpec taggedGrammar writer
+            writer.WriteLine ()
+
+            // Emit the token-tag -> symbolic-token-name function.
+            emitTokenTagToSymTokenNameLookupFunction processedSpec taggedGrammar writer
+            writer.WriteLine ()
+
+            // Emit the production-index -> symbolic-nonterminal-name function.
+            emitProdIdxToSymNonterminalNameLookupFunction processedSpec taggedGrammar writer
+            writer.WriteLine ()
+
+            // Emit constants for "end-of-input" and "tag of error terminal"
+            intLiteralDecl "_fsyacc_endOfInputTag" false
+                (untag <| TagBimap.findValue AugmentedTerminal.EndOfFile taggedGrammar.Terminals) writer
+            intLiteralDecl "_fsyacc_tagOfErrorTerminal" false
+                (untag <| TagBimap.findValue (AugmentedTerminal.Terminal errorTerminal) taggedGrammar.Terminals) writer
+            writer.WriteLine ()
+
+            // Emit the token -> token-name function.
+            emitTokenToTokenNameLookupFunction processedSpec taggedGrammar writer
+            writer.WriteLine ()
+
+            // Emit the function for getting the token data.
+            emitTokenDataGetterFunction processedSpec taggedGrammar writer
             writer.WriteLine ()
 
 
