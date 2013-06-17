@@ -222,15 +222,32 @@ module private FsYacc =
             "NONTERM__start" + startingNonterminal
 
         /// Emit the token type declaration.
-        let private emitTokenTypeDecl (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        let private emitTokenTypeDecl
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (writer : IndentedTextWriter) =
+            let terminalsAndTypes =
+                (Map.empty, taggedGrammar.Terminals)
+                ||> TagBimap.fold (fun terminalsAndTypes terminalIndex terminal ->
+                    // Built-in and implicit terminals are not included in this map.
+                    match terminal with
+                    | AugmentedTerminal.EndOfFile ->
+                        terminalsAndTypes
+                    | AugmentedTerminal.Terminal terminal ->
+                        // Is this one of the implicit terminals?
+                        // TODO : This should check against a set to make things easier...but for now, we only have one implicit terminal.
+                        // Perhaps create a 3-way active pattern (|EndOfFile|BuiltIn|Declared|) to take care of it.
+                        if terminal = errorTerminal then
+                            terminalsAndTypes
+                        else
+                            let terminalType = TagMap.tryFind terminalIndex taggedGrammar.TerminalTypes
+                            Map.add terminal terminalType terminalsAndTypes)
+
             quickSummary writer "This type is the type of tokens accepted by the parser."
-            unionTypeDecl "token" true processedSpec.Terminals writer
+            unionTypeDecl "token" true terminalsAndTypes writer
             writer.WriteLine ()
 
         // Emit the symbolic token-name type declaration.
-        let private emitSymbolicTokenNameTypeDecl (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        let private emitSymbolicTokenNameTypeDecl
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (writer : IndentedTextWriter) =
             let symbolicTerminalNamesAndTypes =
@@ -246,7 +263,7 @@ module private FsYacc =
             writer.WriteLine ()
 
         //
-        let private emitSymbolicNonterminalTypeDecl (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        let private emitSymbolicNonterminalTypeDecl
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (writer : IndentedTextWriter) =
             /// The symbolic nonterminals. All values in this map are None
@@ -275,7 +292,7 @@ module private FsYacc =
             unionTypeDecl "nonterminalId" false symbolicNonterminalNamesAndTypes writer
 
         // Emit the token -> token-tag function.
-        let private emitTokenToTokenTagLookupFunction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        let private emitTokenToTokenTagLookupFunction
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (writer : IndentedTextWriter) =
             quickSummary writer "Maps tokens to integer indexes."
@@ -289,8 +306,7 @@ module private FsYacc =
                     | Terminal terminal ->
                         // Don't emit cases for the built-in (implicit) terminals.
                         if terminal <> errorTerminal then
-                            // TODO : Get the terminal type (if any) from the TaggedGrammar, not processedSpec.
-                            match Map.tryFind terminal processedSpec.Terminals with
+                            match TagMap.tryFind terminalIndex taggedGrammar.TerminalTypes with
                             | None ->
                                 sprintf "| %s -> %i" terminal (untag terminalIndex)
                             | Some _ ->
@@ -298,7 +314,7 @@ module private FsYacc =
                             |> writer.WriteLine)
 
         // Emit the token-tag -> symbolic-token-name function.
-        let private emitTokenTagToSymTokenNameLookupFunction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+        let private emitTokenTagToSymTokenNameLookupFunction
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (writer : IndentedTextWriter) =
             quickSummary writer "Maps integer indices to symbolic token ids."
@@ -321,7 +337,6 @@ module private FsYacc =
 
         // Emit the production-index -> symbolic-nonterminal-name function.
         let private emitProdIdxToSymNonterminalNameLookupFunction
-            (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
             (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
             (writer : IndentedTextWriter) =
             quickSummary writer "Maps production indexes returned in syntax errors to strings representing
@@ -384,65 +399,74 @@ module private FsYacc =
                         "failwithf \"prodIdxToNonTerminal: Invalid production index. (Index = %i)\" " + catchAllVariableName)
 
         // Emit the token -> token-name function.
-        let private emitTokenToTokenNameLookupFunction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
-            (writer : IndentedTextWriter) =
+        let private emitTokenToTokenNameLookupFunction
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>) (writer : IndentedTextWriter) =
             quickSummary writer "Gets the name of a token as a string."
             writer.WriteLine "let token_to_string = function"
             IndentedTextWriter.indented writer <| fun writer ->
-                // Emit a case for each terminal (token).
-                processedSpec.Terminals
-                |> Map.iter (fun tokenName tokenType ->
-                    match tokenType with
-                    | None ->
-                        sprintf "| %s -> \"%s\"" tokenName tokenName
-                    | Some _ ->
-                        sprintf "| %s _ -> \"%s\"" tokenName tokenName
-                    |> writer.WriteLine)
+                // Emit a case for each declared terminal (token) --
+                // implicit/built-in terminals are skipped.
+                taggedGrammar.Terminals
+                |> TagBimap.iter (fun terminalIndex terminal ->
+                    match terminal with
+                    | AugmentedTerminal.EndOfFile -> ()
+                    | AugmentedTerminal.Terminal terminal ->
+                        // Is this a built-in/implicit terminal?
+                        if terminal = errorTerminal then ()
+                        else
+                            // Data-carrying terminals need to be handled specially.
+                            if TagMap.containsKey terminalIndex taggedGrammar.TerminalTypes then
+                                sprintf "| %s _ -> \"%s\"" terminal terminal
+                            else
+                                sprintf "| %s -> \"%s\"" terminal terminal
+                            |> writer.WriteLine)
 
         // Emit the function for getting the token data.
-        let private emitTokenDataGetterFunction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
-            (writer : IndentedTextWriter) =
+        let private emitTokenDataGetterFunction
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>) (writer : IndentedTextWriter) =
             quickSummary writer "Gets the data carried by a token as an object."
             writer.WriteLine "let private _fsyacc_dataOfToken = function"
             IndentedTextWriter.indented writer <| fun writer ->
-                // Emit a case for each terminal (token).
-                processedSpec.Terminals
-                |> Map.iter (fun tokenName tokenType ->
-                    match tokenType with
-                    | None ->
-                        sprintf "| %s -> (null : System.Object)" tokenName
-                    | Some _ ->
-                        sprintf "| %s _fsyacc_x -> box _fsyacc_x" tokenName
-                    |> writer.WriteLine)
+                // Emit a case for each declared terminal (token) --
+                // implicit/built-in terminals are skipped.
+                taggedGrammar.Terminals
+                |> TagBimap.iter (fun terminalIndex terminal ->
+                    match terminal with
+                    | AugmentedTerminal.EndOfFile -> ()
+                    | AugmentedTerminal.Terminal terminal ->
+                        // Is this a built-in/implicit terminal?
+                        if terminal = errorTerminal then ()
+                        else
+                            match TagMap.tryFind terminalIndex taggedGrammar.TerminalTypes with
+                            | None ->
+                                sprintf "| %s -> (null : System.Object)" terminal
+                            | Some _ ->
+                                sprintf "| %s _fsyacc_x -> box _fsyacc_x" terminal
+                            |> writer.WriteLine)
 
-        /// Emits F# code declaring terminal (token) and nonterminal types
-        /// used by the generated parser into an IndentedTextWriter.
-        let emit (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
-            (writer : IndentedTextWriter) =
-
+        /// Emits F# code declaring terminal (token) and nonterminal types used by the
+        /// generated parser into an IndentedTextWriter.
+        let emit (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>) (writer : IndentedTextWriter) =
             // Emit the token type declaration.
-            emitTokenTypeDecl processedSpec taggedGrammar writer
+            emitTokenTypeDecl taggedGrammar writer
 
             // Emit the symbolic token-name type declaration.
-            emitSymbolicTokenNameTypeDecl processedSpec taggedGrammar writer
+            emitSymbolicTokenNameTypeDecl taggedGrammar writer
 
             // Emit the symbolic nonterminal type declaration.
-            emitSymbolicNonterminalTypeDecl processedSpec taggedGrammar writer
+            emitSymbolicNonterminalTypeDecl taggedGrammar writer
             writer.WriteLine ()
          
             // Emit the token -> token-tag function.
-            emitTokenToTokenTagLookupFunction processedSpec taggedGrammar writer
+            emitTokenToTokenTagLookupFunction taggedGrammar writer
             writer.WriteLine ()
 
             // Emit the token-tag -> symbolic-token-name function.
-            emitTokenTagToSymTokenNameLookupFunction processedSpec taggedGrammar writer
+            emitTokenTagToSymTokenNameLookupFunction taggedGrammar writer
             writer.WriteLine ()
 
             // Emit the production-index -> symbolic-nonterminal-name function.
-            emitProdIdxToSymNonterminalNameLookupFunction processedSpec taggedGrammar writer
+            emitProdIdxToSymNonterminalNameLookupFunction taggedGrammar writer
             writer.WriteLine ()
 
             // Emit constants for "end-of-input" and "tag of error terminal"
@@ -453,11 +477,11 @@ module private FsYacc =
             writer.WriteLine ()
 
             // Emit the token -> token-name function.
-            emitTokenToTokenNameLookupFunction processedSpec taggedGrammar writer
+            emitTokenToTokenNameLookupFunction taggedGrammar writer
             writer.WriteLine ()
 
             // Emit the function for getting the token data.
-            emitTokenDataGetterFunction processedSpec taggedGrammar writer
+            emitTokenDataGetterFunction taggedGrammar writer
             writer.WriteLine ()
 
 
@@ -1161,7 +1185,7 @@ module private FsYacc =
             writer.WriteLine ())
 
         // Emit the parser types (e.g., the token type).
-        ParserTypes.emit processedSpec taggedGrammar writer
+        ParserTypes.emit taggedGrammar writer
 
         // Emit the parser tables.
         ParserTables.computeAndEmit processedSpec taggedGrammar parserTable writer
