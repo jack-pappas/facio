@@ -194,11 +194,7 @@ module private FsYaccConstants =
 //
 [<RequireQualifiedAccess>]
 module internal ParserTypes =
-    open System
-    open System.Diagnostics
-    open Printf
     open Graham
-    open Graham.LR
     open BackendUtils.CodeGen
 
 
@@ -488,9 +484,7 @@ module internal ParserTypes =
 /// Functions for computing the parser tables and emitting them into the generated code.
 [<RequireQualifiedAccess>]
 module internal ParserTables =
-    open System
     open System.Diagnostics
-    open Printf
     open Graham
     open Graham.LR
     open BackendUtils.CodeGen
@@ -907,9 +901,6 @@ module internal ParserTables =
 //
 [<RequireQualifiedAccess>]
 module private Reductions =
-    open System
-    open System.Diagnostics
-    open Printf
     open Graham
     open Graham.LR
     open BackendUtils.CodeGen
@@ -976,7 +967,7 @@ module private Reductions =
                 /// The individual lines of the reduction action code,
                 /// annotated with the number of leading spaces on that line.
                 let annotatedActionLines =
-                    action.Split (Emit.newlines, StringSplitOptions.None)
+                    action.Split (Emit.newlines, System.StringSplitOptions.None)
                     |> Array.map (fun line ->
                         // First replace any tab characters in the string.
                         let line = replaceTabs Emit.indent line
@@ -1004,8 +995,8 @@ module private Reductions =
                 |> Array.map (fun (line, leadingSpaces) ->
                     match leadingSpaces with
                     | None ->
-                        assert (String.IsNullOrWhiteSpace line)
-                        String.Empty
+                        assert (System.String.IsNullOrWhiteSpace line)
+                        String.empty
                     | Some _ ->
                         // Remove the computed number of spaces from the left side of this line.
                         line.Substring (int minIndentation))
@@ -1074,9 +1065,6 @@ module private Reductions =
 /// by the older 'fsyacc' tool from the F# PowerPack.
 [<RequireQualifiedAccess>]
 module private FsYacc =
-    open System
-    open System.Diagnostics
-    open Printf
     open Graham
     open Graham.LR
     open BackendUtils.CodeGen
@@ -1180,7 +1168,7 @@ module private FsYacc =
             // IndentedTextWriter; this ensures that the newlines are correct for this system
             // and also that the indentation level is correct.
             // OPTIMIZE : Use String.Split.iter from ExtCore.
-            header.Split (Emit.newlines, StringSplitOptions.None)
+            header.Split (Emit.newlines, System.StringSplitOptions.None)
             |> Array.iter (fun codeLine ->
                 (* TODO :   Trim the lines of code here, as done for the user-specified actions.
                             We'd have to process the entire array first to determine the "base"
