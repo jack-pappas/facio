@@ -237,6 +237,32 @@ let specToGrammar (processedSpec : ProcessedSpecification<_,_>)
                 { taggedGrammar with
                     Terminals = TagBimap.add terminalIndex terminal taggedGrammar.Terminals; })
 
+
     // Augment the tagged grammar with the Start nonterminal, EndOfFile terminal,
     // and new production rules for the Start nonterminal.
-    AugmentedTaggedGrammar.augmentWith taggedGrammar processedSpec.StartSymbols
+    let augTaggedGrammar = AugmentedTaggedGrammar.augmentWith taggedGrammar processedSpec.StartSymbols
+
+    // Add the types of the terminals and nonterminals, if they were specified.
+    let augTaggedGrammar =
+        (augTaggedGrammar, processedSpec.Terminals)
+        ||> Map.fold (fun augTaggedGrammar terminal terminalType ->
+            match terminalType with
+            | None ->
+                augTaggedGrammar
+            | Some terminalType ->
+                let terminalIndex = TagBimap.findValue (AugmentedTerminal.Terminal terminal) augTaggedGrammar.Terminals
+                { augTaggedGrammar with
+                    TerminalTypes = TagMap.add terminalIndex terminalType augTaggedGrammar.TerminalTypes; })
+
+    let augTaggedGrammar =
+        (augTaggedGrammar, processedSpec.Nonterminals)
+        ||> Map.fold (fun augTaggedGrammar nonterminal nonterminalType ->
+            match nonterminalType with
+            | None ->
+                augTaggedGrammar
+            | Some nonterminalType ->
+                let nonterminalIndex = TagBimap.findValue (AugmentedNonterminal.Nonterminal nonterminal) augTaggedGrammar.Nonterminals
+                { augTaggedGrammar with
+                    NonterminalTypes = TagMap.add nonterminalIndex nonterminalType augTaggedGrammar.NonterminalTypes; })
+
+    augTaggedGrammar
