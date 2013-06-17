@@ -901,160 +901,163 @@ module private FsYacc =
             emitImmediateActions taggedGrammar parserTable writer
 
 
-    /// Emits F# code for a single reduction action into an IndentedTextWriter.
-    let private reduction (nonterminal : NonterminalIdentifier) (symbols : Symbol<NonterminalIdentifier, TerminalIdentifier>[]) (action : CodeFragment)
-        (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-        (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
-        (options, writer : IndentedTextWriter) : unit =
-        // Write the function declaration for this semantic action.
-        options.ParserInterpreterNamespace
-        |> Option.fill defaultParsingNamespace
-        |> fprintfn writer "(fun (parseState : %s.IParseState) ->"
+    //
+    [<RequireQualifiedAccess>]
+    module private Reductions =
+        /// Emits F# code for a single reduction action into an IndentedTextWriter.
+        let private reduction (nonterminal : NonterminalIdentifier) (symbols : Symbol<NonterminalIdentifier, TerminalIdentifier>[]) (action : CodeFragment)
+            (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>)
+            (options, writer : IndentedTextWriter) : unit =
+            // Write the function declaration for this semantic action.
+            options.ParserInterpreterNamespace
+            |> Option.fill defaultParsingNamespace
+            |> fprintfn writer "(fun (parseState : %s.IParseState) ->"
 
-        IndentedTextWriter.indented writer <| fun writer ->
-            // Emit code to get the values of symbols carrying data values.
-            symbols
-            |> Array.iteri (fun idx symbol ->
-                match symbol with
-                | Symbol.Nonterminal nonterminal ->
-                    match Map.find nonterminal processedSpec.Nonterminals with
-                    | (Some _) as declaredType ->
+            IndentedTextWriter.indented writer <| fun writer ->
+                // Emit code to get the values of symbols carrying data values.
+                symbols
+                |> Array.iteri (fun idx symbol ->
+                    match symbol with
+                    | Symbol.Nonterminal nonterminal ->
+                        match Map.find nonterminal processedSpec.Nonterminals with
+                        | (Some _) as declaredType ->
+                            declaredType
+                        | None ->
+                            // Create a generic type parameter to use for this nonterminal and let
+                            // the F# compiler use type inference to figure out what type it should be.
+                            Some <| "'" + nonterminal
+                    | Symbol.Terminal terminal ->
+                        Map.find terminal processedSpec.Terminals
+                    // Emit a let-binding to get the value of this symbol if it carries any data.
+                    |> Option.iter (fun symbolType ->
+                        fprintfn writer "let _%d = (let data = parseState.GetInput(%d) in (Microsoft.FSharp.Core.Operators.unbox data : %s)) in"
+                            (idx + 1) (idx + 1) symbolType))
+
+                /// The type of the value carried by the nonterminal produced by this rule.
+                let nonterminalValueType =
+                    match Map.tryFind nonterminal processedSpec.Nonterminals with
+                    | Some (Some declaredType) ->
                         declaredType
-                    | None ->
+                    | None
+                    | Some None ->
                         // Create a generic type parameter to use for this nonterminal and let
                         // the F# compiler use type inference to figure out what type it should be.
-                        Some <| "'" + nonterminal
-                | Symbol.Terminal terminal ->
-                    Map.find terminal processedSpec.Terminals
-                // Emit a let-binding to get the value of this symbol if it carries any data.
-                |> Option.iter (fun symbolType ->
-                    fprintfn writer "let _%d = (let data = parseState.GetInput(%d) in (Microsoft.FSharp.Core.Operators.unbox data : %s)) in"
-                        (idx + 1) (idx + 1) symbolType))
+                        "'" + nonterminal
 
-            /// The type of the value carried by the nonterminal produced by this rule.
-            let nonterminalValueType =
-                match Map.tryFind nonterminal processedSpec.Nonterminals with
-                | Some (Some declaredType) ->
-                    declaredType
-                | None
-                | Some None ->
-                    // Create a generic type parameter to use for this nonterminal and let
-                    // the F# compiler use type inference to figure out what type it should be.
-                    "'" + nonterminal
+                (*  Split 'action' into multiple lines. Determine the minimum amount of whitespace
+                    which appears on the left of any line in the action, but do not consider blank
+                    lines. Then, trim this minimum amount of whitespace from the left side of each
+                    line. When this is done, the action can be written line-by-line using the standard
+                    'writer.WriteLine' method of the IndentedTextWriter, and the generated code will
+                    have the correct indentation. *)
 
-            (*  Split 'action' into multiple lines. Determine the minimum amount of whitespace
-                which appears on the left of any line in the action, but do not consider blank
-                lines. Then, trim this minimum amount of whitespace from the left side of each
-                line. When this is done, the action can be written line-by-line using the standard
-                'writer.WriteLine' method of the IndentedTextWriter, and the generated code will
-                have the correct indentation. *)
+                /// The individual lines of the reduction action code, trimmed to remove a number of
+                /// leading spaces common to all non-empty/non-whitespace lines.
+                let trimmedActionLines =
+                    (* OPTIMIZE :   Use functions from ExtCore.String.Split to re-implement the code below so it doesn't
+                                    create tons of unnecessary strings. *)
+                    (* OPTIMIZE :   If the computation of 'trimmedActionLines' were moved down to where it's used, we could
+                                    use the ExtCore.String.Split functions to eliminate the creation of those strings too --
+                                    we'd simply adjust the indentation on the substring supplied by the String.Split function
+                                    then use the substring extension methods from ExtCore to write the adjusted substring
+                                    into the TextWriter. *)
 
-            /// The individual lines of the reduction action code, trimmed to remove a number of
-            /// leading spaces common to all non-empty/non-whitespace lines.
-            let trimmedActionLines =
-                (* OPTIMIZE :   Use functions from ExtCore.String.Split to re-implement the code below so it doesn't
-                                create tons of unnecessary strings. *)
-                (* OPTIMIZE :   If the computation of 'trimmedActionLines' were moved down to where it's used, we could
-                                use the ExtCore.String.Split functions to eliminate the creation of those strings too --
-                                we'd simply adjust the indentation on the substring supplied by the String.Split function
-                                then use the substring extension methods from ExtCore to write the adjusted substring
-                                into the TextWriter. *)
-
-                /// The individual lines of the reduction action code,
-                /// annotated with the number of leading spaces on that line.
-                let annotatedActionLines =
-                    action.Split (Emit.newlines, StringSplitOptions.None)
-                    |> Array.map (fun line ->
-                        // First replace any tab characters in the string.
-                        let line = replaceTabs Emit.indent line
-                        let leadingSpaces = countLeadingSpaces line
-                        line, leadingSpaces)
+                    /// The individual lines of the reduction action code,
+                    /// annotated with the number of leading spaces on that line.
+                    let annotatedActionLines =
+                        action.Split (Emit.newlines, StringSplitOptions.None)
+                        |> Array.map (fun line ->
+                            // First replace any tab characters in the string.
+                            let line = replaceTabs Emit.indent line
+                            let leadingSpaces = countLeadingSpaces line
+                            line, leadingSpaces)
         
-                /// The minimum number of spaces on the left side of any line of code.
-                let minIndentation =
-                    (None, annotatedActionLines)
-                    ||> Array.fold (fun x (_, y) ->
-                        match x, y with
-                        | None, None ->
-                            None
-                        | (Some _ as x), None ->
-                            x
-                        | None, (Some _ as y) ->
-                            y
-                        | Some x, Some y ->
-                            Some <| min x y)
-                    // Default to zero (0) indentation.
-                    |> Option.fill GenericZero
+                    /// The minimum number of spaces on the left side of any line of code.
+                    let minIndentation =
+                        (None, annotatedActionLines)
+                        ||> Array.fold (fun x (_, y) ->
+                            match x, y with
+                            | None, None ->
+                                None
+                            | (Some _ as x), None ->
+                                x
+                            | None, (Some _ as y) ->
+                                y
+                            | Some x, Some y ->
+                                Some <| min x y)
+                        // Default to zero (0) indentation.
+                        |> Option.fill GenericZero
 
-                // Remove the same amount of indentation from every non-empty line.
-                annotatedActionLines
-                |> Array.map (fun (line, leadingSpaces) ->
-                    match leadingSpaces with
-                    | None ->
-                        assert (String.IsNullOrWhiteSpace line)
-                        String.Empty
-                    | Some _ ->
-                        // Remove the computed number of spaces from the left side of this line.
-                        line.Substring (int minIndentation))
+                    // Remove the same amount of indentation from every non-empty line.
+                    annotatedActionLines
+                    |> Array.map (fun (line, leadingSpaces) ->
+                        match leadingSpaces with
+                        | None ->
+                            assert (String.IsNullOrWhiteSpace line)
+                            String.Empty
+                        | Some _ ->
+                            // Remove the computed number of spaces from the left side of this line.
+                            line.Substring (int minIndentation))
             
-            // Emit the semantic action code, wrapped in a bit of code which boxes the return value.
-            writer.WriteLine "Microsoft.FSharp.Core.Operators.box"
-            IndentedTextWriter.indented writer <| fun writer ->
-                writer.WriteLine "("
+                // Emit the semantic action code, wrapped in a bit of code which boxes the return value.
+                writer.WriteLine "Microsoft.FSharp.Core.Operators.box"
                 IndentedTextWriter.indented writer <| fun writer ->
                     writer.WriteLine "("
                     IndentedTextWriter.indented writer <| fun writer ->
-                        // Write the trimmed action-code lines to the IndentedTextWriter one-by-one.
-                        // This ensures they're indented correctly with respect to the rest of the emitted code.
-                        trimmedActionLines
-                        |> Array.iter writer.WriteLine
-                    writer.WriteLine ")"
+                        writer.WriteLine "("
+                        IndentedTextWriter.indented writer <| fun writer ->
+                            // Write the trimmed action-code lines to the IndentedTextWriter one-by-one.
+                            // This ensures they're indented correctly with respect to the rest of the emitted code.
+                            trimmedActionLines
+                            |> Array.iter writer.WriteLine
+                        writer.WriteLine ")"
 
-                // Emit the nonterminal type for this production rule.
-                fprintfn writer ": %s))" nonterminalValueType
+                    // Emit the nonterminal type for this production rule.
+                    fprintfn writer ": %s))" nonterminalValueType
 
-    /// Replaces the placeholders for symbols in production rules
-    /// (e.g., $2) with valid F# value identifiers.
-    let inline private replaceSymbolPlaceholders (code : CodeFragment) =
-        System.Text.RegularExpressions.Regex.Replace (code, "\$(?=\d+)", "_")
+        /// Replaces the placeholders for symbols in production rules
+        /// (e.g., $2) with valid F# value identifiers.
+        let inline private replaceSymbolPlaceholders (code : CodeFragment) =
+            System.Text.RegularExpressions.Regex.Replace (code, "\$(?=\d+)", "_")
 
-    /// Emits the user-defined semantic actions for the reductions.
-    let private reductions (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
-        (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>) (options, writer : IndentedTextWriter) : unit =
-        /// The default action to execute when a production rule
-        /// has no semantic action code associated with it.
-        let defaultAction =
-            options.ParserInterpreterNamespace
-            |> Option.fill defaultParsingNamespace
-            |> sprintf "raise (%s.Accept (Microsoft.FSharp.Core.Operators.box _1))"
+        /// Emits the user-defined semantic actions for the reductions.
+        let emitReductionActions (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>)
+            (taggedGrammar : AugmentedTaggedGrammar<NonterminalIdentifier, TerminalIdentifier, DeclaredType>) (options, writer : IndentedTextWriter) : unit =
+            /// The default action to execute when a production rule
+            /// has no semantic action code associated with it.
+            let defaultAction =
+                options.ParserInterpreterNamespace
+                |> Option.fill defaultParsingNamespace
+                |> sprintf "raise (%s.Accept (Microsoft.FSharp.Core.Operators.box _1))"
 
-        // _fsyacc_reductions
-        writer.WriteLine "let private _fsyacc_reductions = [|"
-        IndentedTextWriter.indented writer <| fun writer ->
-            // Emit actions for the augmented starting nonterminals.
-            processedSpec.StartSymbols
-            |> Set.iter (fun startSymbol ->
-                let startNonterminal = "_start" + startSymbol
-                reduction startNonterminal [| Symbol.Nonterminal startSymbol |] defaultAction processedSpec taggedGrammar (options, writer))
+            // _fsyacc_reductions
+            writer.WriteLine "let private _fsyacc_reductions = [|"
+            IndentedTextWriter.indented writer <| fun writer ->
+                // Emit actions for the augmented starting nonterminals.
+                processedSpec.StartSymbols
+                |> Set.iter (fun startSymbol ->
+                    let startNonterminal = "_start" + startSymbol
+                    reduction startNonterminal [| Symbol.Nonterminal startSymbol |] defaultAction processedSpec taggedGrammar (options, writer))
 
-            // Emit the actions for each of the production rules.
-            processedSpec.ProductionRules
-            |> Map.iter (fun nonterminal rules ->
-                rules |> Array.iter (fun rule ->
-                    /// The rule action, where the symbol placeholders have been replaced by
-                    /// the names of variables within the generated code (e.g., $2 changed to _2).
-                    let ruleAction =
-                        rule.Action
-                        |> Option.map replaceSymbolPlaceholders
-                        |> Option.fill defaultAction
+                // Emit the actions for each of the production rules.
+                processedSpec.ProductionRules
+                |> Map.iter (fun nonterminal rules ->
+                    rules |> Array.iter (fun rule ->
+                        /// The rule action, where the symbol placeholders have been replaced by
+                        /// the names of variables within the generated code (e.g., $2 changed to _2).
+                        let ruleAction =
+                            rule.Action
+                            |> Option.map replaceSymbolPlaceholders
+                            |> Option.fill defaultAction
 
-                    reduction nonterminal rule.Symbols ruleAction processedSpec taggedGrammar (options, writer)))
+                        reduction nonterminal rule.Symbols ruleAction processedSpec taggedGrammar (options, writer)))
             
-            // Emit the closing bracket of the array.
-            writer.WriteLine "|]"
+                // Emit the closing bracket of the array.
+                writer.WriteLine "|]"
 
-        // Write a blank line for readability.
-        writer.WriteLine ()
+            // Write a blank line for readability.
+            writer.WriteLine ()
 
     /// Emits F# code which creates the 'tables' record and defines the
     /// parser functions into an IndentedTextWriter.
@@ -1172,7 +1175,7 @@ module private FsYacc =
         ParserTables.computeAndEmit taggedGrammar parserTable writer
 
         // Emit the reduction functions (i.e., the user-specified actions / code fragments).
-        reductions processedSpec taggedGrammar (options, writer)
+        Reductions.emitReductionActions processedSpec taggedGrammar (options, writer)
 
         do
             // Emit the parser "tables" record and parser functions.
