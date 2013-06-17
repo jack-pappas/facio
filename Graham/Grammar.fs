@@ -160,47 +160,6 @@ module Grammar =
                 | Terminal terminal ->
                     nonterminals, Set.add terminal terminals)))
 
-    /// <summary>Augments a Grammar with a unique "start" symbol and the end-of-file marker.</summary>
-    /// <param name="grammar">The grammar to be augmented.</param>
-    /// <param name="startSymbols">The parser will begin parsing with any one of these symbols.</param>
-    /// <returns>A grammar augmented with the Start symbol and the EndOfFile marker.</returns>
-    [<System.Obsolete("Grammars should no longer be augmented. Instead, create a TaggedGrammar from the \
-        Grammar, then use AugmentedTaggedGrammar.augmentWith to augment the TaggedGrammar.")>]
-    [<CompiledName("AugmentWith")>]
-    let augmentWith (grammar : Grammar<'Nonterminal, 'Terminal>) (startSymbols : Set<'Nonterminal>)
-        : AugmentedGrammar<'Nonterminal, 'Terminal> =
-        // Preconditions
-        if Set.isEmpty startSymbols then
-            invalidArg "startSymbols" "The set of start symbols is empty."
-
-        // Based on the input grammar, create a new grammar with an additional
-        // nonterminal and production rules for the start symbol and an additional
-        // terminal representing the end-of-file marker.
-        let startProductions =
-            startSymbols
-            |> Set.mapToArray (fun startSymbol ->
-                [|  Nonterminal <| AugmentedNonterminal.Nonterminal startSymbol;
-                    Terminal EndOfFile; |])
-
-        (Map.empty, grammar)
-        ||> Map.fold (fun productionMap nontermId nontermProductions ->
-            let nontermProductions =
-                Array.map (Array.map Symbol.Augment) nontermProductions
-            Map.add (AugmentedNonterminal.Nonterminal nontermId) nontermProductions productionMap)
-        // Add the (only) production of the new start symbol.
-        |> Map.add Start startProductions
-
-    /// <summary>Augments a Grammar with a unique "start" symbol and the end-of-file marker.</summary>
-    /// <param name="grammar">The grammar to be augmented.</param>
-    /// <param name="startSymbol">The parser will begin parsing with this symbol.</param>
-    /// <returns>A grammar augmented with the Start symbol and the EndOfFile marker.</returns>
-    [<System.Obsolete("Grammars should no longer be augmented. Instead, create a TaggedGrammar from the \
-        Grammar, then use AugmentedTaggedGrammar.augment to augment the TaggedGrammar.")>]
-    [<CompiledName("Augment")>]
-    let augment (grammar : Grammar<'Nonterminal, 'Terminal>) (startSymbol : 'Nonterminal)
-        : AugmentedGrammar<'Nonterminal, 'Terminal> =
-        augmentWith grammar (Set.singleton startSymbol)
-
 
 /// Active patterns which simplify pattern matching on augmented grammars.
 module internal AugmentedPatterns =
