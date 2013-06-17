@@ -512,23 +512,24 @@ module internal ParserTables =
         let _fsyacc_gotos, _fsyacc_sparseGotoTableRowOffsets =
             /// The source and target states of GOTO transitions over each nonterminal.
             let gotoEdges =
-                (Map.empty, parserTable.GotoTable)
-                ||> Map.fold (fun gotoEdges (source, nonterminal) target ->
+                (TagMap.empty, parserTable.GotoTable)
+                ||> Map.fold (fun gotoEdges (source, nonterminalIndex) target ->
                     /// The GOTO edges labeled with this nonterminal.
                     let edges =
-                        match Map.tryFind nonterminal gotoEdges with
+                        match TagMap.tryFind nonterminalIndex gotoEdges with
                         | None ->
                             Set.singleton (source, target)
                         | Some edges ->
                             Set.add (source, target) edges
 
                     // Update the map with the new set of edges for this nonterminal.
-                    Map.add nonterminal edges gotoEdges)
+                    TagMap.add nonterminalIndex edges gotoEdges)
 
+            let gotoEdgeCount = TagMap.count gotoEdges
             let gotos =
                 // Initialize to a reasonable size to avoid small re-allocations.
-                ResizeArray (4 * gotoEdges.Count)
-            let offsets = Array.zeroCreate (startSymbolCount + gotoEdges.Count)
+                ResizeArray (4 * gotoEdgeCount)
+            let offsets = Array.zeroCreate (startSymbolCount + gotoEdgeCount)
 
             // Add entries for the "fake" starting nonterminals.
             for i = 0 to startSymbolCount - 1 do
@@ -538,7 +539,7 @@ module internal ParserTables =
 
             // Add entries for the rest of the nonterminals.
             (startSymbolCount, gotoEdges)
-            ||> Map.fold (fun nonterminalIndex _ edges ->
+            ||> TagMap.fold (fun nonterminalIndex _ edges ->
                 // Store the starting index (in the sparse GOTO table) for this nonterminal.
                 offsets.[nonterminalIndex] <- Checked.uint16 (gotos.Count / 2)
 
