@@ -122,10 +122,8 @@ type internal Stack<'a>(n)  =
 exception RecoverableParseError
 exception Accept of obj
 
-#if DEBUG
 module Flags = 
     let debug = true
-#endif
 
 #if INTERNALIZED_POWER_PACK
 module internal Implementation = 
@@ -215,6 +213,10 @@ module Implementation =
         val endPos: Position
         new(value,startPos,endPos) = { value=value; startPos=startPos;endPos=endPos }
 
+    let private report haveLookahead lookaheadToken = 
+        if haveLookahead then sprintf "%A" lookaheadToken 
+        else "[TBC]"
+
     let interpret (tables: Tables<'tok>) lexer (lexbuf : LexBuffer<_>) initialState =
         Debug.WriteLineIf (Flags.debug, "\nParser: interpret tables")
         
@@ -263,10 +265,6 @@ module Implementation =
 
 #if DEBUG
         let iterations = ref 0
-
-        let report haveLookahead lookaheadToken = 
-            if haveLookahead then sprintf "%A" lookaheadToken 
-            else "[TBC]"
 #endif
 
         // Pop the stack until we can shift the 'error' token. If 'tokenOpt' is given
@@ -309,7 +307,9 @@ module Implementation =
                 popStackUntilErrorShifted tokenOpt
 
         while not finished do
+#if DEBUG
             incr iterations
+#endif
             if stateStack.IsEmpty then 
                 finished <- true
             else
