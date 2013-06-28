@@ -18,6 +18,9 @@ limitations under the License.
 
 namespace Graham
 
+open System.Collections.Generic
+open System.Diagnostics
+
 
 /// Tags an integer as denoting the zero-based index of a nonterminal
 /// within the set of nonterminals in a grammar.
@@ -40,11 +43,85 @@ type ProductionRuleIndex = int<ProductionRuleIndexTag>
 /// have been replaced by their respective tagged-indices.
 type TaggedProductionRule = Symbol<NonterminalIndex, TerminalIndex>[]
 
+//
+[<Sealed>]
+type private TaggedGrammarDebuggerProxy<'Nonterminal, 'Terminal
+    when 'Nonterminal : comparison
+    and 'Terminal : comparison> (taggedGrammar : TaggedGrammar<'Nonterminal, 'Terminal>) =
+    //
+    let terminals : 'Terminal[] =
+        let terminals = ResizeArray ()
+        taggedGrammar.Terminals
+        |> TagBimap.iter (fun _ terminal ->
+            ResizeArray.add terminal terminals)
+        ResizeArray.toArray terminals
+
+    //
+    let nonterminals : 'Nonterminal[] =
+        let nonterminals = ResizeArray ()
+        taggedGrammar.Nonterminals
+        |> TagBimap.iter (fun _ nonterminal ->
+            ResizeArray.add nonterminal nonterminals)
+        ResizeArray.toArray nonterminals
+
+    //
+    let productionRules =
+        //notImpl "TaggedGrammarDebuggerProxy.get_ProductionRules"
+        Array.empty<int>
+
+    //
+    let productionsByNonterminal =
+        let productionsByNonterminal = System.Collections.Generic.Dictionary ()
+        taggedGrammar.ProductionsByNonterminal
+        |> TagMap.iter (fun nonterminalId productionRules ->
+            let nonterminal = TagBimap.find nonterminalId taggedGrammar.Nonterminals
+            let rules =
+                let rules = ResizeArray ()
+                productionRules
+                |> TagSet.iter (fun productionRuleId ->
+                    let productionRule =
+                        taggedGrammar.Productions
+                        |> TagMap.find productionRuleId
+                        |> Array.map (function
+                            | Symbol.Terminal terminalId ->
+                                Terminal <| TagBimap.find terminalId taggedGrammar.Terminals
+                            | Symbol.Nonterminal nonterminalId ->
+                                Nonterminal <| TagBimap.find nonterminalId taggedGrammar.Nonterminals)
+
+                    ResizeArray.add productionRule rules)
+                ResizeArray.toArray rules
+            productionsByNonterminal.Add (nonterminal, rules))
+        productionsByNonterminal
+
+    //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Collapsed)>]
+    member __.Terminals
+        with get () = terminals
+
+    //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Collapsed)>]
+    member __.Nonterminals
+        with get () = nonterminals
+
+    //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Collapsed)>]
+    member __.ProductionRules
+        with get () = productionRules
+
+    //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Collapsed)>]
+    member __.ProductionsByNonterminal
+        with get () = productionsByNonterminal
+
 /// A context-free grammar (CFG) where each nonterminal, terminal, and production rule
 /// has been indexed and tagged. This allows for efficient implementations of the grammar
 /// analyses and parser-generation algorithms no matter which types are used for the
 /// grammar's terminals and nonterminals.
-type TaggedGrammar<'Nonterminal, 'Terminal
+and [<DebuggerTypeProxy(typedefof<TaggedGrammarDebuggerProxy<unit, unit>>)>]
+    [<DebuggerDisplay("Terminals = {TerminalCount}, \
+                   Nonterminals = {NonterminalCount}, \
+                   Production Rules = {ProductionRuleCount}")>]
+    TaggedGrammar<'Nonterminal, 'Terminal
     when 'Nonterminal : comparison
     and 'Terminal : comparison> = {
     /// The nonterminals of the grammar.
@@ -63,7 +140,21 @@ type TaggedGrammar<'Nonterminal, 'Terminal
     ProductionsByNonterminal : TagMap<NonterminalIndexTag, TagSet<ProductionRuleIndexTag>>;
     /// Given a production-rule-index, returns the nonterminal-index produced by the rule when matched.
     NonterminalOfProduction : TagMap<ProductionRuleIndexTag, NonterminalIndex>;
-}
+} with
+    //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
+    member private this.TerminalCount =
+        TagBimap.count this.Terminals
+
+    //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
+    member private this.NonterminalCount =
+        TagBimap.count this.Nonterminals
+
+    //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
+    member private this.ProductionRuleCount =
+        TagMap.count this.Productions
 
 /// Functional operators related to the TaggedGrammar<_,_> type.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
