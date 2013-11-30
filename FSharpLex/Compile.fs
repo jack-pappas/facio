@@ -1158,7 +1158,7 @@ let lexerSpec (spec : Specification) options =
     // If there are any compilation errors, use them to set the
     // error value of the computation expression.
     if not <| Array.isEmpty compilationErrors then
-        do! Choice.setError <| Array.concat compilationErrors
+        do! Choice.error <| Array.concat compilationErrors
 
     // Return a CompiledSpecification record created from the compiled rules.
     return {
