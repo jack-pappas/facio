@@ -68,7 +68,7 @@ type internal AvlTree<'T when 'T : comparison> =
     //
     static member private CompareStacks (comparer : IComparer<'T>, l1 : AvlTree<'T> list, l2 : AvlTree<'T> list) : int =
         // OPTIMIZATION : If the lists are identical, there's no need to compare them.
-        if l1 === l2 then 0 else
+        if l1 == l2 then 0 else
 
         match l1, l2 with
         | [], [] -> 0
@@ -77,7 +77,7 @@ type internal AvlTree<'T when 'T : comparison> =
 
         // OPTIMIZATION : If the trees are identical, there's no need to compare them.
         | t1 :: l1, t2 :: l2
-            when t1 === t2 ->
+            when t1 == t2 ->
             AvlTree.CompareStacks (comparer, l1, l2)
 
         | Empty :: t1, Empty :: t2 ->
@@ -122,7 +122,7 @@ type internal AvlTree<'T when 'T : comparison> =
     //
     static member Compare (comparer : IComparer<'T>, s1 : AvlTree<'T>, s2 : AvlTree<'T>) : int =
         // OPTIMIZATION : If the trees are identical, there's no need to compare them.
-        if s1 === s2 then 0
+        if s1 == s2 then 0
         else
             match s1, s2 with
             | Empty, Empty -> 0
@@ -371,14 +371,14 @@ type internal AvlTree<'T when 'T : comparison> =
                 let l' = AvlTree.Delete (comparer, l, value)
 
                 // Only rebalance the tree if an element was actually deleted.
-                if l' === l then tree
+                if l' == l then tree
                 else AvlTree.mkt_bal_r (n, l', r)
             else
                 // x > n
                 let r' = AvlTree.Delete (comparer, r, value)
                 
                 // Only rebalance the tree if an element was actually deleted.
-                if r' === r then tree
+                if r' == r then tree
                 else AvlTree.mkt_bal_l (n, l, r')
 
     /// Adds a value to a AvlTree.
@@ -401,14 +401,14 @@ type internal AvlTree<'T when 'T : comparison> =
                 let l' = AvlTree.Insert (comparer, l, value)
 
                 // Only rebalance the tree if an element was actually inserted.
-                if l' === l then tree
+                if l' == l then tree
                 else AvlTree.mkt_bal_l (n, l', r)
             else
                 // x > n
                 let r' = AvlTree.Insert (comparer, r, value)
                 
                 // Only rebalance the tree if an element was actually inserted.
-                if r' === r then tree
+                if r' == r then tree
                 else AvlTree.mkt_bal_r (n, l, r')
 
     /// Counts the number of elements in the tree.
@@ -1770,7 +1770,7 @@ type CharSet private (tree : CharDiet) as this =
     override this.Equals other =
         match other with
         | :? CharSet as other ->
-            tree === other.Tree ||
+            tree == other.Tree ||
             CharDiet.equal tree other.Tree
         | _ ->
             false
@@ -1842,7 +1842,7 @@ type CharSet private (tree : CharDiet) as this =
         let result = CharDiet.add value charSet.Tree
         //assert (CharDiet.dietInvariant result)
         //assert (CharDiet.intervalsDisjoint result)
-        if charSet.Tree === result then charSet
+        if charSet.Tree == result then charSet
         else CharSet (result)
 
     //
@@ -1866,7 +1866,7 @@ type CharSet private (tree : CharDiet) as this =
             let result = CharDiet.addRange (lower, upper) charSet.Tree
             //assert (CharDiet.dietInvariant result)
             //assert (CharDiet.intervalsDisjoint result)
-            if charSet.Tree === result then charSet
+            if charSet.Tree == result then charSet
             else CharSet (result)
 
     //
@@ -1881,7 +1881,7 @@ type CharSet private (tree : CharDiet) as this =
         let result = CharDiet.remove value charSet.Tree
         //assert (CharDiet.dietInvariant result)
         //assert (CharDiet.intervalsDisjoint result)
-        if charSet.Tree === result then charSet
+        if charSet.Tree == result then charSet
         else CharSet (result)
 
     //
@@ -2004,15 +2004,15 @@ type CharSet private (tree : CharDiet) as this =
         //assert (CharDiet.intervalsDisjoint charSet2.Tree)
 
         // If the input sets have the same underlying tree, we can return immediately.
-        if charSet1.Tree === charSet2.Tree then CharSet.Empty
+        if charSet1.Tree == charSet2.Tree then CharSet.Empty
         else
             // OPTIMIZATION : If the result is the same as either input set's tree,
             // return that set instead of creating a new one.
             let result = CharDiet.difference charSet1.Tree charSet2.Tree
             //assert (CharDiet.dietInvariant result)
             //assert (CharDiet.intervalsDisjoint result)
-            if charSet1.Tree === result then charSet1
-            elif charSet2.Tree === result then charSet2
+            if charSet1.Tree == result then charSet1
+            elif charSet2.Tree == result then charSet2
             else CharSet (result)
 
     //
@@ -2026,15 +2026,15 @@ type CharSet private (tree : CharDiet) as this =
         //assert (CharDiet.intervalsDisjoint charSet2.Tree)
 
         // If the input sets have the same underlying tree, we can return immediately.
-        if charSet1.Tree === charSet2.Tree then charSet1
+        if charSet1.Tree == charSet2.Tree then charSet1
         else
             // OPTIMIZATION : If the result is the same as either input set's tree,
             // return that set instead of creating a new one.
             let result = CharDiet.intersect charSet1.Tree charSet2.Tree
             //assert (CharDiet.dietInvariant result)
             //assert (CharDiet.intervalsDisjoint result)
-            if charSet1.Tree === result then charSet1
-            elif charSet2.Tree === result then charSet2
+            if charSet1.Tree == result then charSet1
+            elif charSet2.Tree == result then charSet2
             else CharSet (result)
 
     //
@@ -2048,15 +2048,15 @@ type CharSet private (tree : CharDiet) as this =
         //assert (CharDiet.intervalsDisjoint charSet2.Tree)
 
         // If the input sets have the same underlying tree, we can return immediately.
-        if charSet1.Tree === charSet2.Tree then charSet1
+        if charSet1.Tree == charSet2.Tree then charSet1
         else
             // OPTIMIZATION : If the result is the same as either input set's tree,
             // return that set instead of creating a new one.
             let result = CharDiet.union charSet1.Tree charSet2.Tree
             //assert (CharDiet.dietInvariant result)
             //assert (CharDiet.intervalsDisjoint result)
-            if charSet1.Tree === result then charSet1
-            elif charSet2.Tree === result then charSet2
+            if charSet1.Tree == result then charSet1
+            elif charSet2.Tree == result then charSet2
             else CharSet (result)
 
     //
@@ -2176,7 +2176,7 @@ type CharSet private (tree : CharDiet) as this =
 
         // OPTIMIZATION : If the filtered tree is the same as the input set's tree,
         // return the input set instead of creating a new CharSet with the same tree.
-        if charSet.Tree === filteredTree then charSet
+        if charSet.Tree == filteredTree then charSet
         else CharSet (filteredTree)
 
     interface System.IComparable with
