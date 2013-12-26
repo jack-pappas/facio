@@ -30,19 +30,109 @@ open Tests.Graham.Grammars
 //
 [<AutoOpen>]
 module private TableHelpers =
+    /// Attempts to create a mapping from one table's parser-state-ids to another table's parser-state-ids.
+    // TODO : Instead of using Choice here to handle non-matches, modify this to return a tuple:
+    //          list-of-matches:(int<ParserStateId> * int<ParserStateId>) list * unmatchedTable1StateIds:TagSet<ParserStateId> * unmatchedTable2StateIds:TagSet<ParserStateId>
+    //        This will make diagnostics easier, since we'll have all non-matching states from both tables instead of just one error message.
+    let private parserStateIdMapping table1ParserStates table2ParserStates =
+        (Choice1Of2 TagMap.empty, table1ParserStates)
+        ||> TagBimap.fold (fun parserStateIdMapping table1ParserStateId parserState ->
+            // If we've encountered an error, propagate the error through the rest of the computation.
+            match parserStateIdMapping with
+            | Choice2Of2 _ ->
+                parserStateIdMapping
+            | Choice1Of2 parserStateIdMapping ->
+                // Find the given parser state in the parser-state-id->parser-state bimap for table2.
+                match TagBimap.tryFindValue parserState table2ParserStates with
+                | None ->
+                    // Return an error message.
+                    let msg = sprintf "Unable to find an equivalent parser state in table2 for the table1 parser state with id '%i'." (int table1ParserStateId)
+                    Choice2Of2 msg
+                | Some table2ParserStateId ->
+                    // Add the table1 and table2 parser state ids to the map.
+                    parserStateIdMapping
+                    |> TagMap.add table1ParserStateId table2ParserStateId
+                    |> Choice1Of2)
+
+    //
+    let private checkActionTablesEquivalent parserStateIdMapping actionTable1 actionTable2 =
+        actionTable1
+        |> Map.forall (fun (parserStateId1, terminal) action1 ->
+            // Use the table1->table2 parser-state-id mapping to find the corresponding parser-state-id for table2.
+            let parserStateId2 = TagMap.find parserStateId1 parserStateIdMapping
+
+            // Try to find the corresponding transition in table2's ACTION table.
+            match Map.tryFind (parserStateId2, terminal) actionTable2 with
+            | None -> false
+            | Some action2 ->
+                // Are the ACTION sets equivalent?
+                match action1, action2 with
+                | Action Accept, Action Accept ->
+                    true
+                | Action (Reduce redRuleId1), Action (Reduce redRuleId2) ->
+                    // For now, we assume the production rules of the grammar have the same ordering in both tables.
+                    // TODO : Pass in additional information to make this more robust.
+                    redRuleId1 = redRuleId2
+                | Action (Shift shiftState1), Action (Shift shiftState2) ->
+                    TagMap.find shiftState1 parserStateIdMapping = shiftState2
+
+                | Conflict conflict1, Conflict conflict2 ->
+                    match conflict1.Shift, conflict2.Shift with
+                    | None, None ->
+                        // For now, we assume the production rules of the grammar have the same ordering in both tables.
+                        // TODO : Pass in additional information to make this more robust.
+                        conflict1.Reductions = conflict2.Reductions
+                    | Some shiftState1, Some shiftState2
+                        when TagMap.find shiftState1 parserStateIdMapping = shiftState2 ->
+                        // For now, we assume the production rules of the grammar have the same ordering in both tables.
+                        // TODO : Pass in additional information to make this more robust.
+                        conflict1.Reductions = conflict2.Reductions
+                    | _, _ ->
+                        false
+                | _, _ ->
+                    false)
+
     /// Determines if two LR parser tables are equivalent.
     /// Two LR parser tables are equivalent if they parse exactly the same grammar.
     /// This is useful for implementing tests, since it provides a way to determine
     /// if two parser tables are the same even when the LR parser states or production
     /// rules have been assigned different identifiers.
-    let equivalentTables (table1 : LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>,
-                          table2 : LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>) : bool =
+    let checkEquivalence (table1 : LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>)
+                         (table2 : LrParserTable<'Nonterminal, 'Terminal, 'Lookahead>) : bool =
         // Preconditions
         checkNonNull "table1" table1
         checkNonNull "table2" table2
 
-        // TODO : Try to determine if the ACTION and GOTO tables of the two LR parser tables are equivalent.
-        notImpl "TableHelpers.equivalentTables"
+        // Try to create a mapping of table1-parser-state-id -> table2-parser-state-id.
+        match parserStateIdMapping table1.ParserStates table2.ParserStates with
+        | Choice2Of2 errMsg ->
+            // Print the error message, then return false.
+            stdout.WriteLine errMsg
+            false
+
+        | Choice1Of2 parserStateIdMapping ->
+            (*  Since we were able to find a mapping between the LR parser states, we know the tables
+                parse the same grammar. This allows us to make some assumptions in the comparison below. *)
+
+            /// Are the ACTION tables equivalent?
+            let actionTablesEquiv =
+                checkActionTablesEquivalent parserStateIdMapping table1.ActionTable table2.ActionTable
+
+            /// Are the GOTO tables equivalent?
+            let gotoTablesEquiv =
+                table1.GotoTable
+                |> Map.forall (fun (parserStateId1, nonterminal) gotoStateId1 ->
+                    // Use the table1->table2 parser-state-id mapping to find the corresponding parser-state-id for table2.
+                    let parserStateId2 = TagMap.find parserStateId1 parserStateIdMapping
+
+                    // Try to find the corresponding entry into table2's GOTO table.
+                    match Map.tryFind (parserStateId2, nonterminal) table2.GotoTable with
+                    | None -> false
+                    | Some gotoStateId2 ->
+                        // Are the target states equivalent?
+                        TagMap.find gotoStateId1 parserStateIdMapping = gotoStateId2)
+
+            actionTablesEquiv && gotoTablesEquiv
 
 
 /// Helper functions for creating LR parser tables for tests.
