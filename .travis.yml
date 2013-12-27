@@ -12,7 +12,7 @@ install:
   - mono .nuget/NuGet.exe install NUnit.Runners -Version 2.6.3 -OutputDirectory tools
 
 script: 
-  - xbuild /property:Configuration=Release BBTrees.sln
+  - xbuild /property:Configuration=Release fsharp-tools.sln
   - mono --runtime=v4.0.30319 ./tools/NUnit.Runners.2.6.3/tools/nunit-console.exe ./FSharpLex.Tests/bin/Release/FSharpLex.Tests.dll
   - mono --runtime=v4.0.30319 ./tools/NUnit.Runners.2.6.3/tools/nunit-console.exe ./Graham.Tests/bin/Release/Graham.Tests.dll
   - mono --runtime=v4.0.30319 ./tools/NUnit.Runners.2.6.3/tools/nunit-console.exe ./FSharpYacc.Tests/bin/Release/FSharpYacc.Tests.dll
