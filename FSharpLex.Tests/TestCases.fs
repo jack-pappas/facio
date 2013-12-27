@@ -93,11 +93,20 @@ module TestCases =
     extern ErrorModes public SetErrorMode (ErrorModes uMode)
 
     [<TestFixtureSetUp>]
-    let disableCrashDialog () : unit =
-        // Disable the crash dialog. This affects not only this process,
-        // but also any child processes (which is really what we care about).
-        let oldMode = SetErrorMode ErrorModes.SEM_NOGPFAULTERRORBOX
-        SetErrorMode (oldMode ||| ErrorModes.SEM_NOGPFAULTERRORBOX) |> ignore
+    let textFixtureSetup () : unit =
+        // When running on Windows (even if running on Mono), disable crash-reporting dialog.
+        match System.Environment.OSVersion.Platform with
+        | PlatformID.Win32NT
+        | PlatformID.Win32S
+        | PlatformID.Win32Windows
+        | PlatformID.WinCE ->
+            // Disable the crash dialog. This affects not only this process,
+            // but also any child processes (which is really what we care about).
+            let oldMode = SetErrorMode ErrorModes.SEM_NOGPFAULTERRORBOX
+            SetErrorMode (oldMode ||| ErrorModes.SEM_NOGPFAULTERRORBOX) |> ignore
+        | _ ->
+            // For all other platforms, this is a no-op.
+            ()
 
     //
     let private testTimeout = TimeSpan.FromSeconds 30.0
