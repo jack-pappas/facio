@@ -1009,7 +1009,9 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         let ruleClauseRegexes =
             let ruleAlphabet =
                 ruleClauseRegexes
-                |> Array.mapReduce regexAlphabetMapReduce
+                //|> Array.mapReduce regexAlphabetMapReduce
+                |> Array.map getAlphabet
+                |> Array.reduce CharSet.union
                 // Add the low ASCII characters too, like fslex does.
                 |> CharSet.union (CharSet.ofRange (char 0) (char 127))
 
