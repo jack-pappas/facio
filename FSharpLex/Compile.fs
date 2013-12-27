@@ -308,8 +308,6 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
 //
 let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition) option, macroId), pattern) (options : CompilationOptions) (macroEnv, badMacros) =
     //
-    // OPTIMIZE : Modify this function to use a LazyList to hold the errors
-    // instead of an F# list to avoid the list concatenation overhead.
     let rec preprocessMacro pattern =
         cont {
         match pattern with
@@ -607,8 +605,6 @@ let private isAsciiCharSet (charSet : CharSet) : bool =
 //
 let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
     //
-    // OPTIMIZE : Modify this function to use a LazyList to hold the errors
-    // instead of an F# list to avoid the list concatenation overhead.
     let rec validateAndSimplify pattern =
         cont {
         match pattern with
@@ -844,6 +840,14 @@ let private getAlphabet regex =
 
     getAlphabet regex id
 
+//
+let private regexAlphabetMapReduce =
+    { new IMapReduction<_,_> with
+        member __.Map (regex : Regex) =
+            notImpl ""
+        member __.Reduce set1 set2 =
+            CharSet.union set1 set2 }
+
 // This is necessary for fslex-compatibility.
 // In the future, it will be moved into the fslex-compatibility backend.
 let private rewriteNegatedCharSets universe regex =
@@ -901,8 +905,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         // in the correct order.
         // NOTE : The ordering only matters when two or more clauses overlap,
         // because then the ordering is used to decide which action to execute.
-        rule.Clauses
-        |> List.revIntoArray
+        List.revIntoArray rule.Clauses
 
     // Extract any clauses which match the end-of-file pattern;
     // these are handled separately from the other patterns.
@@ -1006,8 +1009,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         let ruleClauseRegexes =
             let ruleAlphabet =
                 ruleClauseRegexes
-                |> Array.map getAlphabet
-                |> Array.reduce CharSet.union
+                |> Array.mapReduce regexAlphabetMapReduce
                 // Add the low ASCII characters too, like fslex does.
                 |> CharSet.union (CharSet.ofRange (char 0) (char 127))
 
