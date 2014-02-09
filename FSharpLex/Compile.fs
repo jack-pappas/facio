@@ -60,6 +60,8 @@ type private CompilationState = {
 
     /// Caches the derivative of a regular expression with respect to a symbol.
     RegexDerivativeCache : HashMap<Regex, Map<char, Regex>>;
+    /// Caches the set of derivative classes for a regular expression.
+    DerivativeClassCache : HashMap<Regex, DerivativeClasses>;
     /// Caches the intersection of two derivative classes.
     // NOTE : Since the intersection operation is commutative, the derivative classes
     // are sorted when creating the cache key to increase the cache hit ratio.
@@ -78,6 +80,7 @@ module private CompilationState =
         RegularVectorToDfaState = HashMap.empty;
         DfaStateToRegularVector = TagMap.empty;
         RegexDerivativeCache = HashMap.empty;
+        DerivativeClassCache = HashMap.empty;
         DerivativeClassIntersectionCache = HashMap.empty; }
 
     //
@@ -203,17 +206,20 @@ let rec private createDfa pending compilationState =
             /// The approximate set of derivative classes of the regular vector,
             /// representing transitions out of the DFA state representing it.
             let derivativeClasses, compilationState =
-                let derivativeClasses, intersectionCache =
-                    RegularVector.derivativeClasses regularVector compilationState.DerivativeClassIntersectionCache
+                let derivativeClasses, derivativeClassCache, intersectionCache =
+                    RegularVector.derivativeClasses regularVector compilationState.DerivativeClassCache compilationState.DerivativeClassIntersectionCache
                 
-                derivativeClasses, { compilationState with DerivativeClassIntersectionCache = intersectionCache; }
+                derivativeClasses,
+                { compilationState with
+                    DerivativeClassCache = derivativeClassCache;
+                    DerivativeClassIntersectionCache = intersectionCache; }
 
             // For each DFA state (regular vector) targeted by a transition (derivative class),
             // add the DFA state to the compilation state (if necessary), then add an edge
             // to the transition graph from this DFA state to the target DFA state.
             let transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState =
                 ((HashMap.empty, TagSet.empty, compilationState), derivativeClasses)
-                ||> Set.fold (fun state derivativeClass ->
+                ||> HashSet.fold (fun state derivativeClass ->
                     if CharSet.isEmpty derivativeClass then state
                     else transitions regularVector derivativeClass state)
 
