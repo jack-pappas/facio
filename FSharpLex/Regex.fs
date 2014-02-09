@@ -49,7 +49,7 @@ module DerivativeClass =
         CharSet.difference universe derivClass
 
 //
-type DerivativeClasses = Set<CharSet>
+type HashDerivativeClasses = Set<CharSet>
 
 //
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -486,18 +486,27 @@ module RegularVector =
 
     /// Compute the derivative of a regular vector with respect to the given symbol.
     /// The computation is memoized for increased performance.
-    let derivative symbol (regVec : RegularVector) (derivativeCache : HashMap<Regex * char, Regex>)
-        : RegularVector * HashMap<Regex * char, Regex> =
+    let derivative symbol (regVec : RegularVector) (derivativeCache : HashMap<Regex, Map<char, Regex>>)
+        : RegularVector * HashMap<Regex, Map<char, Regex>> =
         (regVec, derivativeCache)
         ||> State.Array.map (fun regex derivativeCache ->
-            let cacheKey = regex, symbol
-            match HashMap.tryFind cacheKey derivativeCache with
-            | Some regex' ->
-                regex', derivativeCache
+            match HashMap.tryFind regex derivativeCache with
+            | Some symbolMap ->
+                match Map.tryFind symbol symbolMap with
+                | Some regex' ->
+                    regex', derivativeCache
+                | None ->
+                    let regex' = Regex.Derivative symbol regex
+                    let symbolMap = Map.add symbol regex' symbolMap
+                    let derivativeCache = HashMap.add regex symbolMap derivativeCache
+                    regex', derivativeCache
+
             | None ->
                 let regex' = Regex.Derivative symbol regex
-                let derivativeCache = HashMap.add cacheKey regex' derivativeCache
-                regex', derivativeCache)
+                let symbolMap = Map.singleton symbol regex'
+                let derivativeCache = HashMap.add regex symbolMap derivativeCache
+                regex', derivativeCache
+            )
 
     /// Determines if the regular vector is nullable,
     /// i.e., it accepts the empty string (epsilon).
@@ -527,18 +536,11 @@ module RegularVector =
 
     /// Compute the approximate set of derivative classes of a regular vector.
     /// The computation is memoized for increased performance.
-    let derivativeClasses (regVec : RegularVector) (intersectionCache : HashMap<DerivativeClasses * DerivativeClasses, DerivativeClasses>)
-        : DerivativeClasses * HashMap<DerivativeClasses * DerivativeClasses, DerivativeClasses> =
+    let derivativeClasses (regVec : RegularVector) (intersectionCache : HashMap<DerivativeClasses, HashMap<DerivativeClasses, DerivativeClasses>>)
+        : DerivativeClasses * HashMap<DerivativeClasses, HashMap<DerivativeClasses, DerivativeClasses>> =
         // Preconditions
         if Array.isEmpty regVec then
             invalidArg "regVec" "The regular vector does not contain any regular expressions."
-
-        // DEBUG : For debugging purposes ONLY. Remove ASAP.
-        // This will help us determine if using an LruCache will be more efficient than plain HashMap
-        // (since an LruCache is limited to a certain size, the lookups should be faster even if it
-        // means we have to re-compute the intersections on occasion).
-        Debug.Write "Cached Intersections: "
-        Debug.WriteLine (HashMap.count intersectionCache)
 
         (* Compute the approximate set of derivative classes
            for each regular expression in the vector.
@@ -559,20 +561,33 @@ module RegularVector =
             let rest = ArrayView.create regVecDerivativeClasses 1 (regVecLen - 1)
             ((zerothElement, intersectionCache), rest)
             ||> ArrayView.fold (fun (intersection, intersectionCache) derivClass ->
-                let key =
+                let key1, key2 =
                     if intersection < derivClass then intersection, derivClass
                     else derivClass, intersection
 
                 // Try to find the intersection in the cache; if it's not found,
                 // compute it then add it to the cache for later reuse.
-                match HashMap.tryFind key intersectionCache with
-                | Some intersection ->
-                    intersection, intersectionCache
+                match HashMap.tryFind key1 intersectionCache with
+                | Some cache2 ->
+                    match HashMap.tryFind key2 cache2 with
+                    | Some intersection ->
+                        intersection, intersectionCache
+                    | None ->
+                        // Compute the intersection of this derivative class and the intersection
+                        // of the previous derivative classes.
+                        let intersection = DerivativeClasses.intersect intersection derivClass
+
+                        // Add the result to the cache, then return it.
+                        let cache2 = HashMap.add key2 intersection cache2
+                        let intersectionCache = HashMap.add key1 cache2 intersectionCache
+                        intersection, intersectionCache
+
                 | None ->
                     // Compute the intersection of this derivative class and the intersection
                     // of the previous derivative classes.
                     let intersection = DerivativeClasses.intersect intersection derivClass
 
                     // Add the result to the cache, then return it.
-                    let intersectionCache = HashMap.add key intersection intersectionCache
+                    let cache2 = HashMap.singleton key2 intersection
+                    let intersectionCache = HashMap.add key1 cache2 intersectionCache
                     intersection, intersectionCache)

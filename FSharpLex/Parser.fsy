@@ -63,12 +63,14 @@ macro:
     | LET IDENT EQUALS regexp {
         match $4 with
         | Pattern pattern ->
-            let pos =
+            let posRange =
                 let rawStartPos, rawEndPos = parseState.ResultRange
                 let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
                 let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
-                Some (startPos, endPos)
-            ((pos, _2), pattern)
+                let range = SourcePositionRange (startPos, endPos)
+                Some range
+            ({ Value = _2; PositionRange = posRange; }, pattern)
+
         | EndOfFile ->
             let msg = sprintf "End-of-file pattern in macro '%s'." $2
             raise <| exn msg
@@ -83,13 +85,14 @@ rule:
         let rule = {
             Parameters = $2;
             Clauses = $6; }
-        let pos =
+        let posRange =
             let rawStartPos, rawEndPos = parseState.ResultRange
             let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
             let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
-            Some (startPos, endPos)
-      
-        ((pos, $1), rule) }
+            let range = SourcePositionRange (startPos, endPos)
+            Some range
+
+        ({ Value = $1; PositionRange = posRange; }, rule) }
 
 args:
     | { [] }
