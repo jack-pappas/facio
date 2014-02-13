@@ -26,8 +26,8 @@ open ExtCore.Control
 open ExtCore.Control.Cps
 open FSharpLex.SpecializedCollections
 open FSharpLex.Graph
-open FSharpLex.Regex
 open FSharpLex.Ast
+
 
 
 /// DFA compilation state.
@@ -53,11 +53,14 @@ type private CompilationState = {
     DfaStateToRegularVector : TagMap<DfaState, RegularVector>;
 
     (* Caches for memoizing the output of functions.
-       These *hugely* improve compilation performance. *)
+       These *hugely* improve compilation performance; without them, fsharplex takes a very, very long
+       time to compile large language definitions (e.g., the F# compiler lexer). *)
 
-    // OPTIMIZE :   Change these fields to use LruCache from ExtCore to
-    //              limit the amount of memory they can use.
-
+    /// A cache used for hash-consing of CharSets.
+    /// This is critical for performance; without it, definitions which make heavy use of Unicode character sets
+    /// cause fsharplex to spend a significant amount of time comparing CharSets for equality.
+    /// With this cache, many of those equality checks are reduced to reference (physical) equality comparisons.
+    CharSetCache : HashMap<CharSet, CharSet>;
     /// Caches the derivative of a regular expression with respect to a symbol.
     RegexDerivativeCache : HashMap<Regex, Map<char, Regex>>;
     /// Caches the set of derivative classes for a regular expression.
@@ -79,6 +82,7 @@ module private CompilationState =
         FinalStates = Set.empty;
         RegularVectorToDfaState = HashMap.empty;
         DfaStateToRegularVector = TagMap.empty;
+        CharSetCache = HashMap.empty;
         RegexDerivativeCache = HashMap.empty;
         DerivativeClassCache = HashMap.empty;
         DerivativeClassIntersectionCache = HashMap.empty; }
@@ -155,10 +159,7 @@ let private transitions regularVector derivativeClass (transitionsFromCurrentDfa
         compilationState
     else
         let targetDfaState, unvisitedTransitionTargets, compilationState =
-            let maybeDfaState =
-                CompilationState.tryGetDfaState regularVector' compilationState
-
-            match maybeDfaState with
+            match CompilationState.tryGetDfaState regularVector' compilationState with
             | Some targetDfaState ->
                 targetDfaState,
                 unvisitedTransitionTargets,
@@ -606,7 +607,7 @@ let private preprocessMacros macros options =
 let private isAsciiCharSet (charSet : CharSet) : bool =
     charSet
     |> CharSet.forall (fun c ->
-        int c <= int System.Byte.MaxValue)
+        c <= char System.Byte.MaxValue)
 
 //
 let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
@@ -742,7 +743,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 |> Choice1Of2
         
         | Pattern.Any ->
-            return Choice1Of2 Regex.Regex.Any
+            return Choice1Of2 Regex.Any
 
         | Pattern.Character c ->
             // Make sure the character is an ASCII character unless the 'Unicode' option is set.
@@ -820,8 +821,14 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
         | Choice1Of2 processedPattern ->
             Choice1Of2 processedPattern
 
-//
-let private getAlphabet regex =
+/// <summary>An <see cref="IMapReduction`2"/> which can be used to compute the alphabet of a regular vector.</summary>
+/// <remarks>
+/// This is only necessary for fslex compatibility; once fsharplex has it's own backend (e.g., direct-style),
+/// this won't be needed anymore (though it may be retained as a library function for diagnostics purposes).
+/// </remarks>
+let private regexAlphabetMapReduce =
+    /// Gets the alphabet of a regular expression.
+    /// The alphabet is the set of symbols which may be matched at any state by the regular expression.
     let rec getAlphabet regex =
         cont {
         match regex with
@@ -844,18 +851,23 @@ let private getAlphabet regex =
             return CharSet.union rAlphabet sAlphabet
         }
 
-    getAlphabet regex id
-
-//
-let private regexAlphabetMapReduce =
     { new IMapReduction<_,_> with
         member __.Map (regex : Regex) =
-            getAlphabet regex
+            getAlphabet regex id
         member __.Reduce set1 set2 =
             CharSet.union set1 set2 }
 
-// This is necessary for fslex-compatibility.
-// In the future, it will be moved into the fslex-compatibility backend.
+/// <summary>Rewrites negated character sets (i.e, a set of characters *not* to be matched) into positive character sets.</summary>
+/// <param name="universe">
+/// The universe of characters for <paramref name="regex"/>; this is the set of all possible input values, whether valid or invalid.
+/// The universe is, by definition, a superset of <paramref name="regex"/>'s alphabet.
+/// </param>
+/// <param name="regex">A regular expression.</param>
+/// <returns>A regular expression created by transforming negated character sets into positive character sets.</returns>
+/// <remarks>
+/// This is only necessary for fslex compatibility; once fsharplex has it's own backend (e.g., direct-style),
+/// this won't be needed anymore (though it may be retained as a library function for diagnostics purposes).
+/// </remarks>
 let private rewriteNegatedCharSets universe regex =
     let rec rewriteNegatedCharSets regex =
         cont {
@@ -1013,10 +1025,8 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         let ruleClauseRegexes =
             let ruleAlphabet =
                 ruleClauseRegexes
-                //|> Array.mapReduce regexAlphabetMapReduce
-                |> Array.map getAlphabet
-                |> Array.reduce CharSet.union
-                // Add the low ASCII characters too, like fslex does.
+                |> Array.mapReduce regexAlphabetMapReduce
+                // fslex compatibility: Always add the standard (low) ASCII characters, like fslex does.
                 |> CharSet.union (CharSet.ofRange (char 0) (char 127))
 
             ruleClauseRegexes
