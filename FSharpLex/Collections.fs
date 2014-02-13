@@ -128,6 +128,11 @@ type internal AvlTree<'T when 'T : comparison> =
             | Empty, Empty -> 0
             | Empty, _ -> -1
             | _, Empty -> 1
+            
+            // OPTIMIZATION : For this simple, common case, avoid the overhead of creating lists.
+            | Node (Empty, Empty, x, _), Node (Empty, Empty, y, _) ->
+                compare x y
+
             | _ ->
                 AvlTree<'T>.CompareStacks (comparer, [s1], [s2])
 
@@ -1770,6 +1775,7 @@ type CharSet private (tree : CharDiet) as this =
     override this.Equals other =
         match other with
         | :? CharSet as other ->
+            this == other ||
             tree == other.Tree ||
             CharDiet.equal tree other.Tree
         | _ ->
@@ -2183,17 +2189,21 @@ type CharSet private (tree : CharDiet) as this =
         member this.CompareTo other =
             match other with
             | :? CharSet as other ->
-                CharDiet.comparison this.Tree other.Tree
+                if this == other || this.Tree == other.Tree then 0
+                else CharDiet.comparison tree other.Tree
             | _ ->
                 invalidArg "other" "The argument is not an instance of CharSet."
 
     interface System.IComparable<CharSet> with
         member this.CompareTo other =
-            CharDiet.comparison tree other.Tree
+            if this == other || this.Tree == other.Tree then 0
+            else CharDiet.comparison tree other.Tree
 
     interface System.IEquatable<CharSet> with
         member this.Equals other =
-            CharDiet.equal tree other.Tree
+            this == other
+            || this.Tree == other.Tree
+            || CharDiet.equal tree other.Tree
 
 
 /// Functional programming operators related to the CharSet type.
