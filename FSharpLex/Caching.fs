@@ -31,7 +31,7 @@ type CompilationCache = {
     /// Caches the derivative of a regular expression with respect to a symbol.
     RegexDerivativeCache : HashMap<Regex, Map<char, Regex>>;
     /// Caches the set of derivative classes for a regular expression.
-    DerivativeClassCache : HashMap<Regex, DerivativeClasses>;
+    DerivativeClassesCache : HashMap<Regex, DerivativeClasses>;
     /// Caches the intersection of two derivative classes.
     // NOTE : Since the intersection operation is commutative, the derivative classes
     // are sorted when creating the cache key to increase the cache hit ratio.
@@ -42,11 +42,41 @@ type CompilationCache = {
 //
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module CompilationCache =
+    open ExtCore.Control.Collections
+
     //
     [<CompiledName("Empty")>]
     let empty =
         { CharSetCache = HashMap.empty;
           RegexDerivativeCache = HashMap.empty;
-          DerivativeClassCache = HashMap.empty;
+          DerivativeClassesCache = HashMap.empty;
           DerivativeClassIntersectionCache = HashMap.empty; }
 
+    //
+    [<CompiledName("InternCharSet")>]
+    let internCharSet (charSet : CharSet) (compilationCache : CompilationCache) =
+        // Preconditions
+        // TODO
+
+        // Intern the given CharSet into the cache, if necessary.
+        let charSetCache = compilationCache.CharSetCache
+        match HashMap.tryFind charSet charSetCache with
+        | Some cachedCharSet ->
+            cachedCharSet, compilationCache
+        | None ->
+            // Add the CharSet instance to the cache, then update the compilation cache.
+            let compilationCache =
+                { compilationCache with
+                    CharSetCache = HashMap.add charSet charSet charSetCache }
+
+            charSet, compilationCache
+
+    //
+    [<CompiledName("InternDerivativeClasses")>]
+    let internDerivativeClasses (derivativeClasses : DerivativeClasses) (compilationCache : CompilationCache) : DerivativeClasses * _ =
+        // Preconditions
+        // TODO
+
+        // Intern each CharSet instance in the given derivative class.
+        // TODO : Also intern the actual DerivativeClasses (i.e., HashSet<CharSet>) instances? Would the perf. gain be worthwhile?
+        State.HashSet.map internCharSet derivativeClasses compilationCache

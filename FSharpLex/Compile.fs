@@ -52,24 +52,8 @@ type private CompilationState = {
     /// Maps a DFA state to the regular vector it represents.
     DfaStateToRegularVector : TagMap<DfaState, RegularVector>;
 
-    (* Caches for memoizing the output of functions.
-       These *hugely* improve compilation performance; without them, fsharplex takes a very, very long
-       time to compile large language definitions (e.g., the F# compiler lexer). *)
-
-    /// A cache used for hash-consing of CharSets.
-    /// This is critical for performance; without it, definitions which make heavy use of Unicode character sets
-    /// cause fsharplex to spend a significant amount of time comparing CharSets for equality.
-    /// With this cache, many of those equality checks are reduced to reference (physical) equality comparisons.
-    CharSetCache : HashMap<CharSet, CharSet>;
-    /// Caches the derivative of a regular expression with respect to a symbol.
-    RegexDerivativeCache : HashMap<Regex, Map<char, Regex>>;
-    /// Caches the set of derivative classes for a regular expression.
-    DerivativeClassCache : HashMap<Regex, DerivativeClasses>;
-    /// Caches the intersection of two derivative classes.
-    // NOTE : Since the intersection operation is commutative, the derivative classes
-    // are sorted when creating the cache key to increase the cache hit ratio.
-    //DerivativeClassIntersectionCache : HashMap<DerivativeClasses * DerivativeClasses, DerivativeClasses>;
-    DerivativeClassIntersectionCache : HashMap<DerivativeClasses, HashMap<DerivativeClasses, DerivativeClasses>>;
+    /// Caches used for memoizing computations.
+    Cache : CompilationCache;
 }
 
 /// Functional operators related to the CompilationState record.
@@ -82,10 +66,7 @@ module private CompilationState =
         FinalStates = Set.empty;
         RegularVectorToDfaState = HashMap.empty;
         DfaStateToRegularVector = TagMap.empty;
-        CharSetCache = HashMap.empty;
-        RegexDerivativeCache = HashMap.empty;
-        DerivativeClassCache = HashMap.empty;
-        DerivativeClassIntersectionCache = HashMap.empty; }
+        Cache = CompilationCache.empty; }
 
     //
     let inline tryGetDfaState regVec (compilationState : CompilationState) =
@@ -136,16 +117,14 @@ let private transitions regularVector derivativeClass (transitionsFromCurrentDfa
     // The derivative of the regular vector w.r.t. the chosen element.
     let regularVector', compilationState =
         // Compute the derivative of the regular vector
-        let regularVector', derivativeCache =
+        let regularVector', compilationCache =
             // Choose an element from the derivative class; any element
             // will do (which is the point behind the derivative classes).
             let derivativeClassElement = CharSet.minElement derivativeClass
-            RegularVector.derivative derivativeClassElement regularVector compilationState.RegexDerivativeCache
+            RegularVector.derivative derivativeClassElement regularVector compilationState.Cache
             
         // Return the derivative vector and the updated compilation state.
-        regularVector',
-        { compilationState with
-            RegexDerivativeCache = derivativeCache; }
+        regularVector', { compilationState with Cache = compilationCache; }
 
     (*  If the derivative of the regular vector represents the 'error' state,
         ignore it. Instead of representing the error state with an explicit state
@@ -207,13 +186,10 @@ let rec private createDfa pending compilationState =
             /// The approximate set of derivative classes of the regular vector,
             /// representing transitions out of the DFA state representing it.
             let derivativeClasses, compilationState =
-                let derivativeClasses, derivativeClassCache, intersectionCache =
-                    RegularVector.derivativeClasses regularVector compilationState.DerivativeClassCache compilationState.DerivativeClassIntersectionCache
+                let derivativeClasses, compilationCache =
+                    RegularVector.derivativeClasses regularVector compilationState.Cache
                 
-                derivativeClasses,
-                { compilationState with
-                    DerivativeClassCache = derivativeClassCache;
-                    DerivativeClassIntersectionCache = intersectionCache; }
+                derivativeClasses, { compilationState with Cache = compilationCache; }
 
             // For each DFA state (regular vector) targeted by a transition (derivative class),
             // add the DFA state to the compilation state (if necessary), then add an edge

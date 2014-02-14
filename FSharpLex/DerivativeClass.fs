@@ -71,21 +71,9 @@ module DerivativeClasses =
         ||> HashSet.fold (fun intersections cr ->
             (intersections, ``C(s)``)
             ||> HashSet.fold (fun intersections cs ->
+                // OPTIMIZE : Memoize this computation -- it is likely producing lots of additional CharSet instances.
                 let intersection = CharSet.intersect cr cs
                 HashSet.add intersection intersections))
-
-    //
-    [<CompiledName("Intern")>]
-    let intern (derivativeClasses : DerivativeClasses) (charSetCache : HashMap<CharSet, CharSet>) : DerivativeClasses * _ =
-        (derivativeClasses, charSetCache)
-        ||> State.HashSet.map (fun derivativeClass charSetCache ->
-            match HashMap.tryFind derivativeClass charSetCache with
-            | Some cachedDerivativeClass ->
-                cachedDerivativeClass, charSetCache
-            | None ->
-                // Add the derivative class (a CharSet) to the cache.
-                let charSetCache = HashMap.add derivativeClass derivativeClass charSetCache
-                derivativeClass, charSetCache)
 
     /// Computes an approximate set of derivative classes for the specified Regex.
     let rec private ofRegexImpl regex =
