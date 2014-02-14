@@ -68,6 +68,10 @@ module DerivativeClasses =
         // Preconditions
         // TODO
 
+        // Intern the derivative classes first.
+        let ``C(r)``, compilationCache = CompilationCache.internDerivativeClasses ``C(r)`` compilationCache
+        let ``C(s)``, compilationCache = CompilationCache.internDerivativeClasses ``C(s)`` compilationCache
+
         // Does this intersection already exist in the cache?
         let intersection =
             compilationCache.DerivativeClassIntersectionCache
@@ -75,32 +79,43 @@ module DerivativeClasses =
             |> Option.bind (fun innerMap ->
                 innerMap
                 |> HashMap.tryFind ``C(s)``)
+
         match intersection with
         | Some intersection ->
             intersection, compilationCache
         | None ->
-            // Intern the derivative classes first.
-            let ``C(r)``, compilationCache = CompilationCache.internDerivativeClasses ``C(r)`` compilationCache
-            let ``C(s)``, compilationCache = CompilationCache.internDerivativeClasses ``C(s)`` compilationCache
+            //
+            let intersection, compilationCache =
+                // Compute the intersection of each set in the Cartesian product of the derivative classes.
+                (HashSet.empty, ``C(r)``, compilationCache)
+                |||> State.HashSet.fold (fun intersections cr compilationCache ->
+                    (intersections, ``C(s)``, compilationCache)
+                    |||> State.HashSet.fold (fun intersections cs ->
+                        state {
+                        // Does this intersection already exist in the cache?
+                        //let! compilationCache = State.getState
+                        //match HashMap.tryFind cr compilationCache.
 
-            // Compute the intersection of each set in the Cartesian product of the derivative classes.
-            (HashSet.empty, ``C(r)``, compilationCache)
-            |||> State.HashSet.fold (fun intersections cr compilationCache ->
-                (intersections, ``C(s)``, compilationCache)
-                |||> State.HashSet.fold (fun intersections cs ->
-                    state {
-                    // Does this intersection already exist in the cache?
-                    //let! compilationCache = State.getState
-                    //match HashMap.tryFind cr compilationCache.
+                        let! intersection =
+                            // Compute the intersection.
+                            CharSet.intersect cr cs
+                            // Intern the intersection.
+                            |> CompilationCache.internCharSet
 
-                    let! intersection =
-                        // Compute the intersection.
-                        CharSet.intersect cr cs
-                        // Intern the intersection.
-                        |> CompilationCache.internCharSet
+                        return HashSet.add intersection intersections
+                        }))
 
-                    return HashSet.add intersection intersections
-                    }))
+            // Add the intersection to the compilation cache.
+            let intersectionCache =
+                let intersectionCache = compilationCache.DerivativeClassIntersectionCache
+                match HashMap.tryFind ``C(r)`` intersectionCache with
+                | None ->
+                    HashMap.add ``C(r)`` (HashMap.singleton ``C(s)`` intersection) intersectionCache
+                | Some cache ->
+                    HashMap.add ``C(r)`` (HashMap.add ``C(s)`` intersection cache) intersectionCache
+
+            // Return the intersection and the updated compilation cache.
+            intersection, { compilationCache with DerivativeClassIntersectionCache = intersectionCache }
 
     /// Computes an approximate set of derivative classes for the specified Regex.
     let rec private ofRegexImpl regex =
