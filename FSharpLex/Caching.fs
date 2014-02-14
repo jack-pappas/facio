@@ -22,6 +22,9 @@ open FSharpLex.SpecializedCollections
 
 
 //
+type DerivativeClasses = HashSet<CharSet>
+
+//
 type CompilationCache = {
     /// A cache used for hash-consing of CharSets.
     /// This is critical for performance; without it, definitions which make heavy use of Unicode character sets

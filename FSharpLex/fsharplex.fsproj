@@ -63,8 +63,8 @@
     <Compile Include="Collections.fs" />
     <Compile Include="Graph.fs" />
     <Compile Include="Regex.fs" />
-    <Compile Include="DerivativeClass.fs" />
     <Compile Include="Caching.fs" />
+    <Compile Include="DerivativeClass.fs" />
     <Compile Include="RegularVector.fs" />
     <Compile Include="Unicode.fs" />
     <Compile Include="Ast.fs" />

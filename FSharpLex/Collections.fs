@@ -1782,6 +1782,7 @@ type CharSet private (tree : CharDiet) as this =
             false
 
     //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member private __.Tree
         with get () = tree
 

@@ -44,11 +44,10 @@ module DerivativeClass =
         CharSet.difference universe derivClass
 
 //
-type DerivativeClasses = HashSet<CharSet>
-
-//
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module DerivativeClasses =
+    open ExtCore.Control
+
     //
     [<CompiledName("Universe")>]
     let universe : DerivativeClasses =
@@ -65,15 +64,43 @@ module DerivativeClasses =
     /// derivative classes. This is needed when computing the set of derivative
     /// classes for a compound regular expression ('And', 'Or', and 'Concat').
     [<CompiledName("Intersect")>]
-    let intersect (``C(r)`` : DerivativeClasses) (``C(s)`` : DerivativeClasses) : DerivativeClasses =
-        //Set.Cartesian.map CharSet.intersect ``C(r)`` ``C(s)``
-        (HashSet.empty, ``C(r)``)
-        ||> HashSet.fold (fun intersections cr ->
-            (intersections, ``C(s)``)
-            ||> HashSet.fold (fun intersections cs ->
-                // OPTIMIZE : Memoize this computation -- it is likely producing lots of additional CharSet instances.
-                let intersection = CharSet.intersect cr cs
-                HashSet.add intersection intersections))
+    let intersect (``C(r)`` : DerivativeClasses) (``C(s)`` : DerivativeClasses) (compilationCache : CompilationCache) : DerivativeClasses * _ =
+        // Preconditions
+        // TODO
+
+        // Does this intersection already exist in the cache?
+        let intersection =
+            compilationCache.DerivativeClassIntersectionCache
+            |> HashMap.tryFind ``C(r)``
+            |> Option.bind (fun innerMap ->
+                innerMap
+                |> HashMap.tryFind ``C(s)``)
+        match intersection with
+        | Some intersection ->
+            intersection, compilationCache
+        | None ->
+            // Intern the derivative classes first.
+            let ``C(r)``, compilationCache = CompilationCache.internDerivativeClasses ``C(r)`` compilationCache
+            let ``C(s)``, compilationCache = CompilationCache.internDerivativeClasses ``C(s)`` compilationCache
+
+            // Compute the intersection of each set in the Cartesian product of the derivative classes.
+            (HashSet.empty, ``C(r)``, compilationCache)
+            |||> State.HashSet.fold (fun intersections cr compilationCache ->
+                (intersections, ``C(s)``, compilationCache)
+                |||> State.HashSet.fold (fun intersections cs ->
+                    state {
+                    // Does this intersection already exist in the cache?
+                    //let! compilationCache = State.getState
+                    //match HashMap.tryFind cr compilationCache.
+
+                    let! intersection =
+                        // Compute the intersection.
+                        CharSet.intersect cr cs
+                        // Intern the intersection.
+                        |> CompilationCache.internCharSet
+
+                    return HashSet.add intersection intersections
+                    }))
 
     /// Computes an approximate set of derivative classes for the specified Regex.
     let rec private ofRegexImpl regex =
@@ -84,8 +111,8 @@ module DerivativeClasses =
             return universe
 
         | _ ->
-            let! cache = StateCont.getState
-            match HashMap.tryFind regex cache with
+            let! compilationCache = StateCont.getState
+            match HashMap.tryFind regex compilationCache.DerivativeClassesCache with
             | Some derivativeClasses ->
                 return derivativeClasses
             | None ->
@@ -106,43 +133,60 @@ module DerivativeClasses =
                         else
                             let! ``C(r)`` = ofRegexImpl r
                             let! ``C(s)`` = ofRegexImpl s
-                            return intersect ``C(r)`` ``C(s)``
+
+                            // TODO : Clean this up -- we shouldn't have to extract and set the state manually here.
+                            let! compilationState = StateCont.getState
+                            let intersection, compilationState = intersect ``C(r)`` ``C(s)`` compilationState
+                            do! StateCont.setState compilationState
+                            return intersection
                     | Or (r, s)
                     | And (r, s) ->
                         let! ``C(r)`` = ofRegexImpl r
                         let! ``C(s)`` = ofRegexImpl s
-                        return intersect ``C(r)`` ``C(s)`` }
 
-                // Add the set of derivative classes to the cache before returning.
-                let cache = HashMap.add regex derivativeClasses cache
-                do! StateCont.setState cache
-                return derivativeClasses
+                        // TODO : Clean this up -- we shouldn't have to extract and set the state manually here.
+                        let! compilationState = StateCont.getState
+                        let intersection, compilationState = intersect ``C(r)`` ``C(s)`` compilationState
+                        do! StateCont.setState compilationState
+                        return intersection
+                        }
+
+                // Get the compilation cache again (in case it was modified when recursively traversing the child nodes).
+                let! compilationCache = StateCont.getState
+                match HashMap.tryFind regex compilationCache.DerivativeClassesCache with
+                | Some derivativeClasses ->
+                    return derivativeClasses
+                | None ->
+                    // Add the set of derivative classes to the cache before returning.
+                    let derivativeClassesCache = HashMap.add regex derivativeClasses compilationCache.DerivativeClassesCache
+                    do! StateCont.setState { compilationCache with DerivativeClassesCache = derivativeClassesCache }
+                    return derivativeClasses
         }
 
     /// Computes an approximate set of derivative classes for the specified Regex.
     [<CompiledName("FromRegex")>]
-    let ofRegex (regex : Regex) (derivativeClassCache : HashMap<Regex, DerivativeClasses>) =
+    let ofRegex (regex : Regex) (compilationCache : CompilationCache) =
         // OPTIMIZATION :   For a few common patterns which always return the same set of derivative classes,
         //                  avoid the cache lookup -- just return the result immediately.
         match regex with
         | Epsilon
         | Any ->
-            universe, derivativeClassCache
+            universe, compilationCache
         | _ ->
             // Try to find the set of derivative classes for this Regex in the cache;
             // if they're not present in the cache, compute the set and add it to the cache before returning.
-            match HashMap.tryFind regex derivativeClassCache with
+            match HashMap.tryFind regex compilationCache.DerivativeClassesCache with
             | Some derivativeClasses ->
-                derivativeClasses, derivativeClassCache
+                derivativeClasses, compilationCache
             | None ->
                 match regex with
                 | Epsilon
                 | Any ->
                     // Shouldn't ever hit this (because we've already matched these patterns earlier)
                     // but we might as well include them here for completeness.
-                    universe, derivativeClassCache
+                    universe, compilationCache
 
                 | _ ->
                     // Compute the set of derivative classes for this regex.
-                    ofRegexImpl regex derivativeClassCache id
+                    ofRegexImpl regex compilationCache id
 
