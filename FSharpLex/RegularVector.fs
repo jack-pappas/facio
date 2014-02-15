@@ -113,14 +113,13 @@ module RegularVector =
         let regVecDerivativeClasses, compilationCache =
             State.Array.map DerivativeClasses.ofRegex regVec compilationCache
 
+        // TODO : Replace with State.ArrayView.reduce from ExtCore 0.8.41.
         let zerothElement = regVecDerivativeClasses.[0]
         let regVecLen = Array.length regVec
         if regVecLen = 1 then
             zerothElement, compilationCache
         else
             let rest = ArrayView.create regVecDerivativeClasses 1 (regVecLen - 1)
-
-            // TODO : Replace with State.ArrayView.fold, or better yet, State.ArrayView.reduce
             ((zerothElement, compilationCache), rest)
             ||> ArrayView.fold (fun (intersection, compilationCache) derivClass ->
                 // Compute the intersection of this DerivativeClasses and the intersection of the previous DerivativeClasses.
