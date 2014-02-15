@@ -123,38 +123,5 @@ module RegularVector =
             // TODO : Replace with State.ArrayView.fold, or better yet, State.ArrayView.reduce
             ((zerothElement, compilationCache), rest)
             ||> ArrayView.fold (fun (intersection, compilationCache) derivClass ->
-                let key1, key2 =
-                    if intersection < derivClass then intersection, derivClass
-                    else derivClass, intersection
-
-                // Try to find the intersection in the cache; if it's not found,
-                // compute it then add it to the cache for later reuse.
-                match HashMap.tryFind key1 compilationCache.DerivativeClassIntersectionCache with
-                | Some cache2 ->
-                    match HashMap.tryFind key2 cache2 with
-                    | Some intersection ->
-                        intersection, compilationCache
-                    | None ->
-                        // Compute the intersection of this derivative class and the intersection
-                        // of the previous derivative classes.
-                        let intersection, compilationCache =
-                            DerivativeClasses.intersect intersection derivClass compilationCache
-
-                        // Add the result to the cache, then return it.
-                        let intersectionCache =
-                            let cache2 = HashMap.add key2 intersection cache2
-                            HashMap.add key1 cache2 compilationCache.DerivativeClassIntersectionCache
-                        intersection, { compilationCache with DerivativeClassIntersectionCache = intersectionCache }
-
-                | None ->
-                    // Compute the intersection of this derivative class and the intersection
-                    // of the previous derivative classes.
-                    let intersection, compilationCache =
-                        DerivativeClasses.intersect intersection derivClass compilationCache
-
-                    // Add the result to the cache, then return it.
-                    let intersectionCache =
-                        let cache2 = HashMap.singleton key2 intersection
-                        HashMap.add key1 cache2 compilationCache.DerivativeClassIntersectionCache
-                    intersection, { compilationCache with DerivativeClassIntersectionCache = intersectionCache })
-        
+                // Compute the intersection of this DerivativeClasses and the intersection of the previous DerivativeClasses.
+                DerivativeClasses.intersect intersection derivClass compilationCache)
