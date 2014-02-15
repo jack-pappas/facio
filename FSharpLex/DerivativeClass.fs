@@ -60,9 +60,8 @@ module DerivativeClasses =
         |> HashSet.add charSet
         |> HashSet.add (DerivativeClass.complement charSet)
 
-    /// Computes a conservative approximation of the intersection of two sets of
-    /// derivative classes. This is needed when computing the set of derivative
-    /// classes for a compound regular expression ('And', 'Or', and 'Concat').
+    /// Computes a conservative approximation of the intersection of two sets of derivative classes.
+    /// This is needed when computing the set of derivative classes for a compound regular expression ('And', 'Or', and 'Concat').
     [<CompiledName("Intersect")>]
     let intersect (``C(r)`` : DerivativeClasses) (``C(s)`` : DerivativeClasses) (compilationCache : CompilationCache) : DerivativeClasses * _ =
         // Preconditions
@@ -71,6 +70,12 @@ module DerivativeClasses =
         // Intern the derivative classes first.
         let ``C(r)``, compilationCache = CompilationCache.internDerivativeClasses ``C(r)`` compilationCache
         let ``C(s)``, compilationCache = CompilationCache.internDerivativeClasses ``C(s)`` compilationCache
+
+        // Sort the derivative classes -- the intersection operation is commutative, so (f x y) = (f y x).
+        // By sorting the two derivative classes here, we increase the cache hit ratio (and also reduce the size of the cache).
+        let ``C(r)``, ``C(s)`` =
+            if ``C(r)`` < ``C(s)`` then ``C(r)``, ``C(s)``
+            else ``C(s)``, ``C(r)``
 
         // Does this intersection already exist in the cache?
         let intersection =
@@ -204,4 +209,3 @@ module DerivativeClasses =
                 | _ ->
                     // Compute the set of derivative classes for this regex.
                     ofRegexImpl regex compilationCache id
-

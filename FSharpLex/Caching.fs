@@ -36,9 +36,8 @@ type CompilationCache = {
     /// Caches the set of derivative classes for a regular expression.
     DerivativeClassesCache : HashMap<Regex, DerivativeClasses>;
     /// Caches the intersection of two derivative classes.
-    // NOTE : Since the intersection operation is commutative, the derivative classes
-    // are sorted when creating the cache key to increase the cache hit ratio.
-    //DerivativeClassIntersectionCache : HashMap<DerivativeClasses * DerivativeClasses, DerivativeClasses>;
+    // NOTE : Since the intersection operation is commutative, the derivative classes are sorted when creating the cache key
+    //        to increase the cache hit ratio. The "lesser" key is used as the outer key.
     DerivativeClassIntersectionCache : HashMap<DerivativeClasses, HashMap<DerivativeClasses, DerivativeClasses>>;
 }
 
