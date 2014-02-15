@@ -320,13 +320,15 @@ let private _fsyacc_reductions = [|
                 (
                    (
                       match _4 with
-                      | Pattern _4 ->
-                        let pos =
+                      | Pattern pattern ->
+                        let posRange =
                             let rawStartPos, rawEndPos = parseState.ResultRange
                             let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
                             let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
-                            Some (startPos, endPos)
-                        ((pos, _2), _4)
+                            let range = SourcePositionRange (startPos, endPos)
+                            Some range
+                        ({ Value = _2; PositionRange = posRange; }, pattern)
+
                       | EndOfFile ->
                         let msg = sprintf "End-of-file pattern in macro '%s'." _2
                         raise <| exn msg
@@ -360,13 +362,14 @@ let private _fsyacc_reductions = [|
                       let rule = {
                           Parameters = _2;
                           Clauses = _6; }
-                      let pos =
+                      let posRange =
                             let rawStartPos, rawEndPos = parseState.ResultRange
                             let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
                             let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
-                            Some (startPos, endPos)
+                            let range = SourcePositionRange (startPos, endPos)
+                            Some range
                       
-                      ((pos, _1), rule)
+                      ({ Value = _1; PositionRange = posRange; }, rule)
                    )
                  : 'rule));
         (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->

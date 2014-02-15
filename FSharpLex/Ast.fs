@@ -22,7 +22,6 @@ module FSharpLex.Ast
 open System.Globalization
 open LanguagePrimitives
 open FSharpLex.SpecializedCollections
-open FSharpLex.Regex
 
 (* TODO :   Add annotations for position information (i.e., position in the lexer
             definition file) to:
@@ -90,9 +89,7 @@ type SourcePosition =
             invalidArg "value" "The value is not an instance of SourcePosition."
 
     override this.ToString () =
-        this.Line.ToString ()
-        + ", "
-        + this.Column.ToString ()
+        sprintf "%u, %u" this.Line this.Column
 
     interface System.IEquatable<SourcePosition> with
         member this.Equals other =
@@ -111,13 +108,38 @@ type SourcePosition =
         member this.CompareTo other =
             SourcePosition.Compare (this, other)
 
-/// Unique identifier for a pattern macro
-/// defined by a lexer specification.
+/// A range of positions in a source file.
+[<Struct>]
+type SourcePositionRange =
+    /// The first (inclusive) position in the range.
+    val First : SourcePosition
+    /// The last (inclusive) position in the range.
+    val Last : SourcePosition
+
+    /// <summary>Create a new <see cref="SourceRange"/> value.</summary>
+    /// <param name="first"></param>
+    /// <param name="last"></param>
+    new (first, last) = {
+        First = first;
+        Last = last;
+        }
+
+    override this.ToString () =
+        sprintf "(%O)-(%O)" this.First this.Last
+
+/// A value, optionally associated with a position range in a source file.
+type PositionedValue<'T> = {
+    /// A position range within a source file.
+    PositionRange : SourcePositionRange option;
+    /// A value.
+    Value : 'T;
+}
+
+/// Unique identifier for a pattern macro defined by a lexer specification.
 type MacroIdentifier = string
 
 //
-type MacroIdentifierWithPosition =
-    (SourcePosition * SourcePosition) option * MacroIdentifier
+type MacroIdentifierWithPosition = PositionedValue<MacroIdentifier>
 
 /// <summary>A regular-expression-based pattern used to define patterns within the lexer.</summary>
 /// <remarks>This is a regular expression extended with additional
@@ -373,8 +395,7 @@ type Rule = {
 type RuleIdentifier = string
 
 //
-type RuleIdentifierWithPosition =
-    (SourcePosition * SourcePosition) option * RuleIdentifier
+type RuleIdentifierWithPosition = PositionedValue<RuleIdentifier>
 
 /// A complete specification of a lexer.
 type Specification = {

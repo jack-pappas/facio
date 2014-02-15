@@ -93,14 +93,23 @@ module TestCases =
     extern ErrorModes public SetErrorMode (ErrorModes uMode)
 
     [<TestFixtureSetUp>]
-    let disableCrashDialog () : unit =
-        // Disable the crash dialog. This affects not only this process,
-        // but also any child processes (which is really what we care about).
-        let oldMode = SetErrorMode ErrorModes.SEM_NOGPFAULTERRORBOX
-        SetErrorMode (oldMode ||| ErrorModes.SEM_NOGPFAULTERRORBOX) |> ignore
+    let textFixtureSetup () : unit =
+        // When running on Windows (even if running on Mono), disable crash-reporting dialog.
+        match System.Environment.OSVersion.Platform with
+        | PlatformID.Win32NT
+        | PlatformID.Win32S
+        | PlatformID.Win32Windows
+        | PlatformID.WinCE ->
+            // Disable the crash dialog. This affects not only this process,
+            // but also any child processes (which is really what we care about).
+            let oldMode = SetErrorMode ErrorModes.SEM_NOGPFAULTERRORBOX
+            SetErrorMode (oldMode ||| ErrorModes.SEM_NOGPFAULTERRORBOX) |> ignore
+        | _ ->
+            // For all other platforms, this is a no-op.
+            ()
 
     //
-    let private testTimeout = TimeSpan.FromSeconds 30.0
+    let private testTimeout = TimeSpan.FromSeconds 120.0
 
     //
     type private RepositoryTestCases () =
@@ -112,6 +121,11 @@ module TestCases =
     //
     [<TestCaseSource(typeof<RepositoryTestCases>, "Items")>]
     let repository (inputFilename : string, outputFilename : string, unicodeSupport : bool) =
+        // Test cases may be ignored by adding a text file with the same filename as the input file, plus the suffix ".ignore".
+        if File.Exists (inputFilename + ".ignore") then
+            let ignoreMsg = sprintf "Ignoring test case '%s'." inputFilename
+            Assert.Ignore ignoreMsg
+
         //
         use toolProcess = new Process ()
         

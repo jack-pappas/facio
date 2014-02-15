@@ -1,6 +1,9 @@
 F# Compiler Tools
 #################
 
+.. image:: https://travis-ci.org/jack-pappas/fsharp-tools.png  
+    :target: https://travis-ci.org/jack-pappas/fsharp-tools
+
 This repository contains a collection of tools which assist in implementing compilers, interpreters, and other language-based tools in F#.
 
 - fsharplex

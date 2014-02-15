@@ -26,8 +26,8 @@ open ExtCore.Control
 open ExtCore.Control.Cps
 open FSharpLex.SpecializedCollections
 open FSharpLex.Graph
-open FSharpLex.Regex
 open FSharpLex.Ast
+
 
 
 /// DFA compilation state.
@@ -52,18 +52,8 @@ type private CompilationState = {
     /// Maps a DFA state to the regular vector it represents.
     DfaStateToRegularVector : TagMap<DfaState, RegularVector>;
 
-    (* Caches for memoizing the output of functions.
-       These *hugely* improve compilation performance. *)
-
-    // OPTIMIZE :   Change these fields to use LruCache from ExtCore to
-    //              limit the amount of memory they can use.
-
-    /// Caches the derivative of a regular expression with respect to a symbol.
-    RegexDerivativeCache : HashMap<Regex * char, Regex>;
-    /// Caches the intersection of two derivative classes.
-    // NOTE : Since the intersection operation is commutative, the derivative classes
-    // are sorted when creating the cache key to increase the cache hit ratio.
-    DerivativeClassIntersectionCache : HashMap<DerivativeClasses * DerivativeClasses, DerivativeClasses>
+    /// Caches used for memoizing computations.
+    Cache : CompilationCache;
 }
 
 /// Functional operators related to the CompilationState record.
@@ -76,8 +66,7 @@ module private CompilationState =
         FinalStates = Set.empty;
         RegularVectorToDfaState = HashMap.empty;
         DfaStateToRegularVector = TagMap.empty;
-        RegexDerivativeCache = HashMap.empty;
-        DerivativeClassIntersectionCache = HashMap.empty; }
+        Cache = CompilationCache.empty; }
 
     //
     let inline tryGetDfaState regVec (compilationState : CompilationState) =
@@ -121,67 +110,60 @@ module private CompilationState =
 
 //
 let private transitions regularVector derivativeClass (transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState) =
-    // Ignore empty derivative classes.
+    // Preconditions
     if CharSet.isEmpty derivativeClass then
+        invalidArg "derivativeClass" "The derivative class is an empty set."
+
+    // The derivative of the regular vector w.r.t. the chosen element.
+    let regularVector', compilationState =
+        // Compute the derivative of the regular vector
+        let regularVector', compilationCache =
+            // Choose an element from the derivative class; any element
+            // will do (which is the point behind the derivative classes).
+            let derivativeClassElement = CharSet.minElement derivativeClass
+            RegularVector.derivative derivativeClassElement regularVector compilationState.Cache
+            
+        // Return the derivative vector and the updated compilation state.
+        regularVector', { compilationState with Cache = compilationCache; }
+
+    (*  If the derivative of the regular vector represents the 'error' state,
+        ignore it. Instead of representing the error state with an explicit state
+        and creating transition edges to it, we will just handle it in the
+        back-end (code-generation phase) by transitioning to the error state
+        whenever we see an input which is not explicitly allowed.
+        This greatly reduces the number of edges in the transition graph. *)
+    if RegularVector.isEmpty regularVector' then
         transitionsFromCurrentDfaState,
         unvisitedTransitionTargets,
         compilationState
     else
-        // The derivative of the regular vector w.r.t. the chosen element.
-        let regularVector', compilationState =
-            // Compute the derivative of the regular vector
-            let regularVector', derivativeCache =
-                // Choose an element from the derivative class; any element
-                // will do (which is the point behind the derivative classes).
-                let derivativeClassElement = CharSet.minElement derivativeClass
-                RegularVector.derivative derivativeClassElement regularVector compilationState.RegexDerivativeCache
-            
-            // Return the derivative vector and the updated compilation state.
-            regularVector',
-            { compilationState with
-                RegexDerivativeCache = derivativeCache; }
+        let targetDfaState, unvisitedTransitionTargets, compilationState =
+            match CompilationState.tryGetDfaState regularVector' compilationState with
+            | Some targetDfaState ->
+                targetDfaState,
+                unvisitedTransitionTargets,
+                compilationState
+            | None ->
+                // Create a DFA state for this regular vector.
+                let newDfaState, compilationState =
+                    CompilationState.createDfaState regularVector' compilationState
 
-        (*  If the derivative of the regular vector represents the 'error' state,
-            ignore it. Instead of representing the error state with an explicit state
-            and creating transition edges to it, we will just handle it in the
-            back-end (code-generation phase) by transitioning to the error state
-            whenever we see an input which is not explicitly allowed.
-            This greatly reduces the number of edges in the transition graph. *)
-        if RegularVector.isEmpty regularVector' then
-            transitionsFromCurrentDfaState,
-            unvisitedTransitionTargets,
-            compilationState
-        else
-            let targetDfaState, unvisitedTransitionTargets, compilationState =
-                let maybeDfaState =
-                    CompilationState.tryGetDfaState regularVector' compilationState
+                // Add this new DFA state to the set of unvisited states
+                // targeted by transitions from the current DFA state.
+                let unvisitedTransitionTargets =
+                    TagSet.add newDfaState unvisitedTransitionTargets
 
-                match maybeDfaState with
-                | Some targetDfaState ->
-                    targetDfaState,
-                    unvisitedTransitionTargets,
-                    compilationState
-                | None ->
-                    // Create a DFA state for this regular vector.
-                    let newDfaState, compilationState =
-                        CompilationState.createDfaState regularVector' compilationState
+                newDfaState,
+                unvisitedTransitionTargets,
+                compilationState
 
-                    // Add this new DFA state to the set of unvisited states
-                    // targeted by transitions from the current DFA state.
-                    let unvisitedTransitionTargets =
-                        TagSet.add newDfaState unvisitedTransitionTargets
+        //
+        let transitionsFromCurrentDfaState =
+            HashMap.add derivativeClass targetDfaState transitionsFromCurrentDfaState
 
-                    newDfaState,
-                    unvisitedTransitionTargets,
-                    compilationState
-
-            //
-            let transitionsFromCurrentDfaState =
-                HashMap.add derivativeClass targetDfaState transitionsFromCurrentDfaState
-
-            transitionsFromCurrentDfaState,
-            unvisitedTransitionTargets,
-            compilationState
+        transitionsFromCurrentDfaState,
+        unvisitedTransitionTargets,
+        compilationState
 
 // TODO : Re-write this using the readerState workflow.
 let rec private createDfa pending compilationState =
@@ -204,18 +186,19 @@ let rec private createDfa pending compilationState =
             /// The approximate set of derivative classes of the regular vector,
             /// representing transitions out of the DFA state representing it.
             let derivativeClasses, compilationState =
-                let derivativeClasses, intersectionCache =
-                    RegularVector.derivativeClasses regularVector compilationState.DerivativeClassIntersectionCache
+                let derivativeClasses, compilationCache =
+                    RegularVector.derivativeClasses regularVector compilationState.Cache
                 
-                derivativeClasses, { compilationState with DerivativeClassIntersectionCache = intersectionCache; }
+                derivativeClasses, { compilationState with Cache = compilationCache; }
 
             // For each DFA state (regular vector) targeted by a transition (derivative class),
             // add the DFA state to the compilation state (if necessary), then add an edge
             // to the transition graph from this DFA state to the target DFA state.
             let transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState =
                 ((HashMap.empty, TagSet.empty, compilationState), derivativeClasses)
-                ||> Set.fold (fun state derivativeClass ->
-                    transitions regularVector derivativeClass state)
+                ||> HashSet.fold (fun state derivativeClass ->
+                    if CharSet.isEmpty derivativeClass then state
+                    else transitions regularVector derivativeClass state)
 
             // Add any newly-created, unvisited states to the
             // set of states which still need to be visited.
@@ -306,10 +289,8 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
         InitialState = initialDfaStateId; }
 
 //
-let private preprocessMacro ((macroIdPosition : (SourcePosition * SourcePosition) option, macroId), pattern) (options : CompilationOptions) (macroEnv, badMacros) =
+let private preprocessMacro ({ Value = macroId; PositionRange = macroIdPosition; }, pattern) (options : CompilationOptions) (macroEnv, badMacros) =
     //
-    // OPTIMIZE : Modify this function to use a LazyList to hold the errors
-    // instead of an F# list to avoid the list concatenation overhead.
     let rec preprocessMacro pattern =
         cont {
         match pattern with
@@ -572,7 +553,7 @@ let private preprocessMacros macros options =
             | errors ->
                 Choice2Of2 (macroEnv, badMacros, errors)
 
-        | ((_, macroId), _ as macro) :: macros ->
+        | ({ Value = macroId; PositionRange = _; }, _ as macro) :: macros ->
             // Validate/process this macro.
             match preprocessMacro macro options (macroEnv, badMacros) with
             | Choice2Of2 macroErrors ->
@@ -602,13 +583,11 @@ let private preprocessMacros macros options =
 let private isAsciiCharSet (charSet : CharSet) : bool =
     charSet
     |> CharSet.forall (fun c ->
-        int c <= int System.Byte.MaxValue)
+        c <= char System.Byte.MaxValue)
 
 //
 let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
     //
-    // OPTIMIZE : Modify this function to use a LazyList to hold the errors
-    // instead of an F# list to avoid the list concatenation overhead.
     let rec validateAndSimplify pattern =
         cont {
         match pattern with
@@ -740,7 +719,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 |> Choice1Of2
         
         | Pattern.Any ->
-            return Choice1Of2 Regex.Regex.Any
+            return Choice1Of2 Regex.Any
 
         | Pattern.Character c ->
             // Make sure the character is an ASCII character unless the 'Unicode' option is set.
@@ -818,8 +797,14 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
         | Choice1Of2 processedPattern ->
             Choice1Of2 processedPattern
 
-//
-let private getAlphabet regex =
+/// <summary>An <see cref="IMapReduction`2"/> which can be used to compute the alphabet of a regular vector.</summary>
+/// <remarks>
+/// This is only necessary for fslex compatibility; once fsharplex has it's own backend (e.g., direct-style),
+/// this won't be needed anymore (though it may be retained as a library function for diagnostics purposes).
+/// </remarks>
+let private regexAlphabetMapReduce =
+    /// Gets the alphabet of a regular expression.
+    /// The alphabet is the set of symbols which may be matched at any state by the regular expression.
     let rec getAlphabet regex =
         cont {
         match regex with
@@ -842,10 +827,23 @@ let private getAlphabet regex =
             return CharSet.union rAlphabet sAlphabet
         }
 
-    getAlphabet regex id
+    { new IMapReduction<_,_> with
+        member __.Map (regex : Regex) =
+            getAlphabet regex id
+        member __.Reduce set1 set2 =
+            CharSet.union set1 set2 }
 
-// This is necessary for fslex-compatibility.
-// In the future, it will be moved into the fslex-compatibility backend.
+/// <summary>Rewrites negated character sets (i.e, a set of characters *not* to be matched) into positive character sets.</summary>
+/// <param name="universe">
+/// The universe of characters for <paramref name="regex"/>; this is the set of all possible input values, whether valid or invalid.
+/// The universe is, by definition, a superset of <paramref name="regex"/>'s alphabet.
+/// </param>
+/// <param name="regex">A regular expression.</param>
+/// <returns>A regular expression created by transforming negated character sets into positive character sets.</returns>
+/// <remarks>
+/// This is only necessary for fslex compatibility; once fsharplex has it's own backend (e.g., direct-style),
+/// this won't be needed anymore (though it may be retained as a library function for diagnostics purposes).
+/// </remarks>
 let private rewriteNegatedCharSets universe regex =
     let rec rewriteNegatedCharSets regex =
         cont {
@@ -901,8 +899,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         // in the correct order.
         // NOTE : The ordering only matters when two or more clauses overlap,
         // because then the ordering is used to decide which action to execute.
-        rule.Clauses
-        |> List.revIntoArray
+        List.revIntoArray rule.Clauses
 
     // Extract any clauses which match the end-of-file pattern;
     // these are handled separately from the other patterns.
@@ -939,8 +936,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             None
         else
             // Only the earliest use of the "eof" pattern will be matched.
-            let acceptingClauseIndex = Set.minElement eofClauseIndices
-            let neverMatchedClauseIndices = Set.remove acceptingClauseIndex eofClauseIndices
+            let acceptingClauseIndex, neverMatchedClauseIndices = Set.extractMin eofClauseIndices
 
             // TODO : Implement code to emit warning messages when 'neverMatchedClauseIndices'
             // is non-empty. (E.g., "This pattern will never be matched.")
@@ -964,8 +960,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             None
         else
             // Only the earliest use of the wildcard pattern will be matched.
-            let acceptingClauseIndex = Set.minElement wildcardClauseIndices
-            let neverMatchedClauseIndices = Set.remove acceptingClauseIndex wildcardClauseIndices
+            let acceptingClauseIndex, neverMatchedClauseIndices = Set.extractMin wildcardClauseIndices
 
             // TODO : Implement code to emit warning messages when 'neverMatchedClauseIndices'
             // is non-empty. (E.g., "This pattern will never be matched.")
@@ -1006,9 +1001,8 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         let ruleClauseRegexes =
             let ruleAlphabet =
                 ruleClauseRegexes
-                |> Array.map getAlphabet
-                |> Array.reduce CharSet.union
-                // Add the low ASCII characters too, like fslex does.
+                |> Array.mapReduce regexAlphabetMapReduce
+                // fslex compatibility: Always add the standard (low) ASCII characters, like fslex does.
                 |> CharSet.union (CharSet.ofRange (char 0) (char 127))
 
             ruleClauseRegexes
@@ -1166,6 +1160,6 @@ let lexerSpec (spec : Specification) options =
         Footer = spec.Footer;
         CompiledRules =
             (Map.empty, ruleIdentifiers, compiledRules)
-            |||> Array.fold2 (fun map (_, ruleId) compiledRule ->
+            |||> Array.fold2 (fun map ({ Value = ruleId; PositionRange = _; }) compiledRule ->
                 Map.add ruleId compiledRule map); }
     }

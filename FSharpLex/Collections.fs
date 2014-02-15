@@ -128,6 +128,11 @@ type internal AvlTree<'T when 'T : comparison> =
             | Empty, Empty -> 0
             | Empty, _ -> -1
             | _, Empty -> 1
+            
+            // OPTIMIZATION : For this simple, common case, avoid the overhead of creating lists.
+            | Node (Empty, Empty, x, _), Node (Empty, Empty, y, _) ->
+                compare x y
+
             | _ ->
                 AvlTree<'T>.CompareStacks (comparer, [s1], [s2])
 
@@ -415,270 +420,76 @@ type internal AvlTree<'T when 'T : comparison> =
     static member Count (tree : AvlTree<'T>) =
         match tree with
         | Empty -> 0u
-        | Node (Empty, Empty, _, _) -> 1u
         | Node (l, r, _, _) ->
-            /// Mutable stack. Holds the trees which still need to be traversed.
-            let stack = Stack (defaultStackCapacity)
-
-            /// The number of elements discovered in the tree so far.
-            let mutable count = 1u   // Start at one (1) to include this root node.
-
-            // Traverse the tree using the mutable stack, incrementing the counter at each node.
-            stack.Push r
-            stack.Push l
-
-            while stack.Count > 0 do
-                match stack.Pop () with
-                | Empty -> ()
-                (* OPTIMIZATION: Handle a few of the cases specially here to avoid pushing empty
-                   nodes on the stack. *)
-                | Node (Empty, Empty, _, _) ->
-                    // Increment the element count.
-                    count <- count + 1u
-
-                | Node (Empty, z, _, _)
-                | Node (z, Empty, _, _) ->
-                    // Increment the element count.
-                    count <- count + 1u
-
-                    // Push the non-empty child onto the stack.
-                    stack.Push z
-
-                | Node (l, r, _, _) ->
-                    // Increment the element count.
-                    count <- count + 1u
-
-                    // Push the children onto the stack.
-                    stack.Push r
-                    stack.Push l
-
-            // Return the element count.
-            count
+            // Count the number of children in the left and right subtrees.
+            // Add one to their sum to account for this node.
+            1u + (AvlTree.Count l) + (AvlTree.Count r)
 
     //
     static member Iter (action : 'T -> unit) (tree : AvlTree<'T>) : unit =
         match tree with
         | Empty -> ()
-        | Node (Empty, Empty, x, _) ->
-            // Invoke the action with this single element.
-            action x
         | Node (l, r, x, _) ->
-            /// Mutable stack. Holds the trees which still need to be traversed.
-            let stack = Stack (defaultStackCapacity)
+            // Iterate over the left subtree.
+            AvlTree.Iter action l
 
-            // Traverse the tree using the mutable stack, applying the folder function to
-            // each value to update the state value.
-            stack.Push r
-            stack.Push <| AvlTree.Singleton x
-            stack.Push l
+            // Invoke the action on the current element.
+            action x
 
-            while stack.Count > 0 do
-                match stack.Pop () with
-                | Empty -> ()
-                | Node (Empty, Empty, x, _) ->
-                    // Apply this value to the action function.
-                    action x
-
-                | Node (Empty, z, x, _) ->
-                    // Apply this value to the action function.
-                    action x
-
-                    // Push the non-empty child onto the stack.
-                    stack.Push z
-
-                | Node (l, r, x, _) ->
-                    // Push the children onto the stack.
-                    // Also push a new Node onto the stack which contains the value from
-                    // this Node, so it'll be processed in the correct order.
-                    stack.Push r
-                    stack.Push <| AvlTree.Singleton x
-                    stack.Push l
+            // Iterate over the right subtree.
+            AvlTree.Iter action r
 
     /// Applies the given accumulating function to all elements in a AvlTree.
     static member Fold (folder : 'State -> 'T -> 'State) (state : 'State) (tree : AvlTree<'T>) =
         match tree with
         | Empty -> state
-        | Node (Empty, Empty, x, _) ->
-            // Invoke the folder function on this single element and return the result.
-            folder state x
         | Node (l, r, x, _) ->
-            // Adapt the folder function since we'll always supply all of the arguments at once.
-            let folder = FSharpFunc<_,_,_>.Adapt folder
+            // Fold over the left subtree.
+            let state = AvlTree.Fold folder state l
 
-            /// Mutable stack. Holds the trees which still need to be traversed.
-            let stack = Stack (defaultStackCapacity)
+            // Apply the folder function to the current element.
+            let state = folder state x
 
-            /// The current state value.
-            let mutable state = state
-
-            // Traverse the tree using the mutable stack, applying the folder function to
-            // each value to update the state value.
-            stack.Push r
-            stack.Push <| AvlTree.Singleton x
-            stack.Push l
-
-            while stack.Count > 0 do
-                match stack.Pop () with
-                | Empty -> ()
-                | Node (Empty, Empty, x, _) ->
-                    // Apply this value to the folder function.
-                    state <- folder.Invoke (state, x)
-
-                | Node (Empty, z, x, _) ->
-                    // Apply this value to the folder function.
-                    state <- folder.Invoke (state, x)
-
-                    // Push the non-empty child onto the stack.
-                    stack.Push z
-
-                | Node (l, r, x, _) ->
-                    // Push the children onto the stack.
-                    // Also push a new Node onto the stack which contains the value from
-                    // this Node, so it'll be processed in the correct order.
-                    stack.Push r
-                    stack.Push <| AvlTree.Singleton x
-                    stack.Push l
-
-            // Return the final state value.
-            state
+            // Fold over the right subtree
+            AvlTree.Fold folder state r
 
     /// Applies the given accumulating function to all elements in a AvlTree.
     static member FoldBack (folder : 'T -> 'State -> 'State) (state : 'State) (tree : AvlTree<'T>) =
         match tree with
         | Empty -> state
-        | Node (Empty, Empty, x, _) ->
-            // Invoke the folder function on this single element and return the result.
-            folder x state
         | Node (l, r, x, _) ->
-            // Adapt the folder function since we'll always supply all of the arguments at once.
-            let folder = FSharpFunc<_,_,_>.Adapt folder
+            // Fold over the right subtree.
+            let state = AvlTree.FoldBack folder state r
 
-            /// Mutable stack. Holds the trees which still need to be traversed.
-            let stack = Stack (defaultStackCapacity)
+            // Apply the folder function to the current element.
+            let state = folder x state
 
-            /// The current state value.
-            let mutable state = state
-
-            // Traverse the tree using the mutable stack, applying the folder function to
-            // each value to update the state value.
-            stack.Push l
-            stack.Push <| AvlTree.Singleton x
-            stack.Push r
-
-            while stack.Count > 0 do
-                match stack.Pop () with
-                | Empty -> ()
-                | Node (Empty, Empty, x, _) ->
-                    // Apply this value to the folder function.
-                    state <- folder.Invoke (x, state)
-
-                | Node (z, Empty, x, _) ->
-                    // Apply this value to the folder function.
-                    state <- folder.Invoke (x, state)
-
-                    // Push the non-empty child onto the stack.
-                    stack.Push z
-
-                | Node (l, r, x, _) ->
-                    // Push the children onto the stack.
-                    // Also push a new Node onto the stack which contains the value from
-                    // this Node, so it'll be processed in the correct order.
-                    stack.Push l
-                    stack.Push <| AvlTree.Singleton x
-                    stack.Push r
-
-            // Return the final state value.
-            state
+            // Fold over the left subtree.
+            AvlTree.FoldBack folder state l
 
     /// Tests if any element of the collection satisfies the given predicate.
     static member Exists (predicate : 'T -> bool) (tree : AvlTree<'T>) : bool =
         match tree with
         | Empty -> false
-        | Node (Empty, Empty, x, _) ->
-            // Apply the predicate function to this element and return the result.
-            predicate x
         | Node (l, r, x, _) ->
-            /// Mutable stack. Holds the trees which still need to be traversed.
-            let stack = Stack (defaultStackCapacity)
-
-            /// Have we found a matching element?
-            let mutable foundMatch = false
-
-            // Traverse the tree using the mutable stack, applying the folder function to
-            // each value to update the state value.
-            stack.Push r
-            stack.Push <| AvlTree.Singleton x
-            stack.Push l
-
-            while stack.Count > 0 && not foundMatch do
-                match stack.Pop () with
-                | Empty -> ()
-                | Node (Empty, Empty, x, _) ->
-                    // Apply the predicate to this element.
-                    foundMatch <- predicate x
-
-                | Node (Empty, z, x, _) ->
-                    // Apply the predicate to this element.
-                    foundMatch <- predicate x
-
-                    // Push the non-empty child onto the stack.
-                    stack.Push z
-
-                | Node (l, r, x, _) ->
-                    // Push the children onto the stack.
-                    // Also push a new Node onto the stack which contains the value from
-                    // this Node, so it'll be processed in the correct order.
-                    stack.Push r
-                    stack.Push <| AvlTree.Singleton x
-                    stack.Push l
-
-            // Return the value indicating whether or not a matching element was found.
-            foundMatch
+            // Try to find a matching element in the left subtree.
+            AvlTree.Exists predicate l
+            // Does the current element match the predicate?
+            || predicate x
+            // Try to find a matching element in the right subtree.
+            || AvlTree.Exists predicate r
 
     /// Tests if all elements of the collection satisfy the given predicate.
     static member Forall (predicate : 'T -> bool) (tree : AvlTree<'T>) : bool =
         match tree with
         | Empty -> true
-        | Node (Empty, Empty, x, _) ->
-            // Apply the predicate function to this element and return the result.
-            predicate x
         | Node (l, r, x, _) ->
-            /// Mutable stack. Holds the trees which still need to be traversed.
-            let stack = Stack (defaultStackCapacity)
-
-            /// Have all of the elements we've seen so far matched the predicate?
-            let mutable allElementsMatch = true
-
-            // Traverse the tree using the mutable stack, applying the folder function to
-            // each value to update the state value.
-            stack.Push r
-            stack.Push <| AvlTree.Singleton x
-            stack.Push l
-
-            while stack.Count > 0 && allElementsMatch do
-                match stack.Pop () with
-                | Empty -> ()
-                | Node (Empty, Empty, x, _) ->
-                    // Apply the predicate to this element.
-                    allElementsMatch <- predicate x
-
-                | Node (Empty, z, x, _) ->
-                    // Apply the predicate to this element.
-                    allElementsMatch <- predicate x
-
-                    // Push the non-empty child onto the stack.
-                    stack.Push z
-
-                | Node (l, r, x, _) ->
-                    // Push the children onto the stack.
-                    // Also push a new Node onto the stack which contains the value from
-                    // this Node, so it'll be processed in the correct order.
-                    stack.Push r
-                    stack.Push <| AvlTree.Singleton x
-                    stack.Push l
-
-            // Return the value indicating if all elements matched the predicate.
-            allElementsMatch
+            // Try to find a non-matching element in the left subtree.
+            AvlTree.Forall predicate l
+            // Does the current element match the predicate?
+            && predicate x
+            // Try to find a non-matching element in the right subtree.
+            && AvlTree.Forall predicate r
 
     /// Returns a sequence containing the elements stored
     /// in a AvlTree, ordered from least to greatest.
@@ -1770,12 +1581,14 @@ type CharSet private (tree : CharDiet) as this =
     override this.Equals other =
         match other with
         | :? CharSet as other ->
+            this == other ||
             tree == other.Tree ||
             CharDiet.equal tree other.Tree
         | _ ->
             false
 
     //
+    [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member private __.Tree
         with get () = tree
 
@@ -2183,17 +1996,21 @@ type CharSet private (tree : CharDiet) as this =
         member this.CompareTo other =
             match other with
             | :? CharSet as other ->
-                CharDiet.comparison this.Tree other.Tree
+                if this == other || this.Tree == other.Tree then 0
+                else CharDiet.comparison tree other.Tree
             | _ ->
                 invalidArg "other" "The argument is not an instance of CharSet."
 
     interface System.IComparable<CharSet> with
         member this.CompareTo other =
-            CharDiet.comparison tree other.Tree
+            if this == other || this.Tree == other.Tree then 0
+            else CharDiet.comparison tree other.Tree
 
     interface System.IEquatable<CharSet> with
         member this.Equals other =
-            CharDiet.equal tree other.Tree
+            this == other
+            || this.Tree == other.Tree
+            || CharDiet.equal tree other.Tree
 
 
 /// Functional programming operators related to the CharSet type.
