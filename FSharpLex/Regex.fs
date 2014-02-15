@@ -153,6 +153,15 @@ module Regex =
         | _ ->
             false
 
+    /// Partial active pattern which may be used to detect the 'empty' language.
+    let inline private (|Empty|_|) regex =
+        match regex with
+        | CharacterSet charSet
+            when CharSet.isEmpty charSet ->
+            Some ()
+        | _ ->
+            None
+
     /// Returns a new regular expression which matches exactly one (1) instance of the specified character.
     [<CompiledName("OfCharacter")>]
     let inline ofChar c =
@@ -180,10 +189,8 @@ module Regex =
     [<CompiledName("CreateStar")>]
     let rec star (regex : Regex) : Regex =
         match regex with
-        | Epsilon ->
-            Epsilon
-        | CharacterSet charSet
-            when CharSet.isEmpty charSet ->
+        | Epsilon
+        | Empty ->
             Epsilon
         | Or (Epsilon, regex)
         | Or (regex, Epsilon)
@@ -199,9 +206,9 @@ module Regex =
         | regex, Epsilon
         | Epsilon, regex ->
             return regex
-        | CharacterSet charSet, _
-        | _, CharacterSet charSet
-            when CharSet.isEmpty charSet ->
+
+        | Empty, _
+        | _, Empty ->
             return empty
 
         // Nested Concat patterns should skew towards the right.
@@ -223,15 +230,26 @@ module Regex =
     let rec private andImpl (regex1 : Regex) (regex2 : Regex) =
         cont {
         match regex1, regex2 with
-        | CharacterSet charSet, _
-        | _, CharacterSet charSet
-            when CharSet.isEmpty charSet ->
+        | Empty, _
+        | _, Empty ->
             return empty
 
         | CharacterSet charSet1, CharacterSet charSet2 ->
+            let intersection = CharSet.intersect charSet1 charSet2
+
+            // If the intersection of the two charsets is empty, this pattern
+            // can never be matched, so return the Empty pattern.
             return
-                CharSet.intersect charSet1 charSet2
-                |> CharacterSet
+                if CharSet.isEmpty intersection then
+                    empty
+                else
+                    CharacterSet intersection
+
+//        | Star (CharacterSet charSet1), Star (CharacterSet charSet2) ->
+//            return
+//                CharSet.intersect charSet1 charSet2
+//                |> CharacterSet
+//                |> Star
 
         | Any, regex
         | regex, Any ->
@@ -267,15 +285,29 @@ module Regex =
     let rec private orImpl (regex1 : Regex) (regex2 : Regex) =
         cont {
         match regex1, regex2 with
-        | CharacterSet charSet, regex
-        | regex, CharacterSet charSet
-            when CharSet.isEmpty charSet ->
+        | Empty, regex
+        | regex, Empty ->
             return regex
 
         | CharacterSet charSet1, CharacterSet charSet2 ->
             return
                 CharSet.union charSet1 charSet2
                 |> CharacterSet
+
+        // NOTE : These next two rewrite rules aren't specified in the original paper, but are useful for compacting the regex.
+        | Star (CharacterSet charSet1), Star (CharacterSet charSet2) ->
+            return
+                CharSet.union charSet1 charSet2
+                |> CharacterSet
+                |> star
+
+        | Star (CharacterSet charSet1), Or (Star (CharacterSet charSet2), regex) ->
+            let starUnion =
+                CharSet.union charSet1 charSet2
+                |> CharacterSet
+                |> star
+
+            return! orImpl starUnion regex
 
         | Any, _
         | _, Any ->
