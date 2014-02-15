@@ -53,10 +53,12 @@ Known Bugs/Issues
 =================
 
 - fsharplex
-    - There is a performance issue which arises when compiling a lexer specification which makes heavy use of Unicode character classes (such as the lexer for the F# compiler). Due to the way ``fsharplex`` is designed, the comparison function for the CharSet data structure is called repeatedly; the Unicode character classes use CharSet extensively, and the CharSet comparison function has a relatively heavyweight implementation, so the combination of these factors causes a blowup in execution time which causes ``fsharplex`` to take an extremely long time to compile the lexer specification. For example, profiling ``fsharplex`` when compiling the lexer for the F# compiler shows that most (>90%) of the execution time is spent within the CharSet comparison function. Eventually, this issue will be fixed by modifying the CharSet implementation itself to allow a much faster comparison function to be used.
+    - (Unconfirmed) There may be a bug affecting fslex-compatible lexer table generation for some specifications -- one example appears to be the F# compiler's lexer. ``fsharplex`` compiles the specification and exits normally, but when the generated lexer is used (i.e., after it has been compiled into a compiler and invoked) the ``fslex`` interpreter will crash with an assertion error.
+    - When a user-specified action for a lexer rule contains an F# ``match`` expression, then in some cases the alignment of the corresponding code in the generated lexer will cause the F# compiler's parser to emit multiple errors about whitespace alignment. (Repro: compile the lexer specification for the F# compiler, replace the ``fslex``-generated lexer with the ``fsharplex``-generated lexer, and try to compile the F# compiler.)
 
 - fsharpyacc / Graham
     - Some parts of the LR (LR(0), SLR(1), LALR(1), LR(1)) parser table generation have not been optimized yet. This issue doesn't impact smaller parser specifications, but larger specifications such as the parser for the F# compiler can take a long time to compile. The parts of the code causing the performance drain will eventually be profiled and tuned to correct the problem; the likely solution will be to implement memoization in some places, and to increase the performance of some Map lookups by using TagBimap to assign 'tags' which can be used in place of more heavyweight objects (e.g., ``LrParserState<_,_,_>``).
+    - Graham does not currently handle multi-way conflicts *at all* -- they currently cause the library to crash.
 
 
 Licensing
