@@ -109,7 +109,7 @@ module TestCases =
             ()
 
     //
-    let private testTimeout = TimeSpan.FromSeconds 30.0
+    let private testTimeout = TimeSpan.FromSeconds 120.0
 
     //
     type private RepositoryTestCases () =
