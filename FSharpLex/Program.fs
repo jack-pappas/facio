@@ -97,6 +97,18 @@ module Program =
         container.ComposeParts (backends)
         backends
 
+    //
+    let private statusMessage msg (generator : unit -> 'T) : 'T =
+        printf "%s..." msg
+        let result =
+            try generator ()
+            with _ ->
+                printfn "error!"
+                reraise ()
+
+        printfn "done."
+        result
+
     open FSharpLex.SpecializedCollections
 
     /// Invokes FSharpLex with the specified options.
@@ -113,10 +125,11 @@ module Program =
         // TEMP : This is hard-coded for now, but eventually we'll make it
         // so the user can specify which backend(s) to use.
         /// Compiler backends.
-        let backends = loadBackends ()
+        let backends = statusMessage "Loading backends" loadBackends
 
         /// The parsed lexer specification.
         let lexerSpec =
+            statusMessage "Parsing lexer specification" <| fun () ->
             try
                 let stream, reader, lexbuf =
                     UnicodeFileAsLexbuf (inputFile, None)
@@ -141,7 +154,12 @@ module Program =
                 exit 1
 
         // Compile the parsed specification.
-        match Compile.lexerSpec lexerSpec options with
+        let compiledSpecification =
+            statusMessage "Compiling specification" <| fun () ->
+                Compile.lexerSpec lexerSpec options
+
+        //
+        match compiledSpecification with
         | Choice2Of2 errorMessages ->
             // Write the error messages to the console.
             // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
@@ -151,15 +169,16 @@ module Program =
             1   // Exit code: Error
 
         | Choice1Of2 compiledLexerSpec ->
-            // TEMP : Invoke the various backends "manually".
-            // Eventually we'll modify this so the user can specify the backend to use.
-            backends.FslexBackend.EmitCompiledSpecification (
-                compiledLexerSpec,
-                options)
+            statusMessage "Invoking backend to generate code" <| fun () ->
+                // TEMP : Invoke the various backends "manually".
+                // Eventually we'll modify this so the user can specify the backend to use.
+                backends.FslexBackend.EmitCompiledSpecification (
+                    compiledLexerSpec,
+                    options)
 
-//            backends.GraphBackend.EmitCompiledSpecification (
-//                compiledLexerSpec,
-//                options)
+    //            backends.GraphBackend.EmitCompiledSpecification (
+    //                compiledLexerSpec,
+    //                options)
 
             0   // Exit code: Success
 
@@ -168,7 +187,7 @@ module Program =
 
     /// The entry point for the application.
     [<EntryPoint; CompiledName("Main")>]
-    let main (options : string[]) =
+    let main _ =
         // Variables to hold parsed command-line arguments.
         let inputFile = ref None
         let inputCodePage = ref None

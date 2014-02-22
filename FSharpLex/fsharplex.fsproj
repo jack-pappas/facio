@@ -42,7 +42,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <WarningsAsErrors>25</WarningsAsErrors>
-    <StartArguments>--unicode -o "TestCases\fsharp-lexer.fs" "TestCases\fslex.fsl"</StartArguments>
+    <StartArguments>--unicode -o "TestCases\fsharp\fsharp-lexer.fs" "TestCases\fsharp\fsharp.fsl"</StartArguments>
     <StartWorkingDirectory>C:\Users\Jack\Documents\Code Libraries\fsharp-tools\</StartWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup>
