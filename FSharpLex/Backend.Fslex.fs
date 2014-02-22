@@ -42,17 +42,6 @@ module private FsLex =
     open System.Text
     open BackendUtils.CodeGen
 
-    (* TODO :   Given that each rule is compiled as it's own DFA and therefore won't ever transition
-                into a state from another rule, we might be able to drastically shrink the size of the
-                generated table by creating non-zero-based arrays for the transition arrays of each state.
-                This way, the transition array for each state only needs to include transitions to the
-                states in that DFA, but since the base index of the array will be set to the same index
-                that the starting state (for that DFA) would have in the full transition table the indexing
-                used within the interpreter will still work correctly.
-                Note, however, that the .NET CLR doesn't eliminate array bounds checks for accesses into
-                non-zero-based arrays, so while this technique would shrink the size of the table, it will
-                also introduce some performance penalty. *)
-
     //
     let [<Literal>] private interpreterVariableName = "_fslex_tables"
     //
@@ -133,7 +122,15 @@ module private FsLex =
               - n entries comprised of a pair of entries (giving 2*n actual entries);
                 These entries represent specific Unicode characters.
               - 30 entries representing Unicode categories (UnicodeCategory)
-              - 1 entry representing the end-of-file (EOF) marker. *)
+              - 1 entry representing the end-of-file (EOF) marker.
+              
+            Caveat: the fslex interpreter expects all of the transition-table rows to have the same number of entries.
+            This means 'n' (the number of specific Unicode characters for which we have a transition entry in the table) must be the same
+            for all rows in the table; therefore, before we can emit any of the transition-table rows, we first need to examine the
+            transitions from all states and compute the set of all specific Unicode characters used to label transitions
+            (edges between states). When emitting each transition-table row, we emit transitions to the error state for any of those
+            characters which don't actually have a transition out of the current state.
+        *)
 
         let ruleDfaTransitions = compiledRule.Dfa.Transitions
 
