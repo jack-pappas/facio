@@ -63,17 +63,40 @@ type Regex =
             match this with
             | Epsilon ->
                 "\u03f5"    // Epsilon symbol
+            | Any ->
+                // Any is equivalent to Not Empty.
+                "\u00ac{}"
             | CharacterSet charSet
                 when CharSet.isEmpty charSet ->
-                "Empty"
-            | CharacterSet charSet
-                when CharSet.count charSet = 1 ->
-                let c = CharSet.minElement charSet
-                c.ToString ()
-            | regex ->
-                // TODO : Finish this for the other regex cases.
-                // It would be nice if this would print the regex in usual printed form.
-                sprintf "%A" regex
+                "{}"
+            | CharacterSet charSet ->
+                let sb = System.Text.StringBuilder ()
+                sb.Append "{" |> ignore
+
+                // Write each of the intervals into the StringBuilder.
+                charSet
+                |> CharSet.iterIntervals (fun lo hi ->
+                    Printf.bprintf sb "\u%04x-\u%04x, " (int lo) (int hi))
+
+                sb.Length <- sb.Length - 2  // Remove the trailing ", "
+                sb.Append "}" |> ignore
+
+                sb.ToString ()
+
+            | Negate regex ->
+                sprintf "\u00ac(%s)" regex.DebuggerDisplay
+
+            | Star regex ->
+                sprintf "(%s)*" regex.DebuggerDisplay
+
+            | Concat (r, s) ->
+                r.DebuggerDisplay + s.DebuggerDisplay
+
+            | Or (r, s) ->
+                sprintf "(%s|%s)" r.DebuggerDisplay s.DebuggerDisplay
+
+            | And (r, s) ->
+                sprintf "(%s&%s)" r.DebuggerDisplay s.DebuggerDisplay
 
     /// Determines if a specified Regex is 'nullable',
     /// i.e., it accepts the empty string (epsilon).
@@ -121,6 +144,9 @@ type Regex =
             false
         | _ ->
             Regex.IsNullableImpl regex id
+
+    // TODO : Implement a method for checking equivalence of two regular expressions?
+    //        This is possible for regular expressions, but is it possible for extended regular expressions?
 
 
 /// 'Smart' constructors for Regex.
@@ -173,209 +199,257 @@ module Regex =
     let inline ofCharSet (set : CharSet) : Regex =
         CharacterSet set
 
-    /// Returns a new regular expression which matches the given
-    /// regular expression zero or more times.
-    [<CompiledName("CreateStar")>]
-    let rec star (regex : Regex) : Regex =
+    //
+    let rec private simplify regex =
+        cont {
         match regex with
         | Epsilon
-        | Empty ->
-            Epsilon
-        | Or (Epsilon, regex)
-        | Or (regex, Epsilon)
+        | Any
+        | CharacterSet _ ->
+            return regex
+
+        (* Negate *)
+        // Double-negation cancels out.
+        | Negate (Negate regex) ->
+            return! simplify regex
+        | Negate regex ->
+            // Simplify the inner regex first.
+            let! regex = simplify regex
+            match regex with
+            | Epsilon ->
+                return empty
+
+            // Use DeMorgan's rules to simplify negation of Or and And patterns when possible.
+            // This isn't specified in the original paper, but it helps to compact the regex.
+            | Or (regex1, regex2) ->
+                return! simplify <| And (regex1, regex2)
+            | And (regex1, regex2) ->
+                return! simplify <| Or (regex1, regex2)
+
+            // Double-negation cancels out.
+            | Negate regex ->
+                // 'regex' is already simplified, so it can be returned without simplifying again.
+                return regex
+
+            | _ ->
+                return Negate regex
+
+        (* Star *)
+        // The Star operation is idempotent -- nested Stars are equivalent to a single Star.
+        | Star (Star regex) ->
+            return! simplify <| Star regex
         | Star regex ->
-            star regex
-        | _ ->
-            Star regex
+            // Simplify the inner regex first.
+            let! regex = simplify regex
+            match regex with
+            | Epsilon
+            | Empty ->
+                return Epsilon
 
-    //
-    let rec private concatImpl (regex1 : Regex) (regex2 : Regex) =
-        cont {
-        match regex1, regex2 with
-        | regex, Epsilon
-        | Epsilon, regex ->
-            return regex
+            // The Star operation is idempotent -- nested Stars are equivalent to a single Star.
+            | Star _ ->
+                // 'regex' is already simplified, so it can be returned without simplifying again.
+                return regex
 
-        | Empty, _
-        | _, Empty ->
-            return empty
+            | _ ->
+                return Star regex
 
+        (* Concat *)
         // Nested Concat patterns should skew towards the right.
-        | Concat (r, s), t ->
-            let! s' = concatImpl s t
-            return! concatImpl r s'
+        | Concat (Concat (r, s), t) ->
+            return! simplify <| Concat (r, Concat (s, t))
+        | Concat (regex1, regex2) ->
+            // Simplify the two sub-regexes first.
+            let! regex1 = simplify regex1
+            let! regex2 = simplify regex2
 
-        | _, _ ->
-            return Concat (regex1, regex2)
-        }
+            match regex1, regex2 with
+            | regex, Epsilon
+            | Epsilon, regex ->
+                // 'regex' is already simplified, so we can just return it.
+                return regex
+            | Empty, _
+            | _, Empty ->
+                return empty
 
-    //
-    let rec private andImpl (regex1 : Regex) (regex2 : Regex) =
-        cont {
-        match regex1, regex2 with
-        | Empty, _
-        | _, Empty ->
-            return empty
+            // Nested Concat patterns should skew towards the right.
+            | Concat (r, s), t ->
+                return! simplify <| Concat (r, Concat (s, t))
 
-        | CharacterSet charSet1, CharacterSet charSet2 ->
-            let intersection = CharSet.intersect charSet1 charSet2
-
-            // If the intersection of the two charsets is empty, this pattern
-            // can never be matched, so return the Empty pattern.
-            return
-                if CharSet.isEmpty intersection then
-                    empty
-                else
-                    CharacterSet intersection
-
-        // NOTE : These rules for negated CharacterSets are not described in the original paper,
-        //        but seem to be necessary for fsharplex to terminate on certain patterns.
-//        | CharacterSet positiveSet, Negate (CharacterSet negativeSet)
-//        | Negate (CharacterSet negativeSet), CharacterSet positiveSet ->
-//            return! notImpl ""
-
-        | Negate (CharacterSet charSet1), Negate (CharacterSet charSet2) ->
-            return
-                CharSet.union charSet1 charSet2
-                |> CharacterSet
-                |> Negate
-
-//        | Star (CharacterSet charSet1), Star (CharacterSet charSet2) ->
-//            return
-//                CharSet.intersect charSet1 charSet2
-//                |> CharacterSet
-//                |> Star
-
-        | Any, regex
-        | regex, Any ->
-            return regex
-
-        // Nested And patterns should skew towards the right.
-        | And (r, s), t ->
-            let! s' = andImpl s t
-            return! andImpl r s'
-
-        | _, _ ->
-            if regex1 == regex2 || regex1 = regex2 then
+            | Star s, Star t
+                // The equivalence here is only an approximation.
+                // If we wanted to, we could implement and use a more powerful test for regular expression equivalence.
+                when s == t || s = t ->
+                // 'regex1' is already simplified, so just return it.
                 return regex1
-            else
-                // Compare/sort the two regexes. This simplifies the compilation code and
-                // also -- crucially -- speeds it up since it allows the compiler-generated structural
-                // equality code to be used as an (approximate) equivalence test.
-                if regex2 < regex1 then
-                    return And (regex2, regex1)
-                else
-                    return And (regex1, regex2)
-        }
 
-    //
-    let rec private orImpl (regex1 : Regex) (regex2 : Regex) =
-        cont {
-        match regex1, regex2 with
-        | Empty, regex
-        | regex, Empty ->
-            return regex
+            // TODO : Implement rewrite rules to distribute Concat over Or (and perhaps And)?
 
-        | CharacterSet charSet1, CharacterSet charSet2 ->
-            return
-                CharSet.union charSet1 charSet2
-                |> CharacterSet
+            | _, _ ->
+                // Base case: Concat (regex1, regex2) can't be simplified any further, so return it.
+                return Concat (regex1, regex2)
 
-        // NOTE : These rewrite rules for negated character sets aren't specified in the original paper,
-        //        but seem to be necessary for fsharplex to terminate on certain patterns.
-//        | CharacterSet positiveSet, Negate (CharacterSet negativeSet)
-//        | Negate (CharacterSet negativeSet), CharacterSet positiveSet ->
-//            return! notImpl ""
+        (* And *)
+        // Nested And patterns should skew towards the left.
+        | And (r, And (s, t)) ->
+            return! simplify <| And (And (r, s), t)
+        | And (regex1, regex2) ->
+            // Simplify the two sub-regexes first.
+            let! regex1 = simplify regex1
+            let! regex2 = simplify regex2
 
-        | Negate (CharacterSet charSet1), Negate (CharacterSet charSet2) ->
-            // If the intersection is empty, return 'empty' since this pattern can't ever be matched.
-            let intersection = CharSet.intersect charSet1 charSet2
+            match regex1, regex2 with
+            | Empty, _
+            | _, Empty ->
+                return empty
 
-            return
-                if CharSet.isEmpty intersection then
-                    empty
-                else
-                    intersection
+            | Any, regex
+            | regex, Any ->
+                return regex
+
+            // TODO : Should we have rules for And (Epsilon, _) and And (_, Epsilon)?
+
+            // Nested And patterns should skew towards the left.
+            | r, And (s, t) ->
+                return! simplify <| And (And (r, s), t)
+
+            (* Rewrite rules which are extremely important since they compact the regex, thereby reducing the number of DFA states. *)
+            | CharacterSet s1, CharacterSet s2 ->
+                return
+                    CharSet.intersect s1 s2
+                    |> CharacterSet
+
+            // Simplify via DeMorgan's laws.
+            | Negate (CharacterSet charSet1), Negate (CharacterSet charSet2) ->
+                return
+                    CharSet.union charSet1 charSet2
                     |> CharacterSet
                     |> Negate
 
-        // NOTE : These next two rewrite rules aren't specified in the original paper,
-        //        but seem to be necessary for fsharplex to terminate on certain patterns.
-        | Star (CharacterSet charSet1), Star (CharacterSet charSet2) ->
-            return
-                CharSet.union charSet1 charSet2
-                |> CharacterSet
-                |> star
+//            | CharacterSet positiveSet, Negate (CharacterSet negativeSet)
+//            | Negate (CharacterSet negativeSet), CharacterSet positiveSet ->
+//                return! notImpl ""
 
-        | Star (CharacterSet charSet1), Or (Star (CharacterSet charSet2), regex) ->
-            let starUnion =
-                CharSet.union charSet1 charSet2
-                |> CharacterSet
-                |> star
+            // NOTE : These next two rewrite rules aren't specified in the original paper,
+            //        but are useful for keeping the regex compact in certain cases.
+            | Star (CharacterSet charSet1), Star (CharacterSet charSet2) ->
+                // No simplification needed for Star (CharacterSet _), so just return it.
+                return
+                    CharSet.intersect charSet1 charSet2
+                    |> CharacterSet
+                    |> Star
 
-            return! orImpl starUnion regex
-
-        | Any, _
-        | _, Any ->
-            return Any
-
-        // Nested Or patterns should skew towards the right.
-        | Or (r, s), t ->
-            let! s' = orImpl s t
-            return! orImpl r s'
-
-        | _, _ ->
-            if regex1 == regex2 || regex1 = regex2 then
-                return regex1
-            else
-                // Compare/sort the two regexes. This simplifies the compilation code and
-                // also -- crucially -- speeds it up since it allows the compiler-generated structural
-                // equality code to be used as an (approximate) equivalence test.
-                if regex2 < regex1 then
-                    return Or (regex2, regex1)
+            | _, _ ->
+                // Base case: And (regex1, regex2) can't be simplified any further.
+                if regex1 == regex2 || regex1 = regex2 then
+                    return regex1
                 else
-                    return Or (regex1, regex2)
+                    // Compare/sort the two regexes. This simplifies the compilation code and
+                    // also -- crucially -- speeds it up since it allows the compiler-generated structural
+                    // equality code to be used as an (approximate) equivalence test.
+                    if regex2 < regex1 then
+                        return And (regex2, regex1)
+                    else
+                        return And (regex1, regex2)
+
+        (* Or *)
+        // Nested Or patterns should skew towards the left.
+        | Or (r, Or (s, t)) ->
+            return! simplify <| Or (Or (r, s), t)
+        | Or (regex1, regex2) ->
+            // Simplify the two sub-regexes first.
+            let! regex1 = simplify regex1
+            let! regex2 = simplify regex2
+
+            match regex1, regex2 with
+            | Empty, regex
+            | regex, Empty ->
+                // 'regex' is already simplified, so we can just return it.
+                return regex
+
+            | Any, _
+            | _, Any ->
+                return Any
+
+            // Nested Or patterns should skew towards the left.
+            | r, Or (s, t) ->
+                return! simplify <| Or (Or (r, s), t)
+
+            (* Rewrite rules which are extremely important since they compact the regex, thereby reducing the number of DFA states. *)
+
+            | CharacterSet charSet1, CharacterSet charSet2 ->
+                return
+                    CharSet.union charSet1 charSet2
+                    |> CharacterSet
+
+            // Simplify via DeMorgan's laws.
+            | Negate (CharacterSet charSet1), Negate (CharacterSet charSet2) ->
+                return
+                    CharSet.intersect charSet1 charSet2
+                    |> CharacterSet
+                    |> Negate
+
+//            | CharacterSet positiveSet, Negate (CharacterSet negativeSet)
+//            | Negate (CharacterSet negativeSet), CharacterSet positiveSet ->
+//                return! notImpl ""
+
+            // NOTE : This rewrite rule isn't specified in the original paper,
+            //        but is important for keeping the regex compact in certain cases.
+            | Star (CharacterSet charSet1), Star (CharacterSet charSet2) ->
+                // No simplification needed for Star (CharacterSet _), so just return it.
+                return
+                    CharSet.union charSet1 charSet2
+                    |> CharacterSet
+                    |> Star
+
+            | _, _ ->
+                // Base case: Or (regex1, regex2) can't be simplified any further, so return it.
+                if regex1 == regex2 || regex1 = regex2 then
+                    return regex1
+                else
+                    // Compare/sort the two regexes. This simplifies the compilation code and
+                    // also -- crucially -- speeds it up since it allows the compiler-generated structural
+                    // equality code to be used as an (approximate) equivalence test.
+                    if regex2 < regex1 then
+                        return Or (regex2, regex1)
+                    else
+                        return Or (regex1, regex2)
         }
+
+    /// Returns a new regular expression which matches the given
+    /// regular expression zero or more times.
+    [<CompiledName("CreateStar")>]
+    let star (regex : Regex) : Regex =
+        // Create the Star pattern, then simplify it before returning.
+        simplify (Star regex) id
 
     /// Creates a normalized Regex.Negate from the specified Regex.
     [<CompiledName("CreateNegate")>]
-    let rec negate (regex : Regex) : Regex =
-        match regex with
-        | Negate Epsilon ->
-            empty
-        | Negate (Negate regex) ->
-            negate regex
-
-        // Use DeMorgan's rules to simplify negation of Or and And patterns when possible.
-        // This isn't specified in the original paper, but it helps to compact the regex.
-        | Negate (Or (regex1, regex2)) ->
-            andr regex1 regex2
-        | Negate (And (regex1, regex2)) ->
-            orr regex1 regex2
-
-        | Negate regex ->
-            regex
-        | _ ->
-            Negate regex
+    let negate (regex : Regex) : Regex =
+        // Create the Negate pattern, then simplify it before returning.
+        simplify (Negate regex) id
 
     /// Concatenates two regular expressions so they'll be matched sequentially.
-    and [<CompiledName("CreateConcat")>] concat (regex1 : Regex) (regex2 : Regex) : Regex =
-        // Call the recursive implementation.
-        concatImpl regex1 regex2 id
+    [<CompiledName("CreateConcat")>]
+    let concat (regex1 : Regex) (regex2 : Regex) : Regex =
+        // Create the Concat pattern, then simplify it before returning.
+        simplify (Concat (regex1, regex2)) id
 
     /// Conjunction of two regular expressions.
     /// This returns a new regular expression which matches an input string
     /// if and only if the input matches both of the given regular expressions.
-    and [<CompiledName("CreateAnd")>] andr (regex1 : Regex) (regex2 : Regex) : Regex =
-        // Call the recursive implementation.
-        andImpl regex1 regex2 id
+    [<CompiledName("CreateAnd")>]
+    let andr (regex1 : Regex) (regex2 : Regex) : Regex =
+        // Create the Concat pattern, then simplify it before returning.
+        simplify (And (regex1, regex2)) id
 
     /// Disjunction of two regular expressions.
     /// This returns a new regular expression which matches an input string
     /// when the input matches either (or both) of the given regular expressions.
-    and [<CompiledName("CreateOr")>] orr (regex1 : Regex) (regex2 : Regex) : Regex =
-        // Call the recursive implementation.
-        orImpl regex1 regex2 id
+    [<CompiledName("CreateOr")>]
+    let orr (regex1 : Regex) (regex2 : Regex) : Regex =
+        // Create the Concat pattern, then simplify it before returning.
+        simplify (Or (regex1, regex2)) id
 
     /// Given two regular expressions, computes (regex1 / regex2).
     /// The resulting expression matches any string which matches regex1
@@ -410,6 +484,13 @@ type Regex with
                     Regex.epsilon
                 else
                     Regex.empty
+
+        | Negate (CharacterSet charSet) ->
+            return
+                if CharSet.contains wrtSymbol charSet then
+                    Regex.empty
+                else
+                    Regex.epsilon
 
         | Negate r ->
             let! r' = Regex.DerivativeImpl wrtSymbol r
@@ -455,6 +536,12 @@ type Regex with
                 Regex.epsilon
             else
                 Regex.empty
+
+        | Negate (CharacterSet charSet) ->
+            if CharSet.contains symbol charSet then
+                Regex.empty
+            else
+                Regex.epsilon
 
         | _ ->
             Regex.DerivativeImpl symbol regex id
