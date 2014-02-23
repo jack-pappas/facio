@@ -38,8 +38,6 @@ open FSharpLex.SpecializedCollections
 type Regex =
     /// The empty string.
     | Epsilon
-    /// Any character.
-    | Any
 
     /// A set of characters.
     | CharacterSet of CharSet
@@ -63,9 +61,6 @@ type Regex =
             match this with
             | Epsilon ->
                 "\u03f5"    // Epsilon symbol
-            | Any ->
-                // Any is equivalent to Not Empty.
-                "\u00ac{}"
             | CharacterSet charSet
                 when CharSet.isEmpty charSet ->
                 "{}"
@@ -106,8 +101,8 @@ type Regex =
         | Epsilon
         | Star _ ->
             return true
-        | Any
-        | CharacterSet _ ->
+        | CharacterSet _
+        | Negate (CharacterSet _) ->
             return false
         | Negate regex ->
             let! result = Regex.IsNullableImpl regex
@@ -139,8 +134,8 @@ type Regex =
         | Epsilon
         | Star _ ->
             true
-        | Any
-        | CharacterSet _ ->
+        | CharacterSet _
+        | Negate (CharacterSet _) ->
             false
         | _ ->
             Regex.IsNullableImpl regex id
@@ -160,15 +155,15 @@ module Regex =
     let epsilon : Regex =
         Epsilon
 
-    /// The regular expression which matches exactly one (1) instance of any character.
-    [<CompiledName("Any")>]
-    let any : Regex =
-        Any
-
     /// The regular expression which never matches (accepts) anything.
     [<CompiledName("Empty")>]
     let empty : Regex =
         CharacterSet CharSet.empty
+
+    /// The regular expression which matches exactly one (1) instance of any character.
+    [<CompiledName("Any")>]
+    let any : Regex =
+        Negate empty
 
     /// Is the regular expression empty?
     [<CompiledName("IsEmpty")>]
@@ -184,6 +179,14 @@ module Regex =
         match regex with
         | CharacterSet charSet
             when CharSet.isEmpty charSet ->
+            Some ()
+        | _ ->
+            None
+
+    /// Partial active pattern which may be used to detect a pattern which matches one (1) instance of any character.
+    let inline private (|Any|_|) regex =
+        match regex with
+        | Negate Empty ->
             Some ()
         | _ ->
             None
@@ -369,7 +372,7 @@ module Regex =
 
             | Any, _
             | _, Any ->
-                return Any
+                return any
 
             // Nested Or patterns should skew towards the left.
             | r, Or (s, t) ->

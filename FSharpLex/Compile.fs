@@ -718,7 +718,7 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
                 |> Choice1Of2
         
         | Pattern.Any ->
-            return Choice1Of2 Regex.Any
+            return Choice1Of2 (Regex.negate Regex.empty)
 
         | Pattern.Character c ->
             // Make sure the character is an ASCII character unless the 'Unicode' option is set.

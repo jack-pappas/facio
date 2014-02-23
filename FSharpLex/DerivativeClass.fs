@@ -126,8 +126,10 @@ module DerivativeClasses =
     let rec private ofRegexImpl regex =
         stateCont {
         match regex with
-        | Epsilon
-        | Any ->
+        | Epsilon ->
+            return universe
+        | Negate (CharacterSet charSet)     // Any
+            when CharSet.isEmpty charSet ->
             return universe
 
         | _ ->
@@ -139,8 +141,10 @@ module DerivativeClasses =
                 let! derivativeClasses =
                     stateCont {
                     match regex with
-                    | Epsilon
-                    | Any ->
+                    | Epsilon ->
+                        return universe
+                    | Negate (CharacterSet charSet)     // Any
+                        when CharSet.isEmpty charSet ->
                         return universe
                     | CharacterSet charSet ->
                         return ofCharSet charSet
@@ -189,8 +193,10 @@ module DerivativeClasses =
         // OPTIMIZATION :   For a few common patterns which always return the same set of derivative classes,
         //                  avoid the cache lookup -- just return the result immediately.
         match regex with
-        | Epsilon
-        | Any ->
+        | Epsilon ->
+            universe, compilationCache
+        | Negate (CharacterSet charSet)     // Any
+            when CharSet.isEmpty charSet ->
             universe, compilationCache
         | _ ->
             // Try to find the set of derivative classes for this Regex in the cache;
@@ -200,8 +206,12 @@ module DerivativeClasses =
                 derivativeClasses, compilationCache
             | None ->
                 match regex with
-                | Epsilon
-                | Any ->
+                | Epsilon ->
+                    // Shouldn't ever hit this (because we've already matched these patterns earlier)
+                    // but we might as well include them here for completeness.
+                    universe, compilationCache
+                | Negate (CharacterSet charSet)     // Any
+                    when CharSet.isEmpty charSet ->
                     // Shouldn't ever hit this (because we've already matched these patterns earlier)
                     // but we might as well include them here for completeness.
                     universe, compilationCache
