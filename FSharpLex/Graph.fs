@@ -16,8 +16,7 @@ limitations under the License.
 
 *)
 
-//
-module FSharpLex.Graph
+namespace FSharpLex.Graph
 
 open System.Diagnostics
 open LanguagePrimitives
