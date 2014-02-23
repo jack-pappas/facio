@@ -143,9 +143,6 @@ module DerivativeClasses =
                     match regex with
                     | Epsilon ->
                         return universe
-                    | Negate (CharacterSet charSet)     // Any
-                        when CharSet.isEmpty charSet ->
-                        return universe
                     | CharacterSet charSet ->
                         return ofCharSet charSet
                     | Negate r
@@ -195,9 +192,6 @@ module DerivativeClasses =
         match regex with
         | Epsilon ->
             universe, compilationCache
-        | Negate (CharacterSet charSet)     // Any
-            when CharSet.isEmpty charSet ->
-            universe, compilationCache
         | _ ->
             // Try to find the set of derivative classes for this Regex in the cache;
             // if they're not present in the cache, compute the set and add it to the cache before returning.
@@ -207,11 +201,6 @@ module DerivativeClasses =
             | None ->
                 match regex with
                 | Epsilon ->
-                    // Shouldn't ever hit this (because we've already matched these patterns earlier)
-                    // but we might as well include them here for completeness.
-                    universe, compilationCache
-                | Negate (CharacterSet charSet)     // Any
-                    when CharSet.isEmpty charSet ->
                     // Shouldn't ever hit this (because we've already matched these patterns earlier)
                     // but we might as well include them here for completeness.
                     universe, compilationCache

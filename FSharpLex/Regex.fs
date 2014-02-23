@@ -529,8 +529,6 @@ type Regex with
         match regex with
         | Epsilon ->
             Regex.empty
-        | Any ->
-            Regex.epsilon
 
         | CharacterSet charSet ->
             if CharSet.contains symbol charSet then
