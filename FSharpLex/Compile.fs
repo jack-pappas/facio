@@ -108,6 +108,7 @@ module private CompilationState =
         // Return the new DFA state and the updated compilation state.
         dfaState, compilationState
 
+
 //
 let private transitions regularVector derivativeClass (transitionsFromCurrentDfaState, unvisitedTransitionTargets, compilationState) =
     // Preconditions
@@ -581,9 +582,7 @@ let private preprocessMacros macros options =
 /// Determines if all characters in the specified CharSet are ASCII characters;
 /// that is, they can be represented by an 8-bit value.
 let private isAsciiCharSet (charSet : CharSet) : bool =
-    charSet
-    |> CharSet.forall (fun c ->
-        c <= char System.Byte.MaxValue)
+    CharSet.maxElement charSet <= char System.Byte.MaxValue
 
 //
 let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
