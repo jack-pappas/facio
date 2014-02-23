@@ -60,36 +60,17 @@ type Regex =
         with get () =
             match this with
             | Epsilon ->
-                "\u03f5"    // Epsilon symbol
-            | CharacterSet charSet
-                when CharSet.isEmpty charSet ->
-                "{}"
+                "\u03f5"
             | CharacterSet charSet ->
-                let sb = System.Text.StringBuilder ()
-                sb.Append "{" |> ignore
-
-                // Write each of the intervals into the StringBuilder.
-                charSet
-                |> CharSet.iterIntervals (fun lo hi ->
-                    Printf.bprintf sb "\u%04x-\u%04x, " (int lo) (int hi))
-
-                sb.Length <- sb.Length - 2  // Remove the trailing ", "
-                sb.Append "}" |> ignore
-
-                sb.ToString ()
-
+                charSet.ToString ()
             | Negate regex ->
                 sprintf "\u00ac(%s)" regex.DebuggerDisplay
-
             | Star regex ->
                 sprintf "(%s)*" regex.DebuggerDisplay
-
             | Concat (r, s) ->
                 r.DebuggerDisplay + s.DebuggerDisplay
-
             | Or (r, s) ->
                 sprintf "(%s|%s)" r.DebuggerDisplay s.DebuggerDisplay
-
             | And (r, s) ->
                 sprintf "(%s&%s)" r.DebuggerDisplay s.DebuggerDisplay
 

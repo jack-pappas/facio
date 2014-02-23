@@ -1992,6 +1992,22 @@ type CharSet private (tree : CharDiet) as this =
         if charSet.Tree == filteredTree then charSet
         else CharSet (filteredTree)
 
+    override this.ToString () =
+        if CharSet.IsEmpty this then "{}"
+        else
+            let sb = System.Text.StringBuilder ()
+            sb.Append "{" |> ignore
+
+            // Write each of the intervals into the StringBuilder.
+            CharSet.IterIntervals ((fun lo hi ->
+                Printf.bprintf sb "\u%04x-\u%04x, " (int lo) (int hi)),
+                this)
+
+            sb.Length <- sb.Length - 2  // Remove the trailing ", "
+            sb.Append "}" |> ignore
+
+            sb.ToString ()
+
     interface System.IComparable with
         member this.CompareTo other =
             match other with
