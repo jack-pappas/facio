@@ -173,17 +173,6 @@ module Regex =
     let inline ofCharSet (set : CharSet) : Regex =
         CharacterSet set
 
-    /// Creates a normalized Regex.Negate from the specified Regex.
-    [<CompiledName("CreateNegate")>]
-    let rec negate (regex : Regex) : Regex =
-        match regex with
-        | Negate (Negate regex) ->
-            negate regex
-        | Negate regex ->
-            regex
-        | _ ->
-            Negate regex
-
     /// Returns a new regular expression which matches the given
     /// regular expression zero or more times.
     [<CompiledName("CreateStar")>]
@@ -220,12 +209,6 @@ module Regex =
             return Concat (regex1, regex2)
         }
 
-    /// Concatenates two regular expressions so they'll be matched sequentially.
-    [<CompiledName("CreateConcat")>]
-    let concat (regex1 : Regex) (regex2 : Regex) : Regex =
-        // Call the recursive implementation.
-        concatImpl regex1 regex2 id
-
     //
     let rec private andImpl (regex1 : Regex) (regex2 : Regex) =
         cont {
@@ -244,6 +227,18 @@ module Regex =
                     empty
                 else
                     CharacterSet intersection
+
+        // NOTE : These rules for negated CharacterSets are not described in the original paper,
+        //        but seem to be necessary for fsharplex to terminate on certain patterns.
+//        | CharacterSet positiveSet, Negate (CharacterSet negativeSet)
+//        | Negate (CharacterSet negativeSet), CharacterSet positiveSet ->
+//            return! notImpl ""
+
+        | Negate (CharacterSet charSet1), Negate (CharacterSet charSet2) ->
+            return
+                CharSet.union charSet1 charSet2
+                |> CharacterSet
+                |> Negate
 
 //        | Star (CharacterSet charSet1), Star (CharacterSet charSet2) ->
 //            return
@@ -273,14 +268,6 @@ module Regex =
                     return And (regex1, regex2)
         }
 
-    /// Conjunction of two regular expressions.
-    /// This returns a new regular expression which matches an input string
-    /// if and only if the input matches both of the given regular expressions.
-    [<CompiledName("CreateAnd")>]
-    let andr (regex1 : Regex) (regex2 : Regex) : Regex =
-        // Call the recursive implementation.
-        andImpl regex1 regex2 id
-
     //
     let rec private orImpl (regex1 : Regex) (regex2 : Regex) =
         cont {
@@ -294,7 +281,26 @@ module Regex =
                 CharSet.union charSet1 charSet2
                 |> CharacterSet
 
-        // NOTE : These next two rewrite rules aren't specified in the original paper, but are useful for compacting the regex.
+        // NOTE : These rewrite rules for negated character sets aren't specified in the original paper,
+        //        but seem to be necessary for fsharplex to terminate on certain patterns.
+//        | CharacterSet positiveSet, Negate (CharacterSet negativeSet)
+//        | Negate (CharacterSet negativeSet), CharacterSet positiveSet ->
+//            return! notImpl ""
+
+        | Negate (CharacterSet charSet1), Negate (CharacterSet charSet2) ->
+            // If the intersection is empty, return 'empty' since this pattern can't ever be matched.
+            let intersection = CharSet.intersect charSet1 charSet2
+
+            return
+                if CharSet.isEmpty intersection then
+                    empty
+                else
+                    intersection
+                    |> CharacterSet
+                    |> Negate
+
+        // NOTE : These next two rewrite rules aren't specified in the original paper,
+        //        but seem to be necessary for fsharplex to terminate on certain patterns.
         | Star (CharacterSet charSet1), Star (CharacterSet charSet2) ->
             return
                 CharSet.union charSet1 charSet2
@@ -331,11 +337,43 @@ module Regex =
                     return Or (regex1, regex2)
         }
 
+    /// Creates a normalized Regex.Negate from the specified Regex.
+    [<CompiledName("CreateNegate")>]
+    let rec negate (regex : Regex) : Regex =
+        match regex with
+        | Negate Epsilon ->
+            empty
+        | Negate (Negate regex) ->
+            negate regex
+
+        // Use DeMorgan's rules to simplify negation of Or and And patterns when possible.
+        // This isn't specified in the original paper, but it helps to compact the regex.
+        | Negate (Or (regex1, regex2)) ->
+            andr regex1 regex2
+        | Negate (And (regex1, regex2)) ->
+            orr regex1 regex2
+
+        | Negate regex ->
+            regex
+        | _ ->
+            Negate regex
+
+    /// Concatenates two regular expressions so they'll be matched sequentially.
+    and [<CompiledName("CreateConcat")>] concat (regex1 : Regex) (regex2 : Regex) : Regex =
+        // Call the recursive implementation.
+        concatImpl regex1 regex2 id
+
+    /// Conjunction of two regular expressions.
+    /// This returns a new regular expression which matches an input string
+    /// if and only if the input matches both of the given regular expressions.
+    and [<CompiledName("CreateAnd")>] andr (regex1 : Regex) (regex2 : Regex) : Regex =
+        // Call the recursive implementation.
+        andImpl regex1 regex2 id
+
     /// Disjunction of two regular expressions.
     /// This returns a new regular expression which matches an input string
     /// when the input matches either (or both) of the given regular expressions.
-    [<CompiledName("CreateOr")>]
-    let orr (regex1 : Regex) (regex2 : Regex) : Regex =
+    and [<CompiledName("CreateOr")>] orr (regex1 : Regex) (regex2 : Regex) : Regex =
         // Call the recursive implementation.
         orImpl regex1 regex2 id
 

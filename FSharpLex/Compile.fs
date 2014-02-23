@@ -796,55 +796,6 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
         | Choice1Of2 processedPattern ->
             Choice1Of2 processedPattern
 
-/// <summary>Rewrites negated character sets (i.e, a set of characters *not* to be matched) into positive character sets.</summary>
-/// <param name="universe">
-/// The universe of characters for <paramref name="regex"/>; this is the set of all possible input values, whether valid or invalid.
-/// The universe is, by definition, a superset of <paramref name="regex"/>'s alphabet.
-/// </param>
-/// <param name="regex">A regular expression.</param>
-/// <returns>A regular expression created by transforming negated character sets into positive character sets.</returns>
-let private rewriteNegatedCharSets universe regex =
-    let rec rewriteNegatedCharSets regex =
-        cont {
-        match regex with
-        | Regex.Negate (Regex.CharacterSet charSet) ->
-            return
-                charSet
-                |> CharSet.difference universe
-                |> Regex.ofCharSet
-
-        | Regex.Any
-        | Regex.Epsilon
-        | Regex.CharacterSet _
-            as regex ->
-            return regex
-
-        | Regex.Negate r ->
-            let! r = rewriteNegatedCharSets r
-            return Regex.negate r
-
-        | Regex.Star r ->
-            let! r = rewriteNegatedCharSets r
-            return Regex.star r
-
-        | Regex.Concat (r, s) ->
-            let! r = rewriteNegatedCharSets r
-            let! s = rewriteNegatedCharSets s
-            return Regex.concat r s
-
-        | Regex.And (r, s) ->
-            let! r = rewriteNegatedCharSets r
-            let! s = rewriteNegatedCharSets s
-            return Regex.andr r s
-
-        | Regex.Or (r, s) ->
-            let! r = rewriteNegatedCharSets r
-            let! s = rewriteNegatedCharSets s
-            return Regex.orr r s
-        }
-
-    rewriteNegatedCharSets regex id
-
 //
 let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, badMacros) =
     (* TODO :   Simplify this function by folding over rule.Clauses; this way,
@@ -951,18 +902,6 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
     let compiledPatternDfa =
         let regexOriginalClauseIndices, ruleClauseRegexes =
             Array.unzip ruleClauseRegexes
-
-        // TEMP : Rewrite the regexes so they don't contain negated character sets.
-        //        This avoids a non-termination bug which is triggered by certain patterns containing negated character sets.
-        let ruleClauseRegexes =
-            let universe =
-                if options.Unicode then
-                    CharSet.ofRange System.Char.MinValue System.Char.MaxValue
-                else
-                    CharSet.ofRange (char System.Byte.MinValue) (char System.Byte.MaxValue)
-
-            ruleClauseRegexes
-            |> Array.map (rewriteNegatedCharSets universe)
 
         rulePatternsToDfa ruleClauseRegexes regexOriginalClauseIndices options
 
