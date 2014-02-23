@@ -478,8 +478,6 @@ type Regex with
         match regex with
         | Epsilon ->
             return Regex.empty
-        | Any ->
-            return Regex.epsilon
 
         | CharacterSet charSet ->
             return
