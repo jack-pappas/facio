@@ -290,7 +290,7 @@ let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : R
         InitialState = initialDfaStateId; }
 
 //
-let private preprocessMacro ({ Value = macroId; PositionRange = macroIdPosition; }, pattern) (options : CompilationOptions) (macroEnv, badMacros) =
+let private preprocessMacro ({ Value = macroId; PositionRange = _; }, pattern) (options : CompilationOptions) (macroEnv, badMacros) =
     //
     let rec preprocessMacro pattern =
         cont {
@@ -796,42 +796,6 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
         | Choice1Of2 processedPattern ->
             Choice1Of2 processedPattern
 
-/// <summary>An <see cref="IMapReduction`2"/> which can be used to compute the alphabet of a regular vector.</summary>
-/// <remarks>
-/// This is only necessary for fslex compatibility; once fsharplex has it's own backend (e.g., direct-style),
-/// this won't be needed anymore (though it may be retained as a library function for diagnostics purposes).
-/// </remarks>
-let private regexAlphabetMapReduce =
-    /// Gets the alphabet of a regular expression.
-    /// The alphabet is the set of symbols which may be matched at any state by the regular expression.
-    let rec getAlphabet regex =
-        cont {
-        match regex with
-        | Regex.Any
-        | Regex.Epsilon ->
-            return CharSet.empty
-
-        | Regex.CharacterSet charSet ->
-            return charSet
-
-        | Regex.Negate r
-        | Regex.Star r ->
-            return! getAlphabet r
-
-        | Regex.And (r, s)
-        | Regex.Concat (r, s)
-        | Regex.Or (r, s) ->
-            let! rAlphabet = getAlphabet r
-            let! sAlphabet = getAlphabet s
-            return CharSet.union rAlphabet sAlphabet
-        }
-
-    { new IMapReduction<_,_> with
-        member __.Map (regex : Regex) =
-            getAlphabet regex id
-        member __.Reduce set1 set2 =
-            CharSet.union set1 set2 }
-
 /// <summary>Rewrites negated character sets (i.e, a set of characters *not* to be matched) into positive character sets.</summary>
 /// <param name="universe">
 /// The universe of characters for <paramref name="regex"/>; this is the set of all possible input values, whether valid or invalid.
@@ -839,10 +803,6 @@ let private regexAlphabetMapReduce =
 /// </param>
 /// <param name="regex">A regular expression.</param>
 /// <returns>A regular expression created by transforming negated character sets into positive character sets.</returns>
-/// <remarks>
-/// This is only necessary for fslex compatibility; once fsharplex has it's own backend (e.g., direct-style),
-/// this won't be needed anymore (though it may be retained as a library function for diagnostics purposes).
-/// </remarks>
 let private rewriteNegatedCharSets universe regex =
     let rec rewriteNegatedCharSets regex =
         cont {
@@ -937,11 +897,11 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             // Only the earliest use of the "eof" pattern will be matched.
             let acceptingClauseIndex, neverMatchedClauseIndices = Set.extractMin eofClauseIndices
 
-            // TODO : Implement code to emit warning messages when 'neverMatchedClauseIndices'
-            // is non-empty. (E.g., "This pattern will never be matched.")
-//            if not <| Set.isEmpty neverMatchedClauseIndices then
-//                // TODO
-//                ()
+            // TODO : Return warning messages (with location info) about patterns which will never be matched.
+            // TEMP : In the meantime, print warnings to the debug console for development purposes.
+            neverMatchedClauseIndices
+            |> Set.iter (fun clauseIndex ->
+                Printf.dprintfn "This pattern will never be matched. (ClauseIndex = %i)" <| int clauseIndex)
 
             Some acceptingClauseIndex
 
@@ -961,11 +921,11 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             // Only the earliest use of the wildcard pattern will be matched.
             let acceptingClauseIndex, neverMatchedClauseIndices = Set.extractMin wildcardClauseIndices
 
-            // TODO : Implement code to emit warning messages when 'neverMatchedClauseIndices'
-            // is non-empty. (E.g., "This pattern will never be matched.")
-//            if not <| Set.isEmpty neverMatchedClauseIndices then
-//                // TODO
-//                ()
+            // TODO : Return warning messages (with location info) about patterns which will never be matched.
+            // TEMP : In the meantime, print warnings to the debug console for development purposes.
+            neverMatchedClauseIndices
+            |> Set.iter (fun clauseIndex ->
+                Printf.dprintfn "This pattern will never be matched. (ClauseIndex = %i)" <| int clauseIndex)
 
             Some acceptingClauseIndex
 
@@ -991,21 +951,18 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
     let compiledPatternDfa =
         let regexOriginalClauseIndices, ruleClauseRegexes =
             Array.unzip ruleClauseRegexes
-            
-        (* TEMP :   For compatibility with fslex, we need to determine the alphabet used
-                    by the rule, then rewrite any negated character sets so the transition
-                    table is generated in a way that fslex can handle. *)
 
-        // Rewrite the regexes so they don't contain negated character sets.
+        // TEMP : Rewrite the regexes so they don't contain negated character sets.
+        //        This avoids a non-termination bug which is triggered by certain patterns containing negated character sets.
         let ruleClauseRegexes =
-            let ruleAlphabet =
-                ruleClauseRegexes
-                |> Array.mapReduce regexAlphabetMapReduce
-                // fslex compatibility: Always add the standard (low) ASCII characters, like fslex does.
-                |> CharSet.union (CharSet.ofRange (char 0) (char 127))
+            let universe =
+                if options.Unicode then
+                    CharSet.ofRange System.Char.MinValue System.Char.MaxValue
+                else
+                    CharSet.ofRange (char System.Byte.MinValue) (char System.Byte.MaxValue)
 
             ruleClauseRegexes
-            |> Array.map (rewriteNegatedCharSets ruleAlphabet)
+            |> Array.map (rewriteNegatedCharSets universe)
 
         rulePatternsToDfa ruleClauseRegexes regexOriginalClauseIndices options
 
@@ -1068,11 +1025,13 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
 
                 CharSet.difference ruleAlphabet initialEdgeLabels
 
-            // If the set of characters matched by the wildcard pattern is not empty,
-            // create a new DFA state which accepts the wildcard pattern, then add
-            // transition edges to it from the initial state.
+            // If the set of characters matched by the wildcard pattern is not empty, create a new DFA state which
+            // accepts the wildcard pattern, then add transition edges to it from the initial state.
             if CharSet.isEmpty wildcardChars then
-                // TODO : Emit a warning to let the user know this pattern will never be matched.
+                // TODO : This warning shouldn't be emitted here -- it should be returned from this function so
+                //        if can be displayed to the user in whatever way makes sense for the consumer of this function.
+                //        Also, we want to return location information so it can be used to emit MSBuild-style warning
+                //        messages and/or text adornments in Visual Studio.
                 Printf.dprintfn "Warning: Wildcard pattern in rule will never be matched."
 
                 compiledPatternDfa
