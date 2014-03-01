@@ -132,7 +132,7 @@ module Program =
             statusMessage "Parsing lexer specification" <| fun () ->
             try
                 let stream, reader, lexbuf =
-                    UnicodeFileAsLexbuf (inputFile, None)
+                    UnicodeFileAsLexbuf (inputFile, options.InputCodePage)
                 use stream = stream
                 use reader = reader
                 let lexerSpec = Parser.spec Lexer.token lexbuf
@@ -232,6 +232,8 @@ module Program =
         // and call the 'invoke' function with it.
         invoke (Option.get !inputFile, {
             Unicode = !unicode;
+            InputCodePage = !inputCodePage;
+
             // TEMP : These should be specified in a better way -- perhaps we can get
             // ArgInfo instances from the plugins along with some object which holds ref values
             // internally (used by the returned ArgInfo instances), which has a method

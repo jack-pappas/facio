@@ -52,6 +52,8 @@ type GraphBackendOptions = {
 type CompilationOptions = {
     /// Enable unicode support in the lexer.
     Unicode : bool;
+    //
+    InputCodePage : int option;
 
     (* Backend-specific options. *)
     (* TODO :   Once we implement support for strongly-typed custom exports (via MEF)
