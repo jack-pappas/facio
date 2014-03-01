@@ -53,7 +53,6 @@ Known Bugs/Issues
 =================
 
 - fsharplex
-    - (Unconfirmed) There may be a bug affecting fslex-compatible lexer table generation for some specifications -- one example appears to be the F# compiler's lexer. ``fsharplex`` compiles the specification and exits normally, but when the generated lexer is used (i.e., after it has been compiled into a compiler and invoked) the ``fslex`` interpreter will crash with an assertion error.
     - When a user-specified action for a lexer rule contains an F# ``match`` expression, then in some cases the alignment of the corresponding code in the generated lexer will cause the F# compiler's parser to emit multiple errors about whitespace alignment. (Repro: compile the lexer specification for the F# compiler, replace the ``fslex``-generated lexer with the ``fsharplex``-generated lexer, and try to compile the F# compiler.)
 
 - fsharpyacc / Graham
