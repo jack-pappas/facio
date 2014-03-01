@@ -238,6 +238,7 @@ module Program =
             // that produces an instance of FslexBackendOptions or GraphBackendOptions.
             FslexBackendOptions = Some {
                 OutputPath = Option.get !outputFile;
+                LexerLibraryNamespace = !lexlib;
                 };
             GraphBackendOptions = Some {
                 OutputPath =

@@ -48,7 +48,7 @@ module private FsLexConstants =
     //
     let [<Literal>] lexerBufferVariableName = "lexbuf"
     //
-    let [<Literal>] lexerBufferTypeName = "Microsoft.FSharp.Text.Lexing.LexBuffer<_>"
+    let [<Literal>] lexerBufferTypeName = "LexBuffer<_>"
     //
     let [<Literal>] lexingStateVariableName = "_fslex_state"
 
@@ -479,14 +479,30 @@ module private FsLex =
             "// Create the interpreter from the transition and action tables."
             |> indentingWriter.WriteLine
 
-            sprintf "Microsoft.FSharp.Text.Lexing.%sTables.Create (%s, %s)"
-                (if options.Unicode then "Unicode" else "Ascii")
+            // TEMP : Pass the compilation options in a better way here -- we've already checked that the CompilationOptions record
+            //        includes an FslexBackendOptions record, so we shouldn't need to use Option.get here.
+            let lexerLibraryNamespace =
+                let fslexOptions = Option.get options.FslexBackendOptions
+                fslexOptions.LexerLibraryNamespace
+
+            sprintf "%s.%s.Create (%s, %s)"
+                lexerLibraryNamespace
+                (if options.Unicode then "UnicodeTables" else "AsciiTables")
                 transitionTableVariableName
                 actionTableVariableName
             |> indentingWriter.WriteLine
 
     /// Emits the code for the functions which execute the semantic actions of the rules.
-    let private ruleFunctions (compiledRules : Map<RuleIdentifier, CompiledRule>) (indentingWriter : IndentedTextWriter) =
+    let private ruleFunctions (compiledRules : Map<RuleIdentifier, CompiledRule>) (options : CompilationOptions) (indentingWriter : IndentedTextWriter) =
+        // Preconditions
+        // TODO
+
+        // TODO : Pass the CompilationOptions in a better way here -- we've already checked to make sure the record
+        //        contains an FslexBackendOptions record, so we shouldn't need to use Option.get here.
+        let lexerLibraryNamespace =
+            let fslexOptions = Option.get options.FslexBackendOptions
+            fslexOptions.LexerLibraryNamespace
+
         ((0, true), compiledRules)
         ||> Map.fold (fun (ruleStartingStateId, isFirstRule) ruleId compiledRule ->
             // Emit a comment with the name of this rule.
@@ -500,11 +516,12 @@ module private FsLex =
             compiledRule.Parameters
             |> Array.iter (fun paramName ->
                 indentingWriter.Write paramName
-                indentingWriter.Write ' ')            
+                indentingWriter.Write ' ')
 
             // Emit the lexer buffer parameter as the last (right-most) parameter.
-            sprintf "(%s : %s) ="
+            sprintf "(%s : %s.%s) ="
                 lexerBufferVariableName
+                lexerLibraryNamespace
                 lexerBufferTypeName
             |> indentingWriter.WriteLine
 
@@ -613,7 +630,7 @@ module private FsLex =
         indentingWriter.WriteLine ()
 
         // Emit the semantic functions for the rules.
-        ruleFunctions compiledSpec.CompiledRules indentingWriter
+        ruleFunctions compiledSpec.CompiledRules options indentingWriter
         assert (indentingWriter.Indent = 0) // Make sure indentation was reset
 
         // Emit a newline before emitting the footer.

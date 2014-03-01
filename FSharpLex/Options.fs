@@ -26,6 +26,8 @@ namespace FSharpLex
 type FslexBackendOptions = {
     /// The output path. The generated code will be written to this file.
     OutputPath : string;
+    /// Namespace where the fslex backend (i.e., table interpreters) can be found by the generated lexer.
+    LexerLibraryNamespace : string;
 }
 
 /// Graph-based file formats.
