@@ -146,30 +146,123 @@ module private UnicodeLexer =
         characters which don't actually have a transition out of the current state.
     *)
 
+    //
+    let private optimizeTransitions (outTransitions : Map<char, int<Graph.DfaState>>) =
+        ((Map.empty, Map.empty), UnicodeCharSet.byCategory)
+        ||> Map.fold (fun (categoryTransitions, charTransitions) category categoryChars ->
+            (* If there is a transition out of this DFA state for *most* characters in this
+                Unicode category and all of those transitions go to the same state, we can compress
+                the lexer table by emitting a transition for the Unicode category itself instead
+                of the individual characters.
+                If we do emit a transition for the category, we also need to emit an individual edge
+                for each character which transitions to a different DFA state than the one used by
+                the whole category (or the sentinel value to indicate no transition for that character). *)
+
+            /// The DFA state targeted by the greatest number of edges labeled with
+            /// characters from this Unicode category.
+            let categoryTarget =
+                /// The DFA states targeted by transitions labeled with characters from this Unicode class.
+                let weightedTransitionTargets =
+                    (Map.empty, categoryChars)
+                    ||> CharSet.fold (fun weightedTransitionTargets c ->
+                        let target = Map.tryFind c outTransitions
+                        match Map.tryFind target weightedTransitionTargets with
+                        | None ->
+                            Map.add target 1 weightedTransitionTargets
+                        | Some weight ->
+                            Map.add target (weight + 1) weightedTransitionTargets)
+
+                // TODO : Simplify this to use the Map.maxKeyBy function from ExtCore.
+                (None, weightedTransitionTargets)
+                ||> Map.fold (fun categoryTarget target weight ->
+                    match categoryTarget with
+                    | None ->
+                        Some (target, weight)
+                    | Some (_, maxWeight) ->
+                        if weight > maxWeight then
+                            Some (target, weight)
+                        else categoryTarget)
+                // Discard the intermediate values from the fold.
+                |> Option.get
+                |> fst
+
+            // Add the DFA state targeted by the greatest number of edges labeled with
+            // characters in this Unicode category to the category-transition-target map.
+            let categoryTransitions = Map.add category categoryTarget categoryTransitions
+                
+            // Add individual character transitions for any character which targets a different state
+            // (or does not label a transition from this state).
+            let charTransitions =
+                (charTransitions, categoryChars)
+                ||> CharSet.fold (fun charTransitions c ->
+                    // Filter out ASCII characters -- we've already emitted transitions for them.
+                    if int c < 128 then
+                        charTransitions
+                    else
+                        let target = Map.tryFind c outTransitions
+                        if target = categoryTarget then
+                            charTransitions
+                        else
+                            Map.add c target charTransitions)
+
+            // Pass the category and character transition maps to the next iteration.
+            categoryTransitions, charTransitions)
+
+    /// Creates a map of transitions out of this DFA state, keyed by the character labeling the transition edge.
+    // OPTIMIZE : This should use an IntervalMap for better performance.
+    // Additionally, it should be created on-the-fly while creating the DFA instead of having to re-compute it here.
+    let createTransitionMap (ruleDfaTransitions : Graph.LexerDfaGraph) ruleDfaStateId baseDfaStateId =
+        (Map.empty, ruleDfaTransitions.AdjacencyMap)
+        ||> HashMap.fold (fun outTransitions edgeKey edgeSet ->
+            // Filter to include only this DFA state's out-edges.
+            if edgeKey.Source <> ruleDfaStateId then
+                outTransitions
+            else
+                // Add the transition edges to the map.
+                let target = edgeKey.Target + baseDfaStateId
+
+                (outTransitions, edgeSet)
+                ||> CharSet.fold (fun outTransitions c ->
+                    Map.add c target outTransitions))
+
+    //
+    let transitionChars (compiledRules : Map<RuleIdentifier, CompiledRule>) =
+        ((CharSet.empty, 0), compiledRules)
+        ||> Map.fold (fun (transitionChars, baseDfaStateId) _ compiledRule ->
+            let ruleDfaTransitions = compiledRule.Dfa.Transitions
+
+            let ruleDfaStateCount = ruleDfaTransitions.VertexCount
+
+            let transitionChars' =
+                (0, ruleDfaStateCount - 1, transitionChars)
+                |||> Range.fold (fun transitionChars ruleDfaStateId ->
+                    let outTransitions =
+                        createTransitionMap ruleDfaTransitions (tag ruleDfaStateId) (tag baseDfaStateId)
+
+                    //
+                    let _, unicodeCharTransitions =
+                        optimizeTransitions outTransitions
+
+                    (transitionChars, unicodeCharTransitions)
+                    ||> Map.fold (fun transitionChars c _ ->
+                        CharSet.add c transitionChars))
+
+            //
+            transitionChars',
+            baseDfaStateId + ruleDfaStateCount)
+        // Discard the DFA state id counter.
+        |> fst
+
     /// Emits the elements into a Unicode transition table row for the given DFA state.
-    let transitionVectorElements (*specificUnicodeChars*) compiledRule ruleDfaStateId baseDfaStateId (indentingWriter : IndentedTextWriter) =
+    let transitionVectorElements unicodeTransitionChars compiledRule ruleDfaStateId baseDfaStateId (indentingWriter : IndentedTextWriter) =
         // Preconditions
         // TODO
 
-        let ruleDfaTransitions = compiledRule.Dfa.Transitions
+        let ruleDfaTransitions =
+            compiledRule.Dfa.Transitions
 
-        /// The transitions out of this DFA state, keyed by the
-        /// character labeling the transition edge.
-        // OPTIMIZE : This should use an IntervalMap for better performance.
-        // Additionally, it should be created on-the-fly while creating the DFA instead of having to re-compute it here.
         let outTransitions =
-            (Map.empty, ruleDfaTransitions.AdjacencyMap)
-            ||> HashMap.fold (fun outTransitions edgeKey edgeSet ->
-                // Filter to include only this DFA state's out-edges.
-                if edgeKey.Source <> ruleDfaStateId then
-                    outTransitions
-                else
-                    // Add the transition edges to the map.
-                    let target = edgeKey.Target + baseDfaStateId
-
-                    (outTransitions, edgeSet)
-                    ||> CharSet.fold (fun outTransitions c ->
-                        Map.add c target outTransitions))
+            createTransitionMap ruleDfaTransitions ruleDfaStateId baseDfaStateId
 
         // Emit the transition vector elements for the lower range of ASCII elements [0-127].
         for c = 0 to 127 do
@@ -187,75 +280,33 @@ module private UnicodeLexer =
 
         //
         let unicodeCategoryTransitions, unicodeCharTransitions =
-            ((Map.empty, Map.empty), UnicodeCharSet.byCategory)
-            ||> Map.fold (fun (categoryTransitions, charTransitions) category categoryChars ->
-                (* If there is a transition out of this DFA state for *most* characters in this
-                   Unicode category and all of those transitions go to the same state, we can compress
-                   the lexer table by emitting a transition for the Unicode category itself instead
-                   of the individual characters.
-                   If we do emit a transition for the category, we also need to emit an individual edge
-                   for each character which transitions to a different DFA state than the one used by
-                   the whole category (or the sentinel value to indicate no transition for that character). *)
-
-                /// The DFA state targeted by the greatest number of edges labeled with
-                /// characters from this Unicode category.
-                let categoryTarget =
-                    /// The DFA states targeted by transitions labeled with characters from this Unicode class.
-                    let weightedTransitionTargets =
-                        (Map.empty, categoryChars)
-                        ||> CharSet.fold (fun weightedTransitionTargets c ->
-                            let target = Map.tryFind c outTransitions
-                            match Map.tryFind target weightedTransitionTargets with
-                            | None ->
-                                Map.add target 1 weightedTransitionTargets
-                            | Some weight ->
-                                Map.add target (weight + 1) weightedTransitionTargets)
-
-                    // TODO : Simplify this to use the Map.maxKeyBy function from ExtCore.
-                    (None, weightedTransitionTargets)
-                    ||> Map.fold (fun categoryTarget target weight ->
-                        match categoryTarget with
-                        | None ->
-                            Some (target, weight)
-                        | Some (_, maxWeight) ->
-                            if weight > maxWeight then
-                                Some (target, weight)
-                            else categoryTarget)
-                    // Discard the intermediate values from the fold.
-                    |> Option.get
-                    |> fst
-
-                // Add the DFA state targeted by the greatest number of edges labeled with
-                // characters in this Unicode category to the category-transition-target map.
-                let categoryTransitions = Map.add category categoryTarget categoryTransitions
-                
-                // Add individual character transitions for any character which targets a different state
-                // (or does not label a transition from this state).
-                let charTransitions =
-                    (charTransitions, categoryChars)
-                    ||> CharSet.fold (fun charTransitions c ->
-                        // Filter out ASCII characters -- we've already emitted transitions for them.
-                        if int c < 128 then
-                            charTransitions
-                        else
-                            let target = Map.tryFind c outTransitions
-                            if target = categoryTarget then
-                                charTransitions
-                            else
-                                Map.add c target charTransitions)
-
-                // Pass the category and character transition maps to the next iteration.
-                categoryTransitions, charTransitions)
+            optimizeTransitions outTransitions
 
         // Emit entries for specific Unicode elements.
-        unicodeCharTransitions
-        |> Map.iter (fun c targetStateId ->
-            // Emit the character itself (as a uint16).
-            writeUInt16LiteralElement indentingWriter <| uint16 c            
+        // Note that fslex requires the transition vectors for every state in the DFA to contain the same number
+        // of entries for specific Unicode characters, so we may need to emit entries for characters which don't
+        // label a transition edge from this state (in that case, we emit an entry which transitions to the error state).
+        unicodeTransitionChars
+        |> CharSet.iter (fun c ->
+            // The state targeted by the transition edge labeled by 'c'.
+            let targetStateId =
+                // First, check to see if this state has a specific Unicode transition for 'c'.
+                unicodeCharTransitions
+                |> Map.tryFind c
+                //
+                |> Option.bind id
+                // If there wasn't a specific transition for this character, is there a transition
+                // for this character's Unicode category?
+                |> Option.tryFillWith (fun () ->
+                    let category = System.Globalization.CharUnicodeInfo.GetUnicodeCategory c
+                    Map.tryFind category unicodeCategoryTransitions
+                    |> Option.bind id)
+                // If this state doesn't have an out-transition-edge labeled with 'c',
+                // transition to the error state (by using the sentinel value as the target state id).
+                |> Option.fill (tag <| int sentinelValue)
 
-            /// The target state ID, or a sentinel value if this character does
-            /// not label a transition out-edge from this DFA state.
-            let targetStateId = defaultArg targetStateId (tag <| int sentinelValue)
+            // Emit the character itself (as a uint16).
+            writeUInt16LiteralElement indentingWriter <| uint16 c
 
             // Emit the target state ID.
             writeUInt16LiteralElement indentingWriter <| Checked.uint16 targetStateId)
@@ -284,33 +335,6 @@ module private UnicodeLexer =
             else sentinelValue
 
         writeUInt16LiteralElement indentingWriter eofTransitionTarget
-
-    //
-    let transitionChars (compiledRules : Map<RuleIdentifier, CompiledRule>) =
-        (CharSet.empty, compiledRules)
-        ||> Map.fold (fun transitionChars _ compiledRule ->
-            (transitionChars, compiledRule.Dfa.Transitions.AdjacencyMap)
-            ||> HashMap.fold (fun transitionChars _ edgeSet ->
-                CharSet.union transitionChars edgeSet))
-
-    //
-    let specificUnicodeChars (transitionChars : CharSet) : CharSet =
-        // Remove the low ASCII chars (0-127) first.
-        let transitionChars =
-            transitionChars
-            |> CharSet.filter (fun c ->
-                c > char 127)
-
-        // Remove any complete categories of Unicode characters -- we'll emit a transition for
-        // the entire category instead of the individual characters.
-        (transitionChars, UnicodeCharSet.byCategory)
-        ||> Map.fold (fun transitionChars _ categoryChars ->
-            // Since CharSet doesn't (currently) implement an isSubset or isSuperset function,
-            // use the intersection to check if this Unicode category is a subset of the transition chars.
-            let isect = CharSet.intersect categoryChars transitionChars
-            if categoryChars = isect then
-                CharSet.difference transitionChars categoryChars
-            else transitionChars)
 
 
 /// Emit table-driven code which is compatible to the code generated by the older 'fslex' tool.
@@ -345,13 +369,10 @@ module private FsLex =
             // or not the lexer is generated with support for Unicode.
             let stateTransitionEmitter =
                 if options.Unicode then
-//                    /// The set of Unicode transition chars used to label state-transition-edges,
-//                    /// minus the low ASCII characters and complete Unicode categories.
-//                    let specificUnicodeChars =
-//                        compiledRules
-//                        |> UnicodeLexer.transitionChars
-//                        |> UnicodeLexer.specificUnicodeChars
-                    UnicodeLexer.transitionVectorElements
+                    /// The set of Unicode transition chars used to label state-transition-edges,
+                    /// minus the low ASCII characters and complete Unicode categories.
+                    let specificUnicodeChars = UnicodeLexer.transitionChars compiledRules
+                    UnicodeLexer.transitionVectorElements specificUnicodeChars
                 else
                     AsciiLexer.transitionVectorElements
 
