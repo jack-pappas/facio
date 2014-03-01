@@ -395,7 +395,7 @@ let rec code p buff (lexbuf : Microsoft.FSharp.Text.Lexing.LexBuffer<_>) =
 
         match _fslex_tables.Interpret (_fslex_state, lexbuf) with
         | 0 ->
-            CODE (buff.ToString ())
+            CODE (Substring.ofString <| buff.ToString ())
         | 1 ->
             buff.Append (lexeme lexbuf) |> ignore
             code p buff lexbuf |> ignore

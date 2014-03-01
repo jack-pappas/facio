@@ -551,9 +551,8 @@ module private FsLex =
 
                             // Emit the user-defined code for this pattern's semantic action.
                             // This has to be done line-by-line so the indenting is correct!
-                            // OPTIMIZE : Avoid creating the intermediate array of substrings by
-                            // using String.Split.iter from ExtCore.
-                            actionCode.Split (
+                            // OPTIMIZE : Avoid creating the intermediate array of substrings by using String.Splits.iter from ExtCore.
+                            actionCode.ToString().Split (
                                 [|"\r\n"; "\r"; "\n"|],
                                 System.StringSplitOptions.None)
                             |> Array.iter indentingWriter.WriteLine)

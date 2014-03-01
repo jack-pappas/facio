@@ -157,12 +157,17 @@ type Pattern =
     | Or of Pattern * Pattern
     /// Boolean AND of two regular expressions.
     | And of Pattern * Pattern
-    (* TODO :   The Xor pattern can be implemented easily by rewriting it with one of the identities:
-                p XOR q => (p OR q) AND (NOT (p AND q))
-                -- or --
-                p XOR q => (p AND (NOT q)) OR ((NOT p) AND q) *)
-//    /// Exclusive-OR (XOR) of two regular expressions.
-//    | Xor of Pattern * Pattern
+    /// <summary>Exclusive-OR (XOR) of two regular expressions.</summary>
+    /// <remarks>
+    /// Implementation note: the XOR pattern is implemented easily by rewriting uses of it in terms
+    /// of the <c>And</c> and <c>Negate</c> patterns using one of these identities:
+    /// <code>
+    /// p XOR q => (p OR q) AND (NOT (p AND q))
+    /// -- or --
+    /// p XOR q => (p AND (NOT q)) OR ((NOT p) AND q)
+    /// </code>
+    /// </remarks>
+    | Xor of Pattern * Pattern
 
     (* Extensions *)
     /// The specified Pattern is matched one (1) or more times.
@@ -362,8 +367,10 @@ type RuleClausePattern =
     /// The end-of-file marker.
     | EndOfFile
 
-/// A fragment of F# code.
-type CodeFragment = string
+/// A fragment of user-defined code (e.g., F# source code).
+/// This code may define a header or footer for the generated lexer, or a lexical "action"
+/// (an expression to be executed when a pattern is matched to produce the corresponding token value).
+type CodeFragment = substring
 
 /// A clause of a lexer rule.
 type RuleClause = {

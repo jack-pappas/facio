@@ -353,6 +353,26 @@ let private preprocessMacro ({ Value = macroId; PositionRange = _; }, pattern) (
                     Regex.orr r s
                     |> Choice1Of2
 
+        | Pattern.Xor (r, s) ->
+            let! rResult = preprocessMacro r
+            let! sResult = preprocessMacro s
+
+            match rResult, sResult with
+            | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                return Choice2Of2 (rErrors ++ sErrors)
+            | (Choice2Of2 _ as err), Choice1Of2 _
+            | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                return err
+            | Choice1Of2 r, Choice1Of2 s ->
+                return
+                    // The Xor pattern is implemented using the following identity:
+                    //   p XOR q => (p OR q) AND (NOT (p AND q))
+                    Regex.andr
+                        (Regex.orr r s)
+                        (Regex.negate <|
+                            Regex.andr r s)
+                    |> Choice1Of2
+
         (*  Extended patterns are rewritten using the cases of Pattern
             which have corresponding cases in Regex. *)
         | Pattern.OneOrMore r ->
@@ -708,6 +728,26 @@ let private validateAndSimplifyPattern pattern (macroEnv, badMacros, options) =
             | Choice1Of2 r, Choice1Of2 s ->
                 return
                     Regex.orr r s
+                    |> Choice1Of2
+
+        | Pattern.Xor (r, s) ->
+            let! rResult = validateAndSimplify r
+            let! sResult = validateAndSimplify s
+
+            match rResult, sResult with
+            | Choice2Of2 rErrors, Choice2Of2 sErrors ->
+                return Choice2Of2 (rErrors ++ sErrors)
+            | (Choice2Of2 _ as err), Choice1Of2 _
+            | Choice1Of2 _, (Choice2Of2 _ as err) ->
+                return err
+            | Choice1Of2 r, Choice1Of2 s ->
+                return
+                    // The Xor pattern is implemented using the following identity:
+                    //   p XOR q => (p OR q) AND (NOT (p AND q))
+                    Regex.andr
+                        (Regex.orr r s)
+                        (Regex.negate <|
+                            Regex.andr r s)
                     |> Choice1Of2
 
         (*  Extended patterns are rewritten using the cases of Pattern
