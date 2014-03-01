@@ -1050,8 +1050,6 @@ type CompiledSpecification = {
     Footer : CodeFragment option;
     //
     CompiledRules : Map<RuleIdentifier, CompiledRule>;
-//    //
-//    StartRule : RuleIdentifier;
 }
 
 /// Creates pattern-matching DFAs from the lexer rules.
