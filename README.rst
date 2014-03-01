@@ -54,6 +54,7 @@ Known Bugs/Issues
 
 - fsharplex
     - When a user-specified action for a lexer rule contains an F# ``match`` expression, then in some cases the alignment of the corresponding code in the generated lexer will cause the F# compiler's parser to emit multiple errors about whitespace alignment. (Repro: compile the lexer specification for the F# compiler, replace the ``fslex``-generated lexer with the ``fsharplex``-generated lexer, and try to compile the F# compiler.)
+    - ``fsharplex`` does not yet emit position information (i.e., line numbers) from the specification file into the generated lexer code, so if your lexer encounters an error -- for example, a bug or syntax error in one of the user-defined lexical actions -- it may be difficult to trace the position specified by the compiler error or exception stack trace back to the original code in the specification file.
 
 - fsharpyacc / Graham
     - Some parts of the LR (LR(0), SLR(1), LALR(1), LR(1)) parser table generation have not been optimized yet. This issue doesn't impact smaller parser specifications, but larger specifications such as the parser for the F# compiler can take a long time to compile. The parts of the code causing the performance drain will eventually be profiled and tuned to correct the problem; the likely solution will be to implement memoization in some places, and to increase the performance of some Map lookups by using TagBimap to assign 'tags' which can be used in place of more heavyweight objects (e.g., ``LrParserState<_,_,_>``).
