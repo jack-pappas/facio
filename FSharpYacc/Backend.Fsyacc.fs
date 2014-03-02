@@ -27,6 +27,107 @@ open FSharpYacc.Ast
 open FSharpYacc.Compiler
 
 
+//
+[<AutoOpen>]
+module private FsYaccConstants =
+    //
+    let [<Literal>] defaultLexingNamespace = "Microsoft.FSharp.Text.Lexing"
+    //
+    let [<Literal>] defaultParsingNamespace = "Microsoft.FSharp.Text.Parsing"
+    /// The namespace where the OCaml-compatible parsers can be found.
+    let [<Literal>] ocamlParsingNamespace = "FSharp.Compatibility.OCaml.Parsing"
+
+    /// The name of the end-of-input terminal.
+    let [<Literal>] endOfInputTerminal : TerminalIdentifier = "end_of_input"
+    /// The name of the error terminal.
+    let [<Literal>] errorTerminal : TerminalIdentifier = "error"
+
+
+//
+[<AutoOpen>]
+module private CodeGenHelpers =
+    open System
+    open BackendUtils.CodeGen
+
+    /// Emit a formatted string as a single-line F# comment into an IndentedTextWriter.
+    let inline comment (writer : IndentedTextWriter) fmt : ^T =
+        writer.Write "// "
+        fprintfn writer fmt
+
+    /// Emits a formatted string as a quick-summary (F# triple-slash comment) into an IndentedTextWriter.
+    let inline quickSummary (writer : IndentedTextWriter) fmt : ^T =
+        fmt |> Printf.ksprintf (fun str ->
+            // OPTIMIZE : Use the String.Split.iter function from ExtCore.
+            // Split the string into individual lines.
+            str.Split ([| "\r\n"; "\r"; "\n" |], System.StringSplitOptions.None)
+            // Write the lines to the IndentedTextWriter as triple-slash comments.
+            |> Array.iter (fun line ->
+                writer.Write "/// "
+                writer.WriteLine (line.Trim ())
+                ))
+
+    /// <summary>Emits the declaration of a discriminated union type into an IndentedTextWriter.</summary>
+    /// <param name="typeName">The name of the type.</param>
+    /// <param name="isPublic">When set, the type will be publicly-visible.</param>
+    /// <param name="cases">A map containing the names (and types, if applicable) of the cases.</param>
+    /// <param name="writer">The IndentedTextWriter into which to write the code.</param>
+    let unionTypeDecl (typeName : string, isPublic, cases : Map<string, string option>) (writer : IndentedTextWriter) =
+        // Write the type declaration
+        if isPublic then
+            sprintf "type %s =" typeName
+        else
+            sprintf "type private %s =" typeName
+        |> writer.WriteLine
+
+        // Write the type cases
+        IndentedTextWriter.indented writer <| fun writer ->
+            cases
+            |> Map.iter (fun caseName caseType ->
+                match caseType with
+                | None ->
+                    "| " + caseName
+                | Some caseType ->
+                    // NOTE : The parentheses here are actually quite important -- if the token type
+                    // is a tuple, then wrapping it in parenthesis makes the F# compiler treat it as
+                    // a single value. This reduces performance, but makes emitting some of the
+                    // pattern-matching clauses in the other functions much simpler.
+                    sprintf "| %s of (%s)" caseName caseType
+                |> writer.WriteLine)
+
+    /// Emits code which declares a literal integer value into a TextWriter.
+    let intLiteralDecl (name, isPublic, value : int) (writer : #TextWriter) =
+        // Preconditions
+        if System.String.IsNullOrWhiteSpace name then
+            invalidArg "name" "The variable name cannot be null/empty/whitespace."
+
+        if isPublic then
+            sprintf "let [<Literal>] %s = %i" name value
+        else
+            sprintf "let [<Literal>] private %s = %i" name value
+        |> writer.WriteLine
+
+    /// Emits code which creates an array of UInt16 constants into a TextWriter.
+    let oneLineArrayUInt16 (name, isPublic, array : uint16[]) (writer : #TextWriter) =
+        // Preconditions
+        if System.String.IsNullOrWhiteSpace name then
+            invalidArg "name" "The variable name cannot be null/empty/whitespace."
+
+        // Emit the 'let' binding and opening bracket of the array.
+        if isPublic then
+            sprintf "let %s = [| " name
+        else
+            sprintf "let private %s = [| " name
+        |> writer.Write
+
+        // Emit the array values.
+        array
+        |> Array.iter (fun x ->
+            writer.Write (x.ToString() + "us; "))
+
+        // Emit the closing bracket of the array.
+        writer.WriteLine "|]"
+
+
 /// Emit table-driven code which is compatible with the code generated
 /// by the older 'fsyacc' tool from the F# PowerPack.
 [<RequireQualifiedAccess>]
@@ -38,13 +139,7 @@ module private FsYacc =
     open Graham.LR
     open BackendUtils.CodeGen
 
-    //
-    let [<Literal>] private defaultLexingNamespace = "Microsoft.FSharp.Text.Lexing"
-    //
-    let [<Literal>] private defaultParsingNamespace = "Microsoft.FSharp.Text.Parsing"
-    /// The namespace where the OCaml-compatible parsers can be found.
-    let [<Literal>] private ocamlParsingNamespace = "FSharp.Compatibility.OCaml.Parsing"
-
+    
     /// Values used in the ACTION tables created by fsyacc.
     [<Flags>]
     type private ActionValue =
@@ -83,84 +178,6 @@ module private FsYacc =
         /// The error terminal.
         | Error
 
-    /// Emit a formatted string as a single-line F# comment into an IndentedTextWriter.
-    let inline private comment (writer : IndentedTextWriter) fmt : ^T =
-        writer.Write "// "
-        fprintfn writer fmt
-
-    /// Emits a formatted string as a quick-summary (F# triple-slash comment) into an IndentedTextWriter.
-    let inline private quickSummary (writer : IndentedTextWriter) fmt : ^T =
-        fmt |> Printf.ksprintf (fun str ->
-            // OPTIMIZE : Use the String.Split.iter function from ExtCore.
-            // Split the string into individual lines.
-            str.Split ([| "\r\n"; "\r"; "\n" |], System.StringSplitOptions.None)
-            // Write the lines to the IndentedTextWriter as triple-slash comments.
-            |> Array.iter (fun line ->
-                writer.Write "/// "
-                writer.WriteLine (line.Trim ())
-                ))
-
-    /// <summary>Emits the declaration of a discriminated union type into an IndentedTextWriter.</summary>
-    /// <param name="typeName">The name of the type.</param>
-    /// <param name="isPublic">When set, the type will be publicly-visible.</param>
-    /// <param name="cases">A map containing the names (and types, if applicable) of the cases.</param>
-    /// <param name="writer">The IndentedTextWriter into which to write the code.</param>
-    let private unionTypeDecl (typeName : string, isPublic, cases : Map<string, string option>) (writer : IndentedTextWriter) =
-        // Write the type declaration
-        if isPublic then
-            sprintf "type %s =" typeName
-        else
-            sprintf "type private %s =" typeName
-        |> writer.WriteLine
-
-        // Write the type cases
-        IndentedTextWriter.indented writer <| fun writer ->
-            cases
-            |> Map.iter (fun caseName caseType ->
-                match caseType with
-                | None ->
-                    "| " + caseName
-                | Some caseType ->
-                    // NOTE : The parentheses here are actually quite important -- if the token type
-                    // is a tuple, then wrapping it in parenthesis makes the F# compiler treat it as
-                    // a single value. This reduces performance, but makes emitting some of the
-                    // pattern-matching clauses in the other functions much simpler.
-                    sprintf "| %s of (%s)" caseName caseType
-                |> writer.WriteLine)
-
-    /// Emits code which declares a literal integer value into a TextWriter.
-    let private intLiteralDecl (name, isPublic, value : int) (writer : #TextWriter) =
-        // Preconditions
-        if System.String.IsNullOrWhiteSpace name then
-            invalidArg "name" "The variable name cannot be null/empty/whitespace."
-
-        if isPublic then
-            sprintf "let [<Literal>] %s = %i" name value
-        else
-            sprintf "let [<Literal>] private %s = %i" name value
-        |> writer.WriteLine
-
-    /// Emits code which creates an array of UInt16 constants into a TextWriter.
-    let private oneLineArrayUInt16 (name, isPublic, array : uint16[]) (writer : #TextWriter) =
-        // Preconditions
-        if System.String.IsNullOrWhiteSpace name then
-            invalidArg "name" "The variable name cannot be null/empty/whitespace."
-
-        // Emit the 'let' binding and opening bracket of the array.
-        if isPublic then
-            sprintf "let %s = [| " name
-        else
-            sprintf "let private %s = [| " name
-        |> writer.Write
-
-        // Emit the array values.
-        array
-        |> Array.iter (fun x ->
-            writer.Write (x.ToString() + "us; "))
-
-        // Emit the closing bracket of the array.
-        writer.WriteLine "|]"
-
     /// Creates a Map whose keys are the values of the given Map.
     /// The value associated with each key is None.
     let private valueMap (map : Map<'Key, 'T>) : Map<'T, 'U option> =
@@ -178,11 +195,6 @@ module private FsYacc =
             flattened.[idx] <- a
             flattened.[idx + 1] <- b
         flattened
-
-    /// The name of the end-of-input terminal.
-    let [<Literal>] private endOfInputTerminal : TerminalIdentifier = "end_of_input"
-    /// The name of the error terminal.
-    let [<Literal>] private errorTerminal : TerminalIdentifier = "error"
 
     /// Emits F# code which creates the 'tables' record and defines the
     /// parser functions into an IndentedTextWriter.
@@ -894,30 +906,6 @@ module private FsYacc =
         oneLineArrayUInt16 ("_fsyacc_immediateActions", false,
             _fsyacc_immediateActions) writer
 
-    /// Compute the number of consecutive space characters starting at the beginning of a string.
-    /// If the string is empty or contains only space characters, this function returns None.
-    let private countLeadingSpaces str =
-        let mutable index = 0
-        let mutable foundNonSpace = false
-        let len = String.length str
-        while index < len && not foundNonSpace do
-            // Is the current character a space character?
-            if str.[index] = ' ' then
-                index <- index + 1
-            else
-                foundNonSpace <- true
-
-        // If all of the characters in the string are space characters,
-        // return None. Note this also correctly handles empty strings.
-        if index = len then
-            None
-        else
-            Some <| uint32 index
-
-    /// Replaces the tab characters in a string with some equivalent tab string.
-    let inline private replaceTabs tabString (str : string) =
-        str.Replace ("\t", tabString)
-
     /// Emits F# code for a single reduction action into an IndentedTextWriter.
     let private reduction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
                            nonterminal : NonterminalIdentifier,
@@ -957,54 +945,9 @@ module private FsYacc =
                 // the F# compiler use type inference to figure out what type it should be.
                 "'" + nonterminal
 
-        (*  Split 'action' into multiple lines. Determine the minimum amount of whitespace
-            which appears on the left of any line in the action, but do not consider blank
-            lines. Then, trim this minimum amount of whitespace from the left side of each
-            line. When this is done, the action can be written line-by-line using the standard
-            'writer.WriteLine' method of the IndentedTextWriter, and the generated code will
-            have the correct indentation. *)
-
         /// The individual lines of the reduction action code, trimmed to remove a number of
         /// leading spaces common to all non-empty/non-whitespace lines.
-        let trimmedActionLines =
-            /// The individual lines of the reduction action code,
-            /// annotated with the number of leading spaces on that line.
-            let annotatedActionLines =
-                action.Split ([| "\r\n"; "\n"; "\r" |], StringSplitOptions.None)
-                |> Array.map (fun line ->
-                    // First replace any tab characters in the string.
-                    let line = replaceTabs "    " line
-                    let leadingSpaces = countLeadingSpaces line
-                    line, leadingSpaces)
-        
-            /// The minimum number of spaces on the left side of any line of code.
-            let minIndentation =
-                let minIndentation =
-                    (None, annotatedActionLines)
-                    ||> Array.fold (fun x (_, y) ->
-                        match x, y with
-                        | None, None ->
-                            None
-                        | (Some _ as x), None ->
-                            x
-                        | None, (Some _ as y) ->
-                            y
-                        | Some x, Some y ->
-                            Some <| min x y)
-
-                // Default to zero (0) indentation.
-                defaultArg minIndentation GenericZero
-
-            // Remove the same amount of indentation from every non-empty line.
-            annotatedActionLines
-            |> Array.map (fun (line, leadingSpaces) ->
-                match leadingSpaces with
-                | None ->
-                    assert (String.IsNullOrWhiteSpace line)
-                    String.Empty
-                | Some _ ->
-                    // Remove the computed number of spaces from the left side of this line.
-                    line.Substring (int minIndentation))
+        let trimmedActionLines = trimActionLines action
             
         // Emit the semantic action code, wrapped in a bit of code which boxes the return value.
         writer.WriteLine "Microsoft.FSharp.Core.Operators.box"

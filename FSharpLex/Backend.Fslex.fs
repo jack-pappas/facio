@@ -61,6 +61,26 @@ module CodeGenHelpers =
         textWriter.Write (uint32 value)
         textWriter.Write "us; "
 
+    /// Compute the number of consecutive space characters starting at the beginning of a string.
+    /// If the string is empty or contains only space characters, this function returns None.
+    let countLeadingSpaces str =
+        let mutable index = 0
+        let mutable foundNonSpace = false
+        let len = String.length str
+        while index < len && not foundNonSpace do
+            // Is the current character a space character?
+            if str.[index] = ' ' then
+                index <- index + 1
+            else
+                foundNonSpace <- true
+
+        // If all of the characters in the string are space characters,
+        // return None. Note this also correctly handles empty strings.
+        if index = len then
+            None
+        else
+            Some <| uint32 index
+
 
 //
 [<RequireQualifiedAccess>]
@@ -557,21 +577,20 @@ module private FsLex =
                         // Emit the index as a match pattern.
                         fprintf indentingWriter "| %i ->" ruleClauseIndex   // 'Write', not 'WriteLine' (see comment below).
 
-                        // Decrease the indentation down to one (1) when emitting the user's code.
-                        // Due to a small bug in IndentedTextWriter, a change in indentation only
-                        // takes effect after WriteLine() is called. Therefore, we emit the newline
-                        // for the match pattern after the indent level has been changed, so the
-                        // indentation takes effect "immediately".
-                        IndentedTextWriter.atIndentLevel 1 indentingWriter <| fun indentingWriter ->
+                        // Indent again to emit the user-action code for this rule.
+                        // Due to a small bug in IndentedTextWriter, a change in indentation only takes effect after WriteLine()
+                        // is called. Therefore, we emit the newline for the match pattern after the indent level has been changed,
+                        // so the indentation takes effect "immediately".
+                        IndentedTextWriter.indented indentingWriter <| fun indentingWriter ->
                             // Emit the newline for the match pattern.
                             indentingWriter.WriteLine ()
 
                             // Emit the user-defined code for this pattern's semantic action.
                             // This has to be done line-by-line so the indenting is correct!
-                            // OPTIMIZE : Avoid creating the intermediate array of substrings by using String.Splits.iter from ExtCore.
-                            actionCode.ToString().Split (
-                                [|"\r\n"; "\r"; "\n"|],
-                                System.StringSplitOptions.None)
+                            // The lines of the action code are split and trimmed specially to preserve
+                            // relative indentation levels between lines.
+                            actionCode.ToString()
+                            |> trimActionLines
                             |> Array.iter indentingWriter.WriteLine)
 
                     // Emit a catch-all pattern to handle possible errors.
