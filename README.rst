@@ -53,7 +53,6 @@ Known Bugs/Issues
 =================
 
 - fsharplex
-    - When a user-specified action for a lexer rule contains an F# ``match`` expression, then in some cases the alignment of the corresponding code in the generated lexer will cause the F# compiler's parser to emit multiple errors about whitespace alignment. (Repro: compile the lexer specification for the F# compiler, replace the ``fslex``-generated lexer with the ``fsharplex``-generated lexer, and try to compile the F# compiler.)
     - ``fsharplex`` does not yet emit position information (i.e., line numbers) from the specification file into the generated lexer code, so if your lexer encounters an error -- for example, a bug or syntax error in one of the user-defined lexical actions -- it may be difficult to trace the position specified by the compiler error or exception stack trace back to the original code in the specification file.
 
 - fsharpyacc / Graham
