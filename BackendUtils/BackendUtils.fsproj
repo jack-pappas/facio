@@ -40,9 +40,6 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\Common\CommonAssemblyInfo.fs">
-      <Link>CommonAssemblyInfo.fs</Link>
-    </Compile>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="CodeGen.fs" />
     <Compile Include="Drawing.fs" />
