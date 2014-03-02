@@ -101,7 +101,7 @@ module Program =
 
     /// Invokes FSharpYacc with the specified options.
     [<CompiledName("Invoke")>]
-    let invoke (inputFile, options) : int =
+    let invoke inputFile options inputCodePage : int =
         // Preconditions
         if inputFile = null then
             nullArg "inputFile"
@@ -121,7 +121,7 @@ module Program =
         let parserSpec =
             try
                 let stream, reader, lexbuf =
-                    UnicodeFileAsLexbuf (inputFile, None)
+                    UnicodeFileAsLexbuf (inputFile, inputCodePage)
                 use stream = stream
                 use reader = reader
                 let parserSpec = Parser.spec Lexer.token lexbuf
@@ -204,7 +204,7 @@ module Program =
         //let mlCompatible = ref false
         let lexerInterpreterNamespace = ref None
         let parserInterpreterNamespace = ref None
-        //let inputCodePage = ref None
+        let inputCodePage = ref None
         let inputFile = ref None
 
         /// Command-line options.
@@ -228,8 +228,8 @@ module Program =
                 ArgInfo.Create ("--parslib", ArgType.String (fun s -> parserInterpreterNamespace := Some s),
                     sprintf "Specify the namespace for the implementation of the parser table interpreter. \
                      The default is '%s'." defaultParserInterpreterNamespace);
-//                ArgInfo.Create ("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
-//                    "Assume input lexer specification file is encoded with the given codepage.");
+                ArgInfo.Create ("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
+                    "Assume input lexer specification file is encoded with the given codepage.");
                 |]
 
         // Parses argument values which aren't specified by flags.
@@ -255,7 +255,7 @@ module Program =
 
         // Create a CompilationOptions record from the parsed arguments
         // and call the 'invoke' function with it.
-        invoke (Option.get !inputFile, {
+        let compilationOptions = {
             ParserType = ParserType.Lalr1;
             // TEMP
             FsyaccBackendOptions = Some {
@@ -266,7 +266,8 @@ module Program =
                 OpenDeclarations = openDeclarations.ToArray ();
                 InternalModule = !internalModule;
                 };
-            })
+            }
+        invoke (Option.get !inputFile) compilationOptions !inputCodePage
         
 
         
