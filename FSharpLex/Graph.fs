@@ -23,136 +23,136 @@ open LanguagePrimitives
 open FSharpLex.SpecializedCollections
 
 
-/// <summary>The source and target state of a transition
-/// edge in an NFA transition graph.</summary>
-/// <remarks>Used as a key for sparse graph implementations
-/// because it's more efficient than an F# tuple.</remarks>
+/// DFA state.
+[<Measure>] type DfaState
+
+/// Unique identifier for a state within a DFA.
+type DfaStateId = int<DfaState>
+
+/// <summary>An immutable implementation of a vertex- and edge-labeled sparse multidigraph representing a DFA.</summary>
+/// <remarks>Assumes vertex ids are assigned in order (i.e., there are no gaps in the values), starting at zero (0).</remarks>
 [<Struct>]
-[<DebuggerDisplay("{Source} -> {Target}")>]
-type TransitionEdgeKey<[<Measure>] 'Tag> =
-    /// The source vertex of the edge.
-    val Source : int<'Tag>
-    /// The target vertex of the edge.
-    val Target : int<'Tag>
-
-    new (source, target) =
-        {   Source = source;
-            Target = target; }
-
-/// <summary>An immutable implementation of a vertex- and edge-labeled sparse multidigraph,
-/// modified for better performance when creating DFAs for lexers.</summary>
-/// <remarks>Assumes vertex ids are assigned in order (i.e., there are no gaps in the values),
-/// starting at zero (0).</remarks>
-[<DebuggerDisplay(
-    "Vertices = {VertexCount}, \
-     EdgeSets = {EdgeSetCount}, \
-     Edges = {EdgeCount}")>]
-type SparseMultiDigraph<[<Measure>] 'Tag>
-    private (vertexCount : int, adjacencyMap : HashMap<TransitionEdgeKey<'Tag>, CharSet>, eofTransition : TransitionEdgeKey<'Tag> option) =
+[<DebuggerDisplay("Vertices = {VertexCount}, EdgeSets = {EdgeSetCount}, Edges = {EdgeCount}")>]
+type LexerDfaGraph =
     //
-    static let empty =
-        SparseMultiDigraph (GenericZero, HashMap.empty, None)
+    val private InternalAdjacencyMap : TagMap<DfaState, TagMap<DfaState, CharSet>> option;
+    //
+    // Source-Vertex * Target-Vertex
+    val EofTransitionEdge : (DfaStateId * DfaStateId) option;
+    //
+    val VertexCount : int32;
 
     //
+    new (internalAdjacencyMap, eofTransitionEdge, vertexCount) =
+        { InternalAdjacencyMap = internalAdjacencyMap;
+          EofTransitionEdge = eofTransitionEdge;
+          VertexCount = vertexCount; }
+
+    /// An empty DfaGraph.
     static member internal Empty
-        with get () = empty
-
-    //
-    member __.IsEmpty
         with get () =
-            vertexCount = GenericZero
+            Unchecked.defaultof<LexerDfaGraph>
 
     //
-    member __.AdjacencyMap
-        with get () = adjacencyMap
-    
-    //
-    member __.EofTransition
-        with get () = eofTransition
-
-    //
-    member __.VertexCount
-        with get () = vertexCount
-
-    //
-    member internal __.EdgeSetCount
-        with get () = adjacencyMap.Count
-
-    //
-    member internal __.EdgeCount
+    member this.IsEmpty
         with get () =
-            let seed = if Option.isSome eofTransition then 1 else 0
-            (seed, adjacencyMap)
-            ||> HashMap.fold (fun edgeCount _ edgeSet ->
-                edgeCount + CharSet.count edgeSet)
+            this.VertexCount = GenericZero
+
+    /// Returns the adjancency map for the graph.
+    /// The keys of the outer map are 'source' DFA states -- states with one or more out-transitions from the state.
+    /// The keys of the inner map are the DFA states targeted by transitions from the corresponding key from the outer map.
+    /// The values of the inner map are CharSets representing the set of characters labeling the transitions from the
+    /// corresponding 'source' state to the corresponding 'target state.
+    member this.AdjacencyMap
+        with get () =
+            defaultArg this.InternalAdjacencyMap TagMap.empty
 
     //
-    member __.CreateVertex () =
+    member private this.EdgeSetCount
+        with get () =
+            let seed = if Option.isNone this.EofTransitionEdge then 0 else 1
+            (seed, this.AdjacencyMap)
+            ||> TagMap.fold (fun count _ innerMap ->
+                count + TagMap.count innerMap)
+
+    //
+    member private this.EdgeCount
+        with get () =
+            let seed = if Option.isNone this.EofTransitionEdge then 0 else 1
+            (seed, this.AdjacencyMap)
+            ||> TagMap.fold (fun count _ innerMap ->
+                (count, innerMap)
+                ||> TagMap.fold (fun count _ edgeChars ->
+                    count + CharSet.count edgeChars))
+
+    //
+    member this.CreateVertex () =
+        let vertexCount = this.VertexCount
         let newVertex : int<'Tag> = tag vertexCount
         newVertex,
-        SparseMultiDigraph (
-            vertexCount + 1,
-            adjacencyMap,
-            eofTransition)
+        LexerDfaGraph (
+            this.InternalAdjacencyMap,
+            this.EofTransitionEdge,
+            vertexCount + 1)
 
     //
-    member __.TryGetEdgeSet (source : int<'Tag>, target : int<'Tag>) =
+    member this.TryGetEdgeSet (source : DfaStateId, target : DfaStateId) =
         // Preconditions
-        if int source < 0 || int source >= vertexCount then
+        if int source < 0 || int source >= this.VertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif int target < 0 || int target >= vertexCount then
+        elif int target < 0 || int target >= this.VertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        let key = TransitionEdgeKey<'Tag> (source, target)
-        HashMap.tryFind key adjacencyMap
+        this.InternalAdjacencyMap
+        |> Option.bind (fun adjMap ->
+            TagMap.tryFind source adjMap)
+        |> Option.bind (fun targetMap ->
+            TagMap.tryFind target targetMap)
 
     //
-    member __.AddEdges (source : int<'Tag>, target : int<'Tag>, edges : CharSet) =
+    member this.AddEdges (source : DfaStateId, target : DfaStateId, edges : CharSet) =
         // Preconditions
-        if int source < 0 || int source >= vertexCount then
+        if int source < 0 || int source >= this.VertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif int target < 0 || int target >= vertexCount then
+        elif int target < 0 || int target >= this.VertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
         elif CharSet.isEmpty edges then
             invalidArg "edges" "The set of edges to be added is empty."
 
-        let key = TransitionEdgeKey (source, target)
-
-        //
-        let edgeSet =
-            match HashMap.tryFind key adjacencyMap with
-            | Some edgeSet ->
-                CharSet.union edgeSet edges
+        let newAdjMap =
+            match this.InternalAdjacencyMap with
             | None ->
                 edges
+                |> TagMap.singleton target
+                |> TagMap.singleton source
 
-        SparseMultiDigraph (
-            vertexCount,
-            HashMap.add key edgeSet adjacencyMap,
-            eofTransition)
+            | Some adjMap ->
+                match TagMap.tryFind source adjMap with
+                | None ->
+                    TagMap.add source (TagMap.singleton target edges) adjMap
+
+                | Some targetMap ->
+                    match TagMap.tryFind target targetMap with
+                    | None ->
+                        TagMap.add source (TagMap.add target edges targetMap) adjMap
+
+                    | Some existingEdges ->
+                        TagMap.add source (TagMap.add target (CharSet.union existingEdges edges) targetMap) adjMap
+
+        LexerDfaGraph (Some newAdjMap, this.EofTransitionEdge, this.VertexCount)
 
     //
-    member __.AddEofEdge (source : int<'Tag>, target : int<'Tag>) =
+    member this.AddEofEdge (source : DfaStateId, target : DfaStateId) =
         // Preconditions
-        if int source < 0 || int source >= vertexCount then
+        if int source < 0 || int source >= this.VertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
-        elif int target < 0 || int target >= vertexCount then
+        elif int target < 0 || int target >= this.VertexCount then
             invalidArg "target" "The vertex is not in the graph's vertex-set."
 
-        let eofEdgeKey = TransitionEdgeKey (source, target)
-
-        SparseMultiDigraph (
-            vertexCount,
-            adjacencyMap,
-            Some eofEdgeKey)
-
-
-/// DFA state.
-[<Measure>] type DfaState
-/// Unique identifier for a state within a DFA.
-type DfaStateId = int<DfaState>
-
-type LexerDfaGraph = SparseMultiDigraph<DfaState>
+        LexerDfaGraph (
+            this.InternalAdjacencyMap,
+            Some (source, target),
+            this.VertexCount)
         
 /// Functions on LexerDfaGraph.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -166,11 +166,11 @@ module LexerDfaGraph =
         graph.IsEmpty
 
     //
-    let inline createVertex (graph : LexerDfaGraph) =
+    let inline createVertex (graph : LexerDfaGraph) : DfaStateId * LexerDfaGraph =
         graph.CreateVertex ()
 
     //
-    let inline addEdges source target edges (graph : LexerDfaGraph) =
+    let inline addEdges source target edges (graph : LexerDfaGraph) : LexerDfaGraph =
         graph.AddEdges (source, target, edges)
 
     //
@@ -178,6 +178,6 @@ module LexerDfaGraph =
         graph.TryGetEdgeSet (source, target)
 
     //
-    let inline addEofEdge source target (graph : LexerDfaGraph) =
+    let inline addEofEdge source target (graph : LexerDfaGraph) : LexerDfaGraph =
         graph.AddEofEdge (source, target)
 

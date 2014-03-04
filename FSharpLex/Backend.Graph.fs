@@ -210,61 +210,63 @@ module private Dgml =
 
             // Add the transitions for this rule's DFA.
             compiledRule.Dfa.Transitions.AdjacencyMap
-            |> HashMap.iter (fun edgeKey edgeSet ->
-                /// The Link element representing this transition edge.
-                let transitionEdgeLink =
-                    dgmlDoc.CreateElement ("Link", directedGraph.NamespaceURI)
-                    |> links.AppendChild
+            |> TagMap.iter (fun sourceState targetMap ->
+                targetMap
+                |> TagMap.iter (fun targetState edgeSet ->
+                    /// The Link element representing this transition edge.
+                    let transitionEdgeLink =
+                        dgmlDoc.CreateElement ("Link", directedGraph.NamespaceURI)
+                        |> links.AppendChild
 
-                // Set the Source attribute value to the identifier for the source DFA state.
-                let sourceAttr = dgmlDoc.CreateAttribute "Source"
-                transitionEdgeLink.Attributes.Append sourceAttr |> ignore
-                sourceAttr.Value <- dfaStateUniqueNodeId ruleId edgeKey.Source
+                    // Set the Source attribute value to the identifier for the source DFA state.
+                    let sourceAttr = dgmlDoc.CreateAttribute "Source"
+                    transitionEdgeLink.Attributes.Append sourceAttr |> ignore
+                    sourceAttr.Value <- dfaStateUniqueNodeId ruleId sourceState
 
-                // Set the Target attribute value to the identifier for the target DFA state.
-                let targetAttr = dgmlDoc.CreateAttribute "Target"
-                transitionEdgeLink.Attributes.Append targetAttr |> ignore
-                targetAttr.Value <- dfaStateUniqueNodeId ruleId edgeKey.Target
+                    // Set the Target attribute value to the identifier for the target DFA state.
+                    let targetAttr = dgmlDoc.CreateAttribute "Target"
+                    transitionEdgeLink.Attributes.Append targetAttr |> ignore
+                    targetAttr.Value <- dfaStateUniqueNodeId ruleId targetState
 
-                // Set the Label attribute value.
-                // This is the label shown for this edge when the graph is rendered.
-                let labelAttr = dgmlDoc.CreateAttribute "Label"
-                transitionEdgeLink.Attributes.Append labelAttr |> ignore
-                labelAttr.Value <-
-                    // Create a label for this edge, based on the intervals in the character set.
-                    if CharSet.isEmpty edgeSet then
-                        failwith "Empty edge set."
-                    elif CharSet.intervalCount edgeSet = 1 then
-                        let minElement = CharSet.minElement edgeSet
-                        let maxElement = CharSet.maxElement edgeSet
+                    // Set the Label attribute value.
+                    // This is the label shown for this edge when the graph is rendered.
+                    let labelAttr = dgmlDoc.CreateAttribute "Label"
+                    transitionEdgeLink.Attributes.Append labelAttr |> ignore
+                    labelAttr.Value <-
+                        // Create a label for this edge, based on the intervals in the character set.
+                        if CharSet.isEmpty edgeSet then
+                            failwith "Empty edge set."
+                        elif CharSet.intervalCount edgeSet = 1 then
+                            let minElement = CharSet.minElement edgeSet
+                            let maxElement = CharSet.maxElement edgeSet
 
-                        if minElement = maxElement then
-                            // Single element in the set.
-                            escapedChar minElement
-                        else
-                            sprintf "%s-%s" (escapedChar minElement) (escapedChar maxElement)
-                    else
-                        // OPTIMIZE : If this represents a negated set, it could have a LOT of
-                        // characters -- it would be better to represent negated sets using the
-                        // usual negated character set notation, e.g., [^abc]
-                        let sb = StringBuilder ()
-                        edgeSet
-                        |> CharSet.iterIntervals (fun lowerBound upperBound ->
-                            if lowerBound = upperBound then
-                                sb.Append (escapedChar lowerBound) |> ignore
+                            if minElement = maxElement then
+                                // Single element in the set.
+                                escapedChar minElement
                             else
-                                sb.Append (escapedChar lowerBound) |> ignore
-                                sb.Append "-" |> ignore
-                                sb.Append (escapedChar upperBound) |> ignore
+                                sprintf "%s-%s" (escapedChar minElement) (escapedChar maxElement)
+                        else
+                            // OPTIMIZE : If this represents a negated set, it could have a LOT of
+                            // characters -- it would be better to represent negated sets using the
+                            // usual negated character set notation, e.g., [^abc]
+                            let sb = StringBuilder ()
+                            edgeSet
+                            |> CharSet.iterIntervals (fun lowerBound upperBound ->
+                                if lowerBound = upperBound then
+                                    sb.Append (escapedChar lowerBound) |> ignore
+                                else
+                                    sb.Append (escapedChar lowerBound) |> ignore
+                                    sb.Append "-" |> ignore
+                                    sb.Append (escapedChar upperBound) |> ignore
 
-                            sb.Append "," |> ignore)
-                        // Remove the trailing "," before returning.
-                        sb.Length <- sb.Length - 1
-                        sb.ToString ())
+                                sb.Append "," |> ignore)
+                            // Remove the trailing "," before returning.
+                            sb.Length <- sb.Length - 1
+                            sb.ToString ()))
 
             // Add the EOF transition if this rule has one.
-            compiledRule.Dfa.Transitions.EofTransition
-            |> Option.iter (fun edgeKey ->
+            compiledRule.Dfa.Transitions.EofTransitionEdge
+            |> Option.iter (fun (sourceState, targetState) ->
                 /// The Link element representing this transition edge.
                 let transitionEdgeLink =
                     dgmlDoc.CreateElement ("Link", directedGraph.NamespaceURI)
@@ -273,12 +275,12 @@ module private Dgml =
                 // Set the Source attribute value to the identifier for the source DFA state.
                 let sourceAttr = dgmlDoc.CreateAttribute "Source"
                 transitionEdgeLink.Attributes.Append sourceAttr |> ignore
-                sourceAttr.Value <- dfaStateUniqueNodeId ruleId edgeKey.Source
+                sourceAttr.Value <- dfaStateUniqueNodeId ruleId sourceState
 
                 // Set the Target attribute value to the identifier for the target DFA state.
                 let targetAttr = dgmlDoc.CreateAttribute "Target"
                 transitionEdgeLink.Attributes.Append targetAttr |> ignore
-                targetAttr.Value <- dfaStateUniqueNodeId ruleId edgeKey.Target
+                targetAttr.Value <- dfaStateUniqueNodeId ruleId targetState
 
                 // Set the Label attribute value.
                 // This is the label shown for this edge when the graph is rendered.

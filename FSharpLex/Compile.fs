@@ -244,7 +244,7 @@ type CompiledRule = {
 }
 
 //
-let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : RuleClauseIndex[]) (options : CompilationOptions) : LexerRuleDfa =
+let private rulePatternsToDfa (rulePatterns : RegularVector) (patternIndices : RuleClauseIndex[]) : LexerRuleDfa =
     // Preconditions
     if Array.isEmpty rulePatterns then
         invalidArg "rulePatterns" "The rule must contain at least one (1) pattern."
@@ -943,7 +943,7 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
         let regexOriginalClauseIndices, ruleClauseRegexes =
             Array.unzip ruleClauseRegexes
 
-        rulePatternsToDfa ruleClauseRegexes regexOriginalClauseIndices options
+        rulePatternsToDfa ruleClauseRegexes regexOriginalClauseIndices
 
     // If this rule has a pattern accepting the end-of-file marker,
     // create an additional DFA state to serve as the EOF-accepting state
@@ -981,18 +981,17 @@ let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, 
             let ruleAlphabet =
                 // The alphabet for this rule is the edge-label-set of the transition graph.
                 (CharSet.empty, compiledPatternDfa.Transitions.AdjacencyMap)
-                ||> HashMap.fold (fun ruleAlphabet _ edgeChars ->
-                    CharSet.union ruleAlphabet edgeChars)
+                ||> TagMap.fold (fun ruleAlphabet _ targetMap ->
+                    (ruleAlphabet, targetMap)
+                    ||> TagMap.fold (fun ruleAlphabet _ edgeChars ->
+                        CharSet.union ruleAlphabet edgeChars))
 
             /// The set of characters labelling the out-edges of the initial DFA state.
             let initialEdgeLabels =
-                (CharSet.empty, compiledPatternDfa.Transitions.AdjacencyMap)
-                ||> HashMap.fold (fun initialEdgeLabels edgeKey edgeChars ->
-                    // We only care about out-edges from the initial DFA state.
-                    if edgeKey.Source = compiledPatternDfa.InitialState then
-                        CharSet.union initialEdgeLabels edgeChars
-                    else
-                        initialEdgeLabels)
+                let targetMap = TagMap.find 0<_> compiledPatternDfa.Transitions.AdjacencyMap
+                (CharSet.empty, targetMap)
+                ||> TagMap.fold (fun initialEdgeLabels _ edgeChars ->
+                    CharSet.union initialEdgeLabels edgeChars)
 
             /// The characters matched by this rule's wildcard pattern.
             let wildcardChars =

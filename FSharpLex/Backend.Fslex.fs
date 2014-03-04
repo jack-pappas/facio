@@ -84,6 +84,31 @@ module CodeGenHelpers =
 
 //
 [<RequireQualifiedAccess>]
+module private LexerDfaGraph =
+    /// Creates a map of transitions out of this DFA state, keyed by the character labeling the transition edge.
+    // OPTIMIZE : This should use an IntervalMap for better performance.
+    // Additionally, it should be created on-the-fly while creating the DFA instead of having to re-compute it here.
+    let createTransitionMap (ruleDfaTransitions : Graph.LexerDfaGraph) ruleDfaStateId baseDfaStateId =
+        // Not all DFA states have out-transitions; for those states, we return an empty map.
+        match TagMap.tryFind ruleDfaStateId ruleDfaTransitions.AdjacencyMap with
+        | None ->
+            Map.empty
+        | Some targetMap ->
+            // "Pivot" the target map to get a map of char -> target-state.
+            // We also map the target-state-ids from their id within this rule's DFA to their id within the combined DFA
+            // (i.e., the merged DFA containing the DFAs for all of the defined rules).
+            (Map.empty, targetMap)
+            ||> TagMap.fold (fun outTransitions targetStateRuleDfaStateId edgeChars ->
+                // This DFA state's id within the combined DFA.
+                let targetStateCombinedStateId = targetStateRuleDfaStateId + baseDfaStateId
+
+                (outTransitions, edgeChars)
+                ||> CharSet.fold (fun outTransitions c ->
+                    Map.add c targetStateCombinedStateId outTransitions))
+
+
+//
+[<RequireQualifiedAccess>]
 module private AsciiLexer =
     open System.CodeDom.Compiler
 
@@ -98,23 +123,8 @@ module private AsciiLexer =
 
         let ruleDfaTransitions = compiledRule.Dfa.Transitions
 
-        /// The transitions out of this DFA state, keyed by the
-        /// character labeling the transition edge.
-        // OPTIMIZE : This should use an IntervalMap for better performance.
-        // Additionally, it should be created on-the-fly while creating the DFA instead of having to re-compute it here.
-        let outTransitions =
-            (Map.empty, ruleDfaTransitions.AdjacencyMap)
-            ||> HashMap.fold (fun outTransitions edgeKey edgeSet ->
-                // Filter to include only this DFA state's out-edges.
-                if edgeKey.Source <> ruleDfaStateId then
-                    outTransitions
-                else
-                    // Add the transition edges to the map.
-                    let target = edgeKey.Target + baseDfaStateId
-
-                    (outTransitions, edgeSet)
-                    ||> CharSet.fold (fun outTransitions c ->
-                        Map.add c target outTransitions))
+        /// The transitions out of this DFA state, keyed by the character labeling the transition edge.
+        let outTransitions = LexerDfaGraph.createTransitionMap ruleDfaTransitions ruleDfaStateId baseDfaStateId
 
         // Emit the transition vector elements, based on the transitions out of this state.
         for c = 0 to 255 do
@@ -133,12 +143,12 @@ module private AsciiLexer =
         // NOTE : Only the initial DFA state of a rule can consume the EOF marker!
         let eofTransitionTarget =
             if compiledRule.Dfa.InitialState = ruleDfaStateId then
-                match ruleDfaTransitions.EofTransition with
+                match ruleDfaTransitions.EofTransitionEdge with
                 | None -> sentinelValue
-                | Some edgeKey ->
+                | Some (_, targetStateId) ->
                     // Remember the target DFA state is _relative_ to this DFA --
                     // add it to the base DFA state id to get it's state id for the combined DFA.
-                    Checked.uint16 (edgeKey.Target + baseDfaStateId)
+                    Checked.uint16 (targetStateId + baseDfaStateId)
             else sentinelValue
 
         writeUInt16LiteralElement indentingWriter eofTransitionTarget
@@ -228,23 +238,6 @@ module private UnicodeLexer =
             // Pass the category and character transition maps to the next iteration.
             categoryTransitions, charTransitions)
 
-    /// Creates a map of transitions out of this DFA state, keyed by the character labeling the transition edge.
-    // OPTIMIZE : This should use an IntervalMap for better performance.
-    // Additionally, it should be created on-the-fly while creating the DFA instead of having to re-compute it here.
-    let createTransitionMap (ruleDfaTransitions : Graph.LexerDfaGraph) ruleDfaStateId baseDfaStateId =
-        (Map.empty, ruleDfaTransitions.AdjacencyMap)
-        ||> HashMap.fold (fun outTransitions edgeKey edgeSet ->
-            // Filter to include only this DFA state's out-edges.
-            if edgeKey.Source <> ruleDfaStateId then
-                outTransitions
-            else
-                // Add the transition edges to the map.
-                let target = edgeKey.Target + baseDfaStateId
-
-                (outTransitions, edgeSet)
-                ||> CharSet.fold (fun outTransitions c ->
-                    Map.add c target outTransitions))
-
     //
     let transitionChars (compiledRules : Map<RuleIdentifier, CompiledRule>) =
         ((CharSet.empty, 0), compiledRules)
@@ -257,7 +250,7 @@ module private UnicodeLexer =
                 (0, ruleDfaStateCount - 1, transitionChars)
                 |||> Range.fold (fun transitionChars ruleDfaStateId ->
                     let outTransitions =
-                        createTransitionMap ruleDfaTransitions (tag ruleDfaStateId) (tag baseDfaStateId)
+                        LexerDfaGraph.createTransitionMap ruleDfaTransitions (tag ruleDfaStateId) (tag baseDfaStateId)
 
                     //
                     let _, unicodeCharTransitions =
@@ -282,7 +275,7 @@ module private UnicodeLexer =
             compiledRule.Dfa.Transitions
 
         let outTransitions =
-            createTransitionMap ruleDfaTransitions ruleDfaStateId baseDfaStateId
+            LexerDfaGraph.createTransitionMap ruleDfaTransitions ruleDfaStateId baseDfaStateId
 
         // Emit the transition vector elements for the lower range of ASCII elements [0-127].
         for c = 0 to 127 do
@@ -346,12 +339,12 @@ module private UnicodeLexer =
         // NOTE : Only the initial DFA state of a rule can consume the EOF marker!
         let eofTransitionTarget =
             if compiledRule.Dfa.InitialState = ruleDfaStateId then
-                match ruleDfaTransitions.EofTransition with
+                match ruleDfaTransitions.EofTransitionEdge with
                 | None -> sentinelValue
-                | Some edgeKey ->
+                | Some (_, targetStateId) ->
                     // Remember the target DFA state is _relative_ to this DFA --
                     // add it to the base DFA state id to get it's state id for the combined DFA.
-                    Checked.uint16 (edgeKey.Target + baseDfaStateId)
+                    Checked.uint16 (targetStateId + baseDfaStateId)
             else sentinelValue
 
         writeUInt16LiteralElement indentingWriter eofTransitionTarget
