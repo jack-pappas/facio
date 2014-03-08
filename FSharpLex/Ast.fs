@@ -138,9 +138,6 @@ type PositionedValue<'T> = {
 /// Unique identifier for a pattern macro defined by a lexer specification.
 type MacroIdentifier = string
 
-//
-type MacroIdentifierWithPosition = PositionedValue<MacroIdentifier>
-
 /// <summary>A regular-expression-based pattern used to define patterns within the lexer.</summary>
 /// <remarks>This is a regular expression extended with additional
 /// operators (for convenience) and pattern macros.</remarks>
@@ -401,9 +398,6 @@ type Rule = {
 /// Unique identifier for a lexer rule.
 type RuleIdentifier = string
 
-//
-type RuleIdentifierWithPosition = PositionedValue<RuleIdentifier>
-
 /// A complete specification of a lexer.
 type Specification = {
     //
@@ -416,14 +410,14 @@ type Specification = {
     // for validating the specification).
     // NOTE : This list should be in reverse order; that is, the 'head'
     // of the list should be the last (bottom-most) macro defined in the lexer definition.
-    Macros : (MacroIdentifierWithPosition * Pattern) list;
+    Macros : (PositionedValue<MacroIdentifier> * Pattern) list;
     //
     // NOTE : This is specified as a list (instead of a Map) so we
     // know the order in which the rules were specified and also so we can
     // emit error messages for rules with duplicate names.
     // NOTE : This list should be in reverse order; that is, the 'head'
     // of the list should be the last (bottom-most) rule defined in the lexer definition.
-    Rules : (RuleIdentifierWithPosition * Rule) list;
+    Rules : (PositionedValue<RuleIdentifier> * Rule) list;
 }
 
 //

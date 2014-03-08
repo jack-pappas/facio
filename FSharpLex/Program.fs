@@ -156,7 +156,7 @@ module Program =
         // Compile the parsed specification.
         let compiledSpecification =
             statusMessage "Compiling specification" <| fun () ->
-                Compile.lexerSpec lexerSpec options
+                Compile.Compiler.lexerSpec lexerSpec options
 
         //
         match compiledSpecification with
