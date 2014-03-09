@@ -71,7 +71,7 @@ module private CodeGenHelpers =
     /// <param name="isPublic">When set, the type will be publicly-visible.</param>
     /// <param name="cases">A map containing the names (and types, if applicable) of the cases.</param>
     /// <param name="writer">The IndentedTextWriter into which to write the code.</param>
-    let unionTypeDecl (typeName : string, isPublic, cases : Map<string, string option>) (writer : IndentedTextWriter) =
+    let unionTypeDecl (typeName : string) isPublic (cases : Map<string, string option>) (writer : IndentedTextWriter) =
         // Write the type declaration
         if isPublic then
             sprintf "type %s =" typeName
@@ -95,7 +95,7 @@ module private CodeGenHelpers =
                 |> writer.WriteLine)
 
     /// Emits code which declares a literal integer value into a TextWriter.
-    let intLiteralDecl (name, isPublic, value : int) (writer : #TextWriter) =
+    let intLiteralDecl name isPublic (value : int) (writer : #TextWriter) =
         // Preconditions
         if System.String.IsNullOrWhiteSpace name then
             invalidArg "name" "The variable name cannot be null/empty/whitespace."
@@ -107,7 +107,7 @@ module private CodeGenHelpers =
         |> writer.WriteLine
 
     /// Emits code which creates an array of UInt16 constants into a TextWriter.
-    let oneLineArrayUInt16 (name, isPublic, array : uint16[]) (writer : #TextWriter) =
+    let oneLineArrayUInt16 name isPublic (array : uint16[]) (writer : #TextWriter) =
         // Preconditions
         if System.String.IsNullOrWhiteSpace name then
             invalidArg "name" "The variable name cannot be null/empty/whitespace."
@@ -255,7 +255,7 @@ module private FsYacc =
     let private parserTypes (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>) (writer : IndentedTextWriter) =
         // Emit the token type declaration.
         comment writer "This type is the type of tokens accepted by the parser"
-        unionTypeDecl ("token", true, processedSpec.Terminals) writer
+        unionTypeDecl "token" true processedSpec.Terminals writer
         writer.WriteLine ()
 
         /// Maps terminals (tokens) to symbolic token names.
@@ -269,7 +269,7 @@ module private FsYacc =
 
         // Emit the symbolic token-name type declaration.
         quickSummary writer "This type is used to give symbolic names to token indexes, useful for error messages."
-        unionTypeDecl ("tokenId", false, valueMap symbolicTokenNames) writer
+        unionTypeDecl "tokenId" false (valueMap symbolicTokenNames) writer
         writer.WriteLine ()
 
         /// Maps nonterminal identifiers to symbolic nonterminal names.
@@ -291,7 +291,7 @@ module private FsYacc =
                     Map.add ("NONTERM__start" + startSymbol) None symbolicNonterminals)
 
                 // Write the type declaration.
-            unionTypeDecl ("nonterminalId", false, symbolicNonterminals) writer
+            unionTypeDecl "nonterminalId" false symbolicNonterminals writer
         writer.WriteLine ()
 
         /// Integer indices (tags) of terminals (tokens).
@@ -391,10 +391,10 @@ module private FsYacc =
         writer.WriteLine ()
 
         // Emit constants for "end-of-input" and "tag of error terminal"
-        intLiteralDecl ("_fsyacc_endOfInputTag", false,
-            Map.find endOfInputTerminal tokenTags) writer
-        intLiteralDecl ("_fsyacc_tagOfErrorTerminal", false,
-            Map.find errorTerminal tokenTags) writer
+        intLiteralDecl "_fsyacc_endOfInputTag" false
+            (Map.find endOfInputTerminal tokenTags) writer
+        intLiteralDecl "_fsyacc_tagOfErrorTerminal" false
+            (Map.find errorTerminal tokenTags) writer
         writer.WriteLine ()
 
         // Emit the token -> token-name function.
@@ -522,10 +522,8 @@ module private FsYacc =
             "One or more of the offsets in '_fsyacc_gotos' \
              is greater than the length of '_fsyacc_sparseGotoTableRowOffsets'.")
 
-        oneLineArrayUInt16 ("_fsyacc_gotos", false,
-            _fsyacc_gotos) writer
-        oneLineArrayUInt16 ("_fsyacc_sparseGotoTableRowOffsets", false,
-            _fsyacc_sparseGotoTableRowOffsets) writer
+        oneLineArrayUInt16 "_fsyacc_gotos" false _fsyacc_gotos writer
+        oneLineArrayUInt16 "_fsyacc_sparseGotoTableRowOffsets" false _fsyacc_sparseGotoTableRowOffsets writer
 
 
         (* _fsyacc_stateToProdIdxsTableElements *)
@@ -601,15 +599,12 @@ module private FsYacc =
             "One or more of the offsets in '_fsyacc_stateToProdIdxsTableRowOffsets' \
              is greater than the length of '_fsyacc_stateToProdIdxsTableElements'.")
 
-        oneLineArrayUInt16 ("_fsyacc_stateToProdIdxsTableElements", false,
-            _fsyacc_stateToProdIdxsTableElements) writer
-        oneLineArrayUInt16 ("_fsyacc_stateToProdIdxsTableRowOffsets", false,
-            _fsyacc_stateToProdIdxsTableRowOffsets) writer
+        oneLineArrayUInt16 "_fsyacc_stateToProdIdxsTableElements" false _fsyacc_stateToProdIdxsTableElements writer
+        oneLineArrayUInt16 "_fsyacc_stateToProdIdxsTableRowOffsets" false _fsyacc_stateToProdIdxsTableRowOffsets writer
 
 
         (* _fsyacc_action_rows *)
-        intLiteralDecl ("_fsyacc_action_rows", false,
-            TagBimap.count parserTable.ParserStates) writer
+        intLiteralDecl "_fsyacc_action_rows" false (TagBimap.count parserTable.ParserStates) writer
 
 
         (* _fsyacc_actionTableElements *)
@@ -783,10 +778,10 @@ module private FsYacc =
             "One or more of the offsets in '_fsyacc_actionTableRowOffsets' \
              is greater than the length of '_fsyacc_actionTableElements'.")
 
-        oneLineArrayUInt16 ("_fsyacc_actionTableElements", false,
-            _fsyacc_actionTableElements) writer
-        oneLineArrayUInt16 ("_fsyacc_actionTableRowOffsets", false,
-            _fsyacc_actionTableRowOffsets) writer
+        oneLineArrayUInt16 "_fsyacc_actionTableElements" false
+            _fsyacc_actionTableElements writer
+        oneLineArrayUInt16 "_fsyacc_actionTableRowOffsets" false
+            _fsyacc_actionTableRowOffsets writer
 
 
         (* _fsyacc_reductionSymbolCounts *)
@@ -807,8 +802,8 @@ module private FsYacc =
             // Return the symbol count.
             symbolCounts.ToArray ()
 
-        oneLineArrayUInt16 ("_fsyacc_reductionSymbolCounts", false,
-            _fsyacc_reductionSymbolCounts) writer
+        oneLineArrayUInt16 "_fsyacc_reductionSymbolCounts" false
+            _fsyacc_reductionSymbolCounts writer
 
         (* _fsyacc_productionToNonTerminalTable *)
         let _fsyacc_productionToNonTerminalTable =
@@ -839,8 +834,8 @@ module private FsYacc =
             // Return the array.
             productionToNonTerminalTable
 
-        oneLineArrayUInt16 ("_fsyacc_productionToNonTerminalTable", false,
-            _fsyacc_productionToNonTerminalTable) writer
+        oneLineArrayUInt16 "_fsyacc_productionToNonTerminalTable" false
+            _fsyacc_productionToNonTerminalTable writer
 
 
         (* _fsyacc_immediateActions *)
@@ -903,8 +898,8 @@ module private FsYacc =
             // Return the constructed array.
             immediateActions
 
-        oneLineArrayUInt16 ("_fsyacc_immediateActions", false,
-            _fsyacc_immediateActions) writer
+        oneLineArrayUInt16 "_fsyacc_immediateActions" false
+            _fsyacc_immediateActions writer
 
     /// Emits F# code for a single reduction action into an IndentedTextWriter.
     let private reduction (processedSpec : ProcessedSpecification<NonterminalIdentifier, TerminalIdentifier>,
@@ -1046,6 +1041,7 @@ module private FsYacc =
             // We split the code into individual lines, then write them one at a time to the
             // IndentedTextWriter; this ensures that the newlines are correct for this system
             // and also that the indentation level is correct.
+            // OPTIMIZE : Use String.Split.iter from ExtCore.
             header.Split ([| "\r\n"; "\r"; "\n" |], StringSplitOptions.None)
             |> Array.iter (fun codeLine ->
                 // TODO : Trim the lines? We'd have to process the entire array first
