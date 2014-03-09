@@ -611,7 +611,7 @@ module private FsLex =
                             // This has to be done line-by-line so the indenting is correct!
                             // The lines of the action code are split and trimmed specially to preserve
                             // relative indentation levels between lines.
-                            actionCode.ToString()
+                            actionCode.Value.ToString()
                             |> trimActionLines
                             |> Array.iter indentingWriter.WriteLine)
 
@@ -658,7 +658,8 @@ module private FsLex =
 
         // Emit the header (if present).
         compiledSpec.Header
-        |> Option.iter indentingWriter.WriteLine
+        |> Option.iter (fun header ->
+            indentingWriter.WriteLine header.Value)
 
         // Emit a newline before emitting the table-driven code.
         indentingWriter.WriteLine ()
@@ -679,7 +680,8 @@ module private FsLex =
 
         // Emit the footer (if present).
         compiledSpec.Footer
-        |> Option.iter indentingWriter.WriteLine
+        |> Option.iter (fun footer ->
+            indentingWriter.WriteLine footer.Value)
 
 
 /// A backend which emits code implementing a table-based pattern matcher

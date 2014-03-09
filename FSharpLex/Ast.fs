@@ -358,6 +358,7 @@ type Pattern =
 /// cases representing special patterns which can only appear by themselves; i.e.,
 /// they cannot be combined with any other patterns.
 /// </remarks>
+[<CompilationRepresentation(CompilationRepresentationFlags.UseNullAsTrueValue)>]
 type RuleClausePattern =
     /// A pattern.
     | Pattern of Pattern
@@ -373,9 +374,8 @@ type CodeFragment = substring
 type RuleClause = {
     /// The pattern matched by this clause.
     Pattern : RuleClausePattern;
-    /// The semantic action to be executed when
-    /// <see cref="Pattern"/> is matched by the lexer.
-    Action : CodeFragment;
+    /// <summary>The semantic action to be executed when <see cref="Pattern"/> is matched by the lexer.</summary>
+    Action : PositionedValue<CodeFragment>;
 }
 
 /// The name of a parameter of a lexer rule.
@@ -401,9 +401,9 @@ type RuleIdentifier = string
 /// A complete specification of a lexer.
 type Specification = {
     //
-    Header : CodeFragment option;
+    Header : PositionedValue<CodeFragment> option;
     //
-    Footer : CodeFragment option;
+    Footer : PositionedValue<CodeFragment> option;
     //
     // NOTE : This is specified as a list (instead of a Map) so we
     // know the order in which the macros were specified (necessary

@@ -287,7 +287,14 @@ let private _fsyacc_reductions = [|
             box
                 (
                    (
-                      Some _1 
+                      let posRange =
+                        let rawStartPos, rawEndPos = parseState.ResultRange
+                        let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
+                        let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
+                        let range = SourcePositionRange (startPos, endPos)
+                        Some range
+
+                      Some { Value = _1; PositionRange = posRange; }
                    )
                  : 'codeopt));
         (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->
@@ -424,7 +431,7 @@ let private _fsyacc_reductions = [|
             box
                 (
                    (
-                      { Pattern = _1; Action = _2; }
+                      { Pattern = _1; Action = { Value = _2; PositionRange = None; }; }
                    )
                  : 'clause));
         (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->

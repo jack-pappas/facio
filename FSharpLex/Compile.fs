@@ -60,7 +60,7 @@ type private CompilationState = {
 module private CompilationState =
     /// Empty compilation state.
     let empty = {
-        Transitions = LexerDfaGraph.empty;
+        Transitions = LexerDfaGraph.Empty;
         FinalStates = Set.empty;
         RegularVectorToDfaState = HashMap.empty;
         DfaStateToRegularVector = TagMap.empty;
@@ -85,7 +85,7 @@ module private CompilationState =
 
         /// The DFA state representing this regular vector.
         let (dfaState : DfaStateId), transitions =
-            LexerDfaGraph.createVertex compilationState.Transitions
+            compilationState.Transitions.CreateVertex ()
 
         // Add the new DFA state to the compilation state.
         let compilationState =
@@ -130,15 +130,15 @@ type CompiledRule = {
     Parameters : string[];
     /// The semantic actions to be executed when the
     /// rule clauses are matched.
-    RuleClauseActions : CodeFragment[];
+    RuleClauseActions : PositionedValue<CodeFragment>[];
 }
 
 /// A compiled lexer specification.
 type CompiledSpecification = {
     //
-    Header : CodeFragment option;
+    Header : PositionedValue<CodeFragment> option;
     //
-    Footer : CodeFragment option;
+    Footer : PositionedValue<CodeFragment> option;
     //
     CompiledRules : Map<RuleIdentifier, CompiledRule>;
 }
@@ -249,7 +249,7 @@ module Compiler =
                             // Add the unvisited transition targets to the transition graph.
                             (compilationState.Transitions, transitionsFromCurrentDfaState)
                             ||> HashMap.fold (fun transitions derivativeClass target ->
-                                LexerDfaGraph.addEdges currentState target derivativeClass transitions); }
+                                transitions.AddEdges currentState target derivativeClass); }
 
                 // Continue processing recursively.
                 createDfa pending compilationState
@@ -867,8 +867,7 @@ module Compiler =
         // Extract any clauses which match the end-of-file symbol;
         // these clauses need to be handled specially.
         let patterns, eofClauseIndices =
-            // TODO : Simplify the code below using the splitter function from ExtCore.
-
+            // TODO : Simplify the code below using the Array.mapiPartition function from ExtCore.
             let ruleClauseCount = Array.length ruleClauses
         
             let patterns = ResizeArray<_> (Array.length ruleClauses)
@@ -967,9 +966,9 @@ module Compiler =
                 compiledPatternDfa
             | Some eofAcceptingClauseIndex ->
                 let eofAcceptingState, transitions =
-                    LexerDfaGraph.createVertex compiledPatternDfa.Transitions
+                    compiledPatternDfa.Transitions.CreateVertex ()
                 let transitions =
-                    LexerDfaGraph.addEofEdge compiledPatternDfa.InitialState eofAcceptingState transitions
+                    transitions.AddEofEdge compiledPatternDfa.InitialState eofAcceptingState
                 { compiledPatternDfa with
                     Transitions = transitions;
                     RuleClauseAcceptedByState =
@@ -1028,9 +1027,9 @@ module Compiler =
                     compiledPatternDfa
                 else
                     let wildcardAcceptingState, transitions =
-                        LexerDfaGraph.createVertex compiledPatternDfa.Transitions
+                        compiledPatternDfa.Transitions.CreateVertex ()
                     let transitions =
-                        LexerDfaGraph.addEdges compiledPatternDfa.InitialState wildcardAcceptingState wildcardChars transitions
+                        transitions.AddEdges compiledPatternDfa.InitialState wildcardAcceptingState wildcardChars
 
                     { compiledPatternDfa with
                         Transitions = transitions;
