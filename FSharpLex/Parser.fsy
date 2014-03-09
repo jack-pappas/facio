@@ -1,7 +1,8 @@
 %{
 (*
 
-Copyright 2012-2013 Jack Pappas
+Copyright 2005-2008 Microsoft Corporation
+Copyright 2012-2014 Jack Pappas
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,10 +17,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 *)
-
-(* NOTE :   The code below is adapted from the 'fslex' grammar, which is
-            (c) Microsoft Corporation 2005-2008 and covered under the
-            Apache 2.0 license. *)
 
 open FSharpLex.SpecializedCollections
 open FSharpLex
@@ -50,10 +47,17 @@ spec:
             Rules = $4; } }
 
 codeopt:
-    | CODE { Some $1 }
-    | {
-        //"", (fst parseState.ResultRange)
-        None }
+    | CODE {
+        let posRange =
+            let rawStartPos, rawEndPos = parseState.ResultRange
+            let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
+            let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
+            let range = SourcePositionRange (startPos, endPos)
+            Some range
+
+        Some { Value = $1; PositionRange = posRange; } }
+
+    | { None }
 
 Macros:
     | { [] }
@@ -69,7 +73,7 @@ macro:
                 let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
                 let range = SourcePositionRange (startPos, endPos)
                 Some range
-            ({ Value = _2; PositionRange = posRange; }, pattern)
+            ({ Value = $2; PositionRange = posRange; }, pattern)
 
         | EndOfFile ->
             let msg = sprintf "End-of-file pattern in macro '%s'." $2
@@ -108,7 +112,7 @@ clauses:
 
 clause:
     | regexp CODE {
-        { Pattern = $1; Action = $2; } }
+        { Pattern = $1; Action = { Value = $2; PositionRange = None; }; } }
 
 regexp:
     | CHAR {
