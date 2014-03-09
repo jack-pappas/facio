@@ -52,7 +52,7 @@ Compatibility Notes
 Known Bugs/Issues
 =================
 
-Known bugs or other issues are listed on the `fsharp-tools issues` page.
+Known bugs or other issues are listed on the `fsharp-tools issues`_ page.
 
 .. _`fsharp-tools issues`: https://github.com/jack-pappas/fsharp-tools/issues
 
