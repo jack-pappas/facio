@@ -1,11 +1,10 @@
 %{
 (* (c) Microsoft Corporation 2005-2008.  *)
 
-open FSharpx.Text.Lexing
-open FSharpx.Text.Parsing.ParseHelpers
+// FSharp.PowerPack.FsLex.Parser
 
-open FSharpx.Text.Lexing.FsLex
-open FSharpx.Text.Lexing.FsLex.Ast
+open FSharp.PowerPack.FsLex
+open FSharp.PowerPack.FsLex.AST
 
 %} 
 

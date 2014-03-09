@@ -1,12 +1,12 @@
 {
 (* (c) Microsoft Corporation 2005-2008.  *)
   
-module internal FSharpx.Text.Lexing.FsLex.Lexer
+module internal FSharp.PowerPack.FsLex.Lexer
 
-open FSharpx.Text.Lexing.FsLex.Ast
-open FSharpx.Text.Lexing.FsLex.Parser
-open FSharpx.Text.Lexing
+open FSharp.PowerPack.FsYacc.AST
+open FSharp.PowerPack.FsYacc.Parser
 open System.Text
+open Internal.Utilities.Text.Lexing
 
 
 let private escape = function
