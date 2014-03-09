@@ -52,12 +52,9 @@ Compatibility Notes
 Known Bugs/Issues
 =================
 
-- fsharplex
-    - ``fsharplex`` does not yet emit position information (i.e., line numbers) from the specification file into the generated lexer code, so if your lexer encounters an error -- for example, a bug or syntax error in one of the user-defined lexical actions -- it may be difficult to trace the position specified by the compiler error or exception stack trace back to the original code in the specification file.
+Known bugs or other issues are listed on the `fsharp-tools issues` page.
 
-- fsharpyacc / Graham
-    - Some parts of the LR (LR(0), SLR(1), LALR(1), LR(1)) parser table generation have not been optimized yet. This issue doesn't impact smaller parser specifications, but larger specifications such as the parser for the F# compiler can take a long time to compile. The parts of the code causing the performance drain will eventually be profiled and tuned to correct the problem; the likely solution will be to implement memoization in some places, and to increase the performance of some Map lookups by using TagBimap to assign 'tags' which can be used in place of more heavyweight objects (e.g., ``LrParserState<_,_,_>``).
-    - Graham does not currently handle multi-way conflicts *at all* -- they currently cause the library to crash.
+.. _`fsharp-tools issues`: https://github.com/jack-pappas/fsharp-tools/issues
 
 
 Licensing
