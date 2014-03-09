@@ -96,7 +96,7 @@ type LexerDfaGraph =
             vertexCount + 1)
 
     //
-    member this.TryGetEdgeSet (source : DfaStateId, target : DfaStateId) =
+    member this.TryGetEdgeSet (source : DfaStateId) (target : DfaStateId) =
         // Preconditions
         if int source < 0 || int source >= this.VertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
@@ -110,7 +110,7 @@ type LexerDfaGraph =
             TagMap.tryFind target targetMap)
 
     //
-    member this.AddEdges (source : DfaStateId, target : DfaStateId, edges : CharSet) =
+    member this.AddEdges (source : DfaStateId) (target : DfaStateId) (edges : CharSet) =
         // Preconditions
         if int source < 0 || int source >= this.VertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
@@ -142,7 +142,7 @@ type LexerDfaGraph =
         LexerDfaGraph (Some newAdjMap, this.EofTransitionEdge, this.VertexCount)
 
     //
-    member this.AddEofEdge (source : DfaStateId, target : DfaStateId) =
+    member this.AddEofEdge (source : DfaStateId) (target : DfaStateId) =
         // Preconditions
         if int source < 0 || int source >= this.VertexCount then
             invalidArg "source" "The vertex is not in the graph's vertex-set."
@@ -153,31 +153,3 @@ type LexerDfaGraph =
             this.InternalAdjacencyMap,
             Some (source, target),
             this.VertexCount)
-        
-/// Functions on LexerDfaGraph.
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module LexerDfaGraph =
-    /// The empty graph.
-    let empty : LexerDfaGraph =
-        LexerDfaGraph.Empty
-
-    /// Determines if the graph is empty -- i.e., if it's vertex set is empty.
-    let inline isEmpty (graph : LexerDfaGraph) =
-        graph.IsEmpty
-
-    //
-    let inline createVertex (graph : LexerDfaGraph) : DfaStateId * LexerDfaGraph =
-        graph.CreateVertex ()
-
-    //
-    let inline addEdges source target edges (graph : LexerDfaGraph) : LexerDfaGraph =
-        graph.AddEdges (source, target, edges)
-
-    //
-    let inline tryGetEdgeSet source target (graph : LexerDfaGraph) =
-        graph.TryGetEdgeSet (source, target)
-
-    //
-    let inline addEofEdge source target (graph : LexerDfaGraph) : LexerDfaGraph =
-        graph.AddEofEdge (source, target)
-
