@@ -22,8 +22,9 @@ fsharpyacc <filename>
         -help: display this list of options
 **************************************)
 
-type FsharpYacc() = 
+type FsharpYacc() as this = 
     inherit ToolTask()
+    do this.StandardOutputImportance <- "Normal"
     
     [<Required>]
     member val InputFile = null : string with get, set

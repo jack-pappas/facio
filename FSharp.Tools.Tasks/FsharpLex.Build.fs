@@ -18,9 +18,9 @@ fsharplex <filename>
         -help: display this list of options
 **************************************)
 
-type FsharpLex() = 
-    inherit ToolTask()
-
+type FsharpLex() as this = 
+    inherit ToolTask()   
+    do this.StandardOutputImportance <- "Normal"
     [<Required>]
     member val InputFile = null : string with get, set
     
