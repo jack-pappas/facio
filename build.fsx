@@ -32,13 +32,13 @@ Target "FSharp.Tools Nuget" (fun _ ->
     let nugetVersion = grahamInfo.Version
     let workingDir = nugetTemp @@ (filenameWithouExt fsharpToolsNuget)
     
-    ensureDirectory (workingDir @@ "lib" @@ "net40")
     ensureDirectory (workingDir @@ "build")
     
     !! "/**/FSharp.Tools.Tasks/bin/Release/*.dll"
     ++ "/**/FSharp.Tools.Tasks/bin/Release/*.exe"
     ++ "/**/FSharp.Tools.Tasks/bin/Release/*.config"
-    |> CopyFiles (workingDir @@ "lib" @@ "net40")
+    ++ "/**/fsharp*.exe.config"
+    |> CopyFiles (workingDir @@ "build")
 
     !! "/**/bin/Release/FSharp.Tools.targets"
     |> CopyFiles (workingDir @@ "build")
