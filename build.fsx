@@ -24,7 +24,7 @@ Target "Build" (fun _ ->
 
 Target "FSharp.Tools Nuget" (fun _ ->
     
-    let grahamInfo = !! @"C:\Users\Daniel\git\incube\credit-suisse\fsharp-tools/graham.nuspec" |> Seq.exactlyOne
+    let grahamInfo = !! @"/**/graham.nuspec" |> Seq.exactlyOne
     let grahamInfo = (ReadFileAsString >> getNuspecProperties) grahamInfo
     
     let fsharpToolsNuget = !! "/**/Fsharp.Tools.nuspec" |> Seq.exactlyOne
@@ -33,6 +33,7 @@ Target "FSharp.Tools Nuget" (fun _ ->
     let workingDir = nugetTemp @@ (filenameWithouExt fsharpToolsNuget)
     
     ensureDirectory (workingDir @@ "build")
+    ensureDirectory (workingDir @@ "lib" @@ "net40")
     
     !! "/**/FSharp.Tools.Tasks/bin/Release/*.dll"
     ++ "/**/FSharp.Tools.Tasks/bin/Release/*.exe"
@@ -43,6 +44,9 @@ Target "FSharp.Tools Nuget" (fun _ ->
     !! "/**/bin/Release/FSharp.Tools.targets"
     |> CopyFiles (workingDir @@ "build")
     
+    !! "/**/LegacyInterpreters/bin/Release/*.*"
+    -- "/**/FSharp.Core.*"
+    |> CopyFiles (workingDir @@ "lib" @@ "net40")
 
     NuGet (fun p -> 
         { p with
