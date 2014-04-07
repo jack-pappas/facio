@@ -1,6 +1,6 @@
 // (c) Microsoft Corporation 2005-2009.
 
-namespace Microsoft.FSharp.Build
+namespace FSharp.Tools.Tasks
 
 open System
 open Microsoft.Build.Framework
@@ -81,14 +81,10 @@ type FsharpYacc() =
         // OutputFile
         builder.AppendSwitchIfNotNull("-o ", this.OutputFile)
 
-
         builder.AppendSwitchIfNotNull(" ", this.InputFile)
         
         let args = builder.ToString()
 
-        // when doing simple unit tests using API, no BuildEnginer/Logger is attached
-        if this.BuildEngine <> null then
-            let eventArgs = { new CustomBuildEventArgs(message=args,helpKeyword="",senderName="") with member x.Equals(y) = false }
-            this.BuildEngine.LogCustomEvent(eventArgs)
+        this.BuildEngine.LogCustomEvent { new CustomBuildEventArgs(message=args,helpKeyword="",senderName="") with member x.Equals(y) = false }
         
         args

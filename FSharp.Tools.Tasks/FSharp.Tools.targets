@@ -13,23 +13,25 @@ Copyright (C) Microsoft Corporation. All rights reserved.
 -->
 
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-	<UsingTask TaskName="FsharpLex" AssemblyFile="FSharp.Tools.Tasks.dll"/>
-	<UsingTask TaskName="FsharpYacc" AssemblyFile="FSharp.Tools.Tasks.dll"/>
-	<PropertyGroup>
-		<CompileDependsOn>CallFsharpLex;CallFsharpYacc;$(CompileDependsOn)</CompileDependsOn>
-	</PropertyGroup>
+  <UsingTask TaskName="FsharpLex" AssemblyFile="FSharp.Tools.Tasks.dll"/>
+  <UsingTask TaskName="FsharpYacc" AssemblyFile="FSharp.Tools.Tasks.dll"/>
+  <PropertyGroup>
+    <FsharpLexToolPath Condition=" '$(FsharpLexToolPath)' == '' ">$(MsBuildThisFileDirectory)</FsharpLexToolPath>
+    <FsharpYaccToolPath Condition=" '$(FsharpYaccToolPath)' == '' ">$(MsBuildThisFileDirectory)</FsharpYaccToolPath>
+    <CompileDependsOn>CallFsharpLex;CallFsharpYacc;$(CompileDependsOn)</CompileDependsOn>
+  </PropertyGroup>
 
-	<!-- Build FsharpLex files. -->
-	<Target
+  <!-- Build FsharpLex files. -->
+  <Target
 		Name="CallFsharpLex"
 		Inputs="@(FsharpLex)"
 		Outputs="@(FsharpLex->'$(FsharpLexOutputFolder)%(Filename).fs')"
 		Condition="'@(FsharpLex)'!=''">
 
-		<!-- Create the output directory -->
-		<MakeDir Directories="$(FsharpLexOutputFolder)"/>
-		<!-- Call FsharpLex -->
-		<FsharpLex
+    <!-- Create the output directory -->
+    <MakeDir Directories="$(FsharpLexOutputFolder)"/>
+    <!-- Call FsharpLex -->
+    <FsharpLex
 			InputFile="%(FsharpLex.Identity)"
 			OutputFile="$(FsharpLexOutputFolder)%(FsharpLex.Filename).fs"
 			ToolPath="$(FsharpLexToolPath)"
@@ -37,26 +39,26 @@ Copyright (C) Microsoft Corporation. All rights reserved.
 			Unicode="%(FsharpLex.Unicode)"
 			CodePage="%(FsharpLex.CodePage)"
 			LexLib="%(FsharpLex.LexLib)">
-			<!-- Track outputs for 'Clean' -->
-			<Output TaskParameter="OutputFile" ItemName="FileWrites"/>
-		</FsharpLex>
-		<!-- Make sure it will get cleaned  -->
-		<CreateItem Include="$(FsharpLexOutputFolder)%(FsharpLex.Filename).fs">
-			<Output TaskParameter="Include" ItemName="FileWrites"/>
-		</CreateItem>
-	</Target>
+      <!-- Track outputs for 'Clean' -->
+      <Output TaskParameter="OutputFile" ItemName="FileWrites"/>
+    </FsharpLex>
+    <!-- Make sure it will get cleaned  -->
+    <CreateItem Include="$(FsharpLexOutputFolder)%(FsharpLex.Filename).fs">
+      <Output TaskParameter="Include" ItemName="FileWrites"/>
+    </CreateItem>
+  </Target>
 
-	<!-- Build FsharpYacc files. -->
-	<Target
+  <!-- Build FsharpYacc files. -->
+  <Target
 		Name="CallFsharpYacc"
 		Inputs="@(FsharpYacc)"
 		Outputs="@(FsharpYacc->'$(FsharpYaccOutputFolder)%(Filename).fs')"
 		Condition="'@(FsharpYacc)'!=''">
 
-		<!-- Create the output directory -->
-		<MakeDir Directories="$(FsharpYaccOutputFolder)"/>
-		<!-- Call FsharpYacc -->
-		<FsharpYacc
+    <!-- Create the output directory -->
+    <MakeDir Directories="$(FsharpYaccOutputFolder)"/>
+    <!-- Call FsharpYacc -->
+    <FsharpYacc
 			InputFile="%(FsharpYacc.Identity)"
 			OutputFile="$(FsharpYaccOutputFolder)%(FsharpYacc.Filename).fs"
 			CodePage="%(FsharpYacc.CodePage)"
@@ -68,22 +70,22 @@ Copyright (C) Microsoft Corporation. All rights reserved.
 			Internal="%(FsharpYacc.Internal)"
 			ToolPath="$(FsharpYaccToolPath)"
 			ToolExe="$(FsharpYaccToolExe)">
-			<!-- Track outputs for 'Clean' -->
-			<Output TaskParameter="OutputFile" ItemName="FileWrites"/>
-		</FsharpYacc>
-		<!-- Make sure it will get cleaned  -->
-		<CreateItem Include="$(FsharpYaccOutputFolder)%(FsharpYacc.Filename).fs">
-			<Output TaskParameter="Include" ItemName="FileWrites"/>
-		</CreateItem>
-	</Target>
-	<ItemGroup>
-		<AvailableItemName Include="FsharpLex">
-			<Visible>false</Visible>
-		</AvailableItemName>
-		<AvailableItemName Include="FsharpYacc">
-			<Visible>false</Visible>
-		</AvailableItemName>
-	</ItemGroup>
+      <!-- Track outputs for 'Clean' -->
+      <Output TaskParameter="OutputFile" ItemName="FileWrites"/>
+    </FsharpYacc>
+    <!-- Make sure it will get cleaned  -->
+    <CreateItem Include="$(FsharpYaccOutputFolder)%(FsharpYacc.Filename).fs">
+      <Output TaskParameter="Include" ItemName="FileWrites"/>
+    </CreateItem>
+  </Target>
+  <ItemGroup>
+    <AvailableItemName Include="FsharpLex">
+      <Visible>false</Visible>
+    </AvailableItemName>
+    <AvailableItemName Include="FsharpYacc">
+      <Visible>false</Visible>
+    </AvailableItemName>
+  </ItemGroup>
 </Project>
 
 

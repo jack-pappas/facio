@@ -1,6 +1,6 @@
 // (c) Microsoft Corporation 2005-2009.
 
-namespace Microsoft.FSharp.Build
+namespace FSharp.Tools.Tasks
 
 open System
 open Microsoft.Build.Framework
@@ -18,7 +18,7 @@ fsharplex <filename>
         -help: display this list of options
 **************************************)
 
-type FsLex() = 
+type FsharpLex() = 
     inherit ToolTask()
 
     [<Required>]
