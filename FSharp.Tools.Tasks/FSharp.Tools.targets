@@ -1,6 +1,6 @@
 ﻿<!--
 ***********************************************************************************************
-FSharp.PowerPack.targets
+FSharp.Tools.targets
 
 WARNING:  DO NOT MODIFY this file unless you are knowledgeable about MSBuild and have
 			created a backup copy.  Incorrect changes to this file will make it
@@ -34,8 +34,9 @@ Copyright (C) Microsoft Corporation. All rights reserved.
 			OutputFile="$(FsharpLexOutputFolder)%(FsharpLex.Filename).fs"
 			ToolPath="$(FsharpLexToolPath)"
 			ToolExe="$(FsharpLexToolExe)"
-			OtherFlags="%(FsharpLex.OtherFlags)"
-			Unicode="$(FsharpLexUnicode)">
+			Unicode="%(FsharpLex.Unicode)"
+			CodePage="%(FsharpLex.CodePage)"
+			LexLib="%(FsharpLex.LexLib)">
 			<!-- Track outputs for 'Clean' -->
 			<Output TaskParameter="OutputFile" ItemName="FileWrites"/>
 		</FsharpLex>
@@ -58,9 +59,13 @@ Copyright (C) Microsoft Corporation. All rights reserved.
 		<FsharpYacc
 			InputFile="%(FsharpYacc.Identity)"
 			OutputFile="$(FsharpYaccOutputFolder)%(FsharpYacc.Filename).fs"
+			CodePage="%(FsharpYacc.CodePage)"
+			LexLib="%(FsharpYacc.LexLib)"
+			ParsLib="%(FsharpYacc.ParsLib)"
 			Open="%(FsharpYacc.Open)"
 			Module="%(FsharpYacc.Module)"
-			OtherFlags="%(FsharpYacc.OtherFlags)"
+			Verbose="%(FsharpYacc.Verbose)"
+			Internal="%(FsharpYacc.Internal)"
 			ToolPath="$(FsharpYaccToolPath)"
 			ToolExe="$(FsharpYaccToolExe)">
 			<!-- Track outputs for 'Clean' -->
