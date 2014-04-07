@@ -31,6 +31,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BackendUtils", "BackendUtil
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "LegacyInterpreters", "LegacyInterpreters\LegacyInterpreters.fsproj", "{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Tools.Tasks", "FSharp.Tools.Tasks\FSharp.Tools.Tasks.fsproj", "{72FC84DA-5FF1-4EDC-8A96-21132488A552}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -80,6 +82,12 @@ Global
 		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Release|Any CPU.Build.0 = Release|Any CPU
 		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Testing|Any CPU.ActiveCfg = Release|Any CPU
 		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Testing|Any CPU.Build.0 = Release|Any CPU
+		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Release|Any CPU.Build.0 = Release|Any CPU
+		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Testing|Any CPU.ActiveCfg = Release|Any CPU
+		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Testing|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
