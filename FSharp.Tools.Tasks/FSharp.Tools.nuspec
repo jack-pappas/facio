@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+    <metadata>
+        <id>FSharp.Tools</id>
+        <version>@build.number@</version>
+        @dependencies@
+        @references@
+        <title>FSharp Tools</title>
+        <authors>Jack Pappas</authors>
+        <owners />
+        <licenseUrl>http://opensource.org/licenses/Apache-2.0</licenseUrl>
+        <projectUrl>https://github.com/jack-pappas/fsharp-tools</projectUrl>
+        <requireLicenseAcceptance>false</requireLicenseAcceptance>
+        <description>Nuget package for FsharpLex and FsharpYacc.</description>
+        <tags>f# fsharp yacc fsyacc lex fslex grammar parser lexer irony dsl parsec fparsec</tags>
+    </metadata>
+</package>

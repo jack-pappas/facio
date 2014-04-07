@@ -21,6 +21,7 @@ obj/
 [Dd]ebug*/
 [Rr]elease*/
 results/
+nugetTemp/
 
 # .NET / Visual Studio (Files)
 *_i.c
