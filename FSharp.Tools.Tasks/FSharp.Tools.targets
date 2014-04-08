@@ -1,0 +1,91 @@
+﻿<!--
+***********************************************************************************************
+FSharp.Tools.targets
+
+WARNING:  DO NOT MODIFY this file unless you are knowledgeable about MSBuild and have
+			created a backup copy.  Incorrect changes to this file will make it
+			impossible to load or build your projects from the command-line or the IDE.
+
+PowerPack build rules.
+
+Copyright (C) Microsoft Corporation. All rights reserved.
+***********************************************************************************************
+-->
+
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <UsingTask TaskName="FsharpLex" AssemblyFile="FSharp.Tools.Tasks.dll"/>
+  <UsingTask TaskName="FsharpYacc" AssemblyFile="FSharp.Tools.Tasks.dll"/>
+  <PropertyGroup>
+    <FsharpLexToolPath Condition=" '$(FsharpLexToolPath)' == '' ">$(MsBuildThisFileDirectory)</FsharpLexToolPath>
+    <FsharpYaccToolPath Condition=" '$(FsharpYaccToolPath)' == '' ">$(MsBuildThisFileDirectory)</FsharpYaccToolPath>
+    <CompileDependsOn>CallFsharpLex;CallFsharpYacc;$(CompileDependsOn)</CompileDependsOn>
+  </PropertyGroup>
+
+  <!-- Build FsharpLex files. -->
+  <Target
+		Name="CallFsharpLex"
+		Inputs="@(FsharpLex)"
+		Outputs="@(FsharpLex->'$(FsharpLexOutputFolder)%(Filename).fs')"
+		Condition="'@(FsharpLex)'!=''">
+
+    <!-- Create the output directory -->
+    <MakeDir Directories="$(FsharpLexOutputFolder)"/>
+    <!-- Call FsharpLex -->
+    <FsharpLex
+			InputFile="%(FsharpLex.Identity)"
+			OutputFile="$(FsharpLexOutputFolder)%(FsharpLex.Filename).fs"
+			ToolPath="$(FsharpLexToolPath)"
+			ToolExe="$(FsharpLexToolExe)"
+			Unicode="%(FsharpLex.Unicode)"
+			CodePage="%(FsharpLex.CodePage)"
+			LexLib="%(FsharpLex.LexLib)">
+      <!-- Track outputs for 'Clean' -->
+      <Output TaskParameter="OutputFile" ItemName="FileWrites"/>
+    </FsharpLex>
+    <!-- Make sure it will get cleaned  -->
+    <CreateItem Include="$(FsharpLexOutputFolder)%(FsharpLex.Filename).fs">
+      <Output TaskParameter="Include" ItemName="FileWrites"/>
+    </CreateItem>
+  </Target>
+
+  <!-- Build FsharpYacc files. -->
+  <Target
+		Name="CallFsharpYacc"
+		Inputs="@(FsharpYacc)"
+		Outputs="@(FsharpYacc->'$(FsharpYaccOutputFolder)%(Filename).fs')"
+		Condition="'@(FsharpYacc)'!=''">
+
+    <!-- Create the output directory -->
+    <MakeDir Directories="$(FsharpYaccOutputFolder)"/>
+    <!-- Call FsharpYacc -->
+    <FsharpYacc
+			InputFile="%(FsharpYacc.Identity)"
+			OutputFile="$(FsharpYaccOutputFolder)%(FsharpYacc.Filename).fs"
+			CodePage="%(FsharpYacc.CodePage)"
+			LexLib="%(FsharpYacc.LexLib)"
+			ParsLib="%(FsharpYacc.ParsLib)"
+			Open="%(FsharpYacc.Open)"
+			Module="%(FsharpYacc.Module)"
+			Verbose="%(FsharpYacc.Verbose)"
+			Internal="%(FsharpYacc.Internal)"
+			ToolPath="$(FsharpYaccToolPath)"
+			ToolExe="$(FsharpYaccToolExe)">
+      <!-- Track outputs for 'Clean' -->
+      <Output TaskParameter="OutputFile" ItemName="FileWrites"/>
+    </FsharpYacc>
+    <!-- Make sure it will get cleaned  -->
+    <CreateItem Include="$(FsharpYaccOutputFolder)%(FsharpYacc.Filename).fs">
+      <Output TaskParameter="Include" ItemName="FileWrites"/>
+    </CreateItem>
+  </Target>
+  <ItemGroup>
+    <AvailableItemName Include="FsharpLex">
+      <Visible>false</Visible>
+    </AvailableItemName>
+    <AvailableItemName Include="FsharpYacc">
+      <Visible>false</Visible>
+    </AvailableItemName>
+  </ItemGroup>
+</Project>
+
+

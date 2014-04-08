@@ -1,6 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
+# Visual Studio 2013
+VisualStudioVersion = 12.0.30110.0
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{E0ED8004-9C63-4BA4-987C-EE634B39B881}"
 	ProjectSection(SolutionItems) = preProject
 		.nuget\NuGet.Config = .nuget\NuGet.Config
@@ -28,6 +30,13 @@ EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BackendUtils", "BackendUtils\BackendUtils.fsproj", "{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "LegacyInterpreters", "LegacyInterpreters\LegacyInterpreters.fsproj", "{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Tools.Tasks", "FSharp.Tools.Tasks\FSharp.Tools.Tasks.fsproj", "{72FC84DA-5FF1-4EDC-8A96-21132488A552}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{C29AF896-092A-49A9-953A-2C14F5B9B4F6}"
+	ProjectSection(SolutionItems) = preProject
+		build.fsx = build.fsx
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -78,6 +87,12 @@ Global
 		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Release|Any CPU.Build.0 = Release|Any CPU
 		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Testing|Any CPU.ActiveCfg = Release|Any CPU
 		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Testing|Any CPU.Build.0 = Release|Any CPU
+		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Release|Any CPU.Build.0 = Release|Any CPU
+		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Testing|Any CPU.ActiveCfg = Release|Any CPU
+		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Testing|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

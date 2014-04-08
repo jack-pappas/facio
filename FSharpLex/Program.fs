@@ -103,7 +103,7 @@ module Program =
         let result =
             try generator ()
             with _ ->
-                printfn "error!"
+                eprintfn "error!"
                 reraise ()
 
         printfn "done."
@@ -150,7 +150,7 @@ module Program =
                         |> List.rev; }
 
             with ex ->
-                printfn "Error: %s" ex.Message
+                eprintfn "Error: %s" ex.Message
                 exit 1
 
         // Compile the parsed specification.
@@ -164,7 +164,7 @@ module Program =
             // Write the error messages to the console.
             // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
             errorMessages
-            |> Array.iter (printfn "Error: %s")
+            |> Array.iter (eprintfn "Error: %s")
 
             1   // Exit code: Error
 
@@ -188,6 +188,7 @@ module Program =
     /// The entry point for the application.
     [<EntryPoint; CompiledName("Main")>]
     let main _ =
+        printfn "something is going on"
         // Variables to hold parsed command-line arguments.
         let inputFile = ref None
         let inputCodePage = ref None
@@ -215,7 +216,7 @@ module Program =
             | Some _ ->
                 // If the input filename has already been set, print a message
                 // to the screen, then exit with an error code.
-                printfn "Error: Only one lexer specification file may be used as input."
+                eprintfn "Error: Only one lexer specification file may be used as input."
                 exit 1
 
         // Parse the command-line arguments.
