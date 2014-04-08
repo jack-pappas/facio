@@ -240,7 +240,7 @@ module Program =
             | Some _ ->
                 // If the input filename has already been set, print a message
                 // to the screen, then exit with an error code.
-                printfn "Error: Only one lexer specification file may be used as input."
+                eprintfn "Error: Only one lexer specification file may be used as input."
                 exit 1
 
         // Parse the command-line arguments.
