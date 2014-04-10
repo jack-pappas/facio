@@ -193,23 +193,22 @@ module Program =
     //
     let [<Literal>] private defaultParserModuleName = "Parser"
 
+    // Variables to hold parsed command-line arguments.
+    let outputPath = ref None
+    let createListing = ref false
+    let generatedModuleName = ref None
+    let internalModule = ref false
+    let openDeclarations = ResizeArray ()
+    //let mlCompatible = ref false
+    let lexerInterpreterNamespace = ref None
+    let parserInterpreterNamespace = ref None
+    let inputCodePage = ref None
+    let inputFile = ref None
+            
     /// The entry point for the application.
     [<EntryPoint; CompiledName("Main")>]
     let main (options : string[]) =
         try
-
-            // Variables to hold parsed command-line arguments.
-            let outputPath = ref None
-            let createListing = ref false
-            let generatedModuleName = ref None
-            let internalModule = ref false
-            let openDeclarations = ResizeArray ()
-            //let mlCompatible = ref false
-            let lexerInterpreterNamespace = ref None
-            let parserInterpreterNamespace = ref None
-            let inputCodePage = ref None
-            let inputFile = ref None
-
             /// Command-line options.
             let usage =
                 [|  ArgInfo.Create ("-o", ArgType.String (fun s -> outputPath := Some s),

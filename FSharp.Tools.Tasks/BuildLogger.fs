@@ -4,8 +4,36 @@ open NLog.Layouts
 open NLog
 open System.Reflection
 
-type Marker() = class end
-    
+let mutable logger = null : Microsoft.Build.Utilities.TaskLoggingHelper
+let mutable file = null : string
+
+type MsBuildLogLevel = Info | Warn | Error
+
+type MsBuildLogTarget() =
+    inherit Target()
+    override this.Write (logEvent : LogEventInfo) =
+        let exn =
+            match logEvent.Exception with
+            | null -> None
+            | exn -> Some exn
+        
+        let level =
+            match logEvent.Level with
+            | lvl when lvl = LogLevel.Info -> Some Info
+            | lvl when lvl = LogLevel.Warn -> Some Warn
+            | lvl when lvl = LogLevel.Error -> Some Error
+            | lvl when lvl = LogLevel.Fatal -> Some Error
+            | _ -> None  
+
+        match exn, level with
+        | Some exn, Some Info -> logger.LogMessage exn.Message
+        | None, Some Info -> logger.LogMessage logEvent.FormattedMessage
+        | Some exn, Some Warn -> logger.LogWarningFromException(exn, true)
+        | None, Some Warn -> logger.LogWarning logEvent.FormattedMessage
+        | Some exn, Some Error -> logger.LogErrorFromException (exn, true, true, file)
+        | None, Some Error -> logger.LogError logEvent.FormattedMessage
+        | _, None -> ()
+            
 do  
     let fsharp =
         System.AppDomain.CurrentDomain.GetAssemblies()
@@ -18,18 +46,4 @@ do
         | _ -> null
     )
 
-    let methodCallTarget = new MethodCallTarget()
-    methodCallTarget.ClassName <- typeof<Marker>.DeclaringType.AssemblyQualifiedName
-    methodCallTarget.MethodName <- "log"
-    methodCallTarget.Parameters.Add(MethodCallParameter(Layout.FromString "${level}"))
-    methodCallTarget.Parameters.Add(MethodCallParameter(Layout.FromString "${message}"))
-    Config.SimpleConfigurator.ConfigureForTargetLogging methodCallTarget
-
-let mutable logger = null : Microsoft.Build.Utilities.TaskLoggingHelper
-
-let log level message =
-    match level with
-    | "Error" -> logger.LogError message
-    | "Info" -> logger.LogMessage message
-    | "Warn" -> logger.LogWarning message
-    | level -> logger.LogError (sprintf "unknown level: %s\nmessage: %s" level message)
+    Config.SimpleConfigurator.ConfigureForTargetLogging (new MsBuildLogTarget())

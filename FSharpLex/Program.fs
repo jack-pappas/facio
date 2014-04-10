@@ -106,11 +106,7 @@ module Program =
     let private statusMessage msg (generator : unit -> 'T) : 'T =
         
         loginfo <| sprintf "%s..." msg
-        let result =
-            try generator ()
-            with e ->
-                logexn "error!" e
-                reraise ()
+        let result = generator ()
 
         loginfo <| sprintf "done."
         result
@@ -136,23 +132,28 @@ module Program =
         /// The parsed lexer specification.
         let lexerSpec =
             statusMessage "Parsing lexer specification" <| fun () ->
+            
             let stream, reader, lexbuf =
                 UnicodeFileAsLexbuf (inputFile, options.InputCodePage)
             use stream = stream
             use reader = reader
-            let lexerSpec = Parser.spec Lexer.token lexbuf
+            try
+                let lexerSpec = Parser.spec Lexer.token lexbuf
 
-            // TEMP : Some of the lists need to be reversed so they're in the order we expect.
-            { lexerSpec with
-                Macros = List.rev lexerSpec.Macros;
-                Rules =
-                    lexerSpec.Rules
-                    |> List.map (fun (position, rule) ->
-                        position,
-                        { rule with
-                            Parameters = List.rev rule.Parameters;
-                            Clauses = List.rev rule.Clauses; })
-                    |> List.rev; }
+                // TEMP : Some of the lists need to be reversed so they're in the order we expect.
+                { lexerSpec with
+                    Macros = List.rev lexerSpec.Macros;
+                    Rules =
+                        lexerSpec.Rules
+                        |> List.map (fun (position, rule) ->
+                            position,
+                            { rule with
+                                Parameters = List.rev rule.Parameters;
+                                Clauses = List.rev rule.Clauses; })
+                        |> List.rev; }
+            with exn ->
+                let pos = lexbuf.EndPos
+                failwithf "could not parse the lexer spec: syntax error near line %d, column %d\n%s" pos.Line pos.Column exn.Message
 
         // Compile the parsed specification.
         let compiledSpecification =

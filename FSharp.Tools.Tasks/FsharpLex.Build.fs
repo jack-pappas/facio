@@ -37,6 +37,7 @@ type FsharpLex() =
         
     override this.Execute() =
         BuildLogger.logger <- this.Log
+        BuildLogger.file <- this.InputFile
 
         let toOption x = if x = null then None else Some x
         FSharpLex.Program.inputFile := toOption this.InputFile
