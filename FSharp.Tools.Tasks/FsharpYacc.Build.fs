@@ -23,10 +23,7 @@ fsharpyacc <filename>
 **************************************)
 
 type FsharpYacc() as this = 
-    inherit ToolTask()
-    do this.StandardOutputImportance <- "Normal"
-
-    static member val logger = null with get, set
+    inherit Task()
     
     [<Required>]
     member val InputFile = null : string with get, set
@@ -42,7 +39,7 @@ type FsharpYacc() as this =
     member val ParsLib = null : string with get, set
 
     // --open
-    member val Open = null : string with get, set
+    member val Open = [| |] : string [] with get, set
 
     // --module
     member val Module = null : string with get, set
@@ -50,47 +47,20 @@ type FsharpYacc() as this =
     member val Verbose = false with get, set
 
     member val Internal = false with get, set
-
-    // ToolTask methods
-    override this.ToolName = "fsharpyacc.exe"
-    
-    override this.GenerateFullPathToTool() = System.IO.Path.Combine(this.ToolPath, this.ToolExe)
         
     override this.Execute() =
         BuildLogger.logger <- this.Log
-        base.Execute()
 
-    override this.GenerateCommandLineCommands() =
-        let builder = new CommandLineBuilder()
-
-        // Verbose
-        if this.Verbose then builder.AppendSwitch("-v")
+        FSharpYacc.Program.createListing := this.Verbose
+        FSharpYacc.Program.internalModule := this.Internal
+        let success, codePage = Int32.TryParse this.CodePage
+        if success then FSharpYacc.Program.inputCodePage := Some codePage        
+        Array.iter FSharpYacc.Program.openDeclarations.Add this.Open
+        let toOption x = if x = null then None else Some x
+        FSharpYacc.Program.lexerInterpreterNamespace := toOption this.LexLib
+        FSharpYacc.Program.parserInterpreterNamespace := toOption this.ParsLib
+        FSharpYacc.Program.generatedModuleName := toOption this.Module
+        FSharpYacc.Program.outputPath := toOption this.OutputFile
+        FSharpYacc.Program.inputFile := toOption this.InputFile
         
-        // Internal
-        if this.Internal then builder.AppendSwitch("--internal")
-        
-        // CodePage
-        builder.AppendSwitchIfNotNull("--codepage ", this.CodePage)
-        
-        // Open
-        builder.AppendSwitchIfNotNull("--open ", this.Open)
-
-        // LexLib
-        builder.AppendSwitchIfNotNull("--lexlib ", this.LexLib)
-
-        // LexLib
-        builder.AppendSwitchIfNotNull("--parslib ", this.ParsLib)
-
-        // Module
-        builder.AppendSwitchIfNotNull("--module ", this.Module)
-
-        // OutputFile
-        builder.AppendSwitchIfNotNull("-o ", this.OutputFile)
-
-        builder.AppendSwitchIfNotNull(" ", this.InputFile)
-        
-        let args = builder.ToString()
-
-        this.BuildEngine.LogCustomEvent { new CustomBuildEventArgs(message=args,helpKeyword="",senderName="") with member x.Equals(y) = false }
-                            
-        args
+        FSharpYacc.Program.main [| |] = 0
