@@ -152,7 +152,7 @@ module Program =
                                 Clauses = List.rev rule.Clauses; })
                         |> List.rev; }
             with exn ->
-                let pos = lexbuf.EndPos
+                let pos = lexbuf.StartPos
                 failwithf "could not parse the lexer spec: syntax error near line %d, column %d\n%s" pos.Line pos.Column exn.Message
 
         // Compile the parsed specification.
@@ -185,7 +185,7 @@ module Program =
             0   // Exit code: Success
 
     //
-    let [<Literal>] private defaultLexerInterpreterNamespace = "Microsoft.FSharp.Text.Lexing"
+    let [<Literal>] defaultLexerInterpreterNamespace = "Microsoft.FSharp.Text.Lexing"
     
     // Variables to hold parsed command-line arguments.
     let inputFile = ref None

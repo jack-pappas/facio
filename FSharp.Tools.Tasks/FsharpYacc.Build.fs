@@ -22,7 +22,7 @@ fsharpyacc <filename>
         -help: display this list of options
 **************************************)
 
-type FsharpYacc() as this = 
+type FSharpYacc() = 
     inherit Task()
     
     [<Required>]
@@ -50,11 +50,15 @@ type FsharpYacc() as this =
         
     override this.Execute() =
         BuildLogger.logger <- this.Log
+        BuildLogger.file <- this.InputFile
 
         FSharpYacc.Program.createListing := this.Verbose
         FSharpYacc.Program.internalModule := this.Internal
-        let success, codePage = Int32.TryParse this.CodePage
-        if success then FSharpYacc.Program.inputCodePage := Some codePage        
+        FSharpYacc.Program.inputCodePage := 
+            match Int32.TryParse this.CodePage with
+            | true, codePage -> Some codePage 
+            | _ -> None
+        FSharpYacc.Program.openDeclarations.Clear()
         Array.iter FSharpYacc.Program.openDeclarations.Add this.Open
         let toOption x = if x = null then None else Some x
         FSharpYacc.Program.lexerInterpreterNamespace := toOption this.LexLib

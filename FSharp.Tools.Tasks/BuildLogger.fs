@@ -33,17 +33,6 @@ type MsBuildLogTarget() =
         | Some exn, Some Error -> logger.LogErrorFromException (exn, true, true, file)
         | None, Some Error -> logger.LogError logEvent.FormattedMessage
         | _, None -> ()
-            
-do  
-    let fsharp =
-        System.AppDomain.CurrentDomain.GetAssemblies()
-        |> Seq.filter (fun assembly -> assembly.GetName().Name = "FSharp.Core")
-        |> Seq.exactlyOne
-
-    System.AppDomain.CurrentDomain.add_AssemblyResolve (fun sender args ->
-        match args.Name.Split(',').[0] with
-        | "FSharp.Core" -> fsharp            
-        | _ -> null
-    )
-
+ 
+do
     Config.SimpleConfigurator.ConfigureForTargetLogging (new MsBuildLogTarget())

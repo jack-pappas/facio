@@ -18,7 +18,7 @@ fsharplex <filename>
         -help: display this list of options
 **************************************)
 
-type FsharpLex() = 
+type FSharpLex() = 
     inherit Task()   
     //do this.StandardOutputImportance <- "Normal"
     [<Required>]
@@ -42,10 +42,15 @@ type FsharpLex() =
         let toOption x = if x = null then None else Some x
         FSharpLex.Program.inputFile := toOption this.InputFile
         FSharpLex.Program.outputFile := toOption this.OutputFile
-        if this.LexLib <> null then FSharpLex.Program.lexlib := this.LexLib
+        FSharpLex.Program.lexlib :=
+            match this.LexLib with
+            | null -> FSharpLex.Program.defaultLexerInterpreterNamespace
+            | lexlib -> lexlib
         FSharpLex.Program.unicode := this.Unicode
-        let success, codePage = Int32.TryParse this.CodePage
-        if success then FSharpLex.Program.inputCodePage := Some codePage
+        FSharpLex.Program.inputCodePage :=
+            match Int32.TryParse this.CodePage with
+            | true, codePage -> Some codePage
+            | _ -> None
 
         let logger = NLog.LogManager.GetCurrentClassLogger()
         logger.Info "Running FSharpLex..."

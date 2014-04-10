@@ -120,11 +120,11 @@ module Program =
 
         /// The parsed parser specification.
         let parserSpec =
+            let stream, reader, lexbuf =
+                UnicodeFileAsLexbuf (inputFile, inputCodePage)
+            use stream = stream
+            use reader = reader
             try
-                let stream, reader, lexbuf =
-                    UnicodeFileAsLexbuf (inputFile, inputCodePage)
-                use stream = stream
-                use reader = reader
                 let parserSpec = Parser.spec Lexer.token lexbuf
 
                 // TEMP : Need to do a little massaging of the Specification for now to put some lists in the correct order.
@@ -145,8 +145,8 @@ module Program =
                         |> List.rev; }
 
             with ex ->
-                logger.FatalException ("Unable to parse the specification file.", ex)
-                reraise ()
+                let pos = lexbuf.StartPos
+                failwithf "Unable to parse the specification file. Syntax Error near: line %d, col %d\n%s" pos.Line pos.Column ex.Message
 
         // Precompile the parsed specification to validate and process it.
         let processedSpecification, validationMessages =
