@@ -25,6 +25,8 @@ fsharpyacc <filename>
 type FsharpYacc() as this = 
     inherit ToolTask()
     do this.StandardOutputImportance <- "Normal"
+
+    static member val logger = null with get, set
     
     [<Required>]
     member val InputFile = null : string with get, set
@@ -54,8 +56,11 @@ type FsharpYacc() as this =
     
     override this.GenerateFullPathToTool() = System.IO.Path.Combine(this.ToolPath, this.ToolExe)
         
+    override this.Execute() =
+        BuildLogger.logger <- this.Log
+        base.Execute()
+
     override this.GenerateCommandLineCommands() =
-    
         let builder = new CommandLineBuilder()
 
         // Verbose
@@ -87,5 +92,5 @@ type FsharpYacc() as this =
         let args = builder.ToString()
 
         this.BuildEngine.LogCustomEvent { new CustomBuildEventArgs(message=args,helpKeyword="",senderName="") with member x.Equals(y) = false }
-        
+                            
         args

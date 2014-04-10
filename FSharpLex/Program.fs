@@ -97,16 +97,22 @@ module Program =
         container.ComposeParts (backends)
         backends
 
+    let logger = NLog.LogManager.GetCurrentClassLogger()
+    let loginfo (msg:string) = logger.Info msg
+    let logexn msg exn = logger.ErrorException(msg, exn)
+    let logerror (msg:string) = logger.Error msg
+
     //
     let private statusMessage msg (generator : unit -> 'T) : 'T =
-        printf "%s..." msg
+        
+        loginfo <| sprintf "%s..." msg
         let result =
             try generator ()
-            with _ ->
-                eprintfn "error!"
+            with e ->
+                logexn "error!" e
                 reraise ()
 
-        printfn "done."
+        loginfo <| sprintf "done."
         result
 
     open FSharpLex.SpecializedCollections
@@ -130,28 +136,23 @@ module Program =
         /// The parsed lexer specification.
         let lexerSpec =
             statusMessage "Parsing lexer specification" <| fun () ->
-            try
-                let stream, reader, lexbuf =
-                    UnicodeFileAsLexbuf (inputFile, options.InputCodePage)
-                use stream = stream
-                use reader = reader
-                let lexerSpec = Parser.spec Lexer.token lexbuf
+            let stream, reader, lexbuf =
+                UnicodeFileAsLexbuf (inputFile, options.InputCodePage)
+            use stream = stream
+            use reader = reader
+            let lexerSpec = Parser.spec Lexer.token lexbuf
 
-                // TEMP : Some of the lists need to be reversed so they're in the order we expect.
-                { lexerSpec with
-                    Macros = List.rev lexerSpec.Macros;
-                    Rules =
-                        lexerSpec.Rules
-                        |> List.map (fun (position, rule) ->
-                            position,
-                            { rule with
-                                Parameters = List.rev rule.Parameters;
-                                Clauses = List.rev rule.Clauses; })
-                        |> List.rev; }
-
-            with ex ->
-                eprintfn "Error: %s" ex.Message
-                exit 1
+            // TEMP : Some of the lists need to be reversed so they're in the order we expect.
+            { lexerSpec with
+                Macros = List.rev lexerSpec.Macros;
+                Rules =
+                    lexerSpec.Rules
+                    |> List.map (fun (position, rule) ->
+                        position,
+                        { rule with
+                            Parameters = List.rev rule.Parameters;
+                            Clauses = List.rev rule.Clauses; })
+                    |> List.rev; }
 
         // Compile the parsed specification.
         let compiledSpecification =
@@ -164,7 +165,7 @@ module Program =
             // Write the error messages to the console.
             // TODO : Write the error messages to NLog (or similar) instead, for flexibility.
             errorMessages
-            |> Array.iter (eprintfn "Error: %s")
+            |> Array.iter logerror
 
             1   // Exit code: Error
 
@@ -184,68 +185,70 @@ module Program =
 
     //
     let [<Literal>] private defaultLexerInterpreterNamespace = "Microsoft.FSharp.Text.Lexing"
+    
+    // Variables to hold parsed command-line arguments.
+    let inputFile = ref None
+    let inputCodePage = ref None
+    let outputFile = ref None
+    let unicode = ref false
+    let lexlib = ref defaultLexerInterpreterNamespace
 
     /// The entry point for the application.
     [<EntryPoint; CompiledName("Main")>]
     let main _ =
-        printfn "something is going on"
-        // Variables to hold parsed command-line arguments.
-        let inputFile = ref None
-        let inputCodePage = ref None
-        let outputFile = ref None
-        let unicode = ref false
-        let lexlib = ref defaultLexerInterpreterNamespace
+        try 
+            /// Command-line options.
+            let usage =
+                [|  ArgInfo.Create ("-o", ArgType.String (fun s -> outputFile := Some s),
+                        "The path where the generated lexer source code will be written.");
+                    ArgInfo.Create ("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
+                        "Assume input lexer specification file is encoded with the given codepage.");
+                    ArgInfo.Create ("--lexlib", ArgType.String (fun s -> lexlib := s),
+                        sprintf "Specify the namespace for the implementation of the lexer table interpreter. \
+                        The default is '%s'." defaultLexerInterpreterNamespace);
+                    ArgInfo.Create ("--unicode", ArgType.Set unicode,
+                        "Produce a lexer which supports 16-bit Unicode characters."); |]
 
-        /// Command-line options.
-        let usage =
-            [|  ArgInfo.Create ("-o", ArgType.String (fun s -> outputFile := Some s),
-                    "The path where the generated lexer source code will be written.");
-                ArgInfo.Create ("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
-                    "Assume input lexer specification file is encoded with the given codepage.");
-                ArgInfo.Create ("--lexlib", ArgType.String (fun s -> lexlib := s),
-                    sprintf "Specify the namespace for the implementation of the lexer table interpreter. \
-                    The default is '%s'." defaultLexerInterpreterNamespace);
-                ArgInfo.Create ("--unicode", ArgType.Set unicode,
-                    "Produce a lexer which supports 16-bit Unicode characters."); |]
+            // Parses argument values which aren't specified by flags.
+            let plainArgParser x =
+                match !inputFile with
+                | None ->
+                    inputFile := Some x
+                | Some _ ->
+                    // If the input filename has already been set, print a message
+                    // to the screen, then exit with an error code.
+                    failwith "Error: Only one lexer specification file may be used as input."
 
-        // Parses argument values which aren't specified by flags.
-        let plainArgParser x =
-            match !inputFile with
-            | None ->
-                inputFile := Some x
-            | Some _ ->
-                // If the input filename has already been set, print a message
-                // to the screen, then exit with an error code.
-                eprintfn "Error: Only one lexer specification file may be used as input."
-                exit 1
+            // Parse the command-line arguments.
+            ArgParser.Parse (usage, plainArgParser, "fsharplex <filename>")
 
-        // Parse the command-line arguments.
-        ArgParser.Parse (usage, plainArgParser, "fsharplex <filename>")
+            // Validate the parsed arguments.
+            // TODO
 
-        // Validate the parsed arguments.
-        // TODO
+            // If the output file is not specified, use a default value.
+            if Option.isNone !outputFile then
+                outputFile := Some <| System.IO.Path.ChangeExtension (Option.get !inputFile, "fs")
 
-        // If the output file is not specified, use a default value.
-        if Option.isNone !outputFile then
-            outputFile := Some <| System.IO.Path.ChangeExtension (Option.get !inputFile, "fs")
+            // Create a CompilationOptions record from the parsed arguments
+            // and call the 'invoke' function with it.
+            invoke (Option.get !inputFile, {
+                Unicode = !unicode;
+                InputCodePage = !inputCodePage;
 
-        // Create a CompilationOptions record from the parsed arguments
-        // and call the 'invoke' function with it.
-        invoke (Option.get !inputFile, {
-            Unicode = !unicode;
-            InputCodePage = !inputCodePage;
+                // TEMP : These should be specified in a better way -- perhaps we can get
+                // ArgInfo instances from the plugins along with some object which holds ref values
+                // internally (used by the returned ArgInfo instances), which has a method
+                // that produces an instance of FslexBackendOptions or GraphBackendOptions.
+                FslexBackendOptions = Some {
+                    OutputPath = Option.get !outputFile;
+                    LexerLibraryNamespace = !lexlib;
+                    };
+                GraphBackendOptions = Some {
+                    OutputPath =
+                        System.IO.Path.ChangeExtension (Option.get !outputFile, "dgml");
+                    Format = GraphFileFormat.Dgml; };
+                })
 
-            // TEMP : These should be specified in a better way -- perhaps we can get
-            // ArgInfo instances from the plugins along with some object which holds ref values
-            // internally (used by the returned ArgInfo instances), which has a method
-            // that produces an instance of FslexBackendOptions or GraphBackendOptions.
-            FslexBackendOptions = Some {
-                OutputPath = Option.get !outputFile;
-                LexerLibraryNamespace = !lexlib;
-                };
-            GraphBackendOptions = Some {
-                OutputPath =
-                    System.IO.Path.ChangeExtension (Option.get !outputFile, "dgml");
-                Format = GraphFileFormat.Dgml; };
-            })
-
+        with exn ->
+            logexn "Unrecoverable error" exn
+            1

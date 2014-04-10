@@ -98,6 +98,9 @@ module Program =
         let backends = Backends ()
         container.ComposeParts (backends)
         backends
+    
+    /// Used for writing messages to the console or log file.
+    let logger = LogManager.GetCurrentClassLogger ()
 
     /// Invokes FSharpYacc with the specified options.
     [<CompiledName("Invoke")>]
@@ -110,9 +113,7 @@ module Program =
         elif not <| System.IO.File.Exists inputFile then
             invalidArg "inputFile" "No parser specification exists at the specified path."
 
-        /// Used for writing messages to the console or log file.
-        let logger = LogManager.GetCurrentClassLogger ()
-
+        
         // TEMP : This is hard-coded until we implement functionality to
         // allow the user to select which backend to use.
         let backends = loadBackends ()
@@ -145,7 +146,7 @@ module Program =
 
             with ex ->
                 logger.FatalException ("Unable to parse the specification file.", ex)
-                exit 1
+                reraise ()
 
         // Precompile the parsed specification to validate and process it.
         let processedSpecification, validationMessages =
@@ -195,79 +196,82 @@ module Program =
     /// The entry point for the application.
     [<EntryPoint; CompiledName("Main")>]
     let main (options : string[]) =
-        // Variables to hold parsed command-line arguments.
-        let outputPath = ref None
-        let createListing = ref false
-        let generatedModuleName = ref None
-        let internalModule = ref false
-        let openDeclarations = ResizeArray ()
-        //let mlCompatible = ref false
-        let lexerInterpreterNamespace = ref None
-        let parserInterpreterNamespace = ref None
-        let inputCodePage = ref None
-        let inputFile = ref None
+        try
 
-        /// Command-line options.
-        let usage =
-            [|  ArgInfo.Create ("-o", ArgType.String (fun s -> outputPath := Some s),
-                    "The path where the output file will be written.");
-                ArgInfo.Create ("-v", ArgType.Unit (fun () -> createListing := true),
-                    "Produce a listing file.");
-                ArgInfo.Create ("--module", ArgType.String (fun s -> generatedModuleName := Some s),
-                    sprintf "The name to use for the F# module containing the generated parser. \
-                     The default is '%s'." defaultParserModuleName);
-                ArgInfo.Create ("--internal", ArgType.Unit (fun () -> internalModule := true),
-                    "Generate an internal module");
-                ArgInfo.Create ("--open", ArgType.String openDeclarations.Add,
-                    "Add the given module to the list of those to open in both the generated signature and implementation.");
-//                ArgInfo.Create ("--ml-compatibility", ArgType.Set mlCompatible,
-//                    "Support the use of the global state from the 'Parsing' module in FSharp.Compatibility.OCaml.dll (available on NuGet).");
-                ArgInfo.Create ("--lexlib", ArgType.String (fun s -> lexerInterpreterNamespace := Some s),
-                    sprintf "Specify the namespace for the implementation of the lexer table interpreter. \
-                     The default is '%s'." defaultLexerInterpreterNamespace);
-                ArgInfo.Create ("--parslib", ArgType.String (fun s -> parserInterpreterNamespace := Some s),
-                    sprintf "Specify the namespace for the implementation of the parser table interpreter. \
-                     The default is '%s'." defaultParserInterpreterNamespace);
-                ArgInfo.Create ("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
-                    "Assume input lexer specification file is encoded with the given codepage.");
-                |]
+            // Variables to hold parsed command-line arguments.
+            let outputPath = ref None
+            let createListing = ref false
+            let generatedModuleName = ref None
+            let internalModule = ref false
+            let openDeclarations = ResizeArray ()
+            //let mlCompatible = ref false
+            let lexerInterpreterNamespace = ref None
+            let parserInterpreterNamespace = ref None
+            let inputCodePage = ref None
+            let inputFile = ref None
 
-        // Parses argument values which aren't specified by flags.
-        let plainArgParser x =
-            match !inputFile with
-            | None ->
-                inputFile := Some x
-            | Some _ ->
-                // If the input filename has already been set, print a message
-                // to the screen, then exit with an error code.
-                eprintfn "Error: Only one lexer specification file may be used as input."
-                exit 1
+            /// Command-line options.
+            let usage =
+                [|  ArgInfo.Create ("-o", ArgType.String (fun s -> outputPath := Some s),
+                        "The path where the output file will be written.");
+                    ArgInfo.Create ("-v", ArgType.Unit (fun () -> createListing := true),
+                        "Produce a listing file.");
+                    ArgInfo.Create ("--module", ArgType.String (fun s -> generatedModuleName := Some s),
+                        sprintf "The name to use for the F# module containing the generated parser. \
+                         The default is '%s'." defaultParserModuleName);
+                    ArgInfo.Create ("--internal", ArgType.Unit (fun () -> internalModule := true),
+                        "Generate an internal module");
+                    ArgInfo.Create ("--open", ArgType.String openDeclarations.Add,
+                        "Add the given module to the list of those to open in both the generated signature and implementation.");
+    //                ArgInfo.Create ("--ml-compatibility", ArgType.Set mlCompatible,
+    //                    "Support the use of the global state from the 'Parsing' module in FSharp.Compatibility.OCaml.dll (available on NuGet).");
+                    ArgInfo.Create ("--lexlib", ArgType.String (fun s -> lexerInterpreterNamespace := Some s),
+                        sprintf "Specify the namespace for the implementation of the lexer table interpreter. \
+                         The default is '%s'." defaultLexerInterpreterNamespace);
+                    ArgInfo.Create ("--parslib", ArgType.String (fun s -> parserInterpreterNamespace := Some s),
+                        sprintf "Specify the namespace for the implementation of the parser table interpreter. \
+                         The default is '%s'." defaultParserInterpreterNamespace);
+                    ArgInfo.Create ("--codepage", ArgType.Int (fun i -> inputCodePage := Some i),
+                        "Assume input lexer specification file is encoded with the given codepage.");
+                    |]
 
-        // Parse the command-line arguments.
-        ArgParser.Parse (usage, plainArgParser, "fsharpyacc <filename>")
+            // Parses argument values which aren't specified by flags.
+            let plainArgParser x =
+                match !inputFile with
+                | None ->
+                    inputFile := Some x
+                | Some _ ->
+                    // If the input filename has already been set, print a message
+                    // to the screen, then exit with an error code.
+                    failwith "Error: Only one parser specification file may be used as input."
 
-        // Validate the parsed arguments.
-        // TODO
+            // Parse the command-line arguments.
+            ArgParser.Parse (usage, plainArgParser, "fsharpyacc <filename>")
 
-        // If the output file is not specified, use a default value.
-        if Option.isNone !outputPath then
-            outputPath := Some <| System.IO.Path.ChangeExtension (Option.get !inputFile, "fs")
+            // Validate the parsed arguments.
+            // TODO
 
-        // Create a CompilationOptions record from the parsed arguments
-        // and call the 'invoke' function with it.
-        let compilationOptions = {
-            ParserType = ParserType.Lalr1;
-            // TEMP
-            FsyaccBackendOptions = Some {
-                OutputPath = Option.get !outputPath;
-                ModuleName = !generatedModuleName;
-                LexerInterpreterNamespace = !lexerInterpreterNamespace;
-                ParserInterpreterNamespace = !parserInterpreterNamespace;
-                OpenDeclarations = openDeclarations.ToArray ();
-                InternalModule = !internalModule;
-                };
-            }
-        invoke (Option.get !inputFile) compilationOptions !inputCodePage
+            // If the output file is not specified, use a default value.
+            if Option.isNone !outputPath then
+                outputPath := Some <| System.IO.Path.ChangeExtension (Option.get !inputFile, "fs")
+
+            // Create a CompilationOptions record from the parsed arguments
+            // and call the 'invoke' function with it.
+            let compilationOptions = {
+                ParserType = ParserType.Lalr1;
+                // TEMP
+                FsyaccBackendOptions = Some {
+                    OutputPath = Option.get !outputPath;
+                    ModuleName = !generatedModuleName;
+                    LexerInterpreterNamespace = !lexerInterpreterNamespace;
+                    ParserInterpreterNamespace = !parserInterpreterNamespace;
+                    OpenDeclarations = openDeclarations.ToArray ();
+                    InternalModule = !internalModule;
+                    };
+                }
+            invoke (Option.get !inputFile) compilationOptions !inputCodePage
         
-
+        with exn ->
+            logger.FatalException ("unrecoverable Exception", exn)
+            1
         
