@@ -65,9 +65,7 @@ Copyright (C) Microsoft Corporation. All rights reserved.
 			Open="%(FsharpYacc.Open)"
 			Module="%(FsharpYacc.Module)"
 			Verbose="%(FsharpYacc.Verbose)"
-			Internal="%(FsharpYacc.Internal)"
-			ToolPath="$(FsharpYaccToolPath)"
-			ToolExe="$(FsharpYaccToolExe)">
+			Internal="%(FsharpYacc.Internal)">
       <!-- Track outputs for 'Clean' -->
       <Output TaskParameter="OutputFile" ItemName="FileWrites"/>
     </FsharpYacc>
