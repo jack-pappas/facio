@@ -13,11 +13,9 @@ Copyright (C) Microsoft Corporation. All rights reserved.
 -->
 
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <UsingTask TaskName="FsharpLex" AssemblyFile="FSharp.Tools.Tasks.dll"/>
-  <UsingTask TaskName="FsharpYacc" AssemblyFile="FSharp.Tools.Tasks.dll"/>
+  <UsingTask TaskName="FSharpLex" AssemblyFile="FSharp.Tools.Tasks.dll"/>
+  <UsingTask TaskName="FSharpYacc" AssemblyFile="FSharp.Tools.Tasks.dll"/>
   <PropertyGroup>
-    <FsharpLexToolPath Condition=" '$(FsharpLexToolPath)' == '' ">$(MsBuildThisFileDirectory)</FsharpLexToolPath>
-    <FsharpYaccToolPath Condition=" '$(FsharpYaccToolPath)' == '' ">$(MsBuildThisFileDirectory)</FsharpYaccToolPath>
     <CompileDependsOn>CallFsharpLex;CallFsharpYacc;$(CompileDependsOn)</CompileDependsOn>
   </PropertyGroup>
 
@@ -31,17 +29,15 @@ Copyright (C) Microsoft Corporation. All rights reserved.
     <!-- Create the output directory -->
     <MakeDir Directories="$(FsharpLexOutputFolder)"/>
     <!-- Call FsharpLex -->
-    <FsharpLex
+    <FSharpLex
 			InputFile="%(FsharpLex.Identity)"
 			OutputFile="$(FsharpLexOutputFolder)%(FsharpLex.Filename).fs"
-			ToolPath="$(FsharpLexToolPath)"
-			ToolExe="$(FsharpLexToolExe)"
 			Unicode="%(FsharpLex.Unicode)"
 			CodePage="%(FsharpLex.CodePage)"
 			LexLib="%(FsharpLex.LexLib)">
       <!-- Track outputs for 'Clean' -->
       <Output TaskParameter="OutputFile" ItemName="FileWrites"/>
-    </FsharpLex>
+    </FSharpLex>
     <!-- Make sure it will get cleaned  -->
     <CreateItem Include="$(FsharpLexOutputFolder)%(FsharpLex.Filename).fs">
       <Output TaskParameter="Include" ItemName="FileWrites"/>
@@ -58,7 +54,7 @@ Copyright (C) Microsoft Corporation. All rights reserved.
     <!-- Create the output directory -->
     <MakeDir Directories="$(FsharpYaccOutputFolder)"/>
     <!-- Call FsharpYacc -->
-    <FsharpYacc
+    <FSharpYacc
 			InputFile="%(FsharpYacc.Identity)"
 			OutputFile="$(FsharpYaccOutputFolder)%(FsharpYacc.Filename).fs"
 			CodePage="%(FsharpYacc.CodePage)"
@@ -67,12 +63,10 @@ Copyright (C) Microsoft Corporation. All rights reserved.
 			Open="%(FsharpYacc.Open)"
 			Module="%(FsharpYacc.Module)"
 			Verbose="%(FsharpYacc.Verbose)"
-			Internal="%(FsharpYacc.Internal)"
-			ToolPath="$(FsharpYaccToolPath)"
-			ToolExe="$(FsharpYaccToolExe)">
+			Internal="%(FsharpYacc.Internal)">
       <!-- Track outputs for 'Clean' -->
       <Output TaskParameter="OutputFile" ItemName="FileWrites"/>
-    </FsharpYacc>
+    </FSharpYacc>
     <!-- Make sure it will get cleaned  -->
     <CreateItem Include="$(FsharpYaccOutputFolder)%(FsharpYacc.Filename).fs">
       <Output TaskParameter="Include" ItemName="FileWrites"/>
