@@ -56,6 +56,7 @@
     <Compile Include="TestHelpers.fs" />
     <Compile Include="Collections.fs" />
     <Compile Include="TestCases.fs" />
+    <Content Include="app.config" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExtCore">

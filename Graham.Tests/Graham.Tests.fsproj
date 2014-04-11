@@ -59,6 +59,7 @@
     <Compile Include="Grammars.Grune.fs" />
     <Compile Include="Analysis.fs" />
     <Compile Include="Tables.fs" />
+    <Content Include="app.config" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExtCore">
