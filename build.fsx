@@ -56,7 +56,11 @@ Target "FSharp.Tools Nuget" (fun _ ->
         fsharpToolsNuget
 )
 
-Target "Tests" DoNothing // TODO: implement something meaningful
+Target "Tests" (fun _ ->
+    !! "/**/*.Tests.dll"
+    |> SetBaseDir resultsDir
+    |> NUnit id
+)
 
 Target "Default" DoNothing
 

@@ -23,7 +23,6 @@ open System.IO
 open NUnit.Framework
 open FsUnit
 
-
 /// Helper functions and values for implementing file-based test cases.
 [<AutoOpen>]
 module private TestCaseHelpers =
@@ -120,8 +119,9 @@ module TestCases =
                 testCases () :> System.Collections.IEnumerable
 
     //
-    [<TestCaseSource(typeof<RepositoryTestCases>, "Items")>]
+    [<Test; TestCaseSource(typeof<RepositoryTestCases>, "Items")>]
     let repository (inputFilename : string, outputFilename : string, internalModule : bool, parserModuleName : string) =
+        let sw = System.Diagnostics.Stopwatch.StartNew()
         //
         use toolProcess = new Process ()
         
@@ -158,20 +158,23 @@ module TestCases =
         else
             // Read the error/output streams from the process, then write them into the
             // error/output streams of this process so they can be captured by NUnit.
+            
+            let details = System.Text.StringBuilder()
             do
                 let errorStr = toolProcess.StandardError.ReadToEnd ()
                 if not <| String.IsNullOrWhiteSpace errorStr then
                     System.Console.Error.Write errorStr
+                    Printf.bprintf details "Errors: %s" errorStr
 
             do
                 let outputStr = toolProcess.StandardOutput.ReadToEnd ()
                 if not <| String.IsNullOrWhiteSpace outputStr then
                     System.Console.Out.Write outputStr
+                    Printf.bprintf details "Console output: %s" outputStr
 
             // Based on the process' exit code, assert that the test passed or failed.
             if toolProcess.ExitCode = 0 then
-                // TODO : Provide a message with timing information.
-                Assert.Pass ()
+                Assert.Pass (sprintf "The execution took %A for file %s" sw.Elapsed inputFilename)
             else
-                let msg = sprintf "The external tool process exited with code %i." toolProcess.ExitCode
+                let msg = sprintf "The external tool process exited with code %i.\n%s" toolProcess.ExitCode (details.ToString())
                 Assert.Fail msg
