@@ -1,10 +1,29 @@
-// (c) Microsoft Corporation 2005-2009.
+(*
+
+Copyright 2005-2009 Microsoft Corporation
+Copyright 2014 Jack Pappas
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+*)
 
 namespace FSharp.Tools.Tasks
 
 open System
 open Microsoft.Build.Framework
 open Microsoft.Build.Utilities
+open NLog
+open NLog.Targets
 
 (**************************************
 MSBuild task for fsharplex
@@ -18,12 +37,18 @@ fsharplex <filename>
         -help: display this list of options
 **************************************)
 
-type FSharpLex() = 
-    inherit Task()   
+/// MSBuild task for invoking fsharplex.
+[<Sealed>]
+type FSharpLexTask () =
+    inherit Task ()
+
     //do this.StandardOutputImportance <- "Normal"
+
+    //
     [<Required>]
     member val InputFile = null : string with get, set
     
+    //
     [<Output>]
     member val OutputFile = null : string with get, set
     
@@ -33,26 +58,48 @@ type FSharpLex() =
     // --unicode: Produce a lexer for use with 16-bit unicode characters.
     member val Unicode = false with get, set
 
-    member val LexLib = null : string with get, set
+    // --lexlib: Specify the namespace where the lexer table interpreter can be found.
+    member val LexerInterpreterNamespace = null : string with get, set
         
     override this.Execute() =
-        BuildLogger.logger <- this.Log
-        BuildLogger.file <- this.InputFile
+        // Configure NLog to use our MSBuild-style target.
+        Config.SimpleConfigurator.ConfigureForTargetLogging (new MSBuildLogTarget(this.Log, this.InputFile))
 
-        let toOption x = if x = null then None else Some x
-        FSharpLex.Program.inputFile := toOption this.InputFile
-        FSharpLex.Program.outputFile := toOption this.OutputFile
-        FSharpLex.Program.lexlib :=
-            match this.LexLib with
+        /// The output filename (for the fslex-compatible backend).
+        let outputFile =
+            // If the output file is not specified, use a default value.
+            match this.OutputFile with
+            | null ->
+                System.IO.Path.ChangeExtension (this.InputFile, "fs")
+            | outputFile ->
+                outputFile
+
+        let lexlib =
+            match this.LexerInterpreterNamespace with
             | null -> FSharpLex.Program.defaultLexerInterpreterNamespace
             | lexlib -> lexlib
-        FSharpLex.Program.unicode := this.Unicode
-        FSharpLex.Program.inputCodePage :=
+
+        let inputCodePage =
             match Int32.TryParse this.CodePage with
             | true, codePage -> Some codePage
             | _ -> None
 
-        let logger = NLog.LogManager.GetCurrentClassLogger()
-        logger.Info "Running FSharpLex..."
+        let options : FSharpLex.CompilationOptions = {
+            Unicode = this.Unicode;
+            InputCodePage = inputCodePage;
+            FslexBackendOptions = Some {
+                OutputPath = outputFile;
+                LexerLibraryNamespace = lexlib;
+                };
+            GraphBackendOptions = None;
+            }
 
-        FSharpLex.Program.main [| |] = 0
+        let logger = NLog.LogManager.GetCurrentClassLogger ()
+        logger.Trace "Invoking fsharplex..."
+
+        try
+            FSharpLex.Program.invoke this.InputFile options logger = 0
+        with ex ->
+            // Log any unhandled exceptions raised by fsharplex.
+            logger.FatalException ("Unhandled exception raised by fsharplex.", ex)
+            false
