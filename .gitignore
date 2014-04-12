@@ -98,3 +98,4 @@ ParserGenerated.fs
 /TestCases/*/*.*
 !/TestCases/*/*.fsl
 !/TestCases/*/*.fsy
+*.v2.ncrunch*

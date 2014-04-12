@@ -18,9 +18,9 @@ fsharplex <filename>
         -help: display this list of options
 **************************************)
 
-type FsharpLex() as this = 
-    inherit ToolTask()   
-    do this.StandardOutputImportance <- "Normal"
+type FSharpLex() = 
+    inherit Task()   
+    //do this.StandardOutputImportance <- "Normal"
     [<Required>]
     member val InputFile = null : string with get, set
     
@@ -34,31 +34,25 @@ type FsharpLex() as this =
     member val Unicode = false with get, set
 
     member val LexLib = null : string with get, set
-
-    // ToolTask methods
-    override this.ToolName = "fsharplex.exe"
-    
-    override this.GenerateFullPathToTool() = System.IO.Path.Combine(this.ToolPath, this.ToolExe)
         
-    override this.GenerateCommandLineCommands() =
-    
-        let builder = new CommandLineBuilder()
-        
-        // CodePage
-        builder.AppendSwitchIfNotNull("--codepage ", this.CodePage)
-        
-        // Unicode
-        if this.Unicode then builder.AppendSwitch("--unicode")
+    override this.Execute() =
+        BuildLogger.logger <- this.Log
+        BuildLogger.file <- this.InputFile
 
-        // OutputFile
-        builder.AppendSwitchIfNotNull("-o ", this.OutputFile)
+        let toOption x = if x = null then None else Some x
+        FSharpLex.Program.inputFile := toOption this.InputFile
+        FSharpLex.Program.outputFile := toOption this.OutputFile
+        FSharpLex.Program.lexlib :=
+            match this.LexLib with
+            | null -> FSharpLex.Program.defaultLexerInterpreterNamespace
+            | lexlib -> lexlib
+        FSharpLex.Program.unicode := this.Unicode
+        FSharpLex.Program.inputCodePage :=
+            match Int32.TryParse this.CodePage with
+            | true, codePage -> Some codePage
+            | _ -> None
 
-        builder.AppendSwitchUnquotedIfNotNull("--lexlib ", this.LexLib)
+        let logger = NLog.LogManager.GetCurrentClassLogger()
+        logger.Info "Running FSharpLex..."
 
-        builder.AppendSwitchIfNotNull(" ", this.InputFile)
-        
-        let args = builder.ToString()
-
-        this.BuildEngine.LogCustomEvent { new CustomBuildEventArgs(message=args,helpKeyword="",senderName="") with member x.Equals(y) = false }
-        
-        args
+        FSharpLex.Program.main [| |] = 0
