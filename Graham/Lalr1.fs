@@ -37,8 +37,6 @@ open Graham.Graph
 /// for computing lookaheads.</remarks>
 [<RequireQualifiedAccess>]
 module Lalr1 =
-    module Graph = VertexLabeledSparseDigraph
-
     /// Computes the "direct read symbols" for each nonterminal transition; that is, it computes the set
     /// of terminals which label the out-edges of the state targeted by a nonterminal transition.
     let private directRead (lr0ParserTable : Lr0ParserTable<'Nonterminal, 'Terminal>) =
