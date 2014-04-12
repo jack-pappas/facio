@@ -16,7 +16,6 @@ limitations under the License.
 
 *)
 
-//
 namespace Graham.Graph
 
 open System.Diagnostics
@@ -34,13 +33,13 @@ type internal PartialFunction<'T, 'U
     and 'U : comparison> =
     Map<'T, Set<'U>>
 
-//
+/// Functions for working with PartialFunction instances.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module internal PartialFunction =
-    //
+    /// Returns an empty partial function.
     let empty : PartialFunction<'T, 'U> = Map.empty
 
-    //
+    /// Returns a new partial function with the binding added to the given partial function.
     let add source target (func : PartialFunction<'T,' U>) : PartialFunction<'T,' U> =
         let targets =
             match Map.tryFind source func with
@@ -54,24 +53,24 @@ module internal PartialFunction =
 /// A binary relation over a set of elements.
 // For each 'x', contains the 'y' values such that xRy (given a relation 'R').
 type internal Relation<'T when 'T : comparison> =
-    Map<'T, Set<'T>>
+    PartialFunction<'T, 'T>
 
-/// The traversal status of an element.
-type private TraversalStatus =
-    /// The element has not yet been traversed.
-    | NotStarted
-    /// Traversal of the element is in-progress.
-    | InProgress of int // depth
-    /// Traversal of the element has been completed.
-    | Completed
-
-//
+/// Functional operations on relations.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module internal Relation =
-    //
+    /// The traversal status of an element.
+    type private TraversalStatus =
+        /// The element has not yet been traversed.
+        | NotStarted
+        /// Traversal of the element is in-progress.
+        | InProgress of int // depth
+        /// Traversal of the element has been completed.
+        | Completed
+
+    /// Returns an empty relation instance.
     let empty : Relation<'T> = Map.empty
 
-    //
+    /// Returns a new relation with the binding added to the given relation.
     let add source target (relation : Relation<'T>) : Relation<'T> =
         let targets =
             match Map.tryFind source relation with
@@ -83,8 +82,8 @@ module internal Relation =
         Map.add source targets relation
 
     //
-    let rec private traverse (x, N, stack, F, X : Set<'T>, R : Relation<'T>, F' : PartialFunction<'T, 'U>)
-        : Map<_,_> * Map<_,_> * _ list =
+    let rec private traverse (x, N, stack, F : PartialFunction<_,_>, X : Set<'T>, R : Relation<'T>, F' : PartialFunction<'T, 'U>)
+        : PartialFunction<_,_> * Map<_,_> * _ list =
         let stack = x :: stack
         let d = List.length stack
         let N = Map.add x (InProgress d) N
@@ -92,8 +91,7 @@ module internal Relation =
             let ``F'(x)`` = Map.find x F'
             Map.add x ``F'(x)`` F
 
-        // Find the 'y' values related to 'x' and compute xRy
-        // by recursively traversing them.
+        // Find the 'y' values related to 'x' and compute xRy by recursively traversing them.
         let F, N, stack =
             match Map.tryFind x R with
             | None ->
@@ -145,14 +143,14 @@ module internal Relation =
             F, N, stack
 
     /// <summary>The 'digraph' algorithm from DeRemer and Pennello's paper.</summary>
-    /// <remarks>This algorithm quickly computes set relations by 'condensing'
-    /// a relation graph's strongly-connected components (SCCs), then performing
-    /// a bottom-up traversal of the resulting DAG.</remarks>
+    /// <remarks>
+    /// This algorithm quickly computes set relations by 'condensing' a relation graph's strongly-connected components (SCCs),
+    /// then performing a bottom-up traversal of the resulting DAG.
+    /// </remarks>
     /// <param name="X">The set on which the relation is defined.</param>
     /// <param name="R">A relation on <paramref name="X"/>.</param>
     /// <param name="F'">A function from <paramref name="X"/> to sets.</param>
-    /// <returns><c>F</c>, a function from X to sets, such that <c>F x</c> satisfies
-    /// equation 4.1 in DeRemer and Pennello's paper.</returns>
+    /// <returns><c>F</c>, a function from X to sets, such that <c>F x</c> satisfies equation 4.1 in DeRemer and Pennello's paper.</returns>
     let digraph (X : Set<'T>, R : Relation<'T>, F' : PartialFunction<'T, 'U>) =
         //
         let N =
