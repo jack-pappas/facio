@@ -125,6 +125,8 @@ module TestCases =
         if File.Exists (inputFilename + ".ignore") then
             let ignoreMsg = sprintf "Ignoring test case '%s'." inputFilename
             Assert.Ignore ignoreMsg
+
+        let shouldFail = File.Exists (inputFilename + ".shouldfail")
     
         let sw = System.Diagnostics.Stopwatch.StartNew()
         //
@@ -177,9 +179,16 @@ module TestCases =
                     System.Console.Out.Write outputStr
                     Printf.bprintf details "Console output: %s" outputStr
 
+            let succeed () = Assert.Pass (sprintf "The execution took %A for file %s" sw.Elapsed inputFilename)
             // Based on the process' exit code, assert that the test passed or failed.
             if toolProcess.ExitCode = 0 then
-                Assert.Pass (sprintf "The execution took %A for file %s" sw.Elapsed inputFilename)
+                if shouldFail then
+                    Assert.Fail (sprintf "The test case %s should have failed, but in fact ran successfully." inputFilename)
+                else
+                    succeed()
             else
-                let msg = sprintf "The external tool process exited with code %i.\n%s" toolProcess.ExitCode (details.ToString())
-                Assert.Fail msg
+                if shouldFail then
+                    succeed()
+                else
+                    let msg = sprintf "The external tool process exited with code %i.\n%s" toolProcess.ExitCode (details.ToString())
+                    Assert.Fail msg
