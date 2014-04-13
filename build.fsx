@@ -27,7 +27,7 @@ Target "FSharp.Tools Nuget" (fun _ ->
     let grahamInfo = !! @"/**/Graham.nuspec" |> Seq.exactlyOne
     let grahamInfo = (ReadFileAsString >> getNuspecProperties) grahamInfo
     
-    let fsharpToolsNuget = !! "/**/Fsharp.Tools.nuspec" |> Seq.exactlyOne
+    let fsharpToolsNuget = !! "/**/FSharp.Tools.nuspec" |> Seq.exactlyOne
     
     let nugetVersion = grahamInfo.Version
     let workingDir = nugetTemp @@ (filenameWithouExt fsharpToolsNuget)
