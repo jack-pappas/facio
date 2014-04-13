@@ -1,0 +1,3 @@
+Ignoring the test case 'example1.fsy' for now, because I'm not sure how I want to handle it.
+We could use it as an example which is expected to fail (to test that fsharpyacc detects a problem and emits an error message),
+or we could modify the example to use the OR-style (|) syntax instead of declaring the nonterminal twice. (Or, we could do both.)
