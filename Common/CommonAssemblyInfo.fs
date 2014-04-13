@@ -43,7 +43,7 @@ let [<Literal>] private assemblyConfig =
     #endif
     #endif
     
-let [<Literal>] private versionStr = "0.8.4"
+let [<Literal>] private versionStr = "0.8.5"
 
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
