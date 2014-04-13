@@ -52,7 +52,8 @@ Target "FSharp.Tools Nuget" (fun _ ->
         { p with
             WorkingDir = workingDir
             OutputPath = resultsDir
-            Version = grahamInfo.Version })
+            Version = grahamInfo.Version
+            Files = ["**/*", None, Some "*.nuspec"] })
         fsharpToolsNuget
 )
 
