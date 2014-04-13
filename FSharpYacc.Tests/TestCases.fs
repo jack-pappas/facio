@@ -121,6 +121,11 @@ module TestCases =
     //
     [<Test; TestCaseSource(typeof<RepositoryTestCases>, "Items")>]
     let repository (inputFilename : string, outputFilename : string, internalModule : bool, parserModuleName : string) =
+        // Test cases may be ignored by adding a text file with the same filename as the input file, plus the suffix ".ignore".
+        if File.Exists (inputFilename + ".ignore") then
+            let ignoreMsg = sprintf "Ignoring test case '%s'." inputFilename
+            Assert.Ignore ignoreMsg
+    
         let sw = System.Diagnostics.Stopwatch.StartNew()
         //
         use toolProcess = new Process ()
