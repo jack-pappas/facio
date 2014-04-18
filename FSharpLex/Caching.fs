@@ -21,10 +21,16 @@ namespace FSharpLex
 open FSharpLex.SpecializedCollections
 
 
-//
+/// <summary>
+/// A set of derivative classes.
+/// A 'derivative class' is just a set of characters labeling a transition edge from one DFA state to another,
+/// so <see cref="T:DerivativeClasses"/> is a set of character sets. It could be represented in F# as <c>Set<Set<char>></c>,
+/// but this representation uses a <see cref="T:HashSet{T}"/> of <see cref="T:CharSet"/>s, which are much more
+/// efficient for dense character sets.
+/// </summary>
 type DerivativeClasses = HashSet<CharSet>
 
-//
+/// Caches the results of some "expensive" calculations performed during the compilation process to avoid repeating them.
 type CompilationCache = {
     /// A cache used for hash-consing of CharSets.
     /// This is critical for performance; without it, definitions which make heavy use of Unicode character sets
@@ -36,17 +42,17 @@ type CompilationCache = {
     /// Caches the set of derivative classes for a regular expression.
     DerivativeClassesCache : HashMap<Regex, DerivativeClasses>;
     /// Caches the intersection of two derivative classes.
-    // NOTE : Since the intersection operation is commutative, the derivative classes are sorted when creating the cache key
-    //        to increase the cache hit ratio. The "lesser" key is used as the outer key.
+    /// The intersection operation is commutative, so the derivative classes are sorted when creating the cache key
+    /// to increase the cache hit ratio. The "lesser" key is used as the outer key.
     DerivativeClassIntersectionCache : HashMap<DerivativeClasses, HashMap<DerivativeClasses, DerivativeClasses>>;
 }
 
-//
+/// <summary>Functions operating on <see cref="T:CompilationCache"/> instances.</summary>
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module CompilationCache =
     open ExtCore.Control.Collections
 
-    //
+    /// Returns an empty CompilationCache instance.
     [<CompiledName("Empty")>]
     let empty =
         { CharSetCache = HashMap.empty;
@@ -54,7 +60,16 @@ module CompilationCache =
           DerivativeClassesCache = HashMap.empty;
           DerivativeClassIntersectionCache = HashMap.empty; }
 
-    //
+    /// <summary>
+    /// Interns a character set (<see cref="T:CharSet"/>) in the given compilation cache. If the cache does not already contain an
+    /// equivalent character set, the set is added to the cache and returned along with the updated cache; otherwise, the equivalent set
+    /// is returned along with the cache.
+    /// In other words, this function hash-conses the character set using the compilation cache, which improves performance since
+    /// equality checks between sets are reduced to physical equality checks.
+    /// </summary>
+    /// <param name="charSet"></param>
+    /// <param name="compilationCache"></param>
+    /// <returns></returns>
     [<CompiledName("InternCharSet")>]
     let internCharSet (charSet : CharSet) (compilationCache : CompilationCache) =
         // Preconditions
@@ -73,7 +88,11 @@ module CompilationCache =
 
             charSet, compilationCache
 
-    //
+    /// <summary>
+    /// </summary>
+    /// <param name="derivativeClasses"></param>
+    /// <param name="compilationCache"></param>
+    /// <returns></returns>
     [<CompiledName("InternDerivativeClasses")>]
     let internDerivativeClasses (derivativeClasses : DerivativeClasses) (compilationCache : CompilationCache) : DerivativeClasses * _ =
         // Preconditions

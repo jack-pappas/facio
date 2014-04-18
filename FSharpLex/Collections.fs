@@ -32,9 +32,9 @@ open ExtCore.Control
 
 
 [<AutoOpen>]
-module internal Constants =
-    //
-    let [<Literal>] balanceTolerance = 2u   //1u
+module private Constants =
+    /// AVL balance tolerance factor.
+    let [<Literal>] balanceTolerance = 2u
 
 
 (*  NOTE :  The core functions implementing the AVL tree algorithm were extracted into OCaml
@@ -1556,22 +1556,31 @@ module internal CharDiet =
             Set.add el set)
 
 
+/// <summary>
 /// Character set implementation based on a Discrete Interval Encoding Tree.
-/// This is faster and more efficient than the built-in F# Set<'T>,
+/// This is faster and more efficient than the built-in F# <see cref="T:Set&lt;T&gt;"/>,
 /// especially for dense sets.
+/// </summary>
 [<Sealed>]
 [<DebuggerDisplay("Count = {Count}, Intervals = {IntervalCount}")>]
 type CharSet private (tree : CharDiet) as this =
-    //
+    /// The empty CharSet.
     static let empty = CharSet (CharDiet.empty)
+    /// The "full" CharSet, i.e., a CharSet containing all possible values.
+    static let universe =
+        CharSet.AddRange (Char.MinValue, Char.MaxValue, empty)
 
     /// The hash code for this CharSet is lazily computed,
     /// then cached for maximum performance.
     let hashCode = lazy (CharSet.ComputeHash this)
 
-    //
+    /// Returns an empty CharSet instance.
     static member Empty
         with get () = empty
+
+    /// <summary>Returns a <see cref="T:CharSet"/> instance containing all possible <see cref="T:System.Char"/> values.</summary>
+    static member Universe
+        with get () = universe
     
     override this.GetHashCode () =
         Lazy.force hashCode
@@ -1871,6 +1880,18 @@ type CharSet private (tree : CharDiet) as this =
             else CharSet (result)
 
     //
+    static member Complement (charSet : CharSet) : CharSet =
+        // Preconditions
+        checkNonNull "charSet" charSet
+
+        // OPTIMIZATION : If the given CharSet is the empty set or universe, we don't need to perform the actual computation.
+        if charSet == empty then universe
+        elif charSet == universe then empty
+        else
+            // Compute the complement of the given set by 'subtracting' the given CharSet from the universe set.
+            CharSet.Difference (universe, charSet)
+
+    //
     static member Exists (predicate, charSet : CharSet) : bool =
         // Preconditions
         checkNonNull "charSet" charSet
@@ -2031,8 +2052,12 @@ type CharSet private (tree : CharDiet) as this =
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module CharSet =
     /// The empty set.
-    [<CompiledName("Empty")>]
+    [<CompiledName("Empty"); GeneralizableValue>]
     let empty = CharSet.Empty
+
+    /// <summary>Returns a <see cref="T:CharSet"/> instance containing all possible <see cref="T:System.Char"/> values.</summary>
+    [<CompiledName("Universe"); GeneralizableValue>]
+    let universe = CharSet.Universe
 
     /// Returns 'true' if the set is empty.
     [<CompiledName("IsEmpty")>]
@@ -2191,3 +2216,8 @@ module CharSet =
     let inline union set1 set2 : CharSet =
         CharSet.Union (set1, set2)
 
+    /// Computes the complement of the given set.
+    [<CompiledName("Complement")>]
+    let inline complement charSet : CharSet =
+        CharSet.Complement charSet
+    

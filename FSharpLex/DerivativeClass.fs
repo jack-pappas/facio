@@ -32,33 +32,20 @@ open FSharpLex.SpecializedCollections
 
 //
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module DerivativeClass =
-    //
-    [<CompiledName("Universe")>]
-    let universe =
-        CharSet.ofRange System.Char.MinValue System.Char.MaxValue
-
-    //
-    [<CompiledName("Complement")>]
-    let complement derivClass =
-        CharSet.difference universe derivClass
-
-//
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module DerivativeClasses =
     open ExtCore.Control
 
     //
     [<CompiledName("Universe")>]
     let universe : DerivativeClasses =
-        HashSet.singleton DerivativeClass.universe
+        HashSet.singleton CharSet.universe
 
     //
     [<CompiledName("OfCharSet")>]
     let ofCharSet charSet : DerivativeClasses =
         HashSet.empty
         |> HashSet.add charSet
-        |> HashSet.add (DerivativeClass.complement charSet)
+        |> HashSet.add (CharSet.complement charSet)
 
     /// Computes a conservative approximation of the intersection of two sets of derivative classes.
     /// This is needed when computing the set of derivative classes for a compound regular expression ('And', 'Or', and 'Concat').
