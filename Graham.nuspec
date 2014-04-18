@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
     <metadata>
         <id>Graham</id>
-        <version>0.8.4-alpha</version>
+        <version>0.8.6-alpha</version>
         <dependencies>
           <dependency id="ExtCore" version="0.8.40" />
         </dependencies>

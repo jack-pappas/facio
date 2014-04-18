@@ -43,13 +43,13 @@ let [<Literal>] private assemblyConfig =
     #endif
     #endif
     
-let [<Literal>] private versionStr = "0.8.5"
+let [<Literal>] private versionStr = "0.8.6"
 
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [<assembly: AssemblyConfiguration(assemblyConfig)>]
-[<assembly: AssemblyCopyright("Copyright © Jack Pappas 2012-2013")>]
+[<assembly: AssemblyCopyright("Copyright © Jack Pappas 2012-2014")>]
 //[<assembly: AssemblyTrademark("")>]
 //[<assembly: AssemblyCulture("")>]
 

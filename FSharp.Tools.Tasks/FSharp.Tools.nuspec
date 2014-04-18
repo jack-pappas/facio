@@ -11,7 +11,7 @@
         <licenseUrl>http://opensource.org/licenses/Apache-2.0</licenseUrl>
         <projectUrl>https://github.com/jack-pappas/fsharp-tools</projectUrl>
         <requireLicenseAcceptance>false</requireLicenseAcceptance>
-        <description>Nuget package for FsharpLex and FsharpYacc.</description>
+        <description>Nuget package for fsharplex and fsharpyacc.</description>
         <tags>f# fsharp yacc fsyacc lex fslex grammar parser lexer irony dsl parsec fparsec</tags>
     </metadata>
     @files@
