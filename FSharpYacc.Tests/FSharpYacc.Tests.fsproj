@@ -46,9 +46,9 @@
   <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
   <Import Project="$(SolutionDir).nuget\NuGet.targets" />
   <ItemGroup>
+    <None Include="app.config" />
     <None Include="packages.config" />
     <Compile Include="TestCases.fs" />
-    <None Include="app.config" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExtCore">

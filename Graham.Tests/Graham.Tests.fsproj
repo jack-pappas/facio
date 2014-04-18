@@ -41,11 +41,12 @@
     <FSharpTargetsPath>$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\FSharp\Microsoft.FSharp.Targets</FSharpTargetsPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(VisualStudioVersion)' == '11.0' Or $(OS) != 'Windows_NT'">
-     <FSharpTargetsPath>$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.0\Framework\v4.0\Microsoft.FSharp.Targets</FSharpTargetsPath>
+    <FSharpTargetsPath>$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.0\Framework\v4.0\Microsoft.FSharp.Targets</FSharpTargetsPath>
   </PropertyGroup>
   <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
   <Import Project="$(SolutionDir).nuget\NuGet.targets" />
   <ItemGroup>
+    <Content Include="app.config" />
     <None Include="packages.config" />
     <Compile Include="TestHelpers.fs" />
     <Compile Include="Grammars.fs" />
@@ -53,7 +54,6 @@
     <Compile Include="Grammars.Grune.fs" />
     <Compile Include="Analysis.fs" />
     <Compile Include="Tables.fs" />
-    <Content Include="app.config" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExtCore">
