@@ -34,8 +34,6 @@ open ExtCore.Control
 [<AutoOpen>]
 module internal Constants =
     //
-    let [<Literal>] defaultStackCapacity = 16
-    //
     let [<Literal>] balanceTolerance = 2u   //1u
 
 
