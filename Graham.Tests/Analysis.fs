@@ -26,7 +26,7 @@ open Graham.Analysis
 open Tests.Graham.Grammars
 
 
-[<TestCase>]
+[<Test>]
 let ``Analysis of Grammar 3.26`` () =
     let grammar = Appel.``Grammar 3.26``
     let predictiveSets = PredictiveSets.ofGrammar grammar

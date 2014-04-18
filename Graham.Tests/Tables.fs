@@ -75,7 +75,7 @@ module private Table =
         table |> Map.add (sourceState, AugmentedNonterminal.Nonterminal nonterminal) targetState
 
 
-[<TestCase>]
+[<Test>]
 let ``LR(0) table for Grammar 3.20`` () =    
     let expectedActionTable =
         Map.empty
@@ -129,13 +129,13 @@ let ``LR(0) table for Grammar 3.20`` () =
 
     // Verify the ACTION table.
     lr0ParserTable.ActionTable
-    |> should equal expectedActionTable
+    |> assertEqual expectedActionTable
 
     // Verify the GOTO table.
     lr0ParserTable.GotoTable
-    |> should equal expectedGotoTable
+    |> assertEqual expectedGotoTable
 
-[<TestCase>]
+[<Test>]
 let ``LR(0) table for Grammar 3.23`` () =
     let expectedActionTable =
         Map.empty
@@ -170,13 +170,13 @@ let ``LR(0) table for Grammar 3.23`` () =
 
     // Verify the ACTION table.
     lr0ParserTable.ActionTable
-    |> should equal expectedActionTable
+    |> assertEqual expectedActionTable
 
     // Verify the GOTO table.
     lr0ParserTable.GotoTable
-    |> should equal expectedGotoTable
+    |> assertEqual expectedGotoTable
 
-[<TestCase>]
+[<Test>]
 let ``SLR table for Grammar 3.23`` () =
     let expectedActionTable =
         Map.empty
@@ -209,13 +209,13 @@ let ``SLR table for Grammar 3.23`` () =
 
     // Verify the ACTION table.
     slr1ParserTable.ActionTable
-    |> should equal expectedActionTable
+    |> assertEqual expectedActionTable
 
     // Verify the GOTO table.
     slr1ParserTable.GotoTable
-    |> should equal expectedGotoTable
+    |> assertEqual expectedGotoTable
 
-[<TestCase>]
+[<Test>]
 let ``LR(1) table for Grammar 3.26`` () =
     let expectedActionTable =
         Map.empty
@@ -274,13 +274,13 @@ let ``LR(1) table for Grammar 3.26`` () =
 
     // Verify the ACTION table.
     parserTable.ActionTable
-    |> should equal expectedActionTable
+    |> assertEqual expectedActionTable
 
     // Verify the GOTO table.
     parserTable.GotoTable
-    |> should equal expectedGotoTable
+    |> assertEqual expectedGotoTable
 
-[<TestCase>]
+[<Test>]
 let ``LALR(1) table for Grammar 3.26`` () =
     let expectedActionTable =
         Map.empty
@@ -337,9 +337,9 @@ let ``LALR(1) table for Grammar 3.26`` () =
 
     // Verify the ACTION table.
     lalr1ParserTable.ActionTable
-    |> should equal expectedActionTable
+    |> assertEqual expectedActionTable
 
     // Verify the GOTO table.
     lalr1ParserTable.GotoTable
-    |> should equal expectedGotoTable
+    |> assertEqual expectedGotoTable
 
