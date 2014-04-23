@@ -1,8 +1,11 @@
-F# Compiler Tools
-#################
+=======
+*Facio*
+=======
+Tools for building compilers in F#
+----------------------------------
 
-.. image:: https://travis-ci.org/jack-pappas/fsharp-tools.png  
-    :target: https://travis-ci.org/jack-pappas/fsharp-tools
+.. image:: https://travis-ci.org/jack-pappas/facio.png  
+    :target: https://travis-ci.org/jack-pappas/facio
 
 This repository contains a collection of tools which assist in implementing compilers, interpreters, and other language-based tools in F#.
 
@@ -52,9 +55,9 @@ Compatibility Notes
 Known Bugs/Issues
 =================
 
-Known bugs or other issues are listed on the `fsharp-tools issues`_ page.
+Known bugs or other issues are listed on the `facio issues`_ page.
 
-.. _`fsharp-tools issues`: https://github.com/jack-pappas/fsharp-tools/issues
+.. _`facio issues`: https://github.com/jack-pappas/facio/issues
 
 
 Licensing
