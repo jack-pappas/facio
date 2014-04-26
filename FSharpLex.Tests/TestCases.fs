@@ -72,28 +72,14 @@ let repository (inputFilename : string, outputFilename : string, unicodeSupport 
         Assert.Ignore ignoreMsg
 
     //
-    use toolProcess = new Process ()
-        
-    // Set the process' start info and other properties.
-    toolProcess.StartInfo <-
-        //
-        let toolProcessStartInfo =
-            let processArgs =
-                let unicodeSupport = if unicodeSupport then "--unicode " else ""
-                sprintf "%s-o \"%s\" \"%s\""
-                    unicodeSupport outputFilename inputFilename
-            
-            ProcessStartInfo (toolPath, processArgs)
+    use toolProcess =
+        let processArgs =
+            sprintf "%s-o \"%s\" \"%s\""
+                (if unicodeSupport then "--unicode " else "")
+                outputFilename
+                inputFilename
 
-        // Set additional properties of the ProcessStartInfo.
-        toolProcessStartInfo.CreateNoWindow <- true
-        toolProcessStartInfo.ErrorDialog <- false
-        toolProcessStartInfo.WindowStyle <- ProcessWindowStyle.Hidden
-        toolProcessStartInfo.WorkingDirectory <- Path.GetDirectoryName toolPath
-        toolProcessStartInfo.UseShellExecute <- false
-        toolProcessStartInfo.RedirectStandardError <- true
-        toolProcessStartInfo.RedirectStandardOutput <- true
-        toolProcessStartInfo
+        TestSystem.createToolProcess toolPath processArgs None
 
     // Start the process.
     if not <| toolProcess.Start () then
@@ -104,23 +90,27 @@ let repository (inputFilename : string, outputFilename : string, unicodeSupport 
         // If the process has not completed yet, it's considered to be "timed out" so kill it.
         toolProcess.Kill ()
         Assert.Inconclusive "The external tool process timed out."
+
+    // Read the error/output streams from the process, then write them into the
+    // error/output streams of this process so they can be captured by NUnit.
+    let details = System.Text.StringBuilder()
+    do
+        let errorStr = toolProcess.StandardError.ReadToEnd ()
+        if not <| String.IsNullOrWhiteSpace errorStr then
+            System.Console.Error.Write errorStr
+            Printf.bprintf details "Errors: %s" errorStr
+
+    do
+        let outputStr = toolProcess.StandardOutput.ReadToEnd ()
+        if not <| String.IsNullOrWhiteSpace outputStr then
+            System.Console.Out.Write outputStr
+            Printf.bprintf details "Console output: %s" outputStr
+
+    // Based on the process' exit code, assert that the test passed or failed.
+    if toolProcess.ExitCode = 0 then
+        let elapsedTime = toolProcess.ExitTime - toolProcess.StartTime
+        let msg = sprintf "The execution took %A for file %s" elapsedTime inputFilename
+        Assert.Pass msg
     else
-        // Read the error/output streams from the process, then write them into the
-        // error/output streams of this process so they can be captured by NUnit.
-        do
-            let errorStr = toolProcess.StandardError.ReadToEnd ()
-            if not <| String.IsNullOrWhiteSpace errorStr then
-                System.Console.Error.Write errorStr
-
-        do
-            let outputStr = toolProcess.StandardOutput.ReadToEnd ()
-            if not <| String.IsNullOrWhiteSpace outputStr then
-                System.Console.Out.Write outputStr
-
-        // Based on the process' exit code, assert that the test passed or failed.
-        if toolProcess.ExitCode = 0 then
-            // TODO : Provide a message with timing information.
-            Assert.Pass ()
-        else
-            let msg = sprintf "The external tool process exited with code %i." toolProcess.ExitCode
-            Assert.Fail msg
+        let msg = sprintf "The external tool process exited with code %i.%s%O" toolProcess.ExitCode Environment.NewLine details
+        Assert.Fail msg
