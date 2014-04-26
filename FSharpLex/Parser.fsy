@@ -29,11 +29,13 @@ open FSharpLex.Ast
 %token <CodeFragment> CODE
 %token <char> CHAR
 %token <string> UNICODE_CATEGORY
-%token RULE PARSE LET AND LPAREN RPAREN
-%token EOF BAR DOT PLUS STAR QMARK EQUALS UNDERSCORE LBRACK RBRACK HAT DASH
+%token RULE PARSE LET AND
+%token LPAREN RPAREN
+%token TILDE
+%token EOF BAR AMP HAT DOT PLUS STAR QMARK EQUALS UNDERSCORE LBRACK RBRACK DASH
 %start spec
 %right BAR
-%left regexp_alt
+%left regexp_or regexp_and regexp_xor
 %left regexp_seq
 %nonassoc regexp_opt
 %nonassoc regexp_plus regexp_star
@@ -156,12 +158,26 @@ regexp:
         | EndOfFile ->
             raise <| exn "End-of-file marker in Optional pattern." }
 
-    | regexp BAR regexp %prec regexp_alt {
+    | regexp BAR regexp %prec regexp_or {
         match $1, $3 with
         | Pattern pat1, Pattern pat2 ->
             Pattern <| Or (pat1, pat2)
         | _ ->
             raise <| exn "End-of-file marker in Or pattern." }
+
+    | regexp AMP regexp %prec regexp_and {
+        match $1, $3 with
+        | Pattern pat1, Pattern pat2 ->
+            Pattern <| And (pat1, pat2)
+        | _ ->
+            raise <| exn "End-of-file marker in And pattern." }
+
+    | regexp HAT regexp %prec regexp_xor {
+        match $1, $3 with
+        | Pattern pat1, Pattern pat2 ->
+            Pattern <| Xor (pat1, pat2)
+        | _ ->
+            raise <| exn "End-of-file marker in Xor pattern." }
 
     | LPAREN regexp RPAREN { $2 }
     | LBRACK charset RBRACK {

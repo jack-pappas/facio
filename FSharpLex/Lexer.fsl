@@ -159,6 +159,8 @@ rule token = parse
         newline lexbuf
         token lexbuf }
     | ident_start_char ident_char* { IDENT (lexeme lexbuf) }
+
+    | '~' { TILDE }
     | '|' { BAR }
     | '.' { DOT }
     | '+' { PLUS }
@@ -170,6 +172,7 @@ rule token = parse
     | '(' { LPAREN }
     | ')' { RPAREN }
     | '_' { UNDERSCORE }
+    | '&' { AMP }
     | '^' { HAT }
     | '-' { DASH }
     | "(*" {
@@ -210,8 +213,8 @@ and string p buff = parse
 
 and code p buff = parse
     | "}" {
-        //CODE (buff.ToString (), p)
-        CODE (buff.ToString ())
+        //CODE (Substring.ofString <| buff.ToString (), p)
+        CODE (Substring.ofString <| buff.ToString ())
         }
     | "{" {
         buff.Append (lexeme lexbuf) |> ignore
