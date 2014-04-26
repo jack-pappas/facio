@@ -22,12 +22,12 @@ Target "Build" (fun _ ->
     |> Log "Build-Output (nuget): "
 )
 
-Target "FSharp.Tools Nuget" (fun _ ->
+Target "Facio Nuget" (fun _ ->
     
     let grahamInfo = !! @"/**/Graham.nuspec" |> Seq.exactlyOne
     let grahamInfo = (ReadFileAsString >> getNuspecProperties) grahamInfo
     
-    let fsharpToolsNuget = !! "/**/FSharp.Tools.nuspec" |> Seq.exactlyOne
+    let fsharpToolsNuget = !! "/**/Facio.nuspec" |> Seq.exactlyOne
     
     let nugetVersion = grahamInfo.Version
     let workingDir = nugetTemp @@ (filenameWithouExt fsharpToolsNuget)
@@ -35,13 +35,13 @@ Target "FSharp.Tools Nuget" (fun _ ->
     ensureDirectory (workingDir @@ "build")
     ensureDirectory (workingDir @@ "lib" @@ "net40")
     
-    !! "/**/FSharp.Tools.Tasks/bin/Release/*.dll"
-    ++ "/**/FSharp.Tools.Tasks/bin/Release/*.exe"
-    ++ "/**/FSharp.Tools.Tasks/bin/Release/*.config"
+    !! "/**/Facio.BuildTasks/bin/Release/*.dll"
+    ++ "/**/Facio.BuildTasks/bin/Release/*.exe"
+    ++ "/**/Facio.BuildTasks/bin/Release/*.config"
     ++ "/**/fsharp*.exe.config"
     |> CopyFiles (workingDir @@ "build")
 
-    !! "/**/bin/Release/FSharp.Tools.targets"
+    !! "/**/bin/Release/Facio.targets"
     |> CopyFiles (workingDir @@ "build")
     
     !! "/**/LegacyInterpreters/bin/Release/*.*"
@@ -68,7 +68,7 @@ Target "Default" DoNothing
 "Clean"
     ==> "Build"
     =?> ("Tests", not <| hasBuildParam "NoTests")
-    ==> "FSharp.Tools Nuget"
+    ==> "Facio Nuget"
     ==> "Default"
 
 RunTargetOrDefault "Default"

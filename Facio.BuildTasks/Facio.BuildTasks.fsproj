@@ -52,10 +52,10 @@
     <Compile Include="BuildLogger.fs" />
     <Compile Include="FsharpLex.Build.fs" />
     <Compile Include="FsharpYacc.Build.fs" />
-    <None Include="FSharp.Tools.targets">
+    <None Include="Facio.targets">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="FSharp.Tools.nuspec" />
+    <None Include="Facio.nuspec" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Microsoft.Build.Framework" />

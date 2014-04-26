@@ -17,7 +17,7 @@ limitations under the License.
 
 *)
 
-namespace FSharp.Tools.Tasks
+namespace Facio.BuildTasks
 
 open System
 open Microsoft.Build.Framework

@@ -31,7 +31,7 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BackendUtils", "BackendUtil
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "LegacyInterpreters", "LegacyInterpreters\LegacyInterpreters.fsproj", "{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Tools.Tasks", "FSharp.Tools.Tasks\FSharp.Tools.Tasks.fsproj", "{72FC84DA-5FF1-4EDC-8A96-21132488A552}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.BuildTasks", "Facio.BuildTasks\Facio.BuildTasks.fsproj", "{72FC84DA-5FF1-4EDC-8A96-21132488A552}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{C29AF896-092A-49A9-953A-2C14F5B9B4F6}"
 	ProjectSection(SolutionItems) = preProject

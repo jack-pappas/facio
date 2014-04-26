@@ -16,7 +16,7 @@ limitations under the License.
 
 *)
 
-namespace FSharp.Tools.Tasks
+namespace Facio.BuildTasks
 
 open NLog
 open NLog.Targets

@@ -1,6 +1,6 @@
 ﻿<!--
 ***********************************************************************************************
-FSharp.Tools.targets
+Facio.targets
 
 WARNING:  DO NOT MODIFY this file unless you are knowledgeable about MSBuild and have
 			created a backup copy.  Incorrect changes to this file will make it
@@ -11,8 +11,8 @@ Copyright (C) Microsoft Corporation. All rights reserved.
 -->
 
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <UsingTask TaskName="FSharpLexTask" AssemblyFile="FSharp.Tools.Tasks.dll"/>
-  <UsingTask TaskName="FSharpYaccTask" AssemblyFile="FSharp.Tools.Tasks.dll"/>
+  <UsingTask TaskName="FSharpLexTask" AssemblyFile="Facio.BuildTasks.dll"/>
+  <UsingTask TaskName="FSharpYaccTask" AssemblyFile="Facio.BuildTasks.dll"/>
   <PropertyGroup>
     <CompileDependsOn>CallFSharpLex;CallFSharpYacc;$(CompileDependsOn)</CompileDependsOn>
   </PropertyGroup>
