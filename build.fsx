@@ -44,7 +44,7 @@ Target "Facio Nuget" (fun _ ->
     !! "/**/bin/Release/Facio.targets"
     |> CopyFiles (workingDir @@ "build")
     
-    !! "/**/LegacyInterpreters/bin/Release/*.*"
+    !! "/**/Facio.Support.LegacyInterpreters/bin/Release/*.*"
     -- "/**/FSharp.Core.*"
     |> CopyFiles (workingDir @@ "lib" @@ "net40")
 

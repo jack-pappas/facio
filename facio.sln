@@ -27,9 +27,9 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Graham", "Graham\Graham.fsp
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Graham.Tests", "Graham.Tests\Graham.Tests.fsproj", "{ABFDC4C4-6148-4E28-802C-98445FCD668B}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "BackendUtils", "BackendUtils\BackendUtils.fsproj", "{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.Utilities.Backend", "Facio.Utilities.Backend\Facio.Utilities.Backend.fsproj", "{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "LegacyInterpreters", "LegacyInterpreters\LegacyInterpreters.fsproj", "{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.Support.LegacyInterpreters", "Facio.Support.LegacyInterpreters\Facio.Support.LegacyInterpreters.fsproj", "{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.BuildTasks", "Facio.BuildTasks\Facio.BuildTasks.fsproj", "{72FC84DA-5FF1-4EDC-8A96-21132488A552}"
 EndProject

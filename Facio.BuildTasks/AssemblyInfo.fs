@@ -1,6 +1,6 @@
 ﻿(*
 
-Copyright 2012-2013 Jack Pappas
+Copyright 2012-2014 Jack Pappas
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,10 +26,10 @@ open System.Runtime.InteropServices
 open System.Security
 open System.Security.Permissions
 
-[<assembly: AssemblyTitle("BackendUtils")>]
-[<assembly: AssemblyDescription("A library containing utility modules used by the backends in 'fsharplex' and 'fsharpyacc'.")>]
+[<assembly: AssemblyTitle("Facio.BuildTasks")>]
+[<assembly: AssemblyDescription("MSBuild tasks for Facio.")>]
 [<assembly: NeutralResourcesLanguage("en-US")>]
-[<assembly: Guid("8807f1f0-e13d-45fa-bf59-d1573a86a58a")>]
+[<assembly: Guid("1b289005-6d05-4709-ac72-f27e709bf2bc")>]
 
 (* Dependency hints for Ngen *)
 [<assembly: DependencyAttribute("FSharp.Core", LoadHint.Always)>]

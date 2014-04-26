@@ -16,8 +16,7 @@ limitations under the License.
 
 *)
 
-//
-module BackendUtils.Drawing
+namespace Facio.Utilities.Backend.Drawing
 
 
 /// Functions for generating color palettes.
@@ -71,17 +70,19 @@ module Palette =
 
     /// Returns a randomly-generated color palette
     /// with the specified number of colors.
+    [<CompiledName("Random")>]
     let random count =
         // Preconditions
-        // TODO : Count must be non-negative.
+        if count < 0 then
+            invalidArg "count" "The number of colors in the generated palette cannot be negative."
 
-        // TODO : If the count is zero return an empty array.
-
+        /// Simple random number generator.
         let rng = System.Random ()
+
         // Create the random hue value for each color.
-        Array.init count <| fun _ -> rng.NextDouble ()
+        Array.init count <| fun _ ->
+            rng.NextDouble ()
         |> Array.map (fun hue ->
             // The saturation and brightness values can be tweaked as desired.
             let h = (hue + phi_conj) % 1.0
             colorFromHSV (h * 360.0, 0.5, 0.95))
-

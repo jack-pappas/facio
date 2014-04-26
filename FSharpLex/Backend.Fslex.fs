@@ -159,7 +159,7 @@ module private AsciiLexer =
 module private UnicodeLexer =
     open System.CodeDom.Compiler
     open System.Text
-    open BackendUtils.CodeGen
+    open Facio.Utilities.Backend.CodeGen
 
     (*  Each row of a Unicode-based, 'fslex'-compatible transition table contains:
             - 128 entries for the standard ASCII characters
@@ -384,7 +384,7 @@ module private UnicodeLexer =
 module private FsLex =
     open System.CodeDom.Compiler
     open System.Text
-    open BackendUtils.CodeGen
+    open Facio.Utilities.Backend.CodeGen
 
     //
     let private emitTransitionTable (compiledRules : Map<RuleIdentifier, CompiledRule>) (options : CompilationOptions) (indentingWriter : IndentedTextWriter) =

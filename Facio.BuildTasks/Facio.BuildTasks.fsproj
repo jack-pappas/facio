@@ -7,11 +7,11 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>72fc84da-5ff1-4edc-8a96-21132488a552</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>FSharp.Tools.Tasks</RootNamespace>
-    <AssemblyName>FSharp.Tools.Tasks</AssemblyName>
+    <RootNamespace>Facio.BuildTasks</RootNamespace>
+    <AssemblyName>Facio.BuildTasks</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <TargetFSharpCoreVersion>4.3.0.0</TargetFSharpCoreVersion>
-    <Name>FSharp.Tools.Tasks</Name>
+    <Name>Facio.BuildTasks</Name>
     <TargetFrameworkProfile>
     </TargetFrameworkProfile>
     <SolutionDir Condition="$(SolutionDir) == '' Or $(SolutionDir) == '*Undefined*'">..\</SolutionDir>
@@ -25,7 +25,7 @@
     <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Debug\FSharp.Tools.Tasks.XML</DocumentationFile>
+    <DocumentationFile>bin\Debug\Facio.BuildTasks.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -34,7 +34,7 @@
     <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Release\FSharp.Tools.Tasks.XML</DocumentationFile>
+    <DocumentationFile>bin\Release\Facio.BuildTasks.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
@@ -49,6 +49,7 @@
   <ItemGroup>
     <None Include="app.config" />
     <None Include="packages.config" />
+    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="BuildLogger.fs" />
     <Compile Include="FsharpLex.Build.fs" />
     <Compile Include="FsharpYacc.Build.fs" />

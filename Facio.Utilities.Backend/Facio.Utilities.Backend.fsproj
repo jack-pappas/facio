@@ -5,12 +5,12 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{cedb1c58-a44c-4a65-b5fa-7bc0ef54d6b6}</ProjectGuid>
+    <ProjectGuid>{4841364d-cb0b-45cc-ac84-f8e3b86a1c11}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>LegacyInterpreters</RootNamespace>
-    <AssemblyName>LegacyInterpreters</AssemblyName>
+    <RootNamespace>Facio.Utilities.Backend</RootNamespace>
+    <AssemblyName>Facio.Utilities.Backend</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <Name>LegacyInterpreters</Name>
+    <Name>Facio.Utilities.Backend</Name>
     <TargetFSharpCoreVersion>4.3.0.0</TargetFSharpCoreVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -21,7 +21,8 @@
     <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Debug\LegacyInterpreters.XML</DocumentationFile>
+    <DocumentationFile>bin\Debug\Facio.Utilities.Backend.XML</DocumentationFile>
+    <OtherFlags>--warnon:1182</OtherFlags>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -30,7 +31,7 @@
     <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Release\LegacyInterpreters.XML</DocumentationFile>
+    <DocumentationFile>bin\Release\Facio.Utilities.Backend.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
@@ -44,10 +45,9 @@
   <Import Project="$(FSharpTargetsPath)" Condition="Exists('$(FSharpTargetsPath)')" />
   <ItemGroup>
     <None Include="app.config" />
-    <Compile Include="Lexing.fsi" />
-    <Compile Include="Lexing.fs" />
-    <Compile Include="Parsing.fsi" />
-    <Compile Include="Parsing.fs" />
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="CodeGen.fs" />
+    <Compile Include="Drawing.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
@@ -55,7 +55,7 @@
     </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="System" />
-    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

@@ -77,8 +77,8 @@
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\LegacyInterpreters\LegacyInterpreters.fsproj">
-      <Name>LegacyInterpreters</Name>
+    <ProjectReference Include="..\Facio.Support.LegacyInterpreters\Facio.Support.LegacyInterpreters.fsproj">
+      <Name>Facio.Support.LegacyInterpreters</Name>
       <Project>{cedb1c58-a44c-4a65-b5fa-7bc0ef54d6b6}</Project>
       <Private>True</Private>
     </ProjectReference>
@@ -97,8 +97,8 @@
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.Composition" />
     <Reference Include="System.Core" />
-    <ProjectReference Include="..\BackendUtils\BackendUtils.fsproj">
-      <Name>BackendUtils</Name>
+    <ProjectReference Include="..\Facio.Utilities.Backend\Facio.Utilities.Backend.fsproj">
+      <Name>Facio.Utilities.Backend</Name>
       <Project>{4841364d-cb0b-45cc-ac84-f8e3b86a1c11}</Project>
       <Private>True</Private>
     </ProjectReference>

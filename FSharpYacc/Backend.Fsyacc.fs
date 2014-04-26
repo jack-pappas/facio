@@ -47,7 +47,7 @@ module private FsYaccConstants =
 [<AutoOpen>]
 module private CodeGenHelpers =
     open System
-    open BackendUtils.CodeGen
+    open Facio.Utilities.Backend.CodeGen
 
     /// Emit a formatted string as a single-line F# comment into an IndentedTextWriter.
     let inline comment (writer : IndentedTextWriter) fmt : ^T =
@@ -137,7 +137,7 @@ module private FsYacc =
     open Printf
     open Graham.Grammar
     open Graham.LR
-    open BackendUtils.CodeGen
+    open Facio.Utilities.Backend.CodeGen
 
     
     /// Values used in the ACTION tables created by fsyacc.

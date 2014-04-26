@@ -38,7 +38,7 @@ module private Dgml =
     open System.Xml
     open System.Xml.Linq
     open LanguagePrimitives
-    open BackendUtils.Drawing
+    open Facio.Utilities.Backend.Drawing
 
     (* TODO :   Apply styles to the start state of each rule (perhaps some distinct
                 background color which is the same for the start states of all rules);
