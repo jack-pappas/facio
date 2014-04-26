@@ -48,7 +48,6 @@
   <ItemGroup>
     <Content Include="app.config" />
     <None Include="packages.config" />
-    <Compile Include="TestHelpers.fs" />
     <Compile Include="Collections.fs" />
     <Compile Include="TestCases.fs" />
   </ItemGroup>
@@ -77,6 +76,11 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Facio.Utilities.Testing\Facio.Utilities.Testing.fsproj">
+      <Name>Facio.Utilities.Testing</Name>
+      <Project>{68bfe4f1-020c-4e33-8588-a3e438deecb7}</Project>
+      <Private>True</Private>
+    </ProjectReference>
     <ProjectReference Include="..\FSharpLex\fsharplex.fsproj">
       <Name>fsharplex</Name>
       <Project>{f9f750fb-2817-4559-bd0a-be5402102d37}</Project>

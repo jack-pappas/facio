@@ -48,7 +48,6 @@
   <ItemGroup>
     <Content Include="app.config" />
     <None Include="packages.config" />
-    <Compile Include="TestHelpers.fs" />
     <Compile Include="Grammars.fs" />
     <Compile Include="Grammars.Appel.fs" />
     <Compile Include="Grammars.Grune.fs" />
@@ -76,6 +75,11 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Facio.Utilities.Testing\Facio.Utilities.Testing.fsproj">
+      <Name>Facio.Utilities.Testing</Name>
+      <Project>{68bfe4f1-020c-4e33-8588-a3e438deecb7}</Project>
+      <Private>True</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Graham\Graham.fsproj">
       <Name>Graham</Name>
       <Project>{ab802cfd-4ea9-4f11-ade3-f2f5518bfd52}</Project>

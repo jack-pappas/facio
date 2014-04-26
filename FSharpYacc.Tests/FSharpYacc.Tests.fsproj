@@ -68,6 +68,11 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
+    <ProjectReference Include="..\Facio.Utilities.Testing\Facio.Utilities.Testing.fsproj">
+      <Name>Facio.Utilities.Testing</Name>
+      <Project>{68bfe4f1-020c-4e33-8588-a3e438deecb7}</Project>
+      <Private>True</Private>
+    </ProjectReference>
     <ProjectReference Include="..\FSharpYacc\FSharpYacc.fsproj">
       <Name>FSharpYacc</Name>
       <Project>{1a562247-7b57-45df-9bab-cdfa6202a6b4}</Project>
