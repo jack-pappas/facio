@@ -51,6 +51,7 @@
     <Compile Include="Grammars.fs" />
     <Compile Include="Grammars.Appel.fs" />
     <Compile Include="Grammars.Grune.fs" />
+    <Compile Include="Grammars.DennyMalloy.fs" />
     <Compile Include="Analysis.fs" />
     <Compile Include="Tables.fs" />
   </ItemGroup>
