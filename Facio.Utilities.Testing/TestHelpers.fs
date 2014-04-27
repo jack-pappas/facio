@@ -112,7 +112,7 @@ type private NUnitRunner () =
 let private nUnitConfig = {
     // Config.Verbose
     Config.Quick with
-        MaxTest = 1000;
+        MaxTest = 5000;
         Runner = NUnitRunner (); }
 
 /// Tests that the specified property is correct.
