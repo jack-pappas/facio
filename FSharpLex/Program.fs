@@ -61,15 +61,13 @@ module Program =
     //------------------------------------------------------------------
     // This code is duplicated from Microsoft.FSharp.Compiler.UnicodeLexing
 
-    type private Lexbuf =  LexBuffer<char>
-
     /// Standard utility to create a Unicode LexBuffer
     ///
-    /// One small annoyance is that LexBuffers and not IDisposable. This means
+    /// One small annoyance is that LexBuffers are not IDisposable. This means
     /// we can't just return the LexBuffer object, since the file it wraps wouldn't
     /// get closed when we're finished with the LexBuffer. Hence we return the stream,
     /// the reader and the LexBuffer. The caller should dispose the first two when done.
-    let private UnicodeFileAsLexbuf (filename, codePage : int option) : FileStream * StreamReader * Lexbuf =
+    let private UnicodeFileAsLexbuf (filename, codePage : int option) : FileStream * StreamReader * LexBuffer<char> =
         // Use the .NET functionality to auto-detect the unicode encoding
         // It also uses Lexing.from_text_reader to present the bytes read to the lexer in UTF8 decoded form
         let stream = new FileStream (filename, FileMode.Open, FileAccess.Read, FileShare.Read)
@@ -97,7 +95,6 @@ module Program =
         container.ComposeParts (backends)
         backends
 
-    open FSharpLex.SpecializedCollections
 
     /// Invokes FSharpLex with the specified options.
     [<CompiledName("Invoke")>]
@@ -110,9 +107,8 @@ module Program =
         elif not <| System.IO.File.Exists inputFile then
             invalidArg "inputFile" "No lexer specification exists at the specified path."
 
-        // TEMP : This is hard-coded for now, but eventually we'll make it
-        // so the user can specify which backend(s) to use.
         /// Compiler backends.
+        // TEMP : This is hard-coded for now, but eventually we'll make it so the user can specify which backend(s) to use.
         let backends = loadBackends ()
 
         /// The parsed lexer specification.
@@ -135,9 +131,14 @@ module Program =
                                 Parameters = List.rev rule.Parameters;
                                 Clauses = List.rev rule.Clauses; })
                         |> List.rev; }
-            with exn ->
-                let pos = lexbuf.StartPos
-                failwithf "could not parse the lexer spec: syntax error near line %d, column %d\n%s" pos.Line pos.Column exn.Message
+            with ex ->
+                let msg =
+                    let pos = lexbuf.StartPos
+                    sprintf "Could not parse the lexer spec: syntax error near line %d, column %d" pos.Line pos.Column
+                logger.FatalException (msg, ex)
+
+                // Exit with an error code
+                exit 1
 
         // Compile the parsed specification.
         let compiledSpecification =
