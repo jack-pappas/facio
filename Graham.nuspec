@@ -11,6 +11,7 @@
         <owners />
         <licenseUrl>http://opensource.org/licenses/Apache-2.0</licenseUrl>
         <projectUrl>https://github.com/jack-pappas/fsharp-tools</projectUrl>
+        <iconUrl>https://github.com/jack-pappas/facio/blob/master/docs/files/img/logo.png?raw=true</iconUrl>
         <requireLicenseAcceptance>false</requireLicenseAcceptance>
         <description>A library for creating and analyzing context-free grammars (CFGs) and implementing parser-generators.</description>
         <tags>f# fsharp yacc fsyacc lex fslex grammar parser lexer irony dsl parsec fparsec</tags>
