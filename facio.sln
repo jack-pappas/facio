@@ -1,6 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
+# Visual Studio 2013
+VisualStudioVersion = 12.0.21005.1
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{E0ED8004-9C63-4BA4-987C-EE634B39B881}"
 	ProjectSection(SolutionItems) = preProject
 		.nuget\NuGet.Config = .nuget\NuGet.Config
@@ -11,6 +13,11 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{0F12E0D6-7576-4C95-BE56-5C48BA792032}"
 	ProjectSection(SolutionItems) = preProject
 		Common\CommonAssemblyInfo.fs = Common\CommonAssemblyInfo.fs
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{C29AF896-092A-49A9-953A-2C14F5B9B4F6}"
+	ProjectSection(SolutionItems) = preProject
+		build.fsx = build.fsx
 	EndProjectSection
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "fsharplex", "FSharpLex\fsharplex.fsproj", "{F9F750FB-2817-4559-BD0A-BE5402102D37}"
@@ -30,11 +37,6 @@ EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.Support.LegacyInterpreters", "Facio.Support.LegacyInterpreters\Facio.Support.LegacyInterpreters.fsproj", "{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.BuildTasks", "Facio.BuildTasks\Facio.BuildTasks.fsproj", "{72FC84DA-5FF1-4EDC-8A96-21132488A552}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{C29AF896-092A-49A9-953A-2C14F5B9B4F6}"
-	ProjectSection(SolutionItems) = preProject
-		build.fsx = build.fsx
-	EndProjectSection
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.Utilities.Testing", "Facio.Utilities.Testing\Facio.Utilities.Testing.fsproj", "{68BFE4F1-020C-4E33-8588-A3E438DEECB7}"
 EndProject
