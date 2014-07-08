@@ -24,7 +24,7 @@ open FSharpLex.SpecializedCollections
 /// <summary>
 /// A set of derivative classes.
 /// A 'derivative class' is just a set of characters labeling a transition edge from one DFA state to another,
-/// so <see cref="T:DerivativeClasses"/> is a set of character sets. It could be represented in F# as <c>Set<Set<char>></c>,
+/// so <see cref="T:DerivativeClasses"/> is a set of character sets. It could be represented in F# as <c>Set{Set{char}}</c>,
 /// but this representation uses a <see cref="T:HashSet{T}"/> of <see cref="T:CharSet"/>s, which are much more
 /// efficient for dense character sets.
 /// </summary>
