@@ -2,9 +2,9 @@
 <html lang="en">
   <head>
     <meta charset="utf-8"/>
-    <title>index</title>
+    <title>Compiler - Facio</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <meta name="description" content="Tools for building compilers, interpreters, and analysis tools in F#"/>
+    <meta name="description" content=""/>
     <meta name="author" content="Jack Pappas"/>
 
     <script src="https://code.jquery.com/jquery-1.8.0.js"></script>
@@ -43,51 +43,98 @@
       <div class="row">
         <div class="span9" id="main">
           
-<h2>Tools for building compilers in F#</h2>
 
-<p>This repository contains a collection of tools which assist in implementing compilers, interpreters, and other language-based tools in F#.</p>
 
-<div class="row">
-    <div class="span1"></div>
-    <div class="span6">
-        <div class="well well-small" id="nuget">
-            The Facio library can be <a href="https://www.nuget.org/packages/Facio/">installed from NuGet</a>:
-            <pre>PM> Install-Package Facio -Pre</pre>
-        </div>
-    </div>
-    <div class="span1"></div>
+
+<h1>Compiler</h1>
+<div class="xmldoc">
 </div>
 
-<h3><a href="/facio/lex_index.html"><strong>FSharpLex</strong></a></h3>
+<!-- Render nested types and modules, if there are any -->
+  <h2>Nested types and modules</h2>
+  <div>
+      <table class="table table-bordered type-list">
+    <thead>
+      <tr><td>Type</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td class="type-name">
+            <a href="fsharpyacc-compiler-precompilationstate-2.html">PrecompilationState<'Nonterminal, 'Terminal></a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharpyacc-compiler-processedproductionrule-2.html">ProcessedProductionRule<'Nonterminal, 'Terminal></a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharpyacc-compiler-processedspecification-2.html">ProcessedSpecification<'Nonterminal, 'Terminal></a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharpyacc-compiler-validationmessages.html">ValidationMessages</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+    </tbody>
+  </table>
 
-<p><code>FSharpLex</code> is a tool for generating lexical analyzers ("tokenizers") from a lexer specification file (<code>*.fsl</code>).</p>
+  </div>
 
-<p>The lexer specification files used by <code>FSharpLex</code> and the lexers it generates are largely compatible with the older <code>fslex</code> tool from the F# PowerPack.</p>
+  <h3>Functions and values</h3>
+  <table class="table table-bordered member-list">
+    <thead>
+      <tr><td>Function or value</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="member-name">
 
-<h3><a href="/facio/yacc_index.html"><strong>FSharpYacc</strong></a></h3>
+          <code onmouseout="hideTip(event, '133', 133)" onmouseover="showTip(event, '133', 133)">
+            compile (processedSpec, options)
+          </code>
+          <div class="tip" id="133">
+            <strong>Signature:</strong> (processedSpec:ProcessedSpecification&lt;NonterminalIdentifier,TerminalIdentifier&gt; * options:CompilationOptions) -&gt; Choice&lt;Lr0ParserTable&lt;NonterminalIdentifier,TerminalIdentifier&gt;,string list&gt;<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="https://github.com/jack-pappas/facio/tree/master/FSharpYacc/Compiler.fs#L593-593" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Compiles a parser specification into a deterministic pushdown automaton (DPDA),
+then invokes a specified backend to generate code implementing the parser automaton.</p>
 
-<p><code>FSharpYacc</code> is a tool for generating parsers for context-free grammars (CFGs) described by a parser specification file (<code>*.fsy</code>).</p>
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
 
-<p>The parser specification files used by <code>FSharpYacc</code> and the parsers it generates are largely compatible with the older <code>fsyacc</code> tool from the F# PowerPack.</p>
+          <code onmouseout="hideTip(event, '134', 134)" onmouseover="showTip(event, '134', 134)">
+            precompile (spec, options)
+          </code>
+          <div class="tip" id="134">
+            <strong>Signature:</strong> (spec:Specification * options:CompilationOptions) -&gt; PrecompilationState&lt;NonterminalIdentifier,TerminalIdentifier&gt;<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="https://github.com/jack-pappas/facio/tree/master/FSharpYacc/Compiler.fs#L210-210" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Validates the given parser specification, and compiles it into the
+data structures used by the Graham library.</p>
 
-<h3><a href="/facio/graham_index.html"><strong>Graham</strong></a></h3>
-
-<p><code>Graham</code> is a library for creating, manipulating, and analyzing context-free grammars (CFGs).</p>
-
-<p><code>Graham</code> also includes algorithms for generating parser automata, providing a flexible, <em>generic</em> approach to implementing parser-generator tools like <code>FSharpYacc</code>.</p>
-
-<h2>Implementation Status</h2>
-
-<p>These tools are still in development and should be considered <strong>alpha</strong>-quality.</p>
-
-<p>The core functionality has been implemented and passes some simple tests. The <code>FSharpLex</code> and <code>FSharpYacc</code> tools are able to bootstrap themselves, but there is still much work to be done for the user-facing parts of the code.</p>
-
-<p>At this time, <code>FSharpLex</code> and <code>FSharpYacc</code> generate code which uses the lexer/parser table interpreters for fslex and fsyacc (originally provided as part of the F# PowerPack). I've copied the code for these interpreters from the <a href="https://github.com/fsharp/powerpack">F# PowerPack repository</a> into the <code>LegacyInterpreters</code> project in this repository for convenience; this also allows you to build the interpreters for newer versions of .NET (the F# PowerPack was originally designed for .NET 2.0).</p>
-
-<h2>Licensing</h2>
-
-<p>All projects in this repository are licensed under the terms of the <a href="https://www.apache.org/licenses/LICENSE-2.0.html">Apache 2.0 license</a>.</p>
-
+        </td>
+      </tr>
+    </tbody>
+  </table>
 
         </div>
         <div class="span3">
