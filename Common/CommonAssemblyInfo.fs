@@ -42,14 +42,12 @@ let [<Literal>] private assemblyConfig =
     ""
     #endif
     #endif
-    
-let [<Literal>] private versionStr = "0.8.6"
 
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [<assembly: AssemblyConfiguration(assemblyConfig)>]
-[<assembly: AssemblyCopyright("Copyright © Jack Pappas 2012-2014")>]
+[<assembly: AssemblyCopyright("Copyright ï¿½ Jack Pappas 2012-2014")>]
 //[<assembly: AssemblyTrademark("")>]
 //[<assembly: AssemblyCulture("")>]
 
@@ -59,9 +57,9 @@ let [<Literal>] private versionStr = "0.8.6"
 [<assembly: ComVisible(false)>]
 
 // Version information
-[<assembly: AssemblyVersion(versionStr)>]
-[<assembly: AssemblyFileVersion(versionStr)>]
-[<assembly: AssemblyInformationalVersion(versionStr)>]
+[<assembly: AssemblyVersion("0.8.7")>]
+[<assembly: AssemblyFileVersion("0.8.7")>]
+[<assembly: AssemblyInformationalVersion("0.8.7")>]
 
 // Only allow types derived from System.Exception to be thrown --
 // any other types should be automatically wrapped.
