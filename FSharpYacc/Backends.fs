@@ -32,7 +32,7 @@ type Backends () =
         with get () : IBackend =
             match fsyaccBackend with
             | None ->
-                invalidOp "The fslex backend has not been set."
+                invalidOp "The fsyacc backend has not been set."
             | Some backend ->
                 backend
         and set value =
