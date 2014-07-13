@@ -8,9 +8,9 @@ open Fake.ReleaseNotesHelper
 open System
 
 let docDir = "./doc"
-let resultsDir = "./results"
+let resultsDir = "./_build/results"
 let docOutputDir = resultsDir @@ "Documentation"
-let nugetTemp = "./nugetTemp/"
+let nugetTemp = "./_build/nugetTemp/"
 let authors = [ "Jack Pappas" ]
 
 // Git configuration (used for publishing documentation in gh-pages branch)
