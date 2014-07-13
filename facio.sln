@@ -1,11 +1,14 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
+# Visual Studio 2013
+VisualStudioVersion = 12.0.30501.0
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{E0ED8004-9C63-4BA4-987C-EE634B39B881}"
 	ProjectSection(SolutionItems) = preProject
 		.nuget\NuGet.Config = .nuget\NuGet.Config
 		.nuget\NuGet.exe = .nuget\NuGet.exe
 		.nuget\NuGet.targets = .nuget\NuGet.targets
+		.nuget\packages.config = .nuget\packages.config
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{0F12E0D6-7576-4C95-BE56-5C48BA792032}"
@@ -13,7 +16,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Common", "Common", "{0F12E0
 		Common\CommonAssemblyInfo.fs = Common\CommonAssemblyInfo.fs
 	EndProjectSection
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "fsharplex", "FSharpLex\fsharplex.fsproj", "{F9F750FB-2817-4559-BD0A-BE5402102D37}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "project", "project", "{C29AF896-092A-49A9-953A-2C14F5B9B4F6}"
+	ProjectSection(SolutionItems) = preProject
+		build.fsx = build.fsx
+		Facio.BuildTasks\Facio.nuspec = Facio.BuildTasks\Facio.nuspec
+		Graham.nuspec = Graham.nuspec
+		README.rst = README.rst
+		RELEASE_NOTES.md = RELEASE_NOTES.md
+	EndProjectSection
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "fsharplex", "FSharpLex\FsharpLex.fsproj", "{F9F750FB-2817-4559-BD0A-BE5402102D37}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpLex.Tests", "FSharpLex.Tests\FSharpLex.Tests.fsproj", "{F7E7C726-A9E3-4DCE-BEF7-6694310E4B21}"
 EndProject
@@ -31,12 +43,25 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.Support.LegacyInterpr
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.BuildTasks", "Facio.BuildTasks\Facio.BuildTasks.fsproj", "{72FC84DA-5FF1-4EDC-8A96-21132488A552}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{C29AF896-092A-49A9-953A-2C14F5B9B4F6}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.Utilities.Testing", "Facio.Utilities.Testing\Facio.Utilities.Testing.fsproj", "{68BFE4F1-020C-4E33-8588-A3E438DEECB7}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{3DB3725F-2481-4E57-9200-B7552F28B54A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "content", "content", "{B8406D80-729C-4F58-9ADC-4794F957DD65}"
 	ProjectSection(SolutionItems) = preProject
-		build.fsx = build.fsx
+		docs\content\facio_designNotes.md = docs\content\facio_designNotes.md
+		docs\content\graham_index.md = docs\content\graham_index.md
+		docs\content\index.md = docs\content\index.md
+		docs\content\lex_index.md = docs\content\lex_index.md
+		docs\content\yacc_index.md = docs\content\yacc_index.md
 	EndProjectSection
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.Utilities.Testing", "Facio.Utilities.Testing\Facio.Utilities.Testing.fsproj", "{68BFE4F1-020C-4E33-8588-A3E438DEECB7}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{0CB92EF7-F484-4D20-9E88-84F4A1B24F35}"
+	ProjectSection(SolutionItems) = preProject
+		docs\tools\generate.fsx = docs\tools\generate.fsx
+		docs\tools\packages.config = docs\tools\packages.config
+		docs\tools\templates\template.cshtml = docs\tools\templates\template.cshtml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -102,5 +127,9 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{B8406D80-729C-4F58-9ADC-4794F957DD65} = {3DB3725F-2481-4E57-9200-B7552F28B54A}
+		{0CB92EF7-F484-4D20-9E88-84F4A1B24F35} = {3DB3725F-2481-4E57-9200-B7552F28B54A}
 	EndGlobalSection
 EndGlobal

@@ -12,5 +12,5 @@ install:
   - mono .nuget/NuGet.exe install .nuget/packages.config -OutputDirectory packages -ExcludeVersion
 
 script: 
-  - mono packages/FAKE/tools/FAKE.exe build.fsx Default
+  - mono packages/FAKE/tools/FAKE.exe build.fsx All
 

@@ -59,7 +59,7 @@ module FreePositions =
         /// <summary>The initial (root) node of the graph.</summary>
         /// <remarks>The Initial node is a pseudo-node, but is important because
         /// it ensures the graph is always connected (a necessary condition for
-        /// some calculations we perform on the graph).
+        /// some calculations we perform on the graph).</remarks>
         | Initial
         /// An LR(k) item.
         | Item of LrItem<'Nonterminal, 'Terminal, 'Lookahead>
