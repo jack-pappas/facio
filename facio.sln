@@ -1,8 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.30501.0
-MinimumVisualStudioVersion = 10.0.40219.1
+# Visual Studio 2012
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{E0ED8004-9C63-4BA4-987C-EE634B39B881}"
 	ProjectSection(SolutionItems) = preProject
 		.nuget\NuGet.Config = .nuget\NuGet.Config
@@ -25,7 +23,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "project", "project", "{C29A
 		RELEASE_NOTES.md = RELEASE_NOTES.md
 	EndProjectSection
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "fsharplex", "FSharpLex\FsharpLex.fsproj", "{F9F750FB-2817-4559-BD0A-BE5402102D37}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FsharpLex", "FSharpLex\FsharpLex.fsproj", "{F9F750FB-2817-4559-BD0A-BE5402102D37}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpLex.Tests", "FSharpLex.Tests\FSharpLex.Tests.fsproj", "{F7E7C726-A9E3-4DCE-BEF7-6694310E4B21}"
 EndProject
@@ -38,8 +36,6 @@ EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Graham.Tests", "Graham.Tests\Graham.Tests.fsproj", "{ABFDC4C4-6148-4E28-802C-98445FCD668B}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.Utilities.Backend", "Facio.Utilities.Backend\Facio.Utilities.Backend.fsproj", "{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}"
-EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.Support.LegacyInterpreters", "Facio.Support.LegacyInterpreters\Facio.Support.LegacyInterpreters.fsproj", "{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Facio.BuildTasks", "Facio.BuildTasks\Facio.BuildTasks.fsproj", "{72FC84DA-5FF1-4EDC-8A96-21132488A552}"
 EndProject
@@ -106,12 +102,6 @@ Global
 		{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}.Release|Any CPU.Build.0 = Release|Any CPU
 		{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}.Testing|Any CPU.ActiveCfg = Release|Any CPU
 		{4841364D-CB0B-45CC-AC84-F8E3B86A1C11}.Testing|Any CPU.Build.0 = Release|Any CPU
-		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Debug|Any CPU.ActiveCfg = Release|Any CPU
-		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Debug|Any CPU.Build.0 = Release|Any CPU
-		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Release|Any CPU.Build.0 = Release|Any CPU
-		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Testing|Any CPU.ActiveCfg = Release|Any CPU
-		{CEDB1C58-A44C-4A65-B5FA-7BC0EF54D6B6}.Testing|Any CPU.Build.0 = Release|Any CPU
 		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{72FC84DA-5FF1-4EDC-8A96-21132488A552}.Release|Any CPU.ActiveCfg = Release|Any CPU

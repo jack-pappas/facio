@@ -102,6 +102,8 @@ module private LexerDfaGraph =
                 // This DFA state's id within the combined DFA.
                 let targetStateCombinedStateId = targetStateRuleDfaStateId + baseDfaStateId
 
+                // REVIEW:  Profiling shows that when compiling the F# compiler lexer, over 60% of the
+                //          overall compilation time is spent within the closure below.
                 (outTransitions, edgeChars)
                 ||> CharSet.fold (fun outTransitions c ->
                     Map.add c targetStateCombinedStateId outTransitions))
