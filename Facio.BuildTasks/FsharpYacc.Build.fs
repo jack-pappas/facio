@@ -44,6 +44,12 @@ fsharpyacc <filename>
 [<Sealed>]
 type FSharpYaccTask () = 
     inherit Task ()
+
+    // Install the assembly-resolution handler before doing anything else,
+    // to ensure we don't crash because the CLR can't find certain assemblies.
+    do
+        let resolutionHelper = ResolveHelper ()
+        resolutionHelper.InstallHandler ()
     
     //
     [<Required>]
