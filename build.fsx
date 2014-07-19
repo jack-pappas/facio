@@ -87,7 +87,7 @@ Target "Facio Nuget" (fun _ ->
     let workingDir = nugetTemp @@ (filenameWithouExt facioNuget)
 
     ensureDirectory (workingDir @@ "build")
-    ensureDirectory (workingDir @@ "lib" @@ "net40")
+    //ensureDirectory (workingDir @@ "lib" @@ "net40")
 
     !! "/**/Facio.BuildTasks/bin/Release/*.dll"
     ++ "/**/Facio.BuildTasks/bin/Release/*.exe"
