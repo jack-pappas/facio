@@ -52,10 +52,12 @@ Target "CleanDocs" (fun _ ->
 
 Target "Build" (fun _ ->
     !! "/**/*.sln"
+    -- "Examples/**/*.sln"
     |> MSBuild resultsDir "Build" ["Configuration", "Testing"]
     |> Log "Build-Output (testing): "
 
     !! "/**/*.sln"
+    -- "Examples/**/*.sln"
     |> MSBuildRelease "" "Build"
     |> Log "Build-Output (nuget): "
 )
@@ -72,17 +74,17 @@ Target "Tests" (fun _ ->
 )
 
 // --------------------------------------------------------------------------------------
-// Build a NuGet package
+// Build NuGet package(s)
 
 Target "Facio Nuget" (fun _ ->
 
     //let grahamInfo = !! @"/**/Graham.nuspec" |> Seq.exactlyOne
     //let grahamInfo = (ReadFileAsString >> getNuspecProperties) grahamInfo
 
-    let fsharpToolsNuget = !! "/**/Facio.nuspec" |> Seq.exactlyOne
+    let facioNuget = !! "/**/Facio.nuspec" |> Seq.exactlyOne
 
     //let nugetVersion = grahamInfo.Version
-    let workingDir = nugetTemp @@ (filenameWithouExt fsharpToolsNuget)
+    let workingDir = nugetTemp @@ (filenameWithouExt facioNuget)
 
     ensureDirectory (workingDir @@ "build")
     ensureDirectory (workingDir @@ "lib" @@ "net40")
@@ -96,19 +98,18 @@ Target "Facio Nuget" (fun _ ->
     !! "/**/bin/Release/Facio.targets"
     |> CopyFiles (workingDir @@ "build")
 
-    !! "/**/Facio.Support.LegacyInterpreters/bin/Release/*.*"
-    -- "/**/FSharp.Core.*"
-    |> CopyFiles (workingDir @@ "lib" @@ "net40")
-
-    NuGet (fun p ->
+    facioNuget
+    |> NuGet (fun p ->
         { p with
             Authors = authors
             WorkingDir = workingDir
             OutputPath = resultsDir
             Version = release.NugetVersion
             ReleaseNotes = String.Join(Environment.NewLine, release.Notes)
-            Files = ["**/*", None, Some "*.nuspec"] })
-        fsharpToolsNuget
+            Files = ["**/*", None, Some "*.nuspec"]
+            Dependencies =
+                [ "FsLexYacc.Runtime", "6.0.2" ]
+            })
 )
 
 // --------------------------------------------------------------------------------------
