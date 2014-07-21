@@ -92,12 +92,12 @@ module private LexerDfaGraph =
         // Not all DFA states have out-transitions; for those states, we return an empty map.
         match TagMap.tryFind ruleDfaStateId ruleDfaTransitions.AdjacencyMap with
         | None ->
-            Map.empty
+            HashMap.empty
         | Some targetMap ->
             // "Pivot" the target map to get a map of char -> target-state.
             // We also map the target-state-ids from their id within this rule's DFA to their id within the combined DFA
             // (i.e., the merged DFA containing the DFAs for all of the defined rules).
-            (Map.empty, targetMap)
+            (HashMap.empty, targetMap)
             ||> TagMap.fold (fun outTransitions targetStateRuleDfaStateId edgeChars ->
                 // This DFA state's id within the combined DFA.
                 let targetStateCombinedStateId = targetStateRuleDfaStateId + baseDfaStateId
@@ -106,7 +106,7 @@ module private LexerDfaGraph =
                 //          overall compilation time is spent within the closure below.
                 (outTransitions, edgeChars)
                 ||> CharSet.fold (fun outTransitions c ->
-                    Map.add c targetStateCombinedStateId outTransitions))
+                    HashMap.add c targetStateCombinedStateId outTransitions))
 
 
 //
@@ -131,7 +131,7 @@ module private AsciiLexer =
         // Emit the transition vector elements, based on the transitions out of this state.
         for c = 0 to 255 do
             let targetStateId =
-                let targetStateId = Map.tryFind (char c) outTransitions
+                let targetStateId = HashMap.tryFind (char c) outTransitions
 
                 // If no transition edge was found for this character, return the
                 // sentinel value to indicate there's no transition.
@@ -314,7 +314,7 @@ module private UnicodeLexer =
             // Determine the id of the state we transition to when this character is the input.
             let targetStateId =
                 outTransitions
-                |> Map.tryFind (char c)
+                |> HashMap.tryFind (char c)
                 // If no transition edge was found for this character, return the
                 // sentinel value to indicate there's no transition.
                 |> Option.fill (tag <| int sentinelValue)
