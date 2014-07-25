@@ -32,6 +32,10 @@ The parser specification files used by `FSharpYacc` and the parsers it generates
 
 `Graham` also includes algorithms for generating parser automata, providing a flexible, *generic* approach to implementing parser-generator tools like `FSharpYacc`.
 
+Examples
+-------
+
+Example projects built on top of `Facio` compiler tools you can find in separate [Facio-Examples](https://github.com/jack-pappas/facio-examples) GitHub repository.
 
 Implementation Status
 ---------------------
