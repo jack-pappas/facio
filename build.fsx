@@ -53,8 +53,8 @@ Target "CleanDocs" (fun _ ->
 Target "Build" (fun _ ->
     !! "/**/*.sln"
     -- "Examples/**/*.sln"
-    |> MSBuild resultsDir "Build" ["Configuration", "Testing"]
-    |> Log "Build-Output (testing): "
+    |> MSBuild resultsDir "Build" ["Configuration", "Release"]
+    |> Log "Build-Output (release): "
 
     !! "/**/*.sln"
     -- "Examples/**/*.sln"
