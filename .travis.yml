@@ -4,7 +4,7 @@ env:
   global:
     - EnableNuGetPackageRestore=true
   matrix:
-    - MONO_VERSION="3.4.0"
+    - MONO_VERSION="3.8.0"
 
 install:
   - wget "http://download.mono-project.com/archive/${MONO_VERSION}/macos-10-x86/MonoFramework-MDK-${MONO_VERSION}.macos10.xamarin.x86.pkg"
@@ -12,5 +12,4 @@ install:
   - mono .nuget/NuGet.exe install .nuget/packages.config -OutputDirectory packages -ExcludeVersion
 
 script: 
-  - mono packages/FAKE/tools/FAKE.exe build.fsx All
-
+  - ./build.sh All
