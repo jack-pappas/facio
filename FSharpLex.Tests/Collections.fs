@@ -299,6 +299,24 @@ module CharSet =
                 ||> Seq.compareWith compare = 0
 
         [<Test>]
+        let addRange () : unit =
+            assertProp "Equivalence with Set: 'addRange'" <| fun setOfChars (c1 : char) (c2 : char) ->
+                // Create a CharSet from the Set<char>.
+                let charSet = CharSet.ofSet setOfChars
+
+                // Add the range to the CharSet.
+                let charSet = CharSet.addRange c1 c2 charSet
+
+                // Add the characters in the range to the Set<char>.
+                let setOfChars =
+                    (setOfChars, { c1 .. c2 })
+                    ||> Seq.fold (flip Set.add)
+
+                // The sets should contain the same elements in the same order.
+                (setOfChars, CharSet.toSeq charSet)
+                ||> Seq.compareWith compare = 0
+
+        [<Test>]
         let remove () : unit =
             assertProp "Equivalence with Set: 'remove'" <| fun setOfChars c ->
                 // Create a CharSet from the Set<char>.
