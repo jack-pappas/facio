@@ -15,12 +15,12 @@ This repository contains a collection of tools which assist in implementing comp
 - fsharplex
     ``fsharplex`` is a tool for generating lexical analyzers ("tokenizers") from a lexer specification file (``*.fsl``).
 
-    The lexer specification files used by ``fsharplex`` and the lexers it generates are largely compatible with the older `fslex` tool.
+    The lexer specification files used by ``fsharplex`` and the lexers it generates are largely compatible with the older `fslex`_ tool.
 
 - fsharpyacc
     ``fsharpyacc`` is a tool for generating parsers for context-free grammars (CFGs) described by a parser specification file (``*.fsy``).
 
-    The parser specification files used by ``fsharpyacc`` and the parsers it generates are largely compatible with the older `fsyacc` tool.
+    The parser specification files used by ``fsharpyacc`` and the parsers it generates are largely compatible with the older `fsyacc`_ tool.
 
 - Graham
     ``Graham`` is a library for creating, manipulating, and analyzing context-free grammars (CFGs).
@@ -37,7 +37,7 @@ These tools are still in development and should be considered **alpha**-quality.
 
 The core functionality has been implemented and passes some simple tests. The ``fsharplex`` and ``fsharpyacc`` tools are able to bootstrap themselves, but there is still much work to be done for the user-facing parts of the code (e.g., providing location information when parsing fails).
 
-At this time, ``fsharplex`` and ``fsharpyacc`` generate code which uses the lexer/parser table interpreters for ``fslex`` and ``fsyacc``. This means projects using the generated code need to reference the `FsLexYacc.Runtime` NuGet package.
+At this time, ``fsharplex`` and ``fsharpyacc`` generate code which uses the lexer/parser table interpreters for ``fslex`` and ``fsyacc``. This means projects using the generated code need to reference the `FsLexYacc.Runtime`_ NuGet package.
 
 .. _FsLexYacc.Runtime: https://github.com/fsharp/FsLexYacc
 
