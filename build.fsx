@@ -108,7 +108,7 @@ Target "Facio Nuget" (fun _ ->
             ReleaseNotes = String.Join(Environment.NewLine, release.Notes)
             Files = ["**/*", None, Some "*.nuspec"]
             Dependencies =
-                [ "FsLexYacc.Runtime", "6.0.2" ]
+                [ "FsLexYacc.Runtime", "[6.0.2, 7.0.0)" ]
             })
 )
 
