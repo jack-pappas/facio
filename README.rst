@@ -1,5 +1,5 @@
 =======
-*Facio*
+*Faciō*
 =======
 Tools for building compilers in F#
 ----------------------------------
@@ -7,34 +7,39 @@ Tools for building compilers in F#
 .. image:: https://travis-ci.org/jack-pappas/facio.png  
     :target: https://travis-ci.org/jack-pappas/facio
 
+.. image:: http://img.shields.io/nuget/v/facio.svg
+    :target: https://nuget.org/packages/facio/
+
 This repository contains a collection of tools which assist in implementing compilers, interpreters, and other language-based tools in F#.
 
 - fsharplex
     ``fsharplex`` is a tool for generating lexical analyzers ("tokenizers") from a lexer specification file (``*.fsl``).
 
-    The lexer specification files used by ``fsharplex`` and the lexers it generates are largely compatible with the older ``fslex`` tool from the F# PowerPack.
+    The lexer specification files used by ``fsharplex`` and the lexers it generates are largely compatible with the older `fslex` tool.
 
 - fsharpyacc
     ``fsharpyacc`` is a tool for generating parsers for context-free grammars (CFGs) described by a parser specification file (``*.fsy``).
 
-    The parser specification files used by ``fsharpyacc`` and the parsers it generates are largely compatible with the older ``fsyacc`` tool from the F# PowerPack.
+    The parser specification files used by ``fsharpyacc`` and the parsers it generates are largely compatible with the older `fsyacc` tool.
 
 - Graham
     ``Graham`` is a library for creating, manipulating, and analyzing context-free grammars (CFGs).
 
     ``Graham`` also includes algorithms for generating parser automata, providing a flexible, *generic* approach to implementing parser-generator tools like ``fsharpyacc``.
 
+.. _`fslex`: https://github.com/fsharp/FsLexYacc
+.. _`fsyacc`: https://github.com/fsharp/FsLexYacc
 
 Implementation Status
 =====================
 
 These tools are still in development and should be considered **alpha**-quality.
 
-The core functionality has been implemented and passes some simple tests. The ``fsharplex`` and ``fsharpyacc`` tools are able to bootstrap themselves, but there is still much work to be done for the user-facing parts of the code.
+The core functionality has been implemented and passes some simple tests. The ``fsharplex`` and ``fsharpyacc`` tools are able to bootstrap themselves, but there is still much work to be done for the user-facing parts of the code (e.g., providing location information when parsing fails).
 
-At this time, ``fsharplex`` and ``fsharpyacc`` generate code which uses the lexer/parser table interpreters for fslex and fsyacc (originally provided as part of the F# PowerPack). I've copied the code for these interpreters from the `F# PowerPack repository` into the `LegacyInterpreters` project in this repository for convenience; this also allows you to build the interpreters for newer versions of .NET (the F# PowerPack was originally designed for .NET 2.0).
+At this time, ``fsharplex`` and ``fsharpyacc`` generate code which uses the lexer/parser table interpreters for ``fslex`` and ``fsyacc``. This means projects using the generated code need to reference the `FsLexYacc.Runtime` NuGet package.
 
-.. _`F# PowerPack repository`: https://github.com/fsharp/powerpack
+.. _`FsLexYacc.Runtime`: https://github.com/fsharp/FsLexYacc
 
 
 Compatibility Notes
