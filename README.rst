@@ -27,8 +27,8 @@ This repository contains a collection of tools which assist in implementing comp
 
     ``Graham`` also includes algorithms for generating parser automata, providing a flexible, *generic* approach to implementing parser-generator tools like ``fsharpyacc``.
 
-.. _fslex: https://github.com/fsharp/FsLexYacc
-.. _fsyacc: https://github.com/fsharp/FsLexYacc
+.. _fslex: https://github.com/fsprojects/FsLexYacc
+.. _fsyacc: https://github.com/fsprojects/FsLexYacc
 
 Implementation Status
 =====================
@@ -39,7 +39,7 @@ The core functionality has been implemented and passes some simple tests. The ``
 
 At this time, ``fsharplex`` and ``fsharpyacc`` generate code which uses the lexer/parser table interpreters for ``fslex`` and ``fsyacc``. This means projects using the generated code need to reference the `FsLexYacc.Runtime`_ NuGet package.
 
-.. _FsLexYacc.Runtime: https://github.com/fsharp/FsLexYacc
+.. _FsLexYacc.Runtime: https://github.com/fsprojects/FsLexYacc
 
 
 Compatibility Notes
