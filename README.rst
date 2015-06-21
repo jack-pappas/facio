@@ -10,7 +10,7 @@ Tools for building compilers in F#
 .. image:: http://img.shields.io/nuget/v/facio.svg
     :target: https://nuget.org/packages/facio/
 
-This repository contains a collection of tools which assist in implementing compilers, interpreters, and other language-based tools in F#.
+facio is a collection of tools which assist in implementing compilers, interpreters, and other language-based tools in F#.
 
 - fsharplex
     ``fsharplex`` is a tool for generating lexical analyzers ("tokenizers") from a lexer specification file (``*.fsl``).
