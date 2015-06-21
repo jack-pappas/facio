@@ -18,7 +18,12 @@ limitations under the License.
 
 namespace FSharpLex
 
-//
+open System.ComponentModel.Composition
+open ExtCore.Args
+open FSharpLex.Plugin
+
+
+/// Assembly info for FSharpLex.
 module internal AssemblyInfo =
     open System.Reflection
     open System.Resources
@@ -39,6 +44,7 @@ module internal AssemblyInfo =
     #endif
 
     (* Dependency hints for Ngen *)
+    [<assembly: DependencyAttribute("ExtCore", LoadHint.Always)>]
     [<assembly: DependencyAttribute("FSharp.Core", LoadHint.Always)>]
     [<assembly: DependencyAttribute("System", LoadHint.Always)>]
     [<assembly: DependencyAttribute("System.ComponentModel.Composition", LoadHint.Always)>]
@@ -47,14 +53,9 @@ module internal AssemblyInfo =
     do ()
 
 
-//
+/// Contains functions for working with fslexyacc lex buffers.
 [<RequireQualifiedAccess>]
-module Program =
-    open System.ComponentModel.Composition
-    open System.ComponentModel.Composition.Hosting
-    open ExtCore.Args
-    open FSharpLex.Plugin
-
+module private FsLexYaccBuffer =
     (* TEMP : This code is taken from the F# Powerpack, and is licensed under the Apache 2.0 license *)
     open System.IO
     open Microsoft.FSharp.Text.Lexing
@@ -67,7 +68,7 @@ module Program =
     /// we can't just return the LexBuffer object, since the file it wraps wouldn't
     /// get closed when we're finished with the LexBuffer. Hence we return the stream,
     /// the reader and the LexBuffer. The caller should dispose the first two when done.
-    let private UnicodeFileAsLexbuf (filename, codePage : int option) : FileStream * StreamReader * LexBuffer<char> =
+    let UnicodeFileAsLexbuf (filename, codePage : int option) : FileStream * StreamReader * LexBuffer<char> =
         // Use the .NET functionality to auto-detect the unicode encoding
         // It also uses Lexing.from_text_reader to present the bytes read to the lexer in UTF8 decoded form
         let stream = new FileStream (filename, FileMode.Open, FileAccess.Read, FileShare.Read)
@@ -80,98 +81,127 @@ module Program =
         let lexbuf = LexBuffer.FromFunction reader.Read
         lexbuf.EndPos <- Position.FirstLine filename
         stream, reader, lexbuf
-    (* End-TEMP *)
 
-    //
-    let private loadBackends () =
-        //
-        use catalog = new AssemblyCatalog (typeof<Backends>.Assembly)
 
-        //
-        use container = new CompositionContainer (catalog)
+/// FSharpLex program exit codes.
+type ExitCode =
+    /// The program completed successfully.
+    | Success = 0
+    /// The program encountered an unrecoverable error.
+    | UnrecoverableError = 1
 
-        //
-        let backends = Backends ()
-        container.ComposeParts (backends)
-        backends
 
+/// FSharpLex compiler instance.
+type FSharpLex (logger : NLog.Logger) =
+    /// Backends to invoke with the compiled specification.
+    [<ImportMany>]
+    member val Backends : IBackend[] = null with get, set
+
+    /// <summary>Try to parse a lexer specification from a specification file.</summary>
+    /// <param name="inputFile"></param>
+    /// <param name="inputCodePage"></param>
+    /// <returns></returns>
+    member internal __.TryParseLexerSpecFile (inputFile : string, inputCodePage : int option) : _ option =
+        let stream, reader, lexbuf =
+            FsLexYaccBuffer.UnicodeFileAsLexbuf (inputFile, inputCodePage)
+        use stream = stream
+        use reader = reader
+        try
+            let lexerSpec = Parser.spec Lexer.token lexbuf
+
+            // TEMP : Some of the lists need to be reversed so they're in the order we expect.
+            { lexerSpec with
+                Macros = List.rev lexerSpec.Macros;
+                Rules =
+                    lexerSpec.Rules
+                    |> List.map (fun (position, rule) ->
+                        position,
+                        { rule with
+                            Parameters = List.rev rule.Parameters;
+                            Clauses = List.rev rule.Clauses; })
+                    |> List.rev; }
+            |> Some
+
+        with ex ->
+            let msg =
+                let pos = lexbuf.StartPos
+                sprintf "Could not parse the lexer spec: syntax error near line %d, column %d" pos.Line pos.Column
+            logger.FatalException (msg, ex)
+
+            // Return None since the spec file couldn't be parsed.
+            None
 
     /// Invokes FSharpLex with the specified options.
-    [<CompiledName("Invoke")>]
-    let invoke inputFile options (logger : NLog.Logger) : int =
-        // Preconditions
+    member this.Run (inputFile, options) : ExitCode =
+        // Contracts
         checkNonNull "inputFile" inputFile
-        checkNonNull "logger" logger
         if System.String.IsNullOrWhiteSpace inputFile then
             invalidArg "inputFile" "The path to the lexer specification is empty."
         elif not <| System.IO.File.Exists inputFile then
             invalidArg "inputFile" "No lexer specification exists at the specified path."
 
-        /// Compiler backends.
-        // TEMP : This is hard-coded for now, but eventually we'll make it so the user can specify which backend(s) to use.
-        let backends = loadBackends ()
+        // Try to parse the lexer specification.
+        match this.TryParseLexerSpecFile (inputFile, options.InputCodePage) with
+        | None ->
+            // Couldn't parse the lexer spec, so exit with an error code.
+            ExitCode.UnrecoverableError
 
-        /// The parsed lexer specification.
-        let lexerSpec =
-            let stream, reader, lexbuf =
-                UnicodeFileAsLexbuf (inputFile, options.InputCodePage)
-            use stream = stream
-            use reader = reader
-            try
-                let lexerSpec = Parser.spec Lexer.token lexbuf
+        | Some lexerSpec ->
+            // Compile the parsed specification.
+            let compiledSpecification =
+                logger.Trace "Start: Compiling lexer specification."
+                Compile.Compiler.lexerSpec lexerSpec options
+            logger.Trace "End: Compiling lexer specification."
 
-                // TEMP : Some of the lists need to be reversed so they're in the order we expect.
-                { lexerSpec with
-                    Macros = List.rev lexerSpec.Macros;
-                    Rules =
-                        lexerSpec.Rules
-                        |> List.map (fun (position, rule) ->
-                            position,
-                            { rule with
-                                Parameters = List.rev rule.Parameters;
-                                Clauses = List.rev rule.Clauses; })
-                        |> List.rev; }
-            with ex ->
-                let msg =
-                    let pos = lexbuf.StartPos
-                    sprintf "Could not parse the lexer spec: syntax error near line %d, column %d" pos.Line pos.Column
-                logger.FatalException (msg, ex)
+            // Check whether the specification was compiled successfully or not.
+            match compiledSpecification with
+            | Choice2Of2 errorMessages ->
+                // Write the error messages to the console.
+                errorMessages
+                |> Array.iter logger.Error
 
-                // Exit with an error code
-                exit 1
+                ExitCode.UnrecoverableError
 
-        // Compile the parsed specification.
-        let compiledSpecification =
-            Compile.Compiler.lexerSpec lexerSpec options
+            | Choice1Of2 compiledLexerSpec ->
+                // If there aren't any backends available, log a warning message and return.
+                match this.Backends with
+                | null ->
+                    logger.Warn "No compiler backends selected."
+                    ExitCode.Success
 
-        //
-        match compiledSpecification with
-        | Choice2Of2 errorMessages ->
-            // Write the error messages to the console.
-            errorMessages
-            |> Array.iter logger.Error
+                | backends ->
+                    // Emit the number of backends for tracing purposes.
+                    logger.Trace ("{0} compiler backends to invoke.", backends.Length)
 
-            1   // Exit code: Error
+                    // Iterate over the backends, invoking each one with the compiled lexer spec
+                    // and the specified compiler options.
+                    // TODO : It'd be nice to be able to pass each backend it's own specific set of options
+                    //        rather than having to pass one huge record holding all of the options.
+                    // TODO : Modify IBackend.EmitCompiledSpecification() so it allows the backends to indicate
+                    //        when they've failed (e.g., by returning Protected<unit>). For additional safety,
+                    //        also modify the loop below to wrap the backend invocations in a try/with (or Choice.attempt)
+                    //        in case a backend doesn't catch some exception. If one or more backends fails,
+                    //        we still want to attempt to run the rest of the backends but we'll also want to return
+                    //        an ExitCode indicating failure.
+                    for backend in backends do
+                        let backendName = backend.Name
+                        logger.Trace ("Start: Invoking backend '{0}'.", backendName)
+                        backend.EmitCompiledSpecification (compiledLexerSpec, options)
+                        logger.Trace ("End: Invoking backend '{0}'.", backendName)
 
-        | Choice1Of2 compiledLexerSpec ->
-            // TEMP : Invoke the various backends "manually".
-            // Eventually we'll modify this so the user can specify the backend to use.
-            backends.FslexBackend.EmitCompiledSpecification (
-                compiledLexerSpec,
-                options)
+                    ExitCode.Success
 
-//            backends.GraphBackend.EmitCompiledSpecification (
-//                compiledLexerSpec,
-//                options)
 
-            0   // Exit code: Success
+/// FSharpLex "driver" program.
+/// This is used to invoke the FSharpLex compiler via the command-line.
+[<RequireQualifiedAccess>]
+module Program =
+    open System.ComponentModel.Composition.Hosting
 
     //
     let [<Literal>] defaultLexerInterpreterNamespace = "Microsoft.FSharp.Text.Lexing"
 
     /// The entry point for the application.
-    /// This method simply parses the arguments passed from the command-line, then applies them to the 'invoke' function.
-    /// If calling fsharplex from another tool or library, you should call the 'invoke' method directly.
     [<EntryPoint; CompiledName("Main")>]
     let main _ =
         /// Used for writing messages to the console or log file.
@@ -204,7 +234,8 @@ module Program =
             | Some _ ->
                 // If the input filename has already been set, print a message
                 // to the screen, then exit with an error code.
-                failwith "Error: Only one lexer specification file may be used as input."
+                logger.Error "Only one lexer specification file may be used as input."
+                exit (int ExitCode.UnrecoverableError)
 
         // Parse the command-line arguments.
         ArgParser.Parse (usage, plainArgParser, "fsharplex <filename>")
@@ -236,4 +267,18 @@ module Program =
                 Format = GraphFileFormat.Dgml; };
             }
 
-        invoke (Option.get !inputFile) compilationOptions logger
+        // Discover and instantiate compiler backends.
+        // TODO : This currently instantiates all available backends. This code should be moved up
+        // to run prior to creating 'compilationOptions', then should only instantiate the backends
+        // selected via command-line options.
+        use catalog = new AssemblyCatalog (typeof<FSharpLex>.Assembly)
+        use container = new CompositionContainer (catalog)
+
+        /// An instance of the FSharpLex compiler.
+        let fsharpLex = FSharpLex (logger)
+
+        // Instantiate backends and inject them into the compiler instance.
+        container.ComposeParts (fsharpLex)
+
+        // Run the FSharpLex compiler with the specified options and backends.
+        int <| fsharpLex.Run (Option.get !inputFile, compilationOptions)

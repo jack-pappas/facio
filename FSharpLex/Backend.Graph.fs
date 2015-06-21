@@ -300,9 +300,11 @@ module private Dgml =
 
 /// A backend which serializes the pattern-matching automaton into a
 /// graph-based file format for use with a visualization tool.
-//[<Export(typeof<IBackend>)>]  // TEMP : This is only disabled to avoid a fatal exception until we modify our Backends class to support multiple backends.
+[<Export(typeof<IBackend>)>]
 type GraphBackend () =
     interface IBackend with
+        member __.Name = typeof<GraphBackend>.Name
+
         member this.EmitCompiledSpecification (compiledSpec, options) : unit =
             /// Compilation options specific to this backend.
             let graphOptions =

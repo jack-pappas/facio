@@ -691,6 +691,8 @@ module private FsLex =
 [<Export(typeof<IBackend>)>]
 type FslexBackend () =
     interface IBackend with
+        member __.Name = typeof<FslexBackend>.Name
+
         member this.EmitCompiledSpecification (compiledSpec, options) : unit =
             /// Compilation options specific to this backend.
             let fslexOptions =

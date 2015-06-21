@@ -84,7 +84,6 @@
     <Compile Include="Plugin.fs" />
     <Compile Include="Backend.Fslex.fs" />
     <Compile Include="Backend.Graph.fs" />
-    <Compile Include="Backends.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

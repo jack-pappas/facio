@@ -16,10 +16,8 @@ limitations under the License.
 
 *)
 
-//
 namespace FSharpLex.Plugin
 
-open System.ComponentModel.Composition
 open FSharpLex
 open FSharpLex.Compile
 
@@ -29,11 +27,14 @@ open FSharpLex.Compile
 //
 [<Interface>]
 type IBackend =
+    /// The name of the backend.
+    abstract Name : string with get
+
     /// <summary>Invokes this backend to (e.g., emit code) for the given <see cref="CompiledSpecification"/>.</summary>
     /// <param name="compiledSpec">A compiled lexer specification.</param>
     /// <param name="options">Options which control the behavior of the backend.</param>
     abstract EmitCompiledSpecification :
         compiledSpec : CompiledSpecification
         * options : CompilationOptions
-        // TODO : Add parameter for logging interface?
+        // * logger : NLog.Logger
         -> unit
