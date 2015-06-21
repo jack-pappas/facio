@@ -20,6 +20,8 @@ limitations under the License.
 namespace Facio.BuildTasks
 
 open System
+open System.ComponentModel.Composition
+open System.ComponentModel.Composition.Hosting
 open Microsoft.Build.Framework
 open Microsoft.Build.Utilities
 open NLog
@@ -103,8 +105,17 @@ type FSharpLexTask () =
         let logger = NLog.LogManager.GetCurrentClassLogger ()
         logger.Trace "Invoking fsharplex..."
 
+        // Create an instance of the FSharpLex compiler.
+        let compiler =
+            // TEMP : Directly instantiate the Fslex backend for now, since we don't
+            // have a good way of getting the arguments/options for other backends.
+            let fslexBackend = FSharpLex.Plugin.FslexBackend ()
+
+            FSharpLex.FSharpLex (logger, Backends = [| fslexBackend |])
+
         try
-            FSharpLex.Program.invoke this.InputFile options logger = 0
+            // Run the compiler on the specified input file.
+            compiler.Run (this.InputFile, options) = FSharpLex.ExitCode.Success
         with ex ->
             // Log any unhandled exceptions raised by fsharplex.
             logger.FatalException ("Unhandled exception raised by fsharplex.", ex)
