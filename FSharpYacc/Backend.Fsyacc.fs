@@ -1087,6 +1087,8 @@ module private FsYacc =
 [<Export(typeof<IBackend>)>]
 type FsyaccBackend () =
     interface IBackend with
+        member __.Name = typeof<FsyaccBackend>.Name
+
         member this.Invoke (processedSpec, parserTable, options) : unit =
             /// Compilation options specific to this backend.
             let fsyaccOptions =

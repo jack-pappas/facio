@@ -123,8 +123,17 @@ type FSharpYaccTask () =
 
         logger.Trace "Invoking fsharpyacc..."
 
+        // Create an instance of the FSharpYacc compiler.
+        let compiler =
+            // TEMP : Directly instantiate the Fsyacc backend for now, since we don't
+            // have a good way of getting the arguments/options for other backends.
+            let fsyaccBackend = FSharpYacc.Plugin.FsyaccBackend ()
+
+            FSharpYacc.FSharpYacc (logger, Backends = [| fsyaccBackend |])
+
         try
-            FSharpYacc.Program.invoke this.InputFile compilationOptions inputCodePage logger = 0
+            // Run the compiler on the specified input file.
+            compiler.Run (this.InputFile, compilationOptions, inputCodePage) = FSharpYacc.ExitCode.Success
         with ex ->
             // Log any unhandled exceptions raised by fsharpyacc.
             logger.FatalException ("Unhandled exception raised by fsharpyacc.", ex)

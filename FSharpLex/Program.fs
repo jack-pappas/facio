@@ -19,7 +19,6 @@ limitations under the License.
 namespace FSharpLex
 
 open System.ComponentModel.Composition
-open ExtCore.Args
 open FSharpLex.Plugin
 
 
@@ -197,6 +196,7 @@ type FSharpLex (logger : NLog.Logger) =
 [<RequireQualifiedAccess>]
 module Program =
     open System.ComponentModel.Composition.Hosting
+    open ExtCore.Args
 
     //
     let [<Literal>] defaultLexerInterpreterNamespace = "Microsoft.FSharp.Text.Lexing"
@@ -247,8 +247,7 @@ module Program =
         if Option.isNone !outputFile then
             outputFile := Some <| System.IO.Path.ChangeExtension (Option.get !inputFile, "fs")
 
-        // Create a CompilationOptions record from the parsed arguments
-        // and call the 'invoke' function with it.
+        // Create a CompilationOptions record from the parsed arguments.
         let compilationOptions = {
             Unicode = !unicode;
             InputCodePage = !inputCodePage;
@@ -275,10 +274,10 @@ module Program =
         use container = new CompositionContainer (catalog)
 
         /// An instance of the FSharpLex compiler.
-        let fsharpLex = FSharpLex (logger)
+        let compiler = FSharpLex (logger)
 
         // Instantiate backends and inject them into the compiler instance.
-        container.ComposeParts (fsharpLex)
+        container.ComposeParts (compiler)
 
-        // Run the FSharpLex compiler with the specified options and backends.
-        int <| fsharpLex.Run (Option.get !inputFile, compilationOptions)
+        // Run the compiler with the specified options and backends.
+        int <| compiler.Run (Option.get !inputFile, compilationOptions)

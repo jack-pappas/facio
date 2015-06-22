@@ -30,6 +30,7 @@
     <WarningsAsErrors>25</WarningsAsErrors>
     <StartArguments>--internal --module "Parser" -o "TestCases\fsharp\fsharp-parser.fs" "TestCases\fsharp\fsharp.fsy"</StartArguments>
     <OtherFlags>--stackReserveSize:16777216 --warnon:1182</OtherFlags>
+    <StartWorkingDirectory>C:\Users\Jack\Documents\Code Libraries\facio\</StartWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -75,7 +76,6 @@
     <Compile Include="Backend.Fsyacc.fs" />
     <Compile Include="Backend.Listing.fs" />
     <Compile Include="Backend.Graph.fs" />
-    <Compile Include="Backends.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

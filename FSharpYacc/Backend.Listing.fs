@@ -39,6 +39,8 @@ open Graham.Graph
 //[<Export(typeof<IBackend>)>]
 type TableListingBackend () =
     interface IBackend with
+        member __.Name = typeof<TableListingBackend>.Name
+
         member this.Invoke (processedSpec, parserTable, options) : unit =
             // TODO
             notImpl "TableListingBackend.Invoke"
