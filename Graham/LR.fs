@@ -28,24 +28,6 @@ open Graham.Analysis
 open Graham.Graph
 
 
-//
-module private LrItemHelper =
-    //
-    let compareArrays<'T when 'T : comparison> (arr1 : 'T[], arr2 : 'T[]) : int =
-        let len = arr1.Length
-        match compare len arr2.Length with
-        | 0 ->
-            let mutable result = 0
-            let mutable idx = 0
-
-            while idx < len && result = 0 do
-                result <- compare arr1.[idx] arr2.[idx]
-                idx <- idx + 1
-
-            result
-
-        | c -> c
-
 /// An LR(k) item.
 [<DebuggerDisplay("{DebuggerDisplay,nq}")>]
 [<CustomEquality; CustomComparison>]
@@ -66,7 +48,7 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
     [<DebuggerBrowsable(DebuggerBrowsableState.Never)>]
     member private this.DebuggerDisplay
         with get () =
-            this.ToString '\u2022'
+            LrItem.ToString (this, '\u2022')
 
     //
     member this.CurrentSymbol
@@ -74,41 +56,6 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
             let position = int this.Position
             if position = Array.length this.Production then None
             else Some this.Production.[position]
-
-    /// <summary>Private ToString implementation which allows the 'dot' character to be specified.</summary>
-    /// <param name="dotChar">The character to use to represent the 'dot' (parser position).</param>
-    member private this.ToString (dotChar : char) =
-        let sb = System.Text.StringBuilder ()
-
-        // Add the nonterminal text and arrow to the StringBuilder.
-        sprintf "%O \u2192" this.Nonterminal
-        |> sb.Append |> ignore
-
-        // Is this an empty (epsilon) production?
-        if Array.isEmpty this.Production then
-            sb.Append " (Empty)" |> ignore
-        else
-            for i = 0 to Array.length this.Production do
-                // Append a space before each symbol.
-                sb.Append " " |> ignore
-
-                if i < int this.Position then
-                    this.Production.[i].ToString ()
-                    |> sb.Append |> ignore
-                elif i = int this.Position then
-                    // Append the dot character representing the parser position.
-                    sb.Append dotChar |> ignore
-                else
-                    this.Production.[i - 1].ToString ()
-                    |> sb.Append |> ignore
-
-        // Append the lookahead symbol, if applicable.
-        if typeof<'Lookahead> <> typeof<unit> then
-            sprintf ", %A" this.Lookahead
-            |> sb.Append |> ignore
-
-        // Return the constructed string.
-        sb.ToString ()
 
     /// <inherit />
     override this.Equals other =
@@ -127,50 +74,112 @@ type LrItem<'Nonterminal, 'Terminal, 'Lookahead
 
     /// <inherit />
     override this.ToString () =
-        this.ToString '.'
+        LrItem.ToString (this, '.')
 
+    interface System.IEquatable<LrItem<'Nonterminal, 'Terminal, 'Lookahead>> with
+        member this.Equals other =
+            LrItem.Equals (this, other)
+
+    interface System.IComparable<LrItem<'Nonterminal, 'Terminal, 'Lookahead>> with
+        member this.CompareTo other =
+            LrItem.Compare (this, other)
+
+    interface System.IComparable with
+        member this.CompareTo other =
+            match other with
+            | :? LrItem<'Nonterminal, 'Terminal, 'Lookahead> as other ->
+                LrItem.Compare (this, other)
+
+            | _ ->
+                invalidArg "other" "The other object is not a type-compatible instance of LrItem."
+
+/// Helper methods for LrItem instances.
+and [<Sealed; AbstractClass>] LrItem () =
     //
-    static member private Equals (item1 : LrItem<'Nonterminal, 'Terminal, 'Lookahead>, item2 : LrItem<'Nonterminal, 'Terminal, 'Lookahead>) =
+    static member internal Equals (item1 : LrItem<'Nonterminal, 'Terminal, 'Lookahead>, item2 : LrItem<'Nonterminal, 'Terminal, 'Lookahead>) =
         item1 === item2 || (
             (box item1.Nonterminal === box item2.Nonterminal || item1.Nonterminal = item2.Nonterminal) &&
             (item1.Production === item2.Production || item1.Production = item2.Production) &&
             (box item1.Lookahead === box item2.Lookahead || item1.Lookahead = item2.Lookahead) &&
             item1.Position = item2.Position)
 
-    interface System.IEquatable<LrItem<'Nonterminal, 'Terminal, 'Lookahead>> with
-        member this.Equals other =
-            LrItem.Equals (this, other)
+    //
+    static member private CompareArrays<'T when 'T : comparison> (arr1 : 'T[], arr2 : 'T[]) : int =
+        let len = arr1.Length
+        match compare len arr2.Length with
+        | 0 ->
+            let mutable result = 0
+            let mutable idx = 0
 
-    interface System.IComparable with
-        member this.CompareTo other =
-            match other with
-            | :? LrItem<'Nonterminal, 'Terminal, 'Lookahead> as other ->
-                // Are the instances actually the same instance?
-                if this === other then 0
-                else
-                    // Are the nonterminals the same or equal?
+            while idx < len && result = 0 do
+                result <- compare arr1.[idx] arr2.[idx]
+                idx <- idx + 1
+
+            result
+
+        | c -> c
+
+    //
+    static member internal Compare (item1 : LrItem<'Nonterminal, 'Terminal, 'Lookahead>, item2 : LrItem<'Nonterminal, 'Terminal, 'Lookahead>) =
+        // Are the instances actually the same instance?
+        if item1 === item2 then 0
+        else
+            // Are the nonterminals the same or equal?
+            match
+                if box item1.Nonterminal === box item2.Nonterminal then 0
+                else compare item1.Nonterminal item2.Nonterminal with
+            | 0 ->
+                // Are the productions the same or equal?
+                match
+                    if item1.Production === item2.Production then 0
+                    else LrItem.CompareArrays (item1.Production, item2.Production) with
+                | 0 ->
+                    // Are the lookaheads the same or equal?
                     match
-                        if box this.Nonterminal === box other.Nonterminal then 0
-                        else compare this.Nonterminal other.Nonterminal with
+                        if box item1.Lookahead === box item2.Production then 0
+                        else compare item1.Lookahead item2.Lookahead with
                     | 0 ->
-                        // Are the productions the same or equal?
-                        match
-                            if this.Production === other.Production then 0
-                            else LrItemHelper.compareArrays (this.Production, other.Production) with
-                        | 0 ->
-                            // Are the lookaheads the same or equal?
-                            match
-                                if box this.Lookahead === box other.Production then 0
-                                else compare this.Lookahead other.Lookahead with
-                            | 0 ->
-                                // Compare the parser positions.
-                                compare this.Position other.Position
-                            | c -> c
-                        | c -> c
+                        // Compare the parser positions.
+                        compare item1.Position item2.Position
                     | c -> c
+                | c -> c
+            | c -> c
 
-            | _ ->
-                invalidArg "other" "The other object is not a type-compatible instance of LrItem."
+    /// <summary>Private ToString implementation which allows the 'dot' character to be specified.</summary>
+    /// <param name="dotChar">The character to use to represent the 'dot' (parser position).</param>
+    static member internal ToString (item : LrItem<'Nonterminal, 'Terminal, 'Lookahead>, dotChar : char) =
+        let sb = System.Text.StringBuilder ()
+
+        // Add the nonterminal text and arrow to the StringBuilder.
+        sprintf "%O \u2192" item.Nonterminal
+        |> sb.Append |> ignore
+
+        // Is this an empty (epsilon) production?
+        if Array.isEmpty item.Production then
+            sb.Append " (Empty)" |> ignore
+        else
+            for i = 0 to Array.length item.Production do
+                // Append a space before each symbol.
+                sb.Append " " |> ignore
+
+                if i < int item.Position then
+                    item.Production.[i].ToString ()
+                    |> sb.Append |> ignore
+                elif i = int item.Position then
+                    // Append the dot character representing the parser position.
+                    sb.Append dotChar |> ignore
+                else
+                    item.Production.[i - 1].ToString ()
+                    |> sb.Append |> ignore
+
+        // Append the lookahead symbol, if applicable.
+        if typeof<'Lookahead> <> typeof<unit> then
+            sprintf ", %A" item.Lookahead
+            |> sb.Append |> ignore
+
+        // Return the constructed string.
+        sb.ToString ()
+
 
 /// An LR(k) parser state -- i.e., a set of LR(k) items.
 type LrParserState<'Nonterminal, 'Terminal, 'Lookahead
