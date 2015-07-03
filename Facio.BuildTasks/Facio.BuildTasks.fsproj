@@ -86,6 +86,11 @@
       <Project>{1a562247-7b57-45df-9bab-cdfa6202a6b4}</Project>
       <Private>True</Private>
     </ProjectReference>
+    <ProjectReference Include="..\Reggie\Reggie.fsproj">
+      <Name>Reggie</Name>
+      <Project>{f835111f-5314-42dc-9187-b99e46bfe8ad}</Project>
+      <Private>True</Private>
+    </ProjectReference>
   </ItemGroup>
   <PropertyGroup>
     <NuGetTargets>$(SolutionDir)\.nuget\NuGet.targets</NuGetTargets>
