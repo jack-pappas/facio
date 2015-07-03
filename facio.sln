@@ -1,6 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2012
+# Visual Studio 2013
+VisualStudioVersion = 12.0.31101.0
+MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".nuget", ".nuget", "{E0ED8004-9C63-4BA4-987C-EE634B39B881}"
 	ProjectSection(SolutionItems) = preProject
 		.nuget\NuGet.Config = .nuget\NuGet.Config
@@ -59,6 +61,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{0CB92EF7
 		docs\tools\templates\template.cshtml = docs\tools\templates\template.cshtml
 	EndProjectSection
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Reggie", "Reggie\Reggie.fsproj", "{F835111F-5314-42DC-9187-B99E46BFE8AD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -101,6 +105,10 @@ Global
 		{68BFE4F1-020C-4E33-8588-A3E438DEECB7}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{68BFE4F1-020C-4E33-8588-A3E438DEECB7}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{68BFE4F1-020C-4E33-8588-A3E438DEECB7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F835111F-5314-42DC-9187-B99E46BFE8AD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F835111F-5314-42DC-9187-B99E46BFE8AD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F835111F-5314-42DC-9187-B99E46BFE8AD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F835111F-5314-42DC-9187-B99E46BFE8AD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

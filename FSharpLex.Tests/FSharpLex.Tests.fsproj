@@ -88,6 +88,11 @@
       <Project>{f9f750fb-2817-4559-bd0a-be5402102d37}</Project>
       <Private>True</Private>
     </ProjectReference>
+    <ProjectReference Include="..\Reggie\Reggie.fsproj">
+      <Name>Reggie</Name>
+      <Project>{f835111f-5314-42dc-9187-b99e46bfe8ad}</Project>
+      <Private>True</Private>
+    </ProjectReference>
   </ItemGroup>
   <PropertyGroup>
     <NuGetTargets>$(SolutionDir)\.nuget\NuGet.targets</NuGetTargets>
@@ -98,7 +103,9 @@
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Enable NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is $(NuGetTargets).</ErrorText>
     </PropertyGroup>
     <Error Condition="!Exists('$(NuGetTargets)')" Text="$(ErrorText)" />
+    <Error Condition="!Exists('$(SolutionDir)\.nuget\NuGet.targets')" Text="$([System.String]::Format('$(ErrorText)', '$(SolutionDir)\.nuget\NuGet.targets'))" />
   </Target>
+  <Import Project="$(SolutionDir)\.nuget\NuGet.targets" Condition="Exists('$(SolutionDir)\.nuget\NuGet.targets')" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
 	     Other similar extension points exist, see Microsoft.Common.targets.
 	<Target Name="BeforeBuild">

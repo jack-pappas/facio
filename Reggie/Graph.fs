@@ -49,7 +49,7 @@ type LexerDfaGraph =
           VertexCount = vertexCount; }
 
     /// An empty DfaGraph.
-    static member internal Empty
+    static member Empty
         with get () =
             Unchecked.defaultof<LexerDfaGraph>
 

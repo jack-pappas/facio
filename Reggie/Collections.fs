@@ -56,7 +56,7 @@ module private Constants =
 #endif
 [<NoEquality; NoComparison>]
 [<DebuggerTypeProxy(typedefof<AvlTreeDebuggerProxy<int>>)>]
-type internal AvlTree<'T when 'T : comparison> =
+type AvlTree<'T when 'T : comparison> =
     /// Empty tree.
     | Empty
     /// Node.
@@ -701,20 +701,20 @@ and [<Sealed>]
     member __.Items
         with get () : 'T[] =
             AvlTree.ToArray avlTree
-                
+               
 
 /// A Discrete Interval Encoding Tree (DIET) specialized to the 'char' type.
 /// This is abbreviated in our documentation as a 'char-DIET'.
-type internal CharDiet = AvlTree<char * char>
+type CharDiet = AvlTree<char * char>
 
 /// Functional operations for char-DIETs.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module internal CharDiet =
+module CharDiet =
     open System.Collections.Generic
     open LanguagePrimitives
 
     /// Character interval comparer.
-    let private comparer =
+    let comparer =
         LanguagePrimitives.FastGenericComparer<char * char>
 
     /// Returns the predecessor of the given value.

@@ -21,7 +21,7 @@ namespace FSharpLex
 
 /// Maps Unicode categories to sets of characters they contain.
 [<RequireQualifiedAccess>]
-module internal UnicodeCharSet =
+module UnicodeCharSet =
     open System
     open System.Collections.Generic
     open System.Globalization
