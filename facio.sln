@@ -63,6 +63,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{0CB92EF7
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Reggie", "Reggie\Reggie.fsproj", "{F835111F-5314-42DC-9187-B99E46BFE8AD}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Reggie.Tests", "Reggie.Tests\Reggie.Tests.fsproj", "{48815092-52F5-427F-9FDE-771F1F8FABBD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -109,6 +111,10 @@ Global
 		{F835111F-5314-42DC-9187-B99E46BFE8AD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F835111F-5314-42DC-9187-B99E46BFE8AD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F835111F-5314-42DC-9187-B99E46BFE8AD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{48815092-52F5-427F-9FDE-771F1F8FABBD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{48815092-52F5-427F-9FDE-771F1F8FABBD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{48815092-52F5-427F-9FDE-771F1F8FABBD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{48815092-52F5-427F-9FDE-771F1F8FABBD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
