@@ -703,19 +703,35 @@ and [<Sealed>]
             AvlTree.ToArray avlTree
                
 
+///// A closed interval.
+//[<Struct>]
+//type ClosedInterval<'T when 'T :> System.IComparable<'T>> (a : 'T, b : 'T) =
+//    /// The left endpoint of the interval.
+//    member __.A = a
+//    /// The right endpoint of the interval.
+//    member __.B = b
+
 /// A Discrete Interval Encoding Tree (DIET) specialized to the 'char' type.
 /// This is abbreviated in our documentation as a 'char-DIET'.
+//type CharDiet = AvlTree<ClosedInterval<char>>
 type CharDiet = AvlTree<char * char>
 
 /// Functional operations for char-DIETs.
 [<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module CharDiet =
-    open System.Collections.Generic
-    open LanguagePrimitives
-
     /// Character interval comparer.
+    /// This doesn't do a real interval-algebra comparison -- it's only
+    /// a simple lexicographic ordering.
     let comparer =
         LanguagePrimitives.FastGenericComparer<char * char>
+//        { new System.Collections.Generic.IComparer<ClosedInterval<char>> with
+//            member __.Compare (x, y) =
+//                match compare x.A y.A with
+//                | 0 ->
+//                    compare x.B y.B
+//                | x ->
+//                    x
+//            }
 
     /// Returns the predecessor of the given value.
     let inline private pred (c : char) : char =
