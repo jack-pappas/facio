@@ -20,7 +20,6 @@ namespace FSharpLex
 
 open System.Diagnostics
 open ExtCore.Control.Cps
-open ExtCore.Control.Collections
 open FSharpLex.SpecializedCollections
 
 (*  Turn off warning about uppercase variable identifiers; some variables
@@ -125,6 +124,27 @@ type Regex =
     //        This is possible for regular expressions, but is it possible for extended regular expressions?
 
 
+/// Active patterns which simplify matching of special <see cref="Regex"/> instances.
+[<AutoOpen>]
+module RegexPatterns =
+    /// Partial active pattern which may be used to detect the 'empty' language.
+    let inline (|Empty|_|) regex =
+        match regex with
+        | CharacterSet charSet
+            when CharSet.isEmpty charSet ->
+            Some ()
+        | _ ->
+            None
+
+    /// Partial active pattern which may be used to detect a pattern which matches one (1) instance of any character.
+    let inline (|Any|_|) regex =
+        match regex with
+        | Negate Empty ->
+            Some ()
+        | _ ->
+            None
+
+
 /// 'Smart' constructors for Regex.
 /// These should *always* be used to create new Regex instances because they ensure the
 /// resulting Regex is in a normal form; this is very important for minimizing the number
@@ -150,27 +170,10 @@ module Regex =
     [<CompiledName("IsEmpty")>]
     let isEmpty regex =
         match regex with
-        | CharacterSet charSet ->
-            CharSet.isEmpty charSet
+        | Empty ->
+            true
         | _ ->
             false
-
-    /// Partial active pattern which may be used to detect the 'empty' language.
-    let inline private (|Empty|_|) regex =
-        match regex with
-        | CharacterSet charSet
-            when CharSet.isEmpty charSet ->
-            Some ()
-        | _ ->
-            None
-
-    /// Partial active pattern which may be used to detect a pattern which matches one (1) instance of any character.
-    let inline private (|Any|_|) regex =
-        match regex with
-        | Negate Empty ->
-            Some ()
-        | _ ->
-            None
 
     /// Returns a new regular expression which matches exactly one (1) instance of the specified character.
     [<CompiledName("OfCharacter")>]
@@ -183,8 +186,8 @@ module Regex =
     let inline ofCharSet (set : CharSet) : Regex =
         CharacterSet set
 
-    //
-    let rec private simplify regex =
+    /// Recursively simplify and normalize a regular expression.
+    let rec internal simplifyRec regex =
         cont {
         match regex with
         | Epsilon
@@ -195,10 +198,10 @@ module Regex =
         (* Negate *)
         // Double-negation cancels out.
         | Negate (Negate regex) ->
-            return! simplify regex
+            return! simplifyRec regex
         | Negate regex ->
             // Simplify the inner regex first.
-            let! regex = simplify regex
+            let! regex = simplifyRec regex
             match regex with
             | Epsilon ->
                 return empty
@@ -206,9 +209,9 @@ module Regex =
             // Use DeMorgan's rules to simplify negation of Or and And patterns when possible.
             // This isn't specified in the original paper, but it helps to compact the regex.
             | Or (regex1, regex2) ->
-                return! simplify <| And (regex1, regex2)
+                return! simplifyRec <| And (regex1, regex2)
             | And (regex1, regex2) ->
-                return! simplify <| Or (regex1, regex2)
+                return! simplifyRec <| Or (regex1, regex2)
 
             // Double-negation cancels out.
             | Negate regex ->
@@ -221,10 +224,10 @@ module Regex =
         (* Star *)
         // The Star operation is idempotent -- nested Stars are equivalent to a single Star.
         | Star (Star regex) ->
-            return! simplify <| Star regex
+            return! simplifyRec <| Star regex
         | Star regex ->
             // Simplify the inner regex first.
-            let! regex = simplify regex
+            let! regex = simplifyRec regex
             match regex with
             | Epsilon
             | Empty ->
@@ -241,11 +244,11 @@ module Regex =
         (* Concat *)
         // Nested Concat patterns should skew towards the right.
         | Concat (Concat (r, s), t) ->
-            return! simplify <| Concat (r, Concat (s, t))
+            return! simplifyRec <| Concat (r, Concat (s, t))
         | Concat (regex1, regex2) ->
             // Simplify the two sub-regexes first.
-            let! regex1 = simplify regex1
-            let! regex2 = simplify regex2
+            let! regex1 = simplifyRec regex1
+            let! regex2 = simplifyRec regex2
 
             match regex1, regex2 with
             | regex, Epsilon
@@ -258,7 +261,7 @@ module Regex =
 
             // Nested Concat patterns should skew towards the right.
             | Concat (r, s), t ->
-                return! simplify <| Concat (r, Concat (s, t))
+                return! simplifyRec <| Concat (r, Concat (s, t))
 
             | Star s, Star t
                 // The equivalence here is only an approximation.
@@ -276,11 +279,11 @@ module Regex =
         (* And *)
         // Nested And patterns should skew towards the left.
         | And (r, And (s, t)) ->
-            return! simplify <| And (And (r, s), t)
+            return! simplifyRec <| And (And (r, s), t)
         | And (regex1, regex2) ->
             // Simplify the two sub-regexes first.
-            let! regex1 = simplify regex1
-            let! regex2 = simplify regex2
+            let! regex1 = simplifyRec regex1
+            let! regex2 = simplifyRec regex2
 
             match regex1, regex2 with
             | Empty, _
@@ -295,7 +298,7 @@ module Regex =
 
             // Nested And patterns should skew towards the left.
             | r, And (s, t) ->
-                return! simplify <| And (And (r, s), t)
+                return! simplifyRec <| And (And (r, s), t)
 
             (* Rewrite rules which are extremely important since they compact the regex, thereby reducing the number of DFA states. *)
             | CharacterSet s1, CharacterSet s2 ->
@@ -339,11 +342,11 @@ module Regex =
         (* Or *)
         // Nested Or patterns should skew towards the left.
         | Or (r, Or (s, t)) ->
-            return! simplify <| Or (Or (r, s), t)
+            return! simplifyRec <| Or (Or (r, s), t)
         | Or (regex1, regex2) ->
             // Simplify the two sub-regexes first.
-            let! regex1 = simplify regex1
-            let! regex2 = simplify regex2
+            let! regex1 = simplifyRec regex1
+            let! regex2 = simplifyRec regex2
 
             match regex1, regex2 with
             | Empty, regex
@@ -357,7 +360,7 @@ module Regex =
 
             // Nested Or patterns should skew towards the left.
             | r, Or (s, t) ->
-                return! simplify <| Or (Or (r, s), t)
+                return! simplifyRec <| Or (Or (r, s), t)
 
             (* Rewrite rules which are extremely important since they compact the regex, thereby reducing the number of DFA states. *)
 
@@ -405,19 +408,19 @@ module Regex =
     [<CompiledName("CreateStar")>]
     let star (regex : Regex) : Regex =
         // Create the Star pattern, then simplify it before returning.
-        simplify (Star regex) id
+        simplifyRec (Star regex) id
 
     /// Creates a normalized Regex.Negate from the specified Regex.
     [<CompiledName("CreateNegate")>]
     let negate (regex : Regex) : Regex =
         // Create the Negate pattern, then simplify it before returning.
-        simplify (Negate regex) id
+        simplifyRec (Negate regex) id
 
     /// Concatenates two regular expressions so they'll be matched sequentially.
     [<CompiledName("CreateConcat")>]
     let concat (regex1 : Regex) (regex2 : Regex) : Regex =
         // Create the Concat pattern, then simplify it before returning.
-        simplify (Concat (regex1, regex2)) id
+        simplifyRec (Concat (regex1, regex2)) id
 
     /// Conjunction of two regular expressions.
     /// This returns a new regular expression which matches an input string
@@ -425,7 +428,7 @@ module Regex =
     [<CompiledName("CreateAnd")>]
     let andr (regex1 : Regex) (regex2 : Regex) : Regex =
         // Create the Concat pattern, then simplify it before returning.
-        simplify (And (regex1, regex2)) id
+        simplifyRec (And (regex1, regex2)) id
 
     /// Disjunction of two regular expressions.
     /// This returns a new regular expression which matches an input string
@@ -433,7 +436,7 @@ module Regex =
     [<CompiledName("CreateOr")>]
     let orr (regex1 : Regex) (regex2 : Regex) : Regex =
         // Create the Concat pattern, then simplify it before returning.
-        simplify (Or (regex1, regex2)) id
+        simplifyRec (Or (regex1, regex2)) id
 
     /// Given two regular expressions, computes (regex1 / regex2).
     /// The resulting expression matches any string which matches regex1
@@ -452,6 +455,21 @@ type Regex with
     /// EXCEPT for those which also match regex2.
     static member Difference (regex1, regex2) =
         Regex.difference regex1 regex2
+
+    /// Recursively simplify a regular expression.
+    /// The rewrite rules used to simplify the regular expression also try to normalize it;
+    /// this, in turn, helps to minimize the number of states in the DFA which will
+    /// eventually be generated for the expression.
+    static member Simplify (regex : Regex) : Regex =
+        // For the nullary patterns that can't be simplified, return immediately.
+        // Otherwise, call the recursive implementation.
+        match regex with
+        | Epsilon
+        | Any
+        | CharacterSet _ ->
+            regex
+        | _ ->
+            Regex.simplifyRec regex id
 
     /// Computes the derivative of a Regex with respect to a specified symbol.
     static member private DerivativeImpl wrtSymbol regex =
