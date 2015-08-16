@@ -25,7 +25,7 @@ open FsCheck
 
 
 /// Tests for CharSet.
-module CharSet =
+module CharSetTests =
     [<Test>]
     let isEmpty () : unit =
         // Check with an empty set.
@@ -210,27 +210,26 @@ module CharSet =
         Assert.Ignore "Test not yet implemented."
 
 
-    /// Randomized tests to check for operational equivalence with the standard F# Set type.
-    module Randomized =
-        /// FsCheck generators for CharSet.
-        type CharSetGenerator =
-            /// Generates an arbitrary CharSet instance.
-            static member CharSet () : Arbitrary<CharSet> =
-                gen {
-                let! chars = Arb.generate
-                return CharSet.ofSeq chars
-                } |> Arb.fromGen
+/// Randomized tests to check for operational equivalence with the standard F# Set type.
+module CharSetRandomizedTests =
+    [<Test>]
+    let count () : unit =
+        assertProp "Equivalence with Set: 'count'" <| fun chars ->
+            // Fold over the sequence of chars to create both sets in a single pass.
+            let setOfChars, charSet =
+                ((Set.empty, CharSet.empty), chars)
+                ||> Set.fold (fun (setOfChars, charSet) c ->
+                    Set.add c setOfChars,
+                    CharSet.add c charSet)
 
-        /// Registers the FsCheck generators so they're already loaded
-        /// when NUnit runs the tests in this fixture.
-        [<TestFixtureSetUp>]
-        let registerFsCheckGenerators =
-            Arb.register<CharSetGenerator> () |> ignore
+            // Do both sets have the same count?
+            Set.count setOfChars = CharSet.count charSet
 
-
-        [<Test>]
-        let count () : unit =
-            assertProp "Equivalence with Set: 'count'" <| fun chars ->
+    [<Test>]
+    let maxElement () : unit =
+        assertProp "Equivalence with Set: 'maxElement'" <| fun chars ->
+            // Only test non-empty sequences.
+            not (Seq.isEmpty chars) ==> lazy (
                 // Fold over the sequence of chars to create both sets in a single pass.
                 let setOfChars, charSet =
                     ((Set.empty, CharSet.empty), chars)
@@ -238,42 +237,14 @@ module CharSet =
                         Set.add c setOfChars,
                         CharSet.add c charSet)
 
-                // Do both sets have the same count?
-                Set.count setOfChars = CharSet.count charSet
+                // Do the maximum elements of both sets match?
+                Set.maxElement setOfChars = CharSet.maxElement charSet)
 
-        [<Test>]
-        let maxElement () : unit =
-            assertProp "Equivalence with Set: 'maxElement'" <| fun chars ->
-                // Only test non-empty sequences.
-                not (Seq.isEmpty chars) ==> lazy (
-                    // Fold over the sequence of chars to create both sets in a single pass.
-                    let setOfChars, charSet =
-                        ((Set.empty, CharSet.empty), chars)
-                        ||> Set.fold (fun (setOfChars, charSet) c ->
-                            Set.add c setOfChars,
-                            CharSet.add c charSet)
-
-                    // Do the maximum elements of both sets match?
-                    Set.maxElement setOfChars = CharSet.maxElement charSet)
-
-        [<Test>]
-        let minElement () : unit =
-            assertProp "Equivalence with Set: 'minElement'" <| fun chars ->
-                // Only test non-empty sequences.
-                not (Seq.isEmpty chars) ==> lazy (
-                    // Fold over the sequence of chars to create both sets in a single pass.
-                    let setOfChars, charSet =
-                        ((Set.empty, CharSet.empty), chars)
-                        ||> Set.fold (fun (setOfChars, charSet) c ->
-                            Set.add c setOfChars,
-                            CharSet.add c charSet)
-
-                    // Do the minimum elements of both sets match?
-                    Set.minElement setOfChars = CharSet.minElement charSet)
-
-        [<Test>]
-        let contains () : unit =
-            assertProp "Equivalence with Set: 'contains'" <| fun chars c ->
+    [<Test>]
+    let minElement () : unit =
+        assertProp "Equivalence with Set: 'minElement'" <| fun chars ->
+            // Only test non-empty sequences.
+            not (Seq.isEmpty chars) ==> lazy (
                 // Fold over the sequence of chars to create both sets in a single pass.
                 let setOfChars, charSet =
                     ((Set.empty, CharSet.empty), chars)
@@ -281,126 +252,139 @@ module CharSet =
                         Set.add c setOfChars,
                         CharSet.add c charSet)
 
-                // Both or neither of the sets should contain 'c'.
-                Set.contains c setOfChars = CharSet.contains c charSet
+                // Do the minimum elements of both sets match?
+                Set.minElement setOfChars = CharSet.minElement charSet)
 
-        [<Test>]
-        let add () : unit =
-            assertProp "Equivalence with Set: 'add'" <| fun setOfChars c ->
-                // Create a CharSet from the Set<char>.
-                let charSet = CharSet.ofSet setOfChars
+    [<Test>]
+    let contains () : unit =
+        assertProp "Equivalence with Set: 'contains'" <| fun chars c ->
+            // Fold over the sequence of chars to create both sets in a single pass.
+            let setOfChars, charSet =
+                ((Set.empty, CharSet.empty), chars)
+                ||> Set.fold (fun (setOfChars, charSet) c ->
+                    Set.add c setOfChars,
+                    CharSet.add c charSet)
 
-                // Add 'c' to both sets.
-                let setOfChars = Set.add c setOfChars
-                let charSet = CharSet.add c charSet
+            // Both or neither of the sets should contain 'c'.
+            Set.contains c setOfChars = CharSet.contains c charSet
 
-                // The sets should contain the same elements in the same order.
-                (setOfChars, CharSet.toSeq charSet)
-                ||> Seq.compareWith compare = 0
+    [<Test>]
+    let add () : unit =
+        assertProp "Equivalence with Set: 'add'" <| fun setOfChars c ->
+            // Create a CharSet from the Set<char>.
+            let charSet = CharSet.ofSet setOfChars
 
-        [<Test>]
-        let addRange () : unit =
-            assertProp "Equivalence with Set: 'addRange'" <| fun setOfChars (c1 : char) (c2 : char) ->
-                // Create a CharSet from the Set<char>.
-                let charSet = CharSet.ofSet setOfChars
+            // Add 'c' to both sets.
+            let setOfChars = Set.add c setOfChars
+            let charSet = CharSet.add c charSet
 
-                // Add the range to the CharSet.
-                let charSet = CharSet.addRange c1 c2 charSet
+            // The sets should contain the same elements in the same order.
+            (setOfChars, CharSet.toSeq charSet)
+            ||> Seq.compareWith compare = 0
 
-                // Add the characters in the range to the Set<char>.
-                let setOfChars =
-                    (setOfChars, { c1 .. c2 })
-                    ||> Seq.fold (flip Set.add)
+    [<Test>]
+    let addRange () : unit =
+        assertProp "Equivalence with Set: 'addRange'" <| fun setOfChars (c1 : char) (c2 : char) ->
+            // Create a CharSet from the Set<char>.
+            let charSet = CharSet.ofSet setOfChars
 
-                // The sets should contain the same elements in the same order.
-                (setOfChars, CharSet.toSeq charSet)
-                ||> Seq.compareWith compare = 0
+            // Add the range to the CharSet.
+            let charSet = CharSet.addRange c1 c2 charSet
 
-        [<Test>]
-        let remove () : unit =
-            assertProp "Equivalence with Set: 'remove'" <| fun setOfChars c ->
-                // Create a CharSet from the Set<char>.
-                let charSet = CharSet.ofSet setOfChars
+            // Add the characters in the range to the Set<char>.
+            let setOfChars =
+                (setOfChars, { c1 .. c2 })
+                ||> Seq.fold (flip Set.add)
 
-                // Add 'c' to both sets.
-                let setOfChars = Set.remove c setOfChars
-                let charSet = CharSet.remove c charSet
+            // The sets should contain the same elements in the same order.
+            (setOfChars, CharSet.toSeq charSet)
+            ||> Seq.compareWith compare = 0
 
-                // The sets should contain the same elements in the same order.
-                (setOfChars, CharSet.toSeq charSet)
-                ||> Seq.compareWith compare = 0
+    [<Test>]
+    let remove () : unit =
+        assertProp "Equivalence with Set: 'remove'" <| fun setOfChars c ->
+            // Create a CharSet from the Set<char>.
+            let charSet = CharSet.ofSet setOfChars
 
-        [<Test>]
-        let difference () : unit =
-            assertProp "Equivalence with Set: 'difference'" <| fun seq1 seq2 ->
-                // Create a Set<char> and a CharSet from the first sequence.
-                let setOfChars1, charSet1 =
-                    ((Set.empty, CharSet.empty), seq1)
-                    ||> Set.fold (fun (setOfChars, charSet) c ->
-                        Set.add c setOfChars,
-                        CharSet.add c charSet)
+            // Add 'c' to both sets.
+            let setOfChars = Set.remove c setOfChars
+            let charSet = CharSet.remove c charSet
 
-                // Create a Set<char> and a CharSet from the second sequence.
-                let setOfChars2, charSet2 =
-                    ((Set.empty, CharSet.empty), seq2)
-                    ||> Set.fold (fun (setOfChars, charSet) c ->
-                        Set.add c setOfChars,
-                        CharSet.add c charSet)
+            // The sets should contain the same elements in the same order.
+            (setOfChars, CharSet.toSeq charSet)
+            ||> Seq.compareWith compare = 0
 
-                // Remove the elements of the second sets from the first sets.
-                let setOfChars = Set.difference setOfChars1 setOfChars2
-                let charSet = CharSet.difference charSet1 charSet2
+    [<Test>]
+    let difference () : unit =
+        assertProp "Equivalence with Set: 'difference'" <| fun seq1 seq2 ->
+            // Create a Set<char> and a CharSet from the first sequence.
+            let setOfChars1, charSet1 =
+                ((Set.empty, CharSet.empty), seq1)
+                ||> Set.fold (fun (setOfChars, charSet) c ->
+                    Set.add c setOfChars,
+                    CharSet.add c charSet)
 
-                // The sets should contain the same elements in the same order.
-                (setOfChars, CharSet.toSeq charSet)
-                ||> Seq.compareWith compare = 0
+            // Create a Set<char> and a CharSet from the second sequence.
+            let setOfChars2, charSet2 =
+                ((Set.empty, CharSet.empty), seq2)
+                ||> Set.fold (fun (setOfChars, charSet) c ->
+                    Set.add c setOfChars,
+                    CharSet.add c charSet)
 
-        [<Test>]
-        let intersect () : unit =
-            assertProp "Equivalence with Set: 'intersect'" <| fun seq1 seq2 ->
-                // Create a Set<char> and a CharSet from the first sequence.
-                let setOfChars1, charSet1 =
-                    ((Set.empty, CharSet.empty), seq1)
-                    ||> Set.fold (fun (setOfChars, charSet) c ->
-                        Set.add c setOfChars,
-                        CharSet.add c charSet)
+            // Remove the elements of the second sets from the first sets.
+            let setOfChars = Set.difference setOfChars1 setOfChars2
+            let charSet = CharSet.difference charSet1 charSet2
 
-                // Create a Set<char> and a CharSet from the second sequence.
-                let setOfChars2, charSet2 =
-                    ((Set.empty, CharSet.empty), seq2)
-                    ||> Set.fold (fun (setOfChars, charSet) c ->
-                        Set.add c setOfChars,
-                        CharSet.add c charSet)
+            // The sets should contain the same elements in the same order.
+            (setOfChars, CharSet.toSeq charSet)
+            ||> Seq.compareWith compare = 0
 
-                // Intersect the first and second sets.
-                let setOfChars = Set.intersect setOfChars1 setOfChars2
-                let charSet = CharSet.intersect charSet1 charSet2
+    [<Test>]
+    let intersect () : unit =
+        assertProp "Equivalence with Set: 'intersect'" <| fun seq1 seq2 ->
+            // Create a Set<char> and a CharSet from the first sequence.
+            let setOfChars1, charSet1 =
+                ((Set.empty, CharSet.empty), seq1)
+                ||> Set.fold (fun (setOfChars, charSet) c ->
+                    Set.add c setOfChars,
+                    CharSet.add c charSet)
 
-                // The sets should contain the same elements in the same order.
-                (setOfChars, CharSet.toSeq charSet)
-                ||> Seq.compareWith compare = 0
+            // Create a Set<char> and a CharSet from the second sequence.
+            let setOfChars2, charSet2 =
+                ((Set.empty, CharSet.empty), seq2)
+                ||> Set.fold (fun (setOfChars, charSet) c ->
+                    Set.add c setOfChars,
+                    CharSet.add c charSet)
 
-        [<Test>]
-        let union () : unit =
-            assertProp "Equivalence with Set: 'union'" <| fun seq1 seq2 ->
-                // Create a Set<char> and a CharSet from the first sequence.
-                let setOfChars1, charSet1 =
-                    ((Set.empty, CharSet.empty), seq1)
-                    ||> Set.fold (fun (setOfChars, charSet) c ->
-                        Set.add c setOfChars,
-                        CharSet.add c charSet)
+            // Intersect the first and second sets.
+            let setOfChars = Set.intersect setOfChars1 setOfChars2
+            let charSet = CharSet.intersect charSet1 charSet2
 
-                // Create a Set<char> and a CharSet from the second sequence.
-                let setOfChars2, charSet2 =
-                    ((Set.empty, CharSet.empty), seq2)
-                    ||> Set.fold (fun (setOfChars, charSet) c ->
-                        Set.add c setOfChars,
-                        CharSet.add c charSet)
+            // The sets should contain the same elements in the same order.
+            (setOfChars, CharSet.toSeq charSet)
+            ||> Seq.compareWith compare = 0
 
-                // Union the first and second sets.
-                let setOfChars = Set.intersect setOfChars1 setOfChars2
-                let charSet = CharSet.intersect charSet1 charSet2
+    [<Test>]
+    let union () : unit =
+        assertProp "Equivalence with Set: 'union'" <| fun seq1 seq2 ->
+            // Create a Set<char> and a CharSet from the first sequence.
+            let setOfChars1, charSet1 =
+                ((Set.empty, CharSet.empty), seq1)
+                ||> Set.fold (fun (setOfChars, charSet) c ->
+                    Set.add c setOfChars,
+                    CharSet.add c charSet)
 
-                // The sets should contain the same elements in the same order.
-                (setOfChars, CharSet.toSeq charSet)
-                ||> Seq.compareWith compare = 0
+            // Create a Set<char> and a CharSet from the second sequence.
+            let setOfChars2, charSet2 =
+                ((Set.empty, CharSet.empty), seq2)
+                ||> Set.fold (fun (setOfChars, charSet) c ->
+                    Set.add c setOfChars,
+                    CharSet.add c charSet)
+
+            // Union the first and second sets.
+            let setOfChars = Set.intersect setOfChars1 setOfChars2
+            let charSet = CharSet.intersect charSet1 charSet2
+
+            // The sets should contain the same elements in the same order.
+            (setOfChars, CharSet.toSeq charSet)
+            ||> Seq.compareWith compare = 0
