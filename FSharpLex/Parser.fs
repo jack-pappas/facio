@@ -291,7 +291,7 @@ let private _fsyacc_reductions = [|
                         let rawStartPos, rawEndPos = parseState.ResultRange
                         let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
                         let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
-                        let range = SourcePositionRange (startPos, endPos)
+                        let range = SourcePositionRange (startPos, endPos, rawStartPos.FileName)
                         Some range
 
                       Some { Value = _1; PositionRange = posRange; }
@@ -332,7 +332,7 @@ let private _fsyacc_reductions = [|
                             let rawStartPos, rawEndPos = parseState.ResultRange
                             let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
                             let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
-                            let range = SourcePositionRange (startPos, endPos)
+                            let range = SourcePositionRange (startPos, endPos, rawStartPos.FileName)
                             Some range
                         ({ Value = _2; PositionRange = posRange; }, pattern)
 
@@ -373,7 +373,7 @@ let private _fsyacc_reductions = [|
                             let rawStartPos, rawEndPos = parseState.ResultRange
                             let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
                             let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
-                            let range = SourcePositionRange (startPos, endPos)
+                            let range = SourcePositionRange (startPos, endPos, rawStartPos.FileName)
                             Some range
                       
                       ({ Value = _1; PositionRange = posRange; }, rule)
@@ -431,7 +431,13 @@ let private _fsyacc_reductions = [|
             box
                 (
                    (
-                      { Pattern = _1; Action = { Value = _2; PositionRange = None; }; }
+                      let posRange =
+                            let rawStartPos, rawEndPos = parseState.ResultRange
+                            let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
+                            let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
+                            let range = SourcePositionRange (startPos, endPos, rawStartPos.FileName)
+                            Some range
+                      { Pattern = _1; Action = { Value = _2; PositionRange = posRange; }; }
                    )
                  : 'clause));
         (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->

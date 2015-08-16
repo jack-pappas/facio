@@ -609,6 +609,20 @@ module private FsLex =
                             // Emit the newline for the match pattern.
                             indentingWriter.WriteLine ()
 
+                            // Emit an F# #line directive for the user-defined code;
+                            // this allows the F# compiler to emit warning/error messages referencing
+                            // the user-defined code's original location in the lexer spec if necessary.
+                            match actionCode.PositionRange with
+                            | None -> ()
+                            | Some range ->
+                                let directiveText =
+                                    if String.isNullOrEmpty range.Filename then
+                                        sprintf "#line %i" range.First.Line
+                                    else
+                                        sprintf "#line %i @\"%s\"" range.First.Line range.Filename
+
+                                indentingWriter.WriteLineNoTabs directiveText
+
                             // Emit the user-defined code for this pattern's semantic action.
                             // This has to be done line-by-line so the indenting is correct!
                             // The lines of the action code are split and trimmed specially to preserve

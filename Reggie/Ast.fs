@@ -115,13 +115,17 @@ type SourcePositionRange =
     val First : SourcePosition
     /// The last (inclusive) position in the range.
     val Last : SourcePosition
+    /// The source filename.
+    val Filename : string
 
     /// <summary>Create a new <see cref="SourceRange"/> value.</summary>
     /// <param name="first"></param>
     /// <param name="last"></param>
-    new (first, last) = {
+    /// <param name="filename"></param>
+    new (first, last, filename) = {
         First = first;
         Last = last;
+        Filename = filename;
         }
 
     override this.ToString () =
