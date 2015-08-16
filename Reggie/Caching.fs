@@ -23,10 +23,10 @@ open FSharpLex.SpecializedCollections
 
 /// <summary>
 /// A set of derivative classes.
-/// A 'derivative class' is just a set of characters labeling a transition edge from one DFA state to another,
-/// so <see cref="T:DerivativeClasses"/> is a set of character sets. It could be represented in F# as <c>Set{Set{char}}</c>,
-/// but this representation uses a <see cref="T:HashSet{T}"/> of <see cref="T:CharSet"/>s, which are much more
-/// efficient for dense character sets.
+/// A 'derivative class' is a set of characters labeling a transition edge from one DFA state to another,
+/// so <see cref="DerivativeClasses"/> is a set of character sets. It could be represented in F# as <c>Set{Set{char}}</c>,
+/// but this representation uses a <see cref="HashSet{T}"/> of <see cref="CharSet"/>s, because <see cref="CharSet"/>
+/// is a very efficient representation of dense character sets.
 /// </summary>
 type DerivativeClasses = HashSet<CharSet>
 
@@ -34,7 +34,7 @@ type DerivativeClasses = HashSet<CharSet>
 type CompilationCache = {
     /// A cache used for hash-consing of CharSets.
     /// This is critical for performance; without it, definitions which make heavy use of Unicode character sets
-    /// cause fsharplex to spend a significant amount of time comparing CharSets for equality.
+    /// cause Reggie to spend a significant amount of time comparing CharSets for equality.
     /// With this cache, many of those equality checks are reduced to reference (physical) equality comparisons.
     CharSetCache : HashMap<CharSet, CharSet>;
     /// Caches the derivative of a regular expression with respect to a symbol.
