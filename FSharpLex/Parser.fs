@@ -431,13 +431,15 @@ let private _fsyacc_reductions = [|
             box
                 (
                    (
-                      let posRange =
+                      let actionPosRange =
                             let rawStartPos, rawEndPos = parseState.ResultRange
                             let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
                             let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
                             let range = SourcePositionRange (startPos, endPos, rawStartPos.FileName)
                             Some range
-                      { Pattern = _1; Action = { Value = _2; PositionRange = posRange; }; }
+                      // TODO : Correctly handle getting the position range for the pattern.
+                      { Pattern = { Value = _1; PositionRange = None; };
+                        Action = { Value = _2; PositionRange = actionPosRange; }; }
                    )
                  : 'clause));
         (fun (parseState : Microsoft.FSharp.Text.Parsing.IParseState) ->

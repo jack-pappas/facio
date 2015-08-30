@@ -377,7 +377,7 @@ type CodeFragment = substring
 /// A clause of a lexer rule.
 type RuleClause = {
     /// The pattern matched by this clause.
-    Pattern : RuleClausePattern;
+    Pattern : PositionedValue<RuleClausePattern>;
     /// <summary>The semantic action to be executed when <see cref="Pattern"/> is matched by the lexer.</summary>
     Action : PositionedValue<CodeFragment>;
 }

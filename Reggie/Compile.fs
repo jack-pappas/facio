@@ -847,10 +847,35 @@ module Compiler =
             | Choice1Of2 processedPattern ->
                 Choice1Of2 processedPattern
 
+    /// For special patterns such as 'eof' or the wildcard ("catch-all") pattern, get the earliest occurrence
+    /// of a match-rule clause matching the pattern (if any). If multiple rule clauses match the pattern, emit
+    /// warning messages for any clauses after the first one since they'll never be matched.
+    let private tryGetEarliestMatchingClause (ruleClauses : RuleClause[]) (matchingClauseIndices : int<RuleClauseIdx>[]) =
+        // Precondition: 'matchingClauseIndices' must be sorted.
+        assert (matchingClauseIndices = Array.sort matchingClauseIndices)
+
+        match matchingClauseIndices with
+        | [| |] ->
+            None
+        | [| acceptingClauseIndex |] ->
+            Some acceptingClauseIndex
+        | _ ->
+            // Only the earliest occurrence of the pattern will be matched.
+            // TODO : Return warning messages (with location info) about patterns which will never be matched.
+            // TEMP : In the meantime, print warnings to the debug console for development purposes.
+            for i = 1 to matchingClauseIndices.Length - 1 do
+                let clauseIndex = matchingClauseIndices.[i]
+                let clausePosition = ruleClauses.[int clauseIndex].Pattern.PositionRange
+                Debug.WriteLine (sprintf "This pattern will never be matched. (ClauseIndex = %i)" <| int clauseIndex)
+
+            // Return the first (earliest) use of the matching pattern.
+            Some matchingClauseIndices.[0]
+
     //
     // TODO :   Modify/rewrite this function so it uses the 'readerState' workflow.
     //          The read-only value will be the CompilationOptions record, and the state value will be the (macroEnv, badMacros).
     let private compileRule (rule : Rule) (options : CompilationOptions) (macroEnv, badMacros) =
+        choice {
         (* TODO :   Simplify this function by folding over rule.Clauses; this way,
                     we don't create so many intermediate data structures and we avoid
                     the need to split the clauses based on which RuleClausePattern
@@ -867,72 +892,31 @@ module Compiler =
         // Extract any clauses which match the end-of-file symbol;
         // these clauses need to be handled specially.
         let patterns, eofClauseIndices =
-            // TODO : Simplify the code below using the Array.mapiPartition function from ExtCore.
-            let ruleClauseCount = Array.length ruleClauses
-        
-            let patterns = ResizeArray<_> (Array.length ruleClauses)
-            let mutable eofClauseIndices = Set.empty
-
-            // Extract the relevant information from the pattern of each clause,
-            // based on which case of RuleClausePattern they're defined with.
-            for i = 0 to ruleClauseCount - 1 do
-                let clause = ruleClauses.[i]
-                match clause.Pattern with
+            ruleClauses
+            |> Array.mapiPartition(fun idx clause ->
+                // Extract the relevant information from the pattern of each clause,
+                // based on which case of RuleClausePattern they're defined with.
+                let ruleClauseIdx = tag<RuleClauseIdx> idx
+                match clause.Pattern.Value with
                 | Pattern pattern ->
-                    patterns.Add (
-                        tag<RuleClauseIdx> i,
-                        pattern)
+                    Choice1Of2 (ruleClauseIdx, pattern)
                 | EndOfFile ->
-                    eofClauseIndices <-
-                        Set.add (tag<RuleClauseIdx> i) eofClauseIndices
-
-            // Return the data.
-            patterns.ToArray (),
-            eofClauseIndices
+                    Choice2Of2 ruleClauseIdx)
 
         /// The index of the rule clause whose action will be executed
         /// if the lexer attempts to match this rule once the end-of-file
         /// has been reached.
-        let eofAcceptingClauseIndex =
-            if Set.isEmpty eofClauseIndices then
-                None
-            else
-                // Only the earliest use of the "eof" pattern will be matched.
-                let acceptingClauseIndex, neverMatchedClauseIndices = Set.extractMin eofClauseIndices
-
-                // TODO : Return warning messages (with location info) about patterns which will never be matched.
-                // TEMP : In the meantime, print warnings to the debug console for development purposes.
-                neverMatchedClauseIndices
-                |> Set.iter (fun clauseIndex ->
-                    Printf.dprintfn "This pattern will never be matched. (ClauseIndex = %i)" <| int clauseIndex)
-
-                Some acceptingClauseIndex
+        let eofAcceptingClauseIndex = tryGetEarliestMatchingClause ruleClauses eofClauseIndices
 
         /// The index of the wildcard rule clause, if this rule contains one.
         let wildcardAcceptingClauseIndex =
-            let wildcardClauseIndices =
-                patterns
-                |> Array.choose (fun (idx, pat) ->
-                    match pat with
-                    | Any -> Some idx
-                    | _ -> None)
-                |> Set.ofArray
+            patterns
+            |> Array.choose (fun (idx, pat) ->
+                match pat with
+                | Any -> Some idx
+                | _ -> None)
+            |> tryGetEarliestMatchingClause ruleClauses
 
-            if Set.isEmpty wildcardClauseIndices then
-                None
-            else
-                // Only the earliest use of the wildcard pattern will be matched.
-                let acceptingClauseIndex, neverMatchedClauseIndices = Set.extractMin wildcardClauseIndices
-
-                // TODO : Return warning messages (with location info) about patterns which will never be matched.
-                // TEMP : In the meantime, print warnings to the debug console for development purposes.
-                neverMatchedClauseIndices
-                |> Set.iter (fun clauseIndex ->
-                    Printf.dprintfn "This pattern will never be matched. (ClauseIndex = %i)" <| int clauseIndex)
-
-                Some acceptingClauseIndex
-
-        choice {
         // Validate and simplify the patterns of the rule clauses.
         let! ruleClauseRegexes =
             // Put all of the "results" in one array and all of the "errors" in another.
@@ -1022,7 +1006,7 @@ module Compiler =
                     //        if can be displayed to the user in whatever way makes sense for the consumer of this function.
                     //        Also, we want to return location information so it can be used to emit MSBuild-style warning
                     //        messages and/or text adornments in Visual Studio.
-                    Printf.dprintfn "Warning: Wildcard pattern in rule will never be matched."
+                    Debug.WriteLine "Warning: Wildcard pattern in rule will never be matched."
 
                     compiledPatternDfa
                 else
