@@ -16,7 +16,7 @@ limitations under the License.
 
 *)
 
-namespace Tests.FSharpLex
+namespace Tests.Reggie
 
 open FSharpLex
 open FSharpLex.SpecializedCollections
@@ -27,7 +27,7 @@ open FsCheck
 /// Tests for the Regex type and module.
 module RegexTests =
     [<Test>]
-    [<Ignore("This test fails and needs to be fixed; it's ignored for now while FsCheck issues are being worked out.")>]
+    [<Ignore("This test fails and needs to be fixed; it's ignored for now until I have time to understand why it's failing.")>]
     let ``difference of CharSet regex with itself is the null language`` () : unit =
         // Create a CharacterSet regex for the low ASCII characters.
         let charSetRegex = Regex.CharacterSet (CharSet.ofRange (char 0) (char 127))
@@ -42,10 +42,15 @@ module RegexTests =
 
 /// Randomized tests for operations on Regex.
 [<Ignore("This fixture is ignored for now because the tests cause FsCheck to crash.")>]
+[<TestFixture>]
 module RegexRandomizedTests =
     [<Test(Description = "Checks that the 'simplify' operation is strongly normalizing; \
         i.e., once a regex is simplified, it can't be simplified further.")>]
     let ``simplify operation is normalizing`` () : unit =
+        // If the setup fixture hasn't completed, this test won't work correctly.
+        if not ReggieTestSetupFixture.SetupComplete then
+            Assert.Ignore "The setup fixture has not finished running."
+
         assertProp "simplify is strongly normalizing" <| fun regex ->
             // Simplify the regex.
             let simplifiedRegex = Regex.Simplify regex

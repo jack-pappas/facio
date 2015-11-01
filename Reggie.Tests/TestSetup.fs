@@ -16,8 +16,9 @@ limitations under the License.
 
 *)
 
-namespace Tests.FSharpLex.SpecializedCollections
+namespace Tests.Reggie
 
+open System.Threading
 open FSharpLex.SpecializedCollections
 open NUnit.Framework
 open FsUnit
@@ -50,9 +51,20 @@ type CharSetGenerator =
 /// generators used by multiple test fixtures.
 [<SetUpFixture>]
 [<Sealed>]
-type FSharpLexTestSetupFixture () =
+type ReggieTestSetupFixture () =
+    /// Indicates when setup has completed.
+    /// Zero means non-completed; non-zero means completed.
+    static let mutable setupComplete = 0
+
+    /// Indicates when setup has completed.
+    static member SetupComplete
+        with get () = setupComplete <> 0
+
     //
     [<SetUp>]
     member __.SetUp () =
         // Register FsCheck generators needed for CharSet tests.
         Arb.register<CharSetGenerator> () |> ignore
+
+        // Set the flag indicating setup has completed.
+        Interlocked.Exchange (&setupComplete, 1) |> ignore

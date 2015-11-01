@@ -16,7 +16,7 @@ limitations under the License.
 
 *)
 
-namespace Tests.FSharpLex.SpecializedCollections
+namespace Tests.Reggie.SpecializedCollections
 
 open FSharpLex.SpecializedCollections
 open NUnit.Framework
