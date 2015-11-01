@@ -22,6 +22,19 @@ open FSharpLex.SpecializedCollections
 open FSharpLex
 open FSharpLex.Ast
 
+/// Parser helper functions.
+[<AutoOpen>]
+module internal ParserUtils =
+    /// <summary>
+    /// Creates a <see cref="SourcePositionRange"/> value from a
+    /// <see cref="ParseState"/>'s current result range.
+    /// </summary>
+    let parseStatePosRange (parseState : Microsoft.FSharp.Text.Parsing.IParseState) =
+        let rawStartPos, rawEndPos = parseState.ResultRange
+        let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
+        let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
+        SourcePositionRange (startPos, endPos)
+
 %}
 
 %type <Specification> spec
@@ -50,13 +63,7 @@ spec:
 
 codeopt:
     | CODE {
-        let posRange =
-            let rawStartPos, rawEndPos = parseState.ResultRange
-            let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
-            let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
-            let range = SourcePositionRange (startPos, endPos)
-            Some range
-
+        let posRange = Some (parseStatePosRange parseState)
         Some { Value = $1; PositionRange = posRange; } }
 
     | { None }
@@ -69,12 +76,7 @@ macro:
     | LET IDENT EQUALS regexp {
         match $4 with
         | Pattern pattern ->
-            let posRange =
-                let rawStartPos, rawEndPos = parseState.ResultRange
-                let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
-                let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
-                let range = SourcePositionRange (startPos, endPos)
-                Some range
+            let posRange = Some (parseStatePosRange parseState)
             ({ Value = $2; PositionRange = posRange; }, pattern)
 
         | EndOfFile ->
@@ -91,12 +93,7 @@ rule:
         let rule = {
             Parameters = $2;
             Clauses = $6; }
-        let posRange =
-            let rawStartPos, rawEndPos = parseState.ResultRange
-            let startPos = SourcePosition (uint32 rawStartPos.Line, uint32 rawStartPos.Column)
-            let endPos = SourcePosition (uint32 rawEndPos.Line, uint32 rawEndPos.Column)
-            let range = SourcePositionRange (startPos, endPos)
-            Some range
+        let posRange = Some (parseStatePosRange parseState)
 
         ({ Value = $1; PositionRange = posRange; }, rule) }
 
@@ -114,7 +111,11 @@ clauses:
 
 clause:
     | regexp CODE {
-        { Pattern = $1; Action = { Value = $2; PositionRange = None; }; } }
+        let actionPosRange = Some (parseStatePosRange parseState)
+        // TODO : Correctly handle getting the position range for the pattern.
+        { Pattern = { Value = _1; PositionRange = None; };
+          Action = { Value = _2; PositionRange = actionPosRange; }; }
+      }
 
 regexp:
     | CHAR {
