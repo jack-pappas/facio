@@ -388,3 +388,44 @@ module CharSetRandomizedTests =
             // The sets should contain the same elements in the same order.
             (setOfChars, CharSet.toSeq charSet)
             ||> Seq.compareWith compare = 0
+
+
+/// Randomized tests for functions in the TupleUtils module.
+[<TestFixture>]
+module TupleUtilsRandomizedTests =
+    open System.Threading
+
+    [<Test(Description =
+        "Compare the sortThree function against a naive implementation.")>]
+    let ``sortThree results match naive implementation`` () : unit =
+        using (new ThreadLocal<_> (fun () -> Array.zeroCreate<int> 3)) <| fun actualCached ->
+        using (new ThreadLocal<_> (fun () -> Array.zeroCreate<int> 3)) <| fun expectedCached ->
+        assertProp "sortThree results match naive implementation" <| fun (x, y, z) ->
+            // Call the 'sortThree' function.
+            let actual = actualCached.Value
+            actual.[0] <- x; actual.[1] <- y; actual.[2] <- z
+            TupleUtils.sortThree (&actual.[0], &actual.[1], &actual.[2])
+
+            // Compare the results against the naive implementation
+            let expected = expectedCached.Value
+            expected.[0] <- x; expected.[1] <- y; expected.[2] <- z
+            Array.sortInPlace expected
+            expected = actual
+
+    [<Test(Description =
+        "Compare the sortFour function against a naive implementation.")>]
+    [<Ignore("The sortFour function hasn't been optimized yet, so there's no point in checking a naive implementation against itself.")>]
+    let ``sortFour results match naive implementation`` () : unit =
+        using (new ThreadLocal<_> (fun () -> Array.zeroCreate<int> 4)) <| fun actualCached ->
+        using (new ThreadLocal<_> (fun () -> Array.zeroCreate<int> 4)) <| fun expectedCached ->
+        assertProp "sortFour results match naive implementation" <| fun (x, y, z, w) ->
+            // Call the 'sortFour' function.
+            let actual = actualCached.Value
+            actual.[0] <- x; actual.[1] <- y; actual.[2] <- z; actual.[3] <- w
+            TupleUtils.sortFour (&actual.[0], &actual.[1], &actual.[2], &actual.[3])
+
+            // Compare the results against the naive implementation
+            let expected = expectedCached.Value
+            expected.[0] <- x; expected.[1] <- y; expected.[2] <- z; expected.[3] <- w
+            Array.sortInPlace expected
+            expected = actual

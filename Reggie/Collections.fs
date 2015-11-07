@@ -2236,4 +2236,50 @@ module CharSet =
     [<CompiledName("Complement")>]
     let inline complement charSet : CharSet =
         CharSet.Complement charSet
-    
+
+
+/// Utility functions for working with tuples.
+[<RequireQualifiedAccess>]
+module internal TupleUtils =
+    /// Sort 3 values in-place.
+    let internal sortThree (x : byref<'T>, y : byref<'T>, z : byref<'T>) : unit =
+        let mutable temp = Unchecked.defaultof<_>
+        if x < y then
+            if y > z then
+                if x < z then
+                    temp <- y
+                    y <- z
+                    z <- temp
+                else
+                    temp <- x
+                    x <- z
+                    z <- y
+                    y <- temp
+        else
+            if y < z then
+                if x < z then
+                    temp <- x
+                    x <- y
+                    y <- temp
+                else
+                    temp <- x
+                    x <- y
+                    y <- z
+                    z <- temp
+            else
+                temp <- x
+                x <- z
+                z <- temp
+
+    /// Sort 4 values in-place.
+    let internal sortFour (x : byref<'T>, y : byref<'T>, z : byref<'T>, w : byref<'T>) : unit =
+        // Sorting 4 elements requires 5 comparisons.
+
+        // Naive, slow, allocating implementation.
+        // TODO : Replace this with a more-efficient implementation (e.g., sorting network) after implementing tests.
+        let arr = [| x; y; z; w; |]
+        Array.sortInPlace arr
+        x <- arr.[0]
+        y <- arr.[1]
+        z <- arr.[2]
+        w <- arr.[3]

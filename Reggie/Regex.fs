@@ -277,9 +277,26 @@ module Regex =
                 return Concat (regex1, regex2)
 
         (* And *)
-        // Nested And patterns should skew towards the left.
+
+        // The next two rules ensure that nested And patterns are skewed to the left.
+        // The And operation is associative; to enforce confluence of the rewrite system,
+        // the sub-patterns are also sorted when creating the left-skewed tree.
+        // E.g., And (r, And (s, t)) is rewritten to And (And (a, b), c) where a <= b <= c.
+        | And (And (x, y), And (z, w)) ->
+            let mutable a = x
+            let mutable b = y
+            let mutable c = z
+            let mutable d = w
+            TupleUtils.sortFour (&a, &b, &c, &d)
+            return! simplifyRec <| And (And (And (a, b), c), d)
+
         | And (r, And (s, t)) ->
-            return! simplifyRec <| And (And (r, s), t)
+            let mutable a = r
+            let mutable b = s
+            let mutable c = t
+            TupleUtils.sortThree (&a, &b, &c)
+            return! simplifyRec <| And (And (a, b), c)
+
         | And (regex1, regex2) ->
             // Simplify the two sub-regexes first.
             let! regex1 = simplifyRec regex1
@@ -294,11 +311,29 @@ module Regex =
             | regex, Any ->
                 return regex
 
+            | Epsilon, Epsilon ->
+                return Epsilon
+
             // TODO : Should we have rules for And (Epsilon, _) and And (_, Epsilon)?
 
-            // Nested And patterns should skew towards the left.
+            // The next two rules ensure that nested And patterns are skewed to the left.
+            // The And operation is associative; to enforce confluence of the rewrite system,
+            // the sub-patterns are also sorted when creating the left-skewed tree.
+            // E.g., And (r, And (s, t)) is rewritten to And (And (a, b), c) where a <= b <= c.
+            | And (x, y), And (z, w) ->
+                let mutable a = x
+                let mutable b = y
+                let mutable c = z
+                let mutable d = w
+                TupleUtils.sortFour (&a, &b, &c, &d)
+                return! simplifyRec <| And (And (And (a, b), c), d)
+
             | r, And (s, t) ->
-                return! simplifyRec <| And (And (r, s), t)
+                let mutable a = r
+                let mutable b = s
+                let mutable c = t
+                TupleUtils.sortThree (&a, &b, &c)
+                return! simplifyRec <| And (And (a, b), c)
 
             (* Rewrite rules which are extremely important since they compact the regex, thereby reducing the number of DFA states. *)
             | CharacterSet s1, CharacterSet s2 ->
@@ -340,9 +375,26 @@ module Regex =
                         return And (regex1, regex2)
 
         (* Or *)
-        // Nested Or patterns should skew towards the left.
+
+        // The next two rules ensure that nested Or patterns are skewed to the left.
+        // The Or operation is associative; to enforce confluence of the rewrite system,
+        // the sub-patterns are also sorted when creating the left-skewed tree.
+        // E.g., Or (r, Or (s, t)) is rewritten to Or (Or (a, b), c) where a <= b <= c.
+        | Or (Or (x, y), Or (z, w)) ->
+            let mutable a = x
+            let mutable b = y
+            let mutable c = z
+            let mutable d = w
+            TupleUtils.sortFour (&a, &b, &c, &d)
+            return! simplifyRec <| Or (Or (Or (a, b), c), d)
+
         | Or (r, Or (s, t)) ->
-            return! simplifyRec <| Or (Or (r, s), t)
+            let mutable a = r
+            let mutable b = s
+            let mutable c = t
+            TupleUtils.sortThree (&a, &b, &c)
+            return! simplifyRec <| Or (Or (a, b), c)
+
         | Or (regex1, regex2) ->
             // Simplify the two sub-regexes first.
             let! regex1 = simplifyRec regex1
@@ -358,9 +410,29 @@ module Regex =
             | _, Any ->
                 return any
 
-            // Nested Or patterns should skew towards the left.
+            | Epsilon, Epsilon ->
+                return Epsilon
+
+            // TODO : Should we have rules for Or (Epsilon, _) and Or (_, Epsilon)?
+
+            // The next two rules ensure that nested Or patterns are skewed to the left.
+            // The Or operation is associative; to enforce confluence of the rewrite system,
+            // the sub-patterns are also sorted when creating the left-skewed tree.
+            // E.g., Or (r, Or (s, t)) is rewritten to Or (Or (a, b), c) where a <= b <= c.
+            | Or (x, y), Or (z, w) ->
+                let mutable a = x
+                let mutable b = y
+                let mutable c = z
+                let mutable d = w
+                TupleUtils.sortFour (&a, &b, &c, &d)
+                return! simplifyRec <| Or (Or (Or (a, b), c), d)
+
             | r, Or (s, t) ->
-                return! simplifyRec <| Or (Or (r, s), t)
+                let mutable a = r
+                let mutable b = s
+                let mutable c = t
+                TupleUtils.sortThree (&a, &b, &c)
+                return! simplifyRec <| Or (Or (a, b), c)
 
             (* Rewrite rules which are extremely important since they compact the regex, thereby reducing the number of DFA states. *)
 

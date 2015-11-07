@@ -39,18 +39,69 @@ module RegexTests =
         diff
         |> assertEqual Regex.Epsilon
 
+    [<Test(Description =
+        "Check whether Regex.Simplify terminates for doubly-nested And patterns.")>]
+    let ``simplify terminates for doubly-nested And patterns`` () : unit =
+        let inputRegex = And (And (Epsilon,Epsilon),And (Epsilon,Epsilon))
 
-/// Randomized tests for operations on Regex.
-[<Ignore("This fixture is ignored for now because the tests cause FsCheck to crash.")>]
+        // Try to simplify the input regex.
+        let simplifiedRegex = Regex.Simplify inputRegex
+
+        // If Regex.Simplify returned, it didn't get stuck in infinite recursion.
+        Assert.Pass ()
+
+    [<Test(Description =
+        "Check whether Regex.Simplify terminates for doubly-nested Or patterns.")>]
+    let ``simplify terminates for doubly-nested Or patterns`` () : unit =
+        let inputRegex = Or (Or (Epsilon,Epsilon),Or (Epsilon,Epsilon))
+
+        // Try to simplify the input regex.
+        let simplifiedRegex = Regex.Simplify inputRegex
+
+        // If Regex.Simplify returned, it didn't get stuck in infinite recursion.
+        Assert.Pass ()
+
+    [<Test(Description =
+        "Test whether the rewrite rules in Regex.Simplify are confluent (at least for nested AND patterns). \
+         If they're not this test fails. This test case was discovered using FsCheck.")>]
+    let ``simplify works correctly for nested AND patterns with charset and epsilons`` () : unit =
+        let inputRegex =
+            And (
+                CharacterSet (CharSet.ofRange '\u0056' '\u0056'),
+                And (Epsilon, Epsilon))
+
+        // The regex should be fully simplified in one pass.
+        let simplifiedRegex = Regex.Simplify inputRegex
+
+        // Try to simplify the regex again.
+        let doubleSimplifiedRegex = Regex.Simplify simplifiedRegex
+
+        // Check whether the double-simplified regex is the same as the simplified regex.
+        assertEqual doubleSimplifiedRegex simplifiedRegex
+
+    [<Test>]
+    [<Ignore>]
+    let ``Regex.Simplify test case 001`` () : unit =
+        let inputRegex = And (CharacterSet (CharSet.ofRange '\u0037' '\u0037'),And (Epsilon,Concat (Epsilon,Epsilon)))
+
+        // The regex should be fully simplified in one pass.
+        let simplifiedRegex = Regex.Simplify inputRegex
+
+        // Try to simplify the regex again.
+        let doubleSimplifiedRegex = Regex.Simplify simplifiedRegex
+
+        // Check whether the double-simplified regex is the same as the simplified regex.
+        assertEqual doubleSimplifiedRegex simplifiedRegex
+
+
+
+/// Randomized tests for the Regex type and module.
 [<TestFixture>]
 module RegexRandomizedTests =
     [<Test(Description = "Checks that the 'simplify' operation is strongly normalizing; \
         i.e., once a regex is simplified, it can't be simplified further.")>]
+    [<Ignore("This test is a prototype and still needs to be verified against the implementation.")>]
     let ``simplify operation is normalizing`` () : unit =
-        // If the setup fixture hasn't completed, this test won't work correctly.
-        if not ReggieTestSetupFixture.SetupComplete then
-            Assert.Ignore "The setup fixture has not finished running."
-
         assertProp "simplify is strongly normalizing" <| fun regex ->
             // Simplify the regex.
             let simplifiedRegex = Regex.Simplify regex
@@ -62,6 +113,7 @@ module RegexRandomizedTests =
             simplifiedRegex = doubleSimplifiedRegex
 
     [<Test>]
+    [<Ignore("This test is a prototype and still needs to be verified against the implementation.")>]
     let ``difference of a language and itself is the null language`` () =
         assertProp "difference of a language and itself is the null language" <| fun regex ->
             // Calculate the difference of the regex and itself.
@@ -71,6 +123,7 @@ module RegexRandomizedTests =
             diff = Regex.Epsilon
 
     [<Test>]
+    [<Ignore("This test is a prototype and still needs to be verified against the implementation.")>]
     let ``a language AND-ed with itself then simplified returns the original language`` () =
         assertProp "a language AND-ed with itself then simplified returns the original language" <| fun regex ->
             // AND the langugage with itself, then simplify.
@@ -83,6 +136,7 @@ module RegexRandomizedTests =
             simplifiedRegex = result
 
     [<Test>]
+    [<Ignore("This test is a prototype and still needs to be verified against the implementation.")>]
     let ``a language OR-ed with itself then simplified returns the original language`` () =
         assertProp "a language OR-ed with itself then simplified returns the original language" <| fun regex ->
             // OR the langugage with itself, then simplify.
