@@ -39,7 +39,7 @@ type CharSetGenerator =
     /// Generates an arbitrary CharSet instance.
     static member CharSet () : Arbitrary<CharSet> =
         gen {
-        let! chars = Arb.generate
+        let! chars = Arb.generate<char[]>
         return CharSet.ofSeq chars
         } |> Arb.fromGen
 
