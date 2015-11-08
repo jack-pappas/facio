@@ -16,7 +16,7 @@ limitations under the License.
 
 *)
 
-namespace FSharpLex
+namespace Reggie
 
 (* TODO :   Once we support strongly-typed custom metadata from the backends,
             these types should be moved into their respective backends since they

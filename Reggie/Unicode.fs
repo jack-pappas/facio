@@ -16,7 +16,7 @@ limitations under the License.
 
 *)
 
-namespace FSharpLex
+namespace Reggie
 
 
 /// Maps Unicode categories to sets of characters they contain.
@@ -25,7 +25,7 @@ module UnicodeCharSet =
     open System
     open System.Collections.Generic
     open System.Globalization
-    open FSharpLex.SpecializedCollections
+    open Reggie.SpecializedCollections
 
     /// Maps each UnicodeCategory to the set of characters in the category.
     let byCategory =

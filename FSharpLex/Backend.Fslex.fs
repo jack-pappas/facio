@@ -20,10 +20,11 @@ namespace FSharpLex.Plugin
 
 open System.ComponentModel.Composition
 open System.IO
-open FSharpLex
-open FSharpLex.SpecializedCollections
-open FSharpLex.Ast
-open FSharpLex.Compile
+open Reggie
+open Reggie.SpecializedCollections
+open Reggie.Ast
+open Reggie.Compile
+open Reggie.Plugin
 
 (* TODO :   In the code-generation backends below, where the user-defined semantic actions
             are emitted, it might be useful to add a bit of code which emits a single-line

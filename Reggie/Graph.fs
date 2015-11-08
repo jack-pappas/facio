@@ -16,11 +16,11 @@ limitations under the License.
 
 *)
 
-namespace FSharpLex.Graph
+namespace Reggie.Graph
 
 open System.Diagnostics
 open LanguagePrimitives
-open FSharpLex.SpecializedCollections
+open Reggie.SpecializedCollections
 
 
 /// DFA state.

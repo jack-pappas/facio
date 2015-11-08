@@ -18,7 +18,7 @@ limitations under the License.
 
 namespace Tests.Reggie.SpecializedCollections
 
-open FSharpLex.SpecializedCollections
+open Reggie.SpecializedCollections
 open NUnit.Framework
 open FsUnit
 open FsCheck

@@ -16,11 +16,11 @@ limitations under the License.
 
 *)
 
-namespace FSharpLex
+namespace Reggie
 
 open System.Diagnostics
 open ExtCore.Control.Cps
-open FSharpLex.SpecializedCollections
+open Reggie.SpecializedCollections
 
 (*  Turn off warning about uppercase variable identifiers; some variables
     in the code below are are named using the F# backtick syntax so they

@@ -16,12 +16,12 @@ limitations under the License.
 
 *)
 
-namespace FSharpLex
+namespace Reggie
 
 open ExtCore.Control.Cps
 open ExtCore.Control.Collections
 open ExtCore.Control.Collections.Cps
-open FSharpLex.SpecializedCollections
+open Reggie.SpecializedCollections
 
 (*  Turn off warning about uppercase variable identifiers;
     some variables in the code below are named using the

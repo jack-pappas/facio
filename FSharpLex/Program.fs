@@ -19,6 +19,7 @@ limitations under the License.
 namespace FSharpLex
 
 open System.ComponentModel.Composition
+open Reggie.Plugin
 open FSharpLex.Plugin
 
 
@@ -131,7 +132,7 @@ type FSharpLex (logger : NLog.Logger) =
             None
 
     /// Invokes FSharpLex with the specified options.
-    member this.Run (inputFile, options) : ExitCode =
+    member this.Run (inputFile, options : Reggie.CompilationOptions) : ExitCode =
         // Contracts
         checkNonNull "inputFile" inputFile
         if System.String.IsNullOrWhiteSpace inputFile then
@@ -149,7 +150,7 @@ type FSharpLex (logger : NLog.Logger) =
             // Compile the parsed specification.
             let compiledSpecification =
                 logger.Trace "Start: Compiling lexer specification."
-                Compile.Compiler.lexerSpec lexerSpec options
+                Reggie.Compile.Compiler.lexerSpec lexerSpec options
             logger.Trace "End: Compiling lexer specification."
 
             // Check whether the specification was compiled successfully or not.

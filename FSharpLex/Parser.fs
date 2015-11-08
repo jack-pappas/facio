@@ -25,9 +25,9 @@ limitations under the License.
 
 *)
 
-open FSharpLex.SpecializedCollections
-open FSharpLex
-open FSharpLex.Ast
+open Reggie.SpecializedCollections
+open Reggie
+open Reggie.Ast
 
 // This type is the type of tokens accepted by the parser
 type token =

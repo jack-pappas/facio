@@ -61,7 +61,7 @@ type private RepositoryTestCases () =
 
 /// The absolute path to the fsharplex executable to test.
 let private toolPath =
-    (System.Uri (typeof<FSharpLex.CompilationOptions>.Assembly.CodeBase)).LocalPath
+    (System.Uri (typeof<Reggie.CompilationOptions>.Assembly.CodeBase)).LocalPath
 
 //
 [<TestCaseSource(typeof<RepositoryTestCases>, "Items")>]

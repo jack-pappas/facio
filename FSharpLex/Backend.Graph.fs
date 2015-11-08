@@ -21,11 +21,12 @@ namespace FSharpLex.Plugin
 open System.ComponentModel.Composition
 open System.IO
 open System.Text
-open FSharpLex
-open FSharpLex.SpecializedCollections
-open FSharpLex.Graph
-open FSharpLex.Ast
-open FSharpLex.Compile
+open Reggie
+open Reggie.SpecializedCollections
+open Reggie.Graph
+open Reggie.Ast
+open Reggie.Compile
+open Reggie.Plugin
 
 (* TODO :   Move this backend into a separate assembly so the 'fsharplex' project
             won't have a dependency on System.Xml.dll. *)

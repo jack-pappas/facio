@@ -16,7 +16,7 @@ limitations under the License.
 
 *)
 
-namespace FSharpLex
+namespace Reggie
 
 open ExtCore.Control
 open ExtCore.Control.Collections

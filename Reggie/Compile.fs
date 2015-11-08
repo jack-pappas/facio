@@ -16,16 +16,16 @@ limitations under the License.
 
 *)
 
-namespace FSharpLex.Compile
+namespace Reggie.Compile
 
 open System.Diagnostics
 open LanguagePrimitives
 open ExtCore.Control
 open ExtCore.Control.Cps
-open FSharpLex
-open FSharpLex.SpecializedCollections
-open FSharpLex.Graph
-open FSharpLex.Ast
+open Reggie
+open Reggie.SpecializedCollections
+open Reggie.Graph
+open Reggie.Ast
 
 
 /// DFA compilation state.

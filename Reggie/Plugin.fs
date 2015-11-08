@@ -16,10 +16,10 @@ limitations under the License.
 
 *)
 
-namespace FSharpLex.Plugin
+namespace Reggie.Plugin
 
-open FSharpLex
-open FSharpLex.Compile
+open Reggie
+open Reggie.Compile
 
 (* TODO :   Determine how the user will select the backend they want to use,
             and also how we can allow backend-specific options to be specified. *)

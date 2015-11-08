@@ -17,11 +17,11 @@ limitations under the License.
 *)
 
 //
-module FSharpLex.Ast
+module Reggie.Ast
 
 open System.Globalization
 open LanguagePrimitives
-open FSharpLex.SpecializedCollections
+open Reggie.SpecializedCollections
 
 (* TODO :   Add annotations for position information (i.e., position in the lexer
             definition file) to:

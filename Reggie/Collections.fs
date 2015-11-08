@@ -17,7 +17,7 @@ limitations under the License.
 
 *)
 
-namespace FSharpLex.SpecializedCollections
+namespace Reggie.SpecializedCollections
 
 open System
 open System.Collections.Generic

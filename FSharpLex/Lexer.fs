@@ -20,7 +20,7 @@ limitations under the License.
 
 *)
 
-open FSharpLex.Ast
+open Reggie.Ast
 open FSharpLex.Parser
 open Microsoft.FSharp.Text.Lexing
 open System.Text
