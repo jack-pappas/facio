@@ -198,6 +198,7 @@ type FSharpLex (logger : NLog.Logger) =
 module Program =
     open System.ComponentModel.Composition.Hosting
     open ExtCore.Args
+    open Reggie
 
     //
     let [<Literal>] defaultLexerInterpreterNamespace = "Microsoft.FSharp.Text.Lexing"
