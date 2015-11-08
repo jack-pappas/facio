@@ -33,8 +33,11 @@ let textFixtureSetup () : unit =
     // When running on Windows (even if running on Mono), disable crash-reporting dialog.
     TestSystem.disableCrashReporting ()
 
-//
-let private testTimeout = TimeSpan.FromSeconds 120.0
+/// The maximum amount of time test cases are allowed to run before
+/// timing out and failing.
+// TODO : Make this value a setting so it's configurable (e.g., to handle slower
+// machines like shared CI servers).
+let private testTimeout = TimeSpan.FromSeconds 15.0
 
 //
 type private RepositoryTestCases () =
