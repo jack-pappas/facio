@@ -92,7 +92,7 @@ type FSharpLexTask () =
             | true, codePage -> Some codePage
             | _ -> None
 
-        let options : FSharpLex.CompilationOptions = {
+        let options : Reggie.CompilationOptions = {
             Unicode = this.Unicode;
             InputCodePage = inputCodePage;
             FslexBackendOptions = Some {
