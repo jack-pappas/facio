@@ -27,7 +27,6 @@ open FsCheck
 /// Tests for the Regex type and module.
 module RegexTests =
     [<Test>]
-    [<Ignore("This test fails and needs to be fixed; it's ignored for now until I have time to understand why it's failing.")>]
     let ``difference of CharSet regex with itself is the null language`` () : unit =
         // Create a CharacterSet regex for the low ASCII characters.
         let charSetRegex = Regex.CharacterSet (CharSet.ofRange (char 0) (char 127))
@@ -35,9 +34,9 @@ module RegexTests =
         // Take difference of the regex and itself.
         let diff = Regex.Difference (charSetRegex, charSetRegex)
 
-        // The resulting regex should be epsilon (the null language).
+        // The resulting regex should be the null language.
         diff
-        |> assertEqual Regex.Epsilon
+        |> assertEqual Regex.empty
 
     [<Test(Description =
         "Check whether Regex.Simplify terminates for doubly-nested And patterns.")>]
@@ -80,9 +79,34 @@ module RegexTests =
         assertEqual doubleSimplifiedRegex simplifiedRegex
 
     [<Test>]
-    [<Ignore>]
     let ``Regex.Simplify test case 001`` () : unit =
-        let inputRegex = And (CharacterSet (CharSet.ofRange '\u0037' '\u0037'),And (Epsilon,Concat (Epsilon,Epsilon)))
+        let inputRegex = And (CharacterSet (CharSet.ofRange '\u0037' '\u0037'), And (Epsilon, Concat (Epsilon, Epsilon)))
+
+        // The regex should be fully simplified in one pass.
+        let simplifiedRegex = Regex.Simplify inputRegex
+
+        // Try to simplify the regex again.
+        let doubleSimplifiedRegex = Regex.Simplify simplifiedRegex
+
+        // Check whether the double-simplified regex is the same as the simplified regex.
+        assertEqual doubleSimplifiedRegex simplifiedRegex
+
+    [<Test>]
+    let ``Regex.Simplify test case 002`` () : unit =
+        let inputRegex = And (CharacterSet (CharSet.ofRange '\u0037' '\u0037'), Epsilon)
+
+        // The regex should be fully simplified in one pass.
+        let simplifiedRegex = Regex.Simplify inputRegex
+
+        // Try to simplify the regex again.
+        let doubleSimplifiedRegex = Regex.Simplify simplifiedRegex
+
+        // Check whether the double-simplified regex is the same as the simplified regex.
+        assertEqual doubleSimplifiedRegex simplifiedRegex
+
+    [<Test>]
+    let ``Regex.Simplify test case 003`` () : unit =
+        let inputRegex = Or (Epsilon, Or (Star Epsilon, CharacterSet (CharSet.OfIntervals ([| '\u0042', '\u0042'; '\u004c', '\u004c' |]))))
 
         // The regex should be fully simplified in one pass.
         let simplifiedRegex = Regex.Simplify inputRegex
@@ -94,13 +118,25 @@ module RegexTests =
         assertEqual doubleSimplifiedRegex simplifiedRegex
 
 
-
 /// Randomized tests for the Regex type and module.
 [<TestFixture>]
 module RegexRandomizedTests =
+    [<Test(Description = "Checks that the PrintFSharpCode method always succeeds.")>]
+    [<Ignore("This test takes a long time to run. Re-enable it after upgrading to FsCheck 2.2.2")>]
+    let ``PrintFSharpCode always succeeds`` () : unit =
+        assertProp "PrintFSharpCode always succeeds" <| fun regex ->
+            // Try to run PrintFSharpCode against any Regex. If it doesn't raise an exception,
+            // consider the operation to have succeeded.
+            try
+                Regex.PrintFSharpCode regex |> ignore
+                true
+            with ex ->
+                stderr.WriteLine ex
+                false
+
     [<Test(Description = "Checks that the 'simplify' operation is strongly normalizing; \
         i.e., once a regex is simplified, it can't be simplified further.")>]
-    [<Ignore("This test is a prototype and still needs to be verified against the implementation.")>]
+    //[<Ignore("This test is a prototype and still needs to be verified against the implementation.")>]
     let ``simplify operation is normalizing`` () : unit =
         assertProp "simplify is strongly normalizing" <| fun regex ->
             // Simplify the regex.

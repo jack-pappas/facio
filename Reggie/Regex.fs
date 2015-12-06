@@ -19,6 +19,7 @@ limitations under the License.
 namespace Reggie
 
 open System.Diagnostics
+open ExtCore.Control
 open ExtCore.Control.Cps
 open Reggie.SpecializedCollections
 
@@ -120,6 +121,130 @@ type Regex =
         | _ ->
             Regex.IsNullableImpl regex id
 
+    //
+    static member private PrintFSharpCodeImpl regex (indentedWriter : System.CodeDom.Compiler.IndentedTextWriter) =
+        cont {
+        // TODO : Use the indented writer to pretty-print the code so it's more readable.
+
+        match regex with
+        | Epsilon ->
+            indentedWriter.Write "Epsilon"
+        | CharacterSet charSet ->
+            indentedWriter.Write "CharacterSet (CharSet.OfIntervals ([|"
+
+            // Write out the intervals in the charset as tuples.
+            let intervals = CharSet.ToIntervals charSet
+            if isNull intervals then
+                invalidOp "The intervals sequence is null."
+
+            for ival in intervals do
+                if not (isNull ival) then
+                    let x = fst ival
+                    let y = snd ival
+                    fprintf indentedWriter "('\\u%i', '\\u%i'); " (int x) (int y)
+
+            // Close the array, then close the parentheses for the CharacterSet.
+            indentedWriter.Write "|]))"
+
+        | Negate regex ->
+            // Open the pattern.
+            indentedWriter.Write "Negate ("
+
+            // Write the nested pattern.
+            do! Regex.PrintFSharpCodeImpl regex indentedWriter
+
+            // Close the pattern.
+            indentedWriter.Write ")"
+        | Star regex ->
+            // Open the pattern.
+            indentedWriter.Write "Star ("
+
+            // Write the nested pattern.
+            do! Regex.PrintFSharpCodeImpl regex indentedWriter
+
+            // Close the pattern.
+            indentedWriter.Write ")"
+
+        | Concat (r, s) ->
+            // Open the pattern.
+            indentedWriter.Write "Concat ("
+
+            // Write the first nested pattern.
+            do! Regex.PrintFSharpCodeImpl r indentedWriter
+
+            // Write a comma to separate the first and second patterns.
+            indentedWriter.Write ", "
+
+            // Write the second nested pattern.
+            do! Regex.PrintFSharpCodeImpl s indentedWriter
+
+            // Close the pattern.
+            indentedWriter.Write ")"
+
+        | Or (r, s) ->
+            // Open the pattern.
+            indentedWriter.Write "Or ("
+
+            // Write the first nested pattern.
+            do! Regex.PrintFSharpCodeImpl r indentedWriter
+
+            // Write a comma to separate the first and second patterns.
+            indentedWriter.Write ", "
+
+            // Write the second nested pattern.
+            do! Regex.PrintFSharpCodeImpl s indentedWriter
+
+            // Close the pattern.
+            indentedWriter.Write ")"
+
+        | And (r, s) ->
+            // Open the pattern.
+            indentedWriter.Write "And ("
+
+            // Write the first nested pattern.
+            do! Regex.PrintFSharpCodeImpl r indentedWriter
+
+            // Write a comma to separate the first and second patterns.
+            indentedWriter.Write ", "
+
+            // Write the second nested pattern.
+            do! Regex.PrintFSharpCodeImpl s indentedWriter
+
+            // Close the pattern.
+            indentedWriter.Write ")"
+        }
+
+    //
+    static member PrintFSharpCode (regex, textWriter : System.IO.TextWriter) =
+        checkNonNull "regex" regex
+        checkNonNull "textWriter" textWriter
+
+        // Wrap the specified TextWriter instance with IndentedTextWriter so it's easier
+        // for the recursive implementation to work with.
+        use indentedTextWriter = new System.CodeDom.Compiler.IndentedTextWriter (textWriter, "    ")
+
+        // Print the code to re-create the Regex into the TextWriter.
+        Regex.PrintFSharpCodeImpl regex indentedTextWriter id
+
+    //
+    static member PrintFSharpCode regex =
+        // Initialize the StringBuilder to a reasonable size to avoid repeated small resizes.
+        let sb = System.Text.StringBuilder (1000)
+
+        // Create a StringWriter wrapping the StringBuilder;
+        // print the code to re-create the Regex into the StringWriter.
+        use stringWriter = new System.IO.StringWriter(sb)
+        Regex.PrintFSharpCode (regex, stringWriter)
+
+        // Return the code string.
+        sb.ToString ()
+
+#if DEBUG
+    // TEMP : For testing only, remove this later to restore the default ToString() implementation.
+    override this.ToString () =
+        Regex.PrintFSharpCode this
+#endif
+
     // TODO : Implement a method for checking equivalence of two regular expressions?
     //        This is possible for regular expressions, but is it possible for extended regular expressions?
 
@@ -127,7 +252,7 @@ type Regex =
 /// Active patterns which simplify matching of special <see cref="Regex"/> instances.
 [<AutoOpen>]
 module RegexPatterns =
-    /// Partial active pattern which may be used to detect the 'empty' language.
+    /// Partial active pattern which may be used to detect the 'empty' or 'null' language.
     let inline (|Empty|_|) regex =
         match regex with
         | CharacterSet charSet
@@ -314,7 +439,12 @@ module Regex =
             | Epsilon, Epsilon ->
                 return Epsilon
 
-            // TODO : Should we have rules for And (Epsilon, _) and And (_, Epsilon)?
+            // Any language AND-ed with Epsilon (other than another Epsilon) produces the null (empty) language.
+            // This works because we've already recursively simplified both regexes here first, and we've already
+            // handled the And (Epsilon, Epsilon) case.
+            | Epsilon, _
+            | _, Epsilon ->
+                return empty
 
             // The next two rules ensure that nested And patterns are skewed to the left.
             // The And operation is associative; to enforce confluence of the rewrite system,
@@ -348,9 +478,11 @@ module Regex =
                     |> CharacterSet
                     |> Negate
 
-//            | CharacterSet positiveSet, Negate (CharacterSet negativeSet)
-//            | Negate (CharacterSet negativeSet), CharacterSet positiveSet ->
-//                return! notImpl ""
+            | CharacterSet positiveSet, Negate (CharacterSet negativeSet)
+            | Negate (CharacterSet negativeSet), CharacterSet positiveSet ->
+                return
+                    CharSet.difference positiveSet negativeSet
+                    |> CharacterSet
 
             // NOTE : These next two rewrite rules aren't specified in the original paper,
             //        but are useful for keeping the regex compact in certain cases.

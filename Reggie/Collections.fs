@@ -1542,6 +1542,21 @@ module CharDiet =
         }
 
     //
+    let rec toIntervals (tree : CharDiet) =
+        // Preconditions
+//        assert (dietInvariant tree)
+//        assert (intervalsDisjoint tree)
+
+        seq {
+        match tree with
+        | Empty -> ()
+        | Node (l, r, interval, _) ->
+            yield! toIntervals l
+            yield interval
+            yield! toIntervals r
+        }
+
+    //
     let toList (tree : CharDiet) =
         // Preconditions
 //        assert (dietInvariant tree)
@@ -1746,6 +1761,22 @@ type CharSet private (tree : CharDiet) as this =
             CharSet (tree)
 
     //
+    static member OfIntervals (sequence : seq<char * char>) : CharSet =
+        // Preconditions
+        checkNonNull "sequence" sequence
+
+        // If the sequence is empty, return immediately.
+        if Seq.isEmpty sequence then empty
+        else
+            let tree =
+                (Empty, sequence)
+                ||> Seq.fold (fun tree el ->
+                    CharDiet.addRange el tree)
+            //assert (CharDiet.dietInvariant tree)
+            //assert (CharDiet.intervalsDisjoint tree)
+            CharSet (tree)
+
+    //
     static member OfList (list : char list) : CharSet =
         // Preconditions
         checkNonNull "list" list
@@ -1801,6 +1832,15 @@ type CharSet private (tree : CharDiet) as this =
         //assert (CharDiet.intervalsDisjoint charSet.Tree)
 
         CharDiet.toSeq charSet.Tree
+
+    //
+    static member ToIntervals (charSet : CharSet) : seq<char * char> =
+        // Preconditions
+        checkNonNull "charSet" charSet
+        //assert (CharDiet.dietInvariant charSet.Tree)
+        //assert (CharDiet.intervalsDisjoint charSet.Tree)
+
+        CharDiet.toIntervals charSet.Tree
 
     //
     static member ToList (charSet : CharSet) : char list =
