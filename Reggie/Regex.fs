@@ -532,20 +532,19 @@ module Regex =
             let! regex1 = simplifyRec regex1
             let! regex2 = simplifyRec regex2
 
+            // TODO: Sort the two regexes before matching on them; this will simplify
+            //       some of the rewriting logic below since we won't need to check both ways
+            //       for certain patterns.
+
             match regex1, regex2 with
-            | Empty, regex
-            | regex, Empty ->
-                // 'regex' is already simplified, so we can just return it.
-                return regex
-
-            | Any, _
-            | _, Any ->
-                return any
-
             | Epsilon, Epsilon ->
                 return Epsilon
 
-            // TODO : Should we have rules for Or (Epsilon, _) and Or (_, Epsilon)?
+            // Handle nested Or patterns with Epsilon as one of the inputs (in each pattern).
+            // Epsilon only needs to appear once in each such chain of Or patterns.
+            | Epsilon, (Or (Epsilon, _) as r)
+            | (Or (Epsilon, _) as r), Epsilon ->
+                return r
 
             // The next two rules ensure that nested Or patterns are skewed to the left.
             // The Or operation is associative; to enforce confluence of the rewrite system,
@@ -565,6 +564,17 @@ module Regex =
                 let mutable c = t
                 TupleUtils.sortThree (&a, &b, &c)
                 return! simplifyRec <| Or (Or (a, b), c)
+
+            (* Rewrite rules for 'Any' and 'Empty' *)
+
+            | Empty, regex
+            | regex, Empty ->
+                // 'regex' is already simplified, so we can just return it.
+                return regex
+
+            | Any, _
+            | _, Any ->
+                return any
 
             (* Rewrite rules which are extremely important since they compact the regex, thereby reducing the number of DFA states. *)
 
