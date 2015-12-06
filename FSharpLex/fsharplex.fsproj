@@ -31,6 +31,7 @@
     <StartArguments>--unicode -o "TestCases\fsharp\fsharp-lexer.fs" --lexlib Internal.Utilities.Text.Lexing "TestCases\fsharp\fsharp.fsl"</StartArguments>
     <OtherFlags>--stackReserveSize:16777216 --warnon:1182</OtherFlags>
     <StartWorkingDirectory>C:\Users\Jack\Documents\Code Libraries\facio\</StartWorkingDirectory>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>

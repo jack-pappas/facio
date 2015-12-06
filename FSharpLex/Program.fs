@@ -44,6 +44,7 @@ module internal AssemblyInfo =
     #endif
 
     (* Dependency hints for Ngen *)
+    [<assembly: DependencyAttribute("Reggie", LoadHint.Always)>]
     [<assembly: DependencyAttribute("ExtCore", LoadHint.Always)>]
     [<assembly: DependencyAttribute("FSharp.Core", LoadHint.Always)>]
     [<assembly: DependencyAttribute("System", LoadHint.Always)>]
