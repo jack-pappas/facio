@@ -121,17 +121,23 @@ module RegexTests =
                 And (CharacterSet (CharSet.ofRange '\u0037' '\u0037'), Epsilon)
             yield regexCase <|
                 Or (Epsilon, Or (Star Epsilon, CharacterSet (CharSet.OfIntervals [| '\u0042', '\u0042'; '\u004c', '\u004c' |])))
-            yield regexCaseBroken <|
-                And (Star (Or (Concat (Epsilon, Epsilon), Negate (Epsilon))), And (And (Epsilon, Epsilon), And (Epsilon, Epsilon)))
-            yield regexCaseBroken <|
-                And (Star (CharacterSet (CharSet.OfIntervals [||])), And (And (Epsilon, Epsilon), And (Epsilon, Epsilon)))
             yield regexCase <|
-                Or (Or (Epsilon, CharacterSet (CharSet.OfIntervals [||])), Epsilon)
+                And (Epsilon, And (Epsilon, CharacterSet (CharSet.OfIntervals [||])))
+            yield regexCase <|
+                And (Star (Or (Concat (Epsilon, Epsilon), Negate (Epsilon))), And (And (Epsilon, Epsilon), And (Epsilon, Epsilon)))
+            yield regexCase <|
+                And (Star (CharacterSet CharSet.Empty), And (And (Epsilon, Epsilon), And (Epsilon, Epsilon)))
+            yield regexCase <|
+                Or (Or (Epsilon, CharacterSet CharSet.Empty), Epsilon)
             yield regexCase <|
                 Or (
                     Or (Epsilon,
-                        CharacterSet (CharSet.OfIntervals [| '\u001c', '\u001c';  '\u003c', '\u003c'; '\u005c', '\u005c' |])),
-                    CharacterSet (CharSet.OfIntervals [| '\u0008', '\u0008';  '\u000a', '\u000a'; '\u0015', '\u0015'; '\u0020', '\u0020';  '\u0049', '\u0049'; '\u004b', '\u004b'; '\u0070', '\u0070' |]))
+                        CharacterSet (CharSet.OfIntervals [| '\u001c', '\u001c'; '\u003c', '\u003c'; '\u005c', '\u005c' |])),
+                    CharacterSet (CharSet.OfIntervals [| '\u0008', '\u0008'; '\u000a', '\u000a'; '\u0015', '\u0015'; '\u0020', '\u0020';  '\u0049', '\u0049'; '\u004b', '\u004b'; '\u0070', '\u0070' |]))
+            yield regexCase <|
+                And (
+                    Star (CharacterSet (CharSet.OfArray [| '\u0017'; '\u0029'; '\u002c'; '\u0030'; '\u003c'; '\u0048'; '\u0066'; '\u0068' |])),
+                    Star (CharacterSet (CharSet.OfArray [| '\u001c'; '\u0061'; '\u007a'; |])))
             }
 
         /// Gets a sequence of TestCaseData instances representing test cases for Regex.Simplify().
@@ -177,6 +183,9 @@ module RegexRandomizedTests =
     let private assertRegexProp testName predicate =
         FsCheckJournaled.assertProp testJournalFile testName (fun tw regex -> Regex.PrintFSharpCode(regex, tw)) predicate
 
+    let private assertRegexPropN testName maxTest predicate =
+        FsCheckJournaled.assertPropN testJournalFile testName maxTest (fun tw regex -> Regex.PrintFSharpCode(regex, tw)) predicate
+
     [<Test(Description = "Checks that the PrintFSharpCode method always succeeds.")>]
     let ``PrintFSharpCode always succeeds`` () : unit =
         // Re-use a StringWriter here to speed up the test by avoiding the allocations from
@@ -194,11 +203,8 @@ module RegexRandomizedTests =
 
     [<Test(Description = "Checks that the 'simplify' operation is strongly normalizing; \
         i.e., once a regex is simplified, it can't be simplified further.")>]
-    [<Ignore("FsCheck is able to find some test cases which fail this assertion. \
-        However, some of them cause a StackOverflowException and crash the process so this test is \
-        disabled for now to avoid crashing CI builds.")>]
     let ``simplify operation is normalizing`` () : unit =
-        assertRegexProp "simplify is strongly normalizing" <| fun regex ->
+        assertRegexPropN "simplify is strongly normalizing" 20000 <| fun regex ->
             // Simplify the regex.
             let simplifiedRegex = Regex.Simplify regex
 

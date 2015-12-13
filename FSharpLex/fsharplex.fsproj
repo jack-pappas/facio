@@ -28,7 +28,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <WarningsAsErrors>25</WarningsAsErrors>
-    <StartArguments>--unicode -o "TestCases\fsharp\fsharp-lexer.fs" --lexlib Internal.Utilities.Text.Lexing "TestCases\fsharp\fsharp.fsl"</StartArguments>
+    <StartArguments>--unicode -o "TestCases\fsharp\absil-lexer.fs" --lexlib Internal.Utilities.Text.Lexing "TestCases\fsharp\absil.fsl"</StartArguments>
     <OtherFlags>--stackReserveSize:16777216 --warnon:1182</OtherFlags>
     <StartWorkingDirectory>C:\Users\Jack\Documents\Code Libraries\facio\</StartWorkingDirectory>
     <UseVSHostingProcess>false</UseVSHostingProcess>

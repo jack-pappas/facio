@@ -29,29 +29,39 @@ open Reggie.SpecializedCollections
 #nowarn "49"
 
 
-/// <summary>A regular expression.</summary>
-/// <remarks>This type includes some cases which are normally referred to as "extended"
-/// regular expressions. However, only those cases which are still closed under boolean
-/// operations are included here, so the lanugage it represents must still be a regular
-/// language.</remarks>
+/// <summary>An extended regular expression.</summary>
+/// <remarks>
+/// <para>
+/// This type represents a regular expression "extended" with intersection
+/// and complement operations. These operations are still closed so the language
+/// defined by an instance of this type is still considered a regular language.
+/// </para>
+/// <para>
+/// The ordering of the cases in this type is important because it is used by the
+/// F# compiler when it generates the comparison implementation for this type.
+/// The comparison function is a critical part of the rewriting / simplification /
+/// normalization logic, so re-ordering the cases of this type can significantly
+/// change the behavior of the rest of the program.
+/// </para>
+/// </remarks>
 [<DebuggerDisplay("{DebuggerDisplay,nq}")>]
 type Regex =
     /// The empty string.
     | Epsilon
-
     /// A set of characters.
     | CharacterSet of CharSet
-    /// Negation.
-    | Negate of Regex
 
+    /// Negation (language complement).
+    | Negate of Regex
     /// Kleene *-closure.
     /// The specified Regex will be matched zero (0) or more times.
     | Star of Regex
+
     /// Concatenation. A Regex immediately followed by another Regex.
     | Concat of Regex * Regex
     /// Choice between two regular expressions (i.e., boolean OR).
     | Or of Regex * Regex
-    /// Boolean AND of two regular expressions.
+    /// Intersection of two regular expressions (i.e., boolean AND).
     | And of Regex * Regex
 
     /// Infrastructure. Only for use with DebuggerDisplayAttribute.
@@ -130,21 +140,26 @@ type Regex =
         | Epsilon ->
             indentedWriter.Write "Epsilon"
         | CharacterSet charSet ->
-            indentedWriter.Write "CharacterSet (CharSet.OfIntervals ([|"
+            indentedWriter.Write "CharacterSet "
 
-            // Write out the intervals in the charset as tuples.
-            let intervals = CharSet.ToIntervals charSet
-            if isNull intervals then
-                invalidOp "The intervals sequence is null."
+            // Is the charset empty?
+            if CharSet.isEmpty charSet then
+                indentedWriter.Write "CharSet.Empty"
+            else
+                indentedWriter.Write "(CharSet.OfIntervals [|"
 
-            for ival in intervals do
-                if not (isNull ival) then
-                    let x = fst ival
-                    let y = snd ival
-                    fprintf indentedWriter "('\\u%i', '\\u%i'); " (int x) (int y)
+                // Write out the intervals in the charset as tuples.
+                let intervals = CharSet.ToIntervals charSet
+                for ival in intervals do
+                    // A null tuple is occasionally returned; I'm not sure why that's happening,
+                    // so as a workaround each tuple is checked for null and skipped if it is.
+                    if not (isNull ival) then
+                        let x = fst ival
+                        let y = snd ival
+                        fprintf indentedWriter "'\\u%i', '\\u%i'; " (int x) (int y)
 
-            // Close the array, then close the parentheses for the CharacterSet.
-            indentedWriter.Write "|]))"
+                // Close the array, then close the parentheses for the CharacterSet.
+                indentedWriter.Write "|])"
 
         | Negate regex ->
             // Open the pattern.
@@ -311,8 +326,19 @@ module Regex =
     let inline ofCharSet (set : CharSet) : Regex =
         CharacterSet set
 
+    /// TraceSource which can be enabled to trace Regex simplification steps.
+    let private regexSimplifyTrace = TraceSource ("Reggie.Regex.Simplify")
+
     /// Recursively simplify and normalize a regular expression.
     let rec internal simplifyRec regex =
+#if DEBUG && TRACE
+        // For testing purposes, it's sometimes useful to print out the simplification steps.
+        // Don't call Regex.PrintFSharpCode unless the output is actually going to be used,
+        // as it's relatively expensive in terms of performance.
+        if regexSimplifyTrace.Switch.ShouldTrace TraceEventType.Verbose then
+            regexSimplifyTrace.TraceInformation (Regex.PrintFSharpCode regex)
+#endif
+
         cont {
         match regex with
         | Epsilon
@@ -324,19 +350,19 @@ module Regex =
         // Double-negation cancels out.
         | Negate (Negate regex) ->
             return! simplifyRec regex
-        | Negate regex ->
+        | Negate regex' ->
             // Simplify the inner regex first.
-            let! regex = simplifyRec regex
-            match regex with
+            let! regex' = simplifyRec regex'
+            match regex' with
             | Epsilon ->
                 return empty
 
             // Use DeMorgan's rules to simplify negation of Or and And patterns when possible.
             // This isn't specified in the original paper, but it helps to compact the regex.
             | Or (regex1, regex2) ->
-                return! simplifyRec <| And (regex1, regex2)
+                return! simplifyRec <| And (Negate regex1, Negate regex2)
             | And (regex1, regex2) ->
-                return! simplifyRec <| Or (regex1, regex2)
+                return! simplifyRec <| Or (Negate regex1, Negate regex2)
 
             // Double-negation cancels out.
             | Negate regex ->
@@ -344,12 +370,23 @@ module Regex =
                 return regex
 
             | _ ->
-                return Negate regex
+                // Determine if we were able to simplify the inner regex.
+                // If not, return the original input regex instead of creating a new one
+                // to cut down on allocations and improve performance.
+                if regex == regex' || regex = regex' then
+                    return regex
+                else
+                    return Negate regex'
 
         (* Star *)
         // The Star operation is idempotent -- nested Stars are equivalent to a single Star.
         | Star (Star regex) ->
             return! simplifyRec <| Star regex
+
+        // Can't simplify this case further, so don't bother trying.
+        | Star (CharacterSet c) when not (CharSet.isEmpty c) ->
+            return regex
+
         | Star regex ->
             // Simplify the inner regex first.
             let! regex = simplifyRec regex
@@ -370,6 +407,16 @@ module Regex =
         // Nested Concat patterns should skew towards the right.
         | Concat (Concat (r, s), t) ->
             return! simplifyRec <| Concat (r, Concat (s, t))
+
+        // These cases occur quite frequently so we match them here to improve performance
+        // (by avoiding attempting to simplify further, which allocates continuations and
+        // additional CharacterSet objects).
+        | Concat ((Empty as r), _)
+        | Concat (_, (Empty as r)) ->
+            return r
+        | Concat (CharacterSet _, CharacterSet _) ->
+            return regex
+
         | Concat (regex1, regex2) ->
             // Simplify the two sub-regexes first.
             let! regex1 = simplifyRec regex1
@@ -403,9 +450,9 @@ module Regex =
 
         (* And *)
 
-        // The next two rules ensure that nested And patterns are skewed to the left.
+        // The next two rules ensure that nested And patterns are skewed to the right.
         // The And operation is associative; to enforce confluence of the rewrite system,
-        // the sub-patterns are also sorted when creating the left-skewed tree.
+        // the sub-patterns are also sorted when creating the right-skewed tree.
         // E.g., And (r, And (s, t)) is rewritten to And (And (a, b), c) where a <= b <= c.
         | And (And (x, y), And (z, w)) ->
             let mutable a = x
@@ -413,14 +460,14 @@ module Regex =
             let mutable c = z
             let mutable d = w
             TupleUtils.sortFour (&a, &b, &c, &d)
-            return! simplifyRec <| And (And (And (a, b), c), d)
+            return! simplifyRec <| And (a, And (b, And (c, d)))
 
-        | And (r, And (s, t)) ->
+        | And (And (r, s), t) ->
             let mutable a = r
             let mutable b = s
             let mutable c = t
             TupleUtils.sortThree (&a, &b, &c)
-            return! simplifyRec <| And (And (a, b), c)
+            return! simplifyRec <| And (a, And (b, c))
 
         | And (regex1, regex2) ->
             // Simplify the two sub-regexes first.
@@ -446,9 +493,9 @@ module Regex =
             | _, Epsilon ->
                 return empty
 
-            // The next two rules ensure that nested And patterns are skewed to the left.
+            // The next two rules ensure that nested And patterns are skewed to the right.
             // The And operation is associative; to enforce confluence of the rewrite system,
-            // the sub-patterns are also sorted when creating the left-skewed tree.
+            // the sub-patterns are also sorted when creating the right-skewed tree.
             // E.g., And (r, And (s, t)) is rewritten to And (And (a, b), c) where a <= b <= c.
             | And (x, y), And (z, w) ->
                 let mutable a = x
@@ -456,14 +503,14 @@ module Regex =
                 let mutable c = z
                 let mutable d = w
                 TupleUtils.sortFour (&a, &b, &c, &d)
-                return! simplifyRec <| And (And (And (a, b), c), d)
+                return! simplifyRec <| And (a, And (b, And (c, d)))
 
-            | r, And (s, t) ->
+            | And (r, s), t ->
                 let mutable a = r
                 let mutable b = s
                 let mutable c = t
                 TupleUtils.sortThree (&a, &b, &c)
-                return! simplifyRec <| And (And (a, b), c)
+                return! simplifyRec <| And (a, And (b, c))
 
             (* Rewrite rules which are extremely important since they compact the regex, thereby reducing the number of DFA states. *)
             | CharacterSet s1, CharacterSet s2 ->
@@ -488,10 +535,11 @@ module Regex =
             //        but are useful for keeping the regex compact in certain cases.
             | Star (CharacterSet charSet1), Star (CharacterSet charSet2) ->
                 // No simplification needed for Star (CharacterSet _), so just return it.
-                return
+                return!
                     CharSet.intersect charSet1 charSet2
                     |> CharacterSet
                     |> Star
+                    |> simplifyRec
 
             | _, _ ->
                 // Base case: And (regex1, regex2) can't be simplified any further.
@@ -508,24 +556,30 @@ module Regex =
 
         (* Or *)
 
-        // The next two rules ensure that nested Or patterns are skewed to the left.
+        // The next two rules ensure that nested Or patterns are skewed to the right.
         // The Or operation is associative; to enforce confluence of the rewrite system,
-        // the sub-patterns are also sorted when creating the left-skewed tree.
-        // E.g., Or (r, Or (s, t)) is rewritten to Or (Or (a, b), c) where a <= b <= c.
+        // the sub-patterns are also sorted when creating the right-skewed tree.
+        // E.g., Or (Or (r, s), t) is rewritten to Or (Or a, Or (b, c)) where a <= b <= c.
         | Or (Or (x, y), Or (z, w)) ->
             let mutable a = x
             let mutable b = y
             let mutable c = z
             let mutable d = w
             TupleUtils.sortFour (&a, &b, &c, &d)
-            return! simplifyRec <| Or (Or (Or (a, b), c), d)
+            return! simplifyRec <| Or (a, Or (b, Or (c, d)))
 
-        | Or (r, Or (s, t)) ->
+        | Or (Or (r, s), t) ->
             let mutable a = r
             let mutable b = s
             let mutable c = t
             TupleUtils.sortThree (&a, &b, &c)
-            return! simplifyRec <| Or (Or (a, b), c)
+            return! simplifyRec <| Or (a, Or (b, c))
+
+        // This case occurs quite frequently so we match it here to improve performance
+        // (by avoiding attempting to simplify further, which allocates continuations and
+        // additional CharacterSet objects).
+        | Or ((Empty as r), Empty) ->
+            return r
 
         | Or (regex1, regex2) ->
             // Simplify the two sub-regexes first.
@@ -546,24 +600,24 @@ module Regex =
             | (Or (Epsilon, _) as r), Epsilon ->
                 return r
 
-            // The next two rules ensure that nested Or patterns are skewed to the left.
+            // The next two rules ensure that nested Or patterns are skewed to the right.
             // The Or operation is associative; to enforce confluence of the rewrite system,
-            // the sub-patterns are also sorted when creating the left-skewed tree.
-            // E.g., Or (r, Or (s, t)) is rewritten to Or (Or (a, b), c) where a <= b <= c.
+            // the sub-patterns are also sorted when creating the right-skewed tree.
+            // E.g., Or (Or (r, s), t) is rewritten to Or (Or a, Or (b, c)) where a <= b <= c.
             | Or (x, y), Or (z, w) ->
                 let mutable a = x
                 let mutable b = y
                 let mutable c = z
                 let mutable d = w
                 TupleUtils.sortFour (&a, &b, &c, &d)
-                return! simplifyRec <| Or (Or (Or (a, b), c), d)
+                return! simplifyRec <| Or (a, Or (b, Or (c, d)))
 
-            | r, Or (s, t) ->
+            | Or (r, s), t ->
                 let mutable a = r
                 let mutable b = s
                 let mutable c = t
                 TupleUtils.sortThree (&a, &b, &c)
-                return! simplifyRec <| Or (Or (a, b), c)
+                return! simplifyRec <| Or (a, Or (b, c))
 
             (* Rewrite rules for 'Any' and 'Empty' *)
 

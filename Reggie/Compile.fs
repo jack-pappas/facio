@@ -862,6 +862,8 @@ module Compiler =
         | _ ->
             // Only the earliest occurrence of the pattern will be matched.
             // TODO : Return warning messages (with location info) about patterns which will never be matched.
+            //        It'd also be helpful to provide the location info for the "covering" pattern/clause so it's
+            //        easy for users to know which clause will be matched instead.
             // TEMP : In the meantime, print warnings to the debug console for development purposes.
             for i = 1 to matchingClauseIndices.Length - 1 do
                 let clauseIndex = matchingClauseIndices.[i]
@@ -1038,9 +1040,13 @@ module Compiler =
 
     /// Creates pattern-matching DFAs from the lexer rules.
     let lexerSpec (spec : Specification) options =
+        /// TraceSource for Reggie compilation.
+        let reggieTrace = TraceSource ("Reggie.Compiler")
+
         choice {
         // Validate and simplify the macros to create the macro table/environment.
         let! macroEnv =
+            reggieTrace.TraceInformation "Preprocessing macros."
             preprocessMacros spec.Macros options
             |> Choice.mapError (fun (macroEnv, badMacros, errors) ->
                 // TODO : Validate the rule clauses, but don't compile the rule DFAs.
@@ -1048,6 +1054,7 @@ module Compiler =
                 errors)
             
         (* Compile the lexer rules *)
+        reggieTrace.TraceInformation "Compiling lexer rules."
         let ruleIdentifiers, rules =
             let ruleCount = List.length spec.Rules
             let ruleIdentifiers = Array.zeroCreate ruleCount
@@ -1065,8 +1072,10 @@ module Compiler =
 
         let compiledRules, compilationErrors =
             rules
-            |> Array.mapPartition (fun rule ->
+            |> Array.mapiPartition (fun ruleIdx rule ->
+                reggieTrace.TraceInformation ("Compiling lexer rule. RuleIndex = " + string ruleIdx)
                 compileRule rule options (macroEnv, Set.empty))
+        reggieTrace.TraceInformation ("Finished compiling lexer rules.")
 
         // If there are any compilation errors, use them to set the
         // error value of the computation expression.

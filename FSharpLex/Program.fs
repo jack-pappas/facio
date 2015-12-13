@@ -94,6 +94,11 @@ type ExitCode =
 
 /// FSharpLex compiler instance.
 type FSharpLex (logger : NLog.Logger) =
+    // Remove the global trace lock. It's not needed and impacts
+    // performance when running with tracing enabled.
+    static do
+        System.Diagnostics.Trace.UseGlobalLock <- false
+
     /// Backends to invoke with the compiled specification.
     [<ImportMany>]
     member val Backends : IBackend[] = null with get, set

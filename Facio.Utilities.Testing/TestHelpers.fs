@@ -86,6 +86,11 @@ module Collection =
 
 /// An FsCheck runner which reports FsCheck test results to NUnit.
 type private NUnitRunner () =
+    static let instance = NUnitRunner ()
+
+    /// Default instance of the NUnitRunner class.
+    static member Instance = instance
+
     interface IRunner with
         member __.OnStartFixture _ = ()
         member __.OnArguments (_,_,_) = ()
@@ -108,15 +113,24 @@ type private NUnitRunner () =
                 |> Assert.Fail
 
 /// An FsCheck configuration which logs test results to NUnit.
-let private nUnitConfig = {
-    // Config.Verbose
-    Config.Quick with
-        MaxTest = 5000;
-        Runner = NUnitRunner (); }
+let private nUnitConfig verbose maxTest =
+    let config = if verbose then Config.Verbose else Config.Quick
+    { config with
+        MaxTest = defaultArg maxTest 5000;
+        Runner = NUnitRunner.Instance; }
+
+//
+let private defaultNUnitConfig =
+    nUnitConfig false (Some 5000)
 
 /// Tests that the specified property is correct.
 let assertProp testName (property : 'Testable) =
-    Check.One (testName, nUnitConfig, property)
+    Check.One (testName, defaultNUnitConfig, property)
+
+/// Tests that the specified property is correct.
+let assertPropN testName maxTest (property : 'Testable) =
+    let config = nUnitConfig false (Some maxTest)
+    Check.One (testName, config, property)
 
 /// Helper functions for implementing "journaled" FsCheck tests. These functions wrap
 /// FsCheck with additional logic to record the generated inputs to a file before
@@ -145,6 +159,39 @@ module FsCheckJournaled =
             eprintfn "Facio test journaling enabled. JournalFile = %s" journalFile
 
         assertProp testName <| fun (input : 'T) ->
+            match journalFile with
+            | None -> ()
+            | Some journalFile ->
+                // Create the journal file to hold the generated input.
+                // If the file already exists, it's overwritten.
+                use sw = new StreamWriter (journalFile)
+
+                // Write the date/time and the test name.
+                writeTabSepKeyValue sw "Date" (DateTime.UtcNow.ToString("o"))
+                writeTabSepKeyValue sw "TestName" testName
+                sw.WriteLine ()
+
+                // Write the input to the journal file using the specified serializer.
+                serializer sw input
+
+            // Apply the predicate to the input.
+            predicate input
+
+        // If we reach this point, the test succeeded.
+        // If running in journaling mode delete the journal since it's not needed (because the test passed).
+        journalFile |> Option.iter File.Delete
+
+    /// Journaling version of 'assertPropN'.
+    /// Journaling is disabled if 'journalFile' is None.
+    /// If the test does not crash, the file is deleted afterward; otherwise, the file will be
+    /// left in place on the desktop and will contain the test case causing the crash.
+    let assertPropN (journalFile : string option) testName maxTest (serializer : TextWriter -> 'T -> unit) (predicate : 'T -> bool) =
+        match journalFile with
+        | None -> ()
+        | Some journalFile ->
+            eprintfn "Facio test journaling enabled. JournalFile = %s" journalFile
+
+        assertPropN testName maxTest <| fun (input : 'T) ->
             match journalFile with
             | None -> ()
             | Some journalFile ->
