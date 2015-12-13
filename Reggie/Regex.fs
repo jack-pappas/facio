@@ -146,17 +146,12 @@ type Regex =
             if CharSet.isEmpty charSet then
                 indentedWriter.Write "CharSet.Empty"
             else
-                indentedWriter.Write "(CharSet.OfIntervals [|"
+                indentedWriter.Write "(CharSet.OfIntervals [| "
 
                 // Write out the intervals in the charset as tuples.
-                let intervals = CharSet.ToIntervals charSet
-                for ival in intervals do
-                    // A null tuple is occasionally returned; I'm not sure why that's happening,
-                    // so as a workaround each tuple is checked for null and skipped if it is.
-                    if not (isNull ival) then
-                        let x = fst ival
-                        let y = snd ival
-                        fprintf indentedWriter "'\\u%i', '\\u%i'; " (int x) (int y)
+                CharSet.IterIntervals ((fun lo hi ->
+                    Printf.fprintf indentedWriter "'\\u%04x', '\\u%04x'; " (int lo) (int hi)),
+                    charSet)
 
                 // Close the array, then close the parentheses for the CharacterSet.
                 indentedWriter.Write "|])"
