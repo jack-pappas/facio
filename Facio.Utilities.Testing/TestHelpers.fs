@@ -97,7 +97,7 @@ type private NUnitRunner () =
         member __.OnShrink (_,_) = ()
         member __.OnFinished (name, result) =
             match result with
-            | TestResult.True data ->
+            | TestResult.True (data, suppressResults) ->
                 // TODO : Log the result data.
                 Runner.onFinishedToString name result
                 |> stdout.WriteLine
