@@ -1,4 +1,7 @@
-# AppVeyor CI build configuration for c-blosc
+# AppVeyor CI build configuration for facio.
+
+# Use VS2015 VM image, since facio is using some F# 4.0 features.
+os: Visual Studio 2015
 
 # Before cloning the repo, configure git to handle line endings correctly.
 init:
