@@ -9,7 +9,7 @@ init:
 version: '{build}'
 
 build_script:
-  - cmd: build.cmd
+  - cmd: build.bat
 
 test_script:
-  - cmd: build.cmd All
+  - cmd: build.bat All
