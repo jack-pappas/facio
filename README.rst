@@ -4,8 +4,11 @@
 Tools for building compilers in F#
 ----------------------------------
 
-.. image:: https://travis-ci.org/jack-pappas/facio.png  
+.. image:: https://travis-ci.org/jack-pappas/facio.png
     :target: https://travis-ci.org/jack-pappas/facio
+
+.. image:: https://ci.appveyor.com/api/projects/status/6kkeoavg3607m5lg?svg=true
+    :target: https://ci.appveyor.com/project/jack-pappas/facio
 
 .. image:: http://img.shields.io/nuget/v/facio.svg
     :target: https://nuget.org/packages/facio/
