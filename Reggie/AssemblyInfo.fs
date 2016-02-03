@@ -33,9 +33,7 @@ open System.Security.Permissions
 
 (*  Makes internal modules, types, and functions visible
     to the test project so they can be unit-tested. *)
-#if DEBUG
 [<assembly: InternalsVisibleTo("Reggie.Tests")>]
-#endif
 
 (* Dependency hints for Ngen *)
 [<assembly: DependencyAttribute("ExtCore", LoadHint.Always)>]
