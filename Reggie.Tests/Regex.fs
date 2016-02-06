@@ -158,6 +158,53 @@ module RegexTests =
         // Check whether the double-simplified regex is the same as the simplified regex.
         assertEqual doubleSimplifiedRegex simplifiedRegex
 
+    /// Test case source for Regex.SimplifySteps tests.
+    [<Sealed>]
+    type private RegexSimplifyStepsTestCases () =
+        /// Create a RegexSimplifyTestCase record from a Regex.
+        static let regexCase regex =
+            { Regex = regex; Name = None; Description = None; KnownFailure = false; }
+
+        /// Create a RegexSimplifyTestCase record from a Regex.
+        /// The test case will be ignored (not run) but will still show in up the test runner.
+        static let regexCaseBroken regex =
+            { Regex = regex; Name = None; Description = None; KnownFailure = true; }
+
+        member __.RawItems () =
+            seq {
+            yield regexCase <|
+                Negate (Concat (Epsilon,Epsilon))
+            yield regexCase <|
+                Star (Star (Negate (CharacterSet (CharSet.ofRange '\u0003' '\u0004'))))
+            yield regexCase <|
+                Star (Star (CharacterSet (CharSet.ofRange '\u0003' '\u0004')))
+            }
+
+        /// Gets a sequence of TestCaseData instances representing test cases for Regex.Simplify().
+        member this.Items () =
+            this.RawItems ()
+            |> Seq.mapi (fun idx testCase ->
+                RegexSimplifyTestCase.ToTestCaseData (idx, testCase))
+
+    [<Test(Description = "Test cases for checking whether Regex.SimplifySteps converges to the same result as Regex.Simplify.")>]
+    [<TestCaseSource(typeof<RegexSimplifyStepsTestCases>, "Items")>]
+    let ``Regex.SimplifySteps converges to same result as Regex.Simplify`` (inputRegex : Regex) : unit =
+        // Recursively simplify the regex.
+        let recSimpRegex = Regex.Simplify inputRegex
+
+        // Simplify the regex stepwise, then get the final result of the sequence.
+        let stepSimpRegex =
+            let stepSimpRegexSteps = Regex.SimplifySteps inputRegex
+#if DEBUG
+            let steps = stepSimpRegexSteps |> Seq.toArray
+            Array.last steps
+#else
+            stepSimpRegexSteps |> Seq.last
+#endif
+
+        // Check whether the stepwise-simplified regex is the same as the recursively-simplified regex.
+        assertEqual recSimpRegex stepSimpRegex
+
 
 /// Randomized tests for the Regex type and module.
 [<TestFixture>]
@@ -213,6 +260,26 @@ module RegexRandomizedTests =
 
             // Check whether the double-simplified regex is the same as the simplified regex.
             simplifiedRegex = doubleSimplifiedRegex
+
+    [<Test(Description = "Checks that stepwise simplification by 'simplifyStep' converges to a final result \
+                          which matches the result of simplifying with 'simplify'.")>]
+    let ``stepwise simplification matches recursive simplification`` () : unit =
+        assertRegexPropN "stepwise simplification matches recursive simplification" 20000 <| fun regex ->
+            // Simplify the regex recursively.
+            let recSimpRegex = Regex.Simplify regex
+
+            // Simplify the regex stepwise, then get the final result of the sequence.
+            let stepSimpRegex =
+                let stepSimpRegexSteps = Regex.SimplifySteps regex
+#if DEBUG
+                let steps = stepSimpRegexSteps |> Seq.toArray
+                Array.last steps
+#else
+                stepSimpRegexSteps |> Seq.last
+#endif
+
+            // Check whether the stepwise-simplified regex is the same as the recursively-simplified regex.
+            recSimpRegex = stepSimpRegex
 
     [<Test>]
     [<Ignore("This test is a prototype and still needs to be verified against the implementation.")>]
