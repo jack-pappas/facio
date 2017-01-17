@@ -13,8 +13,8 @@ env:
     - EnableNuGetPackageRestore=true
 
 install:
-  - nuget restore facio.sln
-#  - nuget install NUnit.Runners -Version 2.6.4 -OutputDirectory tools
+  # TODO: Use 'nuget' command from installed mono instead of the binary from this repo
+  - mono .nuget/NuGet.exe install .nuget/packages.config -OutputDirectory packages -ExcludeVersion
 
 script:
   - ./build.sh All
