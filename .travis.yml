@@ -1,15 +1,20 @@
-language: objective-c
+language: csharp
+
+# Use container-based infrastructure with Ubuntu Trusty (14.04)
+dist: trusty
+sudo: false
+
+# TODO : Enable both mono and dotnet builds: https://docs.travis-ci.com/user/languages/csharp/#Testing-Against-Mono-and-.NET-Core
+mono:
+  - latest
 
 env:
   global:
     - EnableNuGetPackageRestore=true
-  matrix:
-    - MONO_VERSION="4.2.2"
 
 install:
-  - wget "http://download.mono-project.com/archive/${MONO_VERSION}/macos-10-x86/MonoFramework-MDK-${MONO_VERSION}.macos10.xamarin.x86.pkg"
-  - sudo installer -pkg "MonoFramework-MDK-${MONO_VERSION}.macos10.xamarin.x86.pkg" -target /
-  - mono .nuget/NuGet.exe install .nuget/packages.config -OutputDirectory packages -ExcludeVersion
+  - nuget restore facio.sln
+#  - nuget install NUnit.Runners -Version 2.6.4 -OutputDirectory tools
 
 script:
   - ./build.sh All
