@@ -13,7 +13,7 @@ Tools for building compilers in F#
 .. image:: http://img.shields.io/nuget/v/facio.svg
     :target: https://nuget.org/packages/facio/
 
-facio is a collection of tools which assist in implementing compilers, interpreters, and other language-based tools in F#.
+**facio** is a collection of tools which assist in implementing compilers, interpreters, and other language-based tools in F#.
 
 - fsharplex
     ``fsharplex`` is a tool for generating lexical analyzers ("tokenizers") from a lexer specification file (``*.fsl``).
@@ -55,7 +55,7 @@ Compatibility Notes
 
     - ``fsharpyacc`` handles multi-way conflicts differently than ``fsyacc``. A multi-way conflict occurs when an LR parser table contains multiple REDUCE actions (and possibly, a SHIFT action) for a single LR parser state; this type of conflict often occurs when compiling a parser specification with an empty production rule for one or more nonterminals.
 
-      The current version (as of 04-Jun-2013) of ``fsharpyacc`` simply discards all of the REDUCE actions except for the one with the lowest production rule number (i.e., the one which occurs closest to the top of the specification file). This stategy is "good enough" for now, but is not optimal so it will be refined in a future version.
+      The current version (as of 04-Jun-2013) of ``fsharpyacc`` simply discards all of the REDUCE actions except for the one with the lowest production rule number (i.e., the one which occurs closest to the top of the specification file). This strategy is "good enough" for now, but is not optimal so it will be refined in a future version.
 
       ``fsyacc`` handles multi-way conflicts on-the-fly while constructing an LR parser table. When it adds an action to an LR parser state which already contains a simple conflict (S/R or R/R), and the added action is not equal to either of the actions involved in the simple conflict, the two conflicting actions are discarded, leaving only the new action. The result of this is that the precedence and associativity declarations are not always applied to resolve conflicts, so the parser may behave unexpectedly.
 
